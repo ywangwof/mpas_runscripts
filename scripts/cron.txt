@@ -1,0 +1,23 @@
+SHELL=/bin/bash
+
+MAILTO=Yunheng.Wang@noaa.gov
+
+# Example of job definition:
+# .---------------- minute (0 - 59)
+# |  .------------- hour (0 - 23)
+# |  |  .---------- day of month (1 - 31)
+# |  |  |  .------- month (1 - 12) OR jan,feb,mar,apr ...
+# |  |  |  |  .---- day of week (0 - 6) (Sunday=0 or 7) OR sun,mon,tue,wed,thu,fri,sat
+# |  |  |  |  |
+# *  *  *  *  * command to be executed
+
+# use UTC
+
+scriptdir=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/scripts
+rundirs=/lfs1/NAGAPE/wof/MPAS/run_dirs
+
+########################################################################
+###          Free forecasts & post-processing                        ###
+########################################################################
+15    4     28 * * $scriptdir/run_MPAS_hrrr.sh $rundirs ungrib,init,lbc,mpas   >> $rundir/fcst`date "+\%Y\%m\%d"`.log 2>&1
+15,45 5-18  28 * * $scriptdir/run_MPAS_hrrr.sh $rundirs clean,upp,mpassit      >> $rundir/post`date "+\%Y\%m\%d"`.log 2>&1
