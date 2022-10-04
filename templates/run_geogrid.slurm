@@ -13,8 +13,8 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-module use /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/modules
-module load build_jet_intel
+module use ROOTDIR/modules
+module load build_jet_intelTed
 
 ulimit -s unlimited
 

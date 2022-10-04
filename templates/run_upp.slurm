@@ -17,7 +17,7 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-module use /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/modules
+module use ROOTDIR/modules
 module load build_jet_intel
 
 ulimit -s unlimited
@@ -25,8 +25,7 @@ ulimit -s unlimited
 wrkdir=WRKDIR
 cd $wrkdir
 
-rm -rf ../error.upp_HHHSTR
-rm -rf ../queue.upp_HHHSTR
+rm -rf ../error.upp_HHHSTR ../queue.upp_HHHSTR
 
 touch ../running.upp_HHHSTR
 

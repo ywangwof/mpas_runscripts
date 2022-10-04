@@ -7,4 +7,6 @@ setenv NETCDF /lfs4/NAGAPE/hpc-wof1/mansell/netcdf490pio
 setenv HDF5 /lfs4/NAGAPE/hpc-wof1/mansell/netcdf490pio
 setenv PIO /lfs4/NAGAPE/hpc-wof1/mansell/netcdf490pio
 
-The libraries are all shared static, which caused a problem with mpas not finding the hdf5 libs, so I added a bit to the Makefile to check for and HDF5 environment variable and set libraries for that. (edited) 
+The libraries are all shared static, which caused a problem with mpas not finding the 
+hdf5 libs, so I added a bit to the Makefile to check for and HDF5 environment variable 
+and set libraries for that. 

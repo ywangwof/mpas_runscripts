@@ -1,4 +1,13 @@
 
+After a new program is built,
+    1. Upgrade modules file to be the same when building the program
+    2. Copy/link the program to exec
+    3. modify all job scripts (*.slurm) to use the same module file
+    4. Check directories in scripts/lntemplates.sh and then run it
+       for program atmosphere and/or mpassit
+
+
+
 1. Domain files
    generated using run_create_region.slurm from 3 km global domain files in
    /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/mesh_3km/x1.65536002.*

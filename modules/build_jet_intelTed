@@ -1,0 +1,24 @@
+#%Module
+
+proc ModulesHelp { } {
+   puts stderr "This module loads libraries for building SRW on"
+   puts stderr "the NOAA RDHPC machine JET using Intel-18.0.5.274"
+}
+
+module-whatis "Loads libraries needed for building MPAS on JET"
+
+module purge
+
+module load cmake/3.20.1
+module load gnu
+
+module load intel/2022.1.2
+module load impi/2022.1.2
+
+setenv NETCDF /lfs4/NAGAPE/hpc-wof1/mansell/netcdf490pio
+setenv HDF5 /lfs4/NAGAPE/hpc-wof1/mansell/netcdf490pio
+setenv PIO /lfs4/NAGAPE/hpc-wof1/mansell/netcdf490pio
+
+setenv CMAKE_C_COMPILER mpiicc
+setenv CMAKE_CXX_COMPILER mpiicpc
+setenv CMAKE_Fortran_COMPILER mpiifort

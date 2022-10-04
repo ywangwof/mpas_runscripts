@@ -78,7 +78,9 @@ eventdateDF=$(date +%Y%m%d)
 #
 # 3. scripts                                # this scripts
 #    3.1 run_MPAS_hrrr.sh
-#    3.1 run_MPAS_gfs.sh
+#    3.2 run_MPAS_gfs.sh
+#    3.3 lntemplates.sh
+#    3.4 cron.txt
 #
 # 4. UPP_KATE_kjet (copied and rebuild from /lfs4/NAGAPE/wof/wrfout_3km-1km/UPP_KATE_kjet)
 #
@@ -268,7 +270,7 @@ EOF
     geoname=${domname/*_/geo_}
     jobscript="run_geogrid.slurm"
     sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/geogrid_${geoname}/;s/NOPART/$npepost/" $TEMPDIR/$jobscript > $jobscript
-    sed -i "s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
+    sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
     echo -n "Submitting $jobscript .... "
     $runcmd $jobscript
 }
@@ -375,8 +377,8 @@ EOF
     #
     jobscript="run_static.slurm"
     sed "s/ACCOUNT/$account/g;s/PARTION/${partition_static}/;s/JOBNAME/static_${domname}/" $TEMPDIR/$jobscript > $jobscript
-    #sed -i "s#WRKDIR#$wrkdir#g;s#EXEDIR#${rootdir}/MPAS-Model#" $jobscript
-    sed -i "s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
+    #sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${rootdir}/MPAS-Model#" $jobscript
+    sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
     echo -n "Submitting $jobscript .... "
     $runcmd $jobscript
 }
@@ -439,7 +441,7 @@ EOF
         #
         jobscript="run_ungrib.slurm"
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/ungrib_${jobname}/" $TEMPDIR/$jobscript > $jobscript
-        sed -i "s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
+        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
         echo -n "Submitting $jobscript .... "
         $runcmd $jobscript
         if [[ $runcmd == "sbatch" ]]; then
@@ -574,7 +576,7 @@ EOF
     #
     jobscript="run_init.slurm"
     sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npeics/;s/JOBNAME/init_${jobname}/" $TEMPDIR/$jobscript > $jobscript
-    sed -i "s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
+    sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
     echo -n "Submitting $jobscript .... "
     $runcmd $jobscript
 }
@@ -706,7 +708,7 @@ EOF
     #
     jobscript="run_lbc.slurm"
     sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npeics/;s/JOBNAME/lbc_${jobname}/" $TEMPDIR/$jobscript > $jobscript
-    sed -i "s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
+    sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
     echo -n "Submitting $jobscript .... "
     $runcmd $jobscript
 }
@@ -777,7 +779,7 @@ function run_mpas {
     cat << EOF > namelist.atmosphere
 &nhyd_model
     config_time_integration_order   = 2
-    config_dt                       = 15
+    config_dt                       = 20
     config_start_time               = '${starttime_str}'
     config_run_duration             = '${fcsthour_str}: 00: 00'
     config_split_dynamics_transport = true
@@ -908,7 +910,7 @@ EOF
     #
     jobscript="run_mpas.slurm"
     sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npefcst/;s/JOBNAME/mpas_${jobname}/" $TEMPDIR/$jobscript > $jobscript
-    sed -i "s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
+    sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
     echo -n "Submitting $jobscript .... "
     $runcmd $jobscript
 }
@@ -923,7 +925,13 @@ function run_mpassit {
     mkwrkdir $wrkdir 0
     cd $wrkdir
 
-    ln -sf $TEMPDIR/parm/* .
+    parmfiles=(diaglist histlist_2d histlist_3d histlist_soil)
+    for fn in ${parmfiles[@]}; do
+        if [[ ! -e $fn ]]; then
+            if [[ $verb -eq 1 ]]; then echo "Linking $fn ..."; fi
+            ln -sf $TEMPDIR/MPASSIT/$fn .
+        fi
+    done
 
     for ((h=0;h<=$fcst_hours;h+=$EXTINVL)); do
         hstr=$(printf "%02d" $h)
@@ -973,8 +981,8 @@ EOF
         # Create job script and submit it
         #
         jobscript="run_mpassit_$hstr.slurm"
-        sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npepost/;s/JOBNAME/intrp_${jobname}_$hstr/;s/HHHSTR/$hstr/" $TEMPDIR/run_mpassit.slurm > $jobscript
-        sed -i "s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
+        sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npepost/;s/JOBNAME/intrp_${jobname}_$hstr/;s/HHHSTR/$hstr/g" $TEMPDIR/run_mpassit.slurm > $jobscript
+        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
         echo -n "Submitting $jobscript .... "
         $runcmd $jobscript
         echo " "
@@ -1095,7 +1103,7 @@ EOF
         #
         jobscript="run_upp_$hstr.slurm"
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npepost/;s/JOBNAME/upp_${jobname}_$hstr/;s/HHHSTR/$hstr/g" $TEMPDIR/run_upp.slurm > $jobscript
-        sed -i "s#WRKDIR#$wrkdir/post_$hstr#g;s#EXEDIR#${exedir}#" $jobscript
+        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir/post_$hstr#g;s#EXEDIR#${exedir}#" $jobscript
         echo -n "Submitting $jobscript .... "
         $runcmd $jobscript
         echo " "
@@ -1279,7 +1287,7 @@ jobname="${eventdate:4:4}"
 #exedir="${rootdir}/${MPASModel}"
 #staticdir="${rootdir}/${MPASModel}"
 
-exedir="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/exec"
+exedir="$rootdir/exec"
 
 staticdir="$TEMPDIR"
 
@@ -1290,17 +1298,19 @@ declare -A jobargs=([static]=$WORKDIR/$domname                          \
                     [lbc]="init/done.ics"                                 \
                     [mpas]="lbc/done.lbc"                                 \
                     #[upp]="/lfs4/NAGAPE/wof/wrfout_3km-1km/UPP_KATE_kjet" \
-                    [upp]="$rootdir/UPP_KATE_kjet"                        \
-                    [clean]="upp"                                         \
+                    [upp]="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/UPP_KATE_kjet" \
+                    [clean]="upp"                                          \
                    )
 
 for job in ${jobs[@]}; do
     if [[ $verb -eq 1 ]]; then
+        echo " "
         echo "run_$job ${jobargs[$job]}"
     fi
     run_$job ${jobargs[$job]}
 done
 
+echo " "
 echo "==== Jobs done $(date +%m-%d_%H:%M:%S) ===="
 echo " "
 exit 0
