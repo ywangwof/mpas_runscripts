@@ -1,6 +1,6 @@
 #!/bin/bash
 
-rootdir="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS"
+rootdir="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/runscriptv2.0"
 eventdateDF=$(date +%Y%m%d)
 
 #-----------------------------------------------------------------------
@@ -25,9 +25,10 @@ eventdateDF=$(date +%Y%m%d)
 #    README
 #
 #    2.1 WPS run-time files for program ungrib & geogrid
-#        Vtable.GFS
-#        Vtable.raphrrr
-#        GEOGRID.TBL.ARW
+#        WRFV4.0/Vtable.GFS_full            # for GFS initialized run only
+#        WRFV4.0/Vtable.GFS
+#        WRFV4.0/Vtable.raphrrr
+#        WRFV4.0/GEOGRID.TBL.ARW
 #
 #    2.2 tables for Thompson cloud microphysics scheme [optional]
 #        MP_THOMPSON_QIautQS_DATA.DBL
@@ -70,10 +71,10 @@ eventdateDF=$(date +%Y%m%d)
 #        wofs_conus.grid.nc
 #
 #    2.6 Parameters for program MPASSIT
-#        parm/diaglist
-#        parm/histlist_2d
-#        parm/histlist_3d
-#        parm/histlist_soil
+#        MPASSIT/diaglist
+#        MPASSIT/histlist_2d
+#        MPASSIT/histlist_3d
+#        MPASSIT/histlist_soil
 #
 # 3. scripts                                # this scripts
 #    3.1 run_MPAS_hrrr.sh
@@ -221,7 +222,7 @@ function run_geogrid {
     mkwrkdir $wrkdir $overwrite
     cd $wrkdir
 
-    ln -sf ${TEMPDIR}/GEOGRID.TBL.ARW GEOGRID.TBL
+    ln -sf ${TEMPDIR}/WRFV4.0/GEOGRID.TBL.ARW GEOGRID.TBL
 
     cat <<EOF > namelist.wps
 &share
@@ -420,7 +421,7 @@ function run_ungrib {
 
         link_grib ${hrrrfiles[@]}
 
-        ln -sf $TEMPDIR/Vtable.raphrrr Vtable
+        ln -sf $TEMPDIR/WRFV4.0/Vtable.raphrrr Vtable
 
         cat << EOF > namelist.wps
 &share
@@ -472,7 +473,7 @@ EOF
             sleep 10
         done
         link_grib $gfs_grib_dir/${julday}000000
-        ln -sf $TEMPDIR/Vtable.GFS Vtable
+        ln -sf $TEMPDIR/WRFV4.0/Vtable.GFS Vtable
 
         cat << EOF > namelist.wps
 &share
@@ -885,7 +886,7 @@ function run_mpas {
     cat << EOF > namelist.atmosphere
 &nhyd_model
     config_time_integration_order   = 2
-    config_dt                       = 15
+    config_dt                       = 20
     config_start_time               = '${starttime_str}'
     config_run_duration             = '${fcsthour_str}: 00: 00'
     config_split_dynamics_transport = true
@@ -1174,9 +1175,8 @@ function run_upp {
         #...Link microphysic's tables - code will use based on mp_physics option
         #   found in data
         #
-        wrfroot_dir=$rootdir/WRFV4.0
-        ln -sf $wrfroot_dir/test/em_real/ETAMPNEW_DATA               nam_micro_lookup.dat
-        ln -sf $wrfroot_dir/test/em_real/ETAMPNEW_DATA.expanded_rain hires_micro_lookup.dat
+        ln -sf $TEMPDIR/WRFV4.0/ETAMPNEW_DATA               nam_micro_lookup.dat
+        ln -sf $TEMPDIR/WRFV4.0/ETAMPNEW_DATA.expanded_rain hires_micro_lookup.dat
 
         #
         #...For GRIB2 the code uses postcntrl.xml to select variables for output

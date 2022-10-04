@@ -1,0 +1,14 @@
+
+20221004
+
+    from /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WRFV4.0/test/em_real
+    ETAMPNEW_DATA
+    ETAMPNEW_DATA.expanded_rain
+
+    from /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_SRC/geogrid/
+    GEOGRID.TBL.ARW
+
+    /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_SRC/ungrib/Variable_Tables/
+    Vtable.GFS_full
+    Vtable.GFS
+    Vtable.raphrrr
