@@ -19,5 +19,5 @@ rundirs=/lfs1/NAGAPE/wof/MPAS/run_dirs
 ########################################################################
 ###          Free forecasts & post-processing                        ###
 ########################################################################
-15    4     28 * * $scriptdir/run_MPAS_hrrr.sh $rundirs ungrib,init,lbc,mpas   >> $rundirs/fcst`date "+\%Y\%m\%d"`.log 2>&1
-15,45 5-18  28 * * $scriptdir/run_MPAS_hrrr.sh $rundirs clean,upp,mpassit      >> $rundirs/post`date "+\%Y\%m\%d"`.log 2>&1
+30    4      * * * $scriptdir/run_MPAS_hrrr.sh $rundirs ungrib,init,lbc,mpas   >> $rundirs/fcst`date "+\%Y\%m\%d"`.log 2>&1
+15,45 6-18   * * * $scriptdir/run_MPAS_hrrr.sh $rundirs clean,upp,mpassit      >> $rundirs/post`date "+\%Y\%m\%d"`.log 2>&1

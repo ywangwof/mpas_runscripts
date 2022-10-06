@@ -24,19 +24,29 @@ eventdateDF=$(date +%Y%m%d)
 # 2. templates                              # templates for this scripts
 #    README
 #
-#    2.1 WPS run-time files for program ungrib & geogrid
-#        WRFV4.0/Vtable.GFS_full            # for GFS initialized run only
-#        WRFV4.0/Vtable.GFS
-#        WRFV4.0/Vtable.raphrrr
-#        WRFV4.0/GEOGRID.TBL.ARW
+#    2.1 SLURM scripts on Jet
+#        run_init.slurm
+#        run_lbc.slurm
+#        run_mpas.slurm
+#        run_mpassit.slurm
+#        run_static.slurm
+#        run_ungrib.slurm
+#        run_geogrid.slurm
+#        run_upp.slurm
 #
-#    2.2 tables for Thompson cloud microphysics scheme [optional]
+#    2.2 Limited-area SCVT meshes
+#        wofs_conus.graph.info
+#        wofs_conus.graph.info.part.1200
+#        wofs_conus.graph.info.part.800
+#        wofs_conus.grid.nc
+#
+#    2.3 tables for Thompson cloud microphysics scheme [optional, lntemplates]
 #        MP_THOMPSON_QIautQS_DATA.DBL
 #        MP_THOMPSON_QRacrQG_DATA.DBL
 #        MP_THOMPSON_QRacrQS_DATA.DBL
 #        MP_THOMPSON_freezeH2O_DATA.DBL
 #
-#    2.3 MPASS run-time static files
+#    2.4 MPASS run-time static files [lntemplates]
 #        stream_list.atmosphere.diagnostics
 #        stream_list.atmosphere.output
 #        stream_list.atmosphere.surface
@@ -54,27 +64,28 @@ eventdateDF=$(date +%Y%m%d)
 #        RRTMG_SW_DATA.DBL SOILPARM.TBL
 #        VEGPARM.TBL
 #
-#    2.4 SLURM scripts on Jet
-#        run_init.slurm
-#        run_lbc.slurm
-#        run_mpas.slurm
-#        run_mpassit.slurm
-#        run_static.slurm
-#        run_ungrib.slurm
-#        run_geogrid.slurm
-#        run_upp.slurm
+#    2.5 WPS run-time files for program ungrib, geogrid & UPP
+#        WRFV4.0/Vtable.GFS_full            # for GFS initialized run only
+#        WRFV4.0/Vtable.GFS
+#        WRFV4.0/Vtable.raphrrr
+#        WRFV4.0/GEOGRID.TBL.ARW
+#        WRFV4.0/ETAMPNEW_DATA
+#        WRFV4.0/ETAMPNEW_DATA.expanded_rain
 #
-#    2.5 Limited-area SCVT meshes
-#        wofs_conus.graph.info
-#        wofs_conus.graph.info.part.1200
-#        wofs_conus.graph.info.part.800
-#        wofs_conus.grid.nc
-#
-#    2.6 Parameters for program MPASSIT
+#    2.6 Parameters for program MPASSIT [lntemplates]
 #        MPASSIT/diaglist
 #        MPASSIT/histlist_2d
 #        MPASSIT/histlist_3d
 #        MPASSIT/histlist_soil
+#
+#    2.7 UPP parameters (copied from "/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/UPP_KATE_kjet")
+#                    originally from "/lfs4/NAGAPE/wof/wrfout_3km-1km/UPP_KATE_kjet"
+#
+#        hrrr_params_grib2_tbl_new
+#        hrrr_post_avblflds.xml
+#        hrrr_postcntrl.xml
+#        hrrr_postxconfig-NT.txt
+#        crtm2_fix   [lntemplates]
 #
 # 3. scripts                                # this scripts
 #    3.1 run_MPAS_hrrr.sh
@@ -82,18 +93,7 @@ eventdateDF=$(date +%Y%m%d)
 #    3.3 lntemplates.sh
 #    3.4 cron.txt
 #
-# 4. UPP_KATE_kjet (copied and rebuild from /lfs4/NAGAPE/wof/wrfout_3km-1km/UPP_KATE_kjet)
-#
-#    NOTE: Due to a library issue, I cannot use the original executable directly.
-#          You can change variable "jobargs[upp]" below and modify file
-#          templates/run_upp.slurm accordingly to use whatever UPP directory
-#          and its environment settings.
-#
-# 5. Parameters for program unipost.exe
-#        WRFV4.0/ETAMPNEW_DATA
-#        WRFV4.0/ETAMPNEW_DATA.expanded_rain
-#
-# 6. /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG
+# 4. /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG
 #
 #    NOTE: It can be anywhere, but should modify "run_geogrid"
 #          and "run_static" below whenever the directory is changed.
@@ -101,12 +101,11 @@ eventdateDF=$(date +%Y%m%d)
 # INSTRUCTIONS:
 #
 #  Use existing domain (wofs_conus)
-#     1. Copy these directories to rootdir
+#     1. Copy these directories to rootdir (or clone using git)
 #        modules
 #        exec
-#        UPP_KATE_kjet [optional, see above]
 #        scripts
-#        templates (change all *.slurm for the module file, see above)
+#        templates (link needed files use script lntemplates.sh, see README in that directory)
 #
 #     2. make a run directory under rootdir
 #        run_dirs
@@ -243,16 +242,16 @@ function run_geogrid {
   i_parent_start = 1,
   j_parent_start = 1,
   e_we = 1601,
-  e_sn = 1061,
+  e_sn = 961,
   geog_data_res = '30s',
   dx = 3000.0,
   dy = 3000.0,
   map_proj = 'lambert',
   ref_lat = 38.5,
-  ref_lon = -96.5,
+  ref_lon = -97.5,
   truelat1 = 38.5,
   truelat2 = 38.5,
-  stand_lon = -96.5
+  stand_lon = -97.5
   geog_data_path = '/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/',
   opt_geogrid_tbl_path = './',
 /
@@ -444,7 +443,7 @@ EOF
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
         echo -n "Submitting $jobscript .... "
         $runcmd $jobscript
-        if [[ $runcmd == "sbatch" ]]; then
+        if [[ $runcmd == *"sbatch" ]]; then
             touch queue.ungrib
         fi
     fi
@@ -468,7 +467,7 @@ function run_init {
     done
 
     for cond in ${conditions[@]}; do
-        echo "Checking: $cond"
+        echo "$$: Checking: $cond"
         while [[ ! -e $cond ]]; do
             if [[ $verb -eq 1 ]]; then
                 echo "Waiting for file: $cond"
@@ -599,7 +598,7 @@ function run_lbc {
     done
 
     for cond in ${conditions[@]}; do
-        echo "Checking: $cond"
+        echo "$$: Checking: $cond"
         while [[ ! -e $cond ]]; do
             if [[ $verb -eq 1 ]]; then
                 echo "Waiting for file: $cond"
@@ -733,7 +732,7 @@ function run_mpas {
     done
 
     for cond in ${conditions[@]}; do
-        echo "Checking: $cond"
+        echo "$$: Checking: $cond"
         while [[ ! -e $cond ]]; do
             if [[ $verb -eq 1 ]]; then
                 echo "Waiting for file: $cond"
@@ -940,12 +939,12 @@ function run_mpassit {
         histfile="$rundir/fcst/${domname}.history.${fcst_time_str}.nc"
         diagfile="$rundir/fcst/${domname}.diag.${fcst_time_str}.nc"
 
-        if [[ -f done.mpassit$hstr || -f running.mpassit$hstr || -f queue.mpassit$hstr ]]; then
+        if [[ -f done.mpassit$hstr || -f running.mpassit$hstr || -f queue.mpassit$hstr || -f error.mpassit$hstr ]]; then
             continue               # already done, is running or is in queue, skip this hour
         fi
 
         for fn in $histfile $diagfile; do
-            echo "Checking: $fn ..."
+            echo "$$: Checking: $fn ..."
             while [[ ! -f $fn ]]; do
                 if [[ $jobsfromcmd -eq 1 ]]; then
                     #return 0
@@ -986,7 +985,7 @@ EOF
         echo -n "Submitting $jobscript .... "
         $runcmd $jobscript
         echo " "
-        if [[ $runcmd == "sbatch" ]]; then
+        if [[ $runcmd == *"sbatch" ]]; then
             touch $wrkdir/queue.mpassit$hstr
         fi
     done
@@ -995,7 +994,6 @@ EOF
 ########################################################################
 
 function run_upp {
-    upproot_dir="$1"
     #
     # Build working directory
     #
@@ -1030,11 +1028,11 @@ function run_upp {
     fixfiles[SpcCoeff]=fixfiles_SpcCoeff[@]
     fixfiles[TauCoeff]=fixfiles_TauCoeff[@]
 
-    fixdirs[AerosolCoeff]="$upproot_dir/src/lib/crtm2/src/fix/AerosolCoeff/Big_Endian"
-    fixdirs[CloudCoeff]="$upproot_dir/src/lib/crtm2/src/fix/CloudCoeff/Big_Endian"
-    fixdirs[EmisCoeff]="$upproot_dir/src/lib/crtm2/src/fix/EmisCoeff/Big_Endian"
-    fixdirs[SpcCoeff]="$upproot_dir/src/lib/crtm2/src/fix/SpcCoeff/Big_Endian"
-    fixdirs[TauCoeff]="$upproot_dir/src/lib/crtm2/src/fix/TauCoeff/ODPS/Big_Endian"
+    fixdirs[AerosolCoeff]="$TEMPDIR/UPP/crtm2_fix/AerosolCoeff/Big_Endian"
+    fixdirs[CloudCoeff]="$TEMPDIR/UPP/crtm2_fix/CloudCoeff/Big_Endian"
+    fixdirs[EmisCoeff]="$TEMPDIR/UPP/crtm2_fix/EmisCoeff/Big_Endian"
+    fixdirs[SpcCoeff]="$TEMPDIR/UPP/crtm2_fix/SpcCoeff/Big_Endian"
+    fixdirs[TauCoeff]="$TEMPDIR/UPP/crtm2_fix/TauCoeff/ODPS/Big_Endian"
 
     for ((h=0;h<=$fcst_hours;h+=$EXTINVL)); do
         hstr=$(printf "%02d" $h)
@@ -1047,7 +1045,7 @@ function run_upp {
         mpasfile="$rundir/mpassit/MPAS-A_out.${fcst_time_str}.nc"
         donefile="$rundir/mpassit/done.mpassit$hstr"
 
-        echo "Checking: $donefile ...."
+        echo "$$: Checking: $donefile ...."
         while [[ ! -f $donefile ]]; do
             if [[ $jobsfromcmd -eq 1 ]]; then
                 #return 0
@@ -1087,7 +1085,7 @@ function run_upp {
         #
         parmfiles=(params_grib2_tbl_new post_avblflds.xml postcntrl.xml postxconfig-NT.txt )
         for fn in ${parmfiles[@]}; do
-            ln -sf $upproot_dir/parm/hrrr_$fn $fn
+            ln -sf $TEMPDIR/UPP/hrrr_$fn $fn
         done
 
         nmlfile="itag"
@@ -1096,7 +1094,7 @@ $mpasfile
 netcdf
 grib2
 ${fcst_time_str//./:}
-NCAR
+RAPR
 EOF
         #
         # Create job script and submit it
@@ -1107,7 +1105,7 @@ EOF
         echo -n "Submitting $jobscript .... "
         $runcmd $jobscript
         echo " "
-        if [[ $runcmd == "sbatch" ]]; then
+        if [[ $runcmd == *"sbatch" ]]; then
             touch $wrkdir/queue.upp_$hstr
         fi
     done
@@ -1161,7 +1159,7 @@ eventdate="$eventdateDF"
 eventtime="00"
 
 domname="wofs_conus"
-runcmd="sbatch"
+runcmd="/apps-local/slurm/default/bin/sbatch"
 verb=0
 overwrite=1
 jobsfromcmd=0
@@ -1206,7 +1204,7 @@ while [[ $# > 0 ]]
             ;;
         -d)
             case $2 in
-            wofs_big | wofs_small | wofs_poly | wofs_conus | wofs_wrf )
+            wofs_big | wofs_small | wofs_conus | wofs_mpas )
                 domname=$2
                 ;;
             * )
@@ -1266,7 +1264,7 @@ OUTINVL_STR="1:00:00"
 OUTIOTYPE="netcdf4"
 ICSIOTYPE="pnetcdf,cdf5"
 
-echo "---- Jobs started $(date +%m-%d_%H:%M:%S)  ----"
+echo "---- Jobs started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
 echo "     Event date : $eventdate ${eventtime}:00"
 echo "     Working dir: $WORKDIR"
 echo "     Domain file: $TEMPDIR/$domname.grid.nc"
@@ -1274,8 +1272,7 @@ echo " "
 
 starttime_str=$(date -d "$eventdate ${eventtime}:00"                     +%Y-%m-%d_%H:%M:%S)
 stoptime_str=$(date -d "$eventdate  ${eventtime}:00 ${fcst_hours} hours" +%Y-%m-%d_%H:%M:%S)
-#rundir="$WORKDIR/$eventdate${eventtime}"
-rundir="$WORKDIR/$eventdate"
+rundir="$WORKDIR/$eventdate${eventtime}_gfs"
 
 if [[ ! -d $rundir ]]; then
     mkdir -p $rundir
@@ -1296,10 +1293,9 @@ declare -A jobargs=([static]=$WORKDIR/$domname                          \
                     [ungrib]=/public/data/grids/gfs/0p25deg/grib2       \
                     [init]="ungrib/done.ungrib $WORKDIR/$domname/done.static" \
                     [lbc]="init/done.ics"                                 \
-                    [mpas]="lbc/done.lbc"                                 \
-                    #[upp]="/lfs4/NAGAPE/wof/wrfout_3km-1km/UPP_KATE_kjet" \
-                    [upp]="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/UPP_KATE_kjet" \
-                    [clean]="upp"                                          \
+                    [mpas]="lbc/done.lbc"                               \
+                    [upp]=""                                            \
+                    [clean]="upp"                                       \
                    )
 
 for job in ${jobs[@]}; do

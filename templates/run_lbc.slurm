@@ -15,7 +15,7 @@ echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
 module use ROOTDIR/modules
-module load build_jet_intelTed
+module load build_jet_intel
 
 ulimit -s unlimited
 

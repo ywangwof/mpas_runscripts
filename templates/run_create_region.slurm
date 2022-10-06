@@ -5,8 +5,8 @@
 #SBATCH --ntasks=1  --cpus-per-task=12
 #SBATCH --exclusive
 #SBATCH -t 02:30:00
-#SBATCH -o /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/run_dirs/wofs_conus/create_%j.out
-#SBATCH -e /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/run_dirs/wofs_conus/create_%j.err
+#SBATCH -o /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/run_dirs/wofs_mpas/create_%j.out
+#SBATCH -e /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/run_dirs/wofs_mpas/create_%j.err
 
 #set -eux
 
@@ -16,23 +16,22 @@ echo " "
 
 source $HOME/.python
 
-if [[ ! -d /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/run_dirs/wofs_conus ]]; then
-    mkdir -p /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/run_dirs/wofs_conus
+if [[ ! -d /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/run_dirs/wofs_mpas ]]; then
+    mkdir -p /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/run_dirs/wofs_mpas
 fi
 
 RUNDIR='/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MPAS-Limited-Area'
 
 cd $RUNDIR
 
-srun -n 1 create_region -v 2 /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/templates/wofs_conus.custom.pts /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/mesh_3km/x1.65536002.grid.nc
+srun -n 1 create_region -v 2 /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/runscriptv2.0/templates/wofs_mpas.custom.pts /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/mesh_3km/x1.65536002.grid.nc
 
 if [[ $? -eq 0 ]]; then
-    mv wofs_conus* /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/templates
+    mv wofs_mpas* /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/runscriptv2.0/templates/
 
-    cd /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/templates
-    /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/bin/gpmetis -minconn -contig -niter=200 wofs_conus.graph.info 800
+    cd /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/runscriptv2.0/templates/
+    /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/bin/gpmetis -minconn -contig -niter=200 wofs_mpas.graph.info 1200
 fi
-
 
 time2=$(date '+%s')
 

@@ -18,13 +18,10 @@ module load impi/2022.1.2
 module load pnetcdf
 #module load pnetcdf/1.10.0
 module load szip
-#module load hdf5
-#module load netcdf4/4.2.1.1
+module load hdf5parallel/1.10.6
 module load netcdf-hdf5parallel/4.7.4
 
-#setenv PNETCDF /apps/pnetcdf/1.10.0/intel/18.0.5.274/impi/2018.4.274
 setenv PIO /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/PIOV2.x
-#setenv NETCDF /apps/netcdf/4.2.1.1-intel
 
 setenv CMAKE_C_COMPILER mpiicc
 setenv CMAKE_CXX_COMPILER mpiicpc

@@ -4,7 +4,7 @@
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=1 --cpus-per-task=12
 #SBATCH --exclusive
-#SBATCH -t 00:40:00
+#SBATCH -t 01:30:00
 #SBATCH --output=WRKDIR/ungrib_%j.log
 
 #set -eux

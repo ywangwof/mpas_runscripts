@@ -17,8 +17,11 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
+module purge
 module use ROOTDIR/modules
-module load build_jet_intel
+module load build_jet_intel22
+
+module list
 
 ulimit -s unlimited
 

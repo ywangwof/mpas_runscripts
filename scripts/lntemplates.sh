@@ -1,11 +1,11 @@
 #!/bin/bash
-srcdir=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MPAS-Model.ted
+
 desdir=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/runscriptv2.0/templates
 
 if [[ $1 == "MPASSIT" ]]; then
     srcmpassit=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MPASSIT
 
-    cd $destdir/MPASSIT
+    cd $desdir/MPASSIT
 
     parmfiles=(diaglist histlist_2d histlist_3d histlist_soil)
     for fn in ${parmfiles[@]}; do
@@ -33,7 +33,16 @@ if [[ $1 == "MPASSIT" ]]; then
 #        fi
 #    done
 
+elif [[ $1 == "UPP" ]]; then
+    srcupp=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/UPP_KATE_kjet
+
+    cd $desdir/UPP
+
+    ln -sf $srcupp/src/lib/crtm2/src/fix crtm2_fix
+
 elif [[ $1 == "mpas" ]]; then
+
+    srcdir=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MPAS-Model.ted
 
     cd $desdir
 
@@ -57,7 +66,7 @@ elif [[ $1 == "mpas" ]]; then
         ln -sf $srcdir/$fn .
     done
 else
-    echo "Argument should be one of [mpas, MPASSIT, WRF]. get \"$1\"."
+    echo "Argument should be one of [mpas, MPASSIT, WRF, UPP]. get \"$1\"."
 fi
 
 exit 0
