@@ -28,6 +28,5 @@ templates/stream_list.atmosphere.output
 templates/stream_list.atmosphere.surface
 templates/streams.atmosphere
 templates/streams.init_atmosphere
-templates/wofs_conus.grid.nc
 templates/UPP/crtm2_fix
 run_dirs
