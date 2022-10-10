@@ -1,0 +1,11 @@
+# Output Lambert Conformal grid specification
+{
+    'ctrlat'  : 38.3,
+    'ctrlon'  : -97.5,
+    'stdlat1' : 38.5,
+    'stdlat2' : 38.5,
+    'nx'      : 1601,
+    'ny'      :  961,
+    'dx'      : 3000.0,
+    'dy'      : 3000.0
+}
