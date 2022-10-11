@@ -136,6 +136,7 @@ function usage {
     echo "              -k  [0,1,2]     Keep working directory if exist, 0- as is; 1- overwrite; 2- make a backup as xxxx.bak?"
     echo "                              Default is 0 for ungrib, mpassit, upp and 1 for others"
     echo "              -t  DIR         Template directory for runtime files"
+    echo "              -m  Machine     Machine name to run, [Jet or Odin]."
     echo "              -d  wofs_conus  Domain name to be used"
     echo " "
     echo "   DEFAULTS:"
@@ -1018,7 +1019,7 @@ EOF
     #
     jobscript="run_mpas.slurm"
     sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npefcst/;s/JOBNAME/mpas_${jobname}/" $TEMPDIR/$jobscript > $jobscript
-    sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
+    sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
     echo -n "Submitting $jobscript .... "
     $runcmd $jobscript
 }
@@ -1272,6 +1273,7 @@ runcmd="/apps-local/slurm/default/bin/sbatch"
 verb=0
 overwrite=1
 jobsfromcmd=0
+machine="Jet"
 
 #-----------------------------------------------------------------------
 #
@@ -1307,6 +1309,17 @@ while [[ $# > 0 ]]
                 TEMPDIR=$2
             else
                 echo "ERROR: Template directory \"$2\" does not exist."
+                usage 1
+            fi
+            shift
+            ;;
+        -m)
+            if [[ ${2^^} == "JET" ]]; then
+                machine=Jet
+            elif [[ ${2^^} == "ODIN" ]]; then
+                machine=Odin
+            else
+                echo "ERROR: Unsupported machine name, got \"$2\"."
                 usage 1
             fi
             shift
@@ -1354,9 +1367,15 @@ done
 #
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-account="wof"
-partition="ujet,tjet,xjet,vjet,kjet"
-partition_static="bigmem"
+if [[ $machine == "Jet" ]]; then
+    account="wof"
+    partition="ujet,tjet,xjet,vjet,kjet"
+    partition_static="bigmem"
+else
+    account="largequeue"
+    partition="wofq"
+    partition_static="largequeue"
+fi
 npeics=800
 npefcst=1200
 npepost=72

@@ -18,6 +18,7 @@
 
 import os
 import sys
+import re
 import argparse
 
 import numpy as np
@@ -41,8 +42,6 @@ import pickle as pkle
 import matplotlib.collections as mplcollections
 import matplotlib.patches as patches
 import matplotlib.path as path
-
-import argparse
 
 ########################################################################
 
@@ -253,15 +252,15 @@ if __name__ == "__main__":
 
 
                 print("\n---- Other Variables ----")
-                for varstr in varODlist:
+                for varstr in sorted(varODlist):
                     print(varstr)
 
                 print("\n---- 3D Variables ----")
-                for varstr in var3dlist:
+                for varstr in sorted(var3dlist):
                     print(varstr)
 
                 print("\n---- 2D Variables ----")
-                for varstr in var2dlist:
+                for varstr in sorted(var2dlist):
                     print(varstr)
 
                 sys.exit(0)
@@ -296,24 +295,6 @@ if __name__ == "__main__":
         picklefile = picklefile+'.'+str(nCells)+'.'+'patches'
         picklefile = os.path.join(os.path.dirname(gridfile),picklefile)
 
-    # In this example, we will be plotting actual MPAS polygons. The
-    # `get_mpas_patches` function will create a collection of patches for the current
-    # mesh for us AND it will save it, so that later we do not need to create it
-    # again (Because often time creation is very slow).
-    #
-    # If you have a PickleFile someone where can supply it as the pickleFile argument
-    # to the `get_mpas_patches` function.
-    #
-    # Doing things this way is slower, as we will have to not only loop through
-    # nCells, but also nEdges of all nCells.
-    #
-    #patch_collection = get_mpas_patches(gridfile, picklefile)
-    patch_collection = load_mpas_patches(picklefile)
-
-    levels = range(nlevels)
-    if args.levels is not None:
-        levels = [int(item) for item in args.levels.split(',')]
-
     if varndim == 2:
         levels=[0]
     elif varndim == 3:
@@ -326,7 +307,12 @@ if __name__ == "__main__":
             sys.exit(0)
 
         if args.levels is not None:
-            levels = [int(item) for item in args.levels.split(',')]
+            pattern = re.compile("^([0-9]+)-([0-9]+)$")
+            pmatched = pattern.match(args.levels)
+            if pmatched:
+                levels=range(int(pmatched[1]),int(pmatched[2]))
+            else:
+                levels = [int(item) for item in args.levels.split(',')]
     else:
         print(f"Do not supported {varndim} dimensions array.")
         sys.exit(0)
@@ -338,9 +324,11 @@ if __name__ == "__main__":
     if args.outfile is None:
         outdir  = './'
         outfile = None
+        defaultoutfile = True
     elif os.path.isdir(args.outfile):
         outdir  = args.outfile
         outfile = None
+        defaultoutfile = True
     else:
         outdir  = os.path.dirname(args.outfile)
         outfile = os.path.basename(args.outfile)
@@ -405,6 +393,20 @@ if __name__ == "__main__":
     color_map = cm.gist_ncar
     style = 'ggplot'
 
+    # In this example, we will be plotting actual MPAS polygons. The
+    # `get_mpas_patches` function will create a collection of patches for the current
+    # mesh for us AND it will save it, so that later we do not need to create it
+    # again (Because often time creation is very slow).
+    #
+    # If you have a PickleFile someone where can supply it as the pickleFile argument
+    # to the `get_mpas_patches` function.
+    #
+    # Doing things this way is slower, as we will have to not only loop through
+    # nCells, but also nEdges of all nCells.
+    #
+    #patch_collection = get_mpas_patches(gridfile, picklefile)
+    patch_collection = load_mpas_patches(picklefile)
+
     times = [0]
     for t in times:
         for l in levels:
@@ -459,7 +461,7 @@ if __name__ == "__main__":
             gl.ylocator = mticker.FixedLocator([10,20,30,40,50,60])
             gl.top_labels = False
             gl.left_labels = True  #default already
-            gl.right_labels = True
+            gl.right_labels = False
             gl.bottom_labels = True
 
 
@@ -478,8 +480,11 @@ if __name__ == "__main__":
             plt.style.use(style) # Set the style that we choose above
 
             #
-            if outfile is None:
-                outfile = f"{varname}.{fcstfname}_K{l:02d}.{basmap}.png"
+            if defaultoutfile:
+                if varndim == 3:
+                    outfile = f"{varname}.{fcstfname}_K{l:02d}.png"
+                else:
+                    outfile = f"{varname}.{fcstfname}.png"
 
             figname = os.path.join(outdir,outfile)
             print(f"Saving figure to {figname} ...")
