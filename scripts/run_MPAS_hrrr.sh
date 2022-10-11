@@ -889,7 +889,7 @@ function run_mpas {
     config_time_integration_order   = 2
     config_dt                       = 20
     config_start_time               = '${starttime_str}'
-    config_run_duration             = '${fcsthour_str}: 00: 00'
+    config_run_duration             = '${fcsthour_str}:00:00'
     config_split_dynamics_transport = true
     config_number_of_sub_steps      = 2
     config_dynamics_split_steps     = 3
@@ -945,8 +945,8 @@ function run_mpas {
     config_sst_update                = false
     config_sstdiurn_update           = false
     config_deepsoiltemp_update       = false
-    config_radtlw_interval           = '00: 30: 00'
-    config_radtsw_interval           = '00: 30: 00'
+    config_radtlw_interval           = '00:30:00'
+    config_radtsw_interval           = '00:30:00'
     config_bucket_update             = 'none'
     config_physics_suite             = 'convection_permitting'
     config_microp_scheme             = 'mp_nssl2m'
