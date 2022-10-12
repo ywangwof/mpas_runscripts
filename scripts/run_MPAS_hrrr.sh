@@ -1,6 +1,6 @@
 #!/bin/bash
 
-rootdir="/scratch/ywang/MPAS/mpas_runscripts"
+rootdir="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/runscriptv2.0"
 eventdateDF=$(date +%Y%m%d)
 
 #-----------------------------------------------------------------------
@@ -1274,7 +1274,7 @@ TEMPDIR="${rootdir}/templates"
 eventdate="$eventdateDF"
 eventtime="00"
 
-domname="wofs_conus"
+domname="wofs_mpas"
 runcmd="sbatch"
 verb=0
 overwrite=1
