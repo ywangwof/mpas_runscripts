@@ -13,8 +13,13 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-module use ROOTDIR/modules
-module load build_jet_intel
+if [[ "MACHINE" == "Jet" ]]; then
+    module use ROOTDIR/modules
+    module load build_jet_intel
+
+else
+    source /scratch/ywang/MPAS/env.mpas
+fi
 
 ulimit -s unlimited
 

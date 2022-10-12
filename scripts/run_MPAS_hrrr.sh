@@ -1,6 +1,6 @@
 #!/bin/bash
 
-rootdir="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/runscriptv2.0"
+rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 eventdateDF=$(date +%Y%m%d)
 
 #-----------------------------------------------------------------------
@@ -1091,7 +1091,7 @@ EOF
         #
         jobscript="run_mpassit_$hstr.slurm"
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npepost/;s/JOBNAME/intrp_${jobname}_$hstr/;s/HHHSTR/$hstr/g" $TEMPDIR/run_mpassit.slurm > $jobscript
-        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
+        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
         echo -n "Submitting $jobscript .... "
         $runcmd $jobscript
         echo " "
@@ -1131,12 +1131,14 @@ function run_upp {
         ssmis_f18.TauCoeff.bin    ssmis_f19.TauCoeff.bin ssmis_f20.TauCoeff.bin \
         tmi_trmm.TauCoeff.bin )
 
-    declare -A fixfiles fixdirs
-    fixfiles[AerosolCoeff]=fixfiles_AerosolCoeff[@]
-    fixfiles[CloudCoeff]=fixfiles_CloudCoeff[@]
-    fixfiles[EmisCoeff]=fixfiles_EmisCoeff[@]
-    fixfiles[SpcCoeff]=fixfiles_SpcCoeff[@]
-    fixfiles[TauCoeff]=fixfiles_TauCoeff[@]
+    declare -A fixdirs
+    #declare -A fixfiles fixdirs
+    #fixfiles[AerosolCoeff]=fixfiles_AerosolCoeff[@]
+    #fixfiles[CloudCoeff]=fixfiles_CloudCoeff[@]
+    #fixfiles[EmisCoeff]=fixfiles_EmisCoeff[@]
+    #fixfiles[SpcCoeff]=fixfiles_SpcCoeff[@]
+    #fixfiles[TauCoeff]=fixfiles_TauCoeff[@]
+    fixfiles=( AerosolCoeff CloudCoeff EmisCoeff SpcCoeff TauCoeff )
 
     fixdirs[AerosolCoeff]="$TEMPDIR/UPP/crtm2_fix/AerosolCoeff/Big_Endian"
     fixdirs[CloudCoeff]="$TEMPDIR/UPP/crtm2_fix/CloudCoeff/Big_Endian"
@@ -1171,8 +1173,12 @@ function run_upp {
         mkwrkdir $wrkdir/post_$hstr 1
         cd $wrkdir/post_$hstr
 
-        for coeff in ${!fixfiles[@]}; do
-            for fn in ${!fixfiles[$coeff][@]}; do
+        #for coeff in ${!fixfiles[@]}; do
+        #    echo "$coeff"
+        #    for fn in ${!fixfiles[$coeff][@]}; do
+        for coeff in ${fixfiles[@]}; do
+            eval filearray=\( \${fixfiles_${coeff}[@]} \)
+            for fn in ${filearray[@]}; do
                 #echo "$coeff -> ${fixdirs[$coeff]}/$fn"
                 ln -sf ${fixdirs[$coeff]}/$fn .
             done
@@ -1211,7 +1217,7 @@ EOF
         #
         jobscript="run_upp_$hstr.slurm"
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npepost/;s/JOBNAME/upp_${jobname}_$hstr/;s/HHHSTR/$hstr/g" $TEMPDIR/run_upp.slurm > $jobscript
-        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir/post_$hstr#g;s#EXEDIR#${exedir}#" $jobscript
+        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir/post_$hstr#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
         echo -n "Submitting $jobscript .... "
         $runcmd $jobscript
         echo " "
@@ -1269,7 +1275,7 @@ eventdate="$eventdateDF"
 eventtime="00"
 
 domname="wofs_conus"
-runcmd="/apps-local/slurm/default/bin/sbatch"
+runcmd="sbatch"
 verb=0
 overwrite=1
 jobsfromcmd=0
