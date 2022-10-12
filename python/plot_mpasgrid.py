@@ -11,6 +11,7 @@
 
 import os
 import sys
+import re
 import argparse
 
 import numpy as np
@@ -116,15 +117,15 @@ if __name__ == "__main__":
 
 
                 print("\n---- Other Variables ----")
-                for varstr in varODlist:
+                for varstr in sorted(varODlist):
                     print(varstr)
 
                 print("\n---- 3D Variables ----")
-                for varstr in var3dlist:
+                for varstr in sorted(var3dlist):
                     print(varstr)
 
                 print("\n---- 2D Variables ----")
-                for varstr in var2dlist:
+                for varstr in sorted(var2dlist):
                     print(varstr)
 
                 sys.exit(0)
@@ -159,9 +160,6 @@ if __name__ == "__main__":
         glats = lats * (180 / np.pi)
         glons = ((lons * (180 / np.pi) )%360 + 540)%360 -180.
 
-    levels = range(nlevels)
-    if args.levels is not None:
-        levels = [int(item) for item in args.levels.split(',')]
 
     if varndim == 2:
         levels=[0]
@@ -175,7 +173,12 @@ if __name__ == "__main__":
             sys.exit(0)
 
         if args.levels is not None:
-            levels = [int(item) for item in args.levels.split(',')]
+            pattern = re.compile("^([0-9]+)-([0-9]+)$")
+            pmatched = pattern.match(args.levels)
+            if pmatched:
+                levels=range(int(pmatched[1]),int(pmatched[2]))
+            else:
+                levels = [int(item) for item in args.levels.split(',')]
     else:
         print(f"Do not supported {varndim} dimensions array.")
         sys.exit(0)
@@ -187,9 +190,11 @@ if __name__ == "__main__":
     if args.outfile is None:
         outdir  = './'
         outfile = None
+        defaultoutfile = True
     elif os.path.isdir(args.outfile):
         outdir  = args.outfile
         outfile = None
+        defaultoutfile = True
     else:
         outdir  = os.path.dirname(args.outfile)
         outfile = os.path.basename(args.outfile)
@@ -296,7 +301,7 @@ if __name__ == "__main__":
             gl.ylocator = mticker.FixedLocator([10,20,30,40,50,60])
             gl.top_labels = False
             gl.left_labels = True  #default already
-            gl.right_labels = True
+            gl.right_labels = False
             gl.bottom_labels = True
 
 
@@ -310,13 +315,16 @@ if __name__ == "__main__":
             #                )
 
             # Create the title as you see fit
-            #plt.title(f"{args.varname} at time {t} and on level {l}")
+            #plt.title(f"{varname} at time {t} and on level {l}")
             ax.set_title(f"{varname} at time {fcstfname} and on level {l:02d}")
             plt.style.use(style) # Set the style that we choose above
 
             #
-            if outfile is None:
-                outfile = f"{varname}.{fcstfname}_K{l:02d}.{basmap}.png"
+            if defaultoutfile:
+                if varndim == 3:
+                    outfile = f"{varname}.{fcstfname}_K{l:02d}.{basmap}.png"
+                else:
+                    outfile = f"{varname}.{fcstfname}.{basmap}.png"
 
             figname = os.path.join(outdir,outfile)
             print(f"Saving figure to {figname} ...")

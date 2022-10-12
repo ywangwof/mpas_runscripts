@@ -13,17 +13,22 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-module use ROOTDIR/modules
-module load build_jet_intelTed
+if [[ "MACHINE" == "Jet" ]]; then
+    module use ROOTDIR/modules
+    module load build_jet_intelTed
+
+    ncores=6
+    #nnode=$(( NOPART/$SLURM_CPUS_ON_NODE ))
+    #nnode=$SLURM_JOB_NUM_NODES
+else
+    source /scratch/ywang/MPAS/env.mpas
+    ncores=24
+fi
+nnode=$(( NOPART/ncores ))
 
 ulimit -s unlimited
 
 cd WRKDIR
-
-ncores=6
-#nnode=$(( NOPART/$SLURM_CPUS_ON_NODE ))
-#nnode=$SLURM_JOB_NUM_NODES
-nnode=$(( NOPART/ncores ))
 
 sed -i "s/NNNODE/$nnode/;s/NNCORE/$ncores/;" namelist.atmosphere
 
