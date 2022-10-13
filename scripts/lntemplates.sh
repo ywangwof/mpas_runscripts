@@ -1,5 +1,10 @@
 #!/bin/bash
 
+desdir=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/runscriptv2.0/templates
+srcmpassitdir=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MPASSIT
+srcuppdir=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/UPP_KATE_kjet
+srcmodeldir=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MPAS-Model.ted
+
 function usage {
     echo " "
     echo "    USAGE: $0 [options] CMD [DESTDIR]"
@@ -8,7 +13,7 @@ function usage {
     echo " "
     echo "    WORKDIR  - Destination Directory"
     echo "    CMD      - One or more jobs from [mpas,MPASSIT,UPP,WRF]"
-    echo "               Default all jobs in sequence"
+    echo "               Default \"mpas\""
     echo " "
     echo "    OPTIONS:"
     echo "              -h              Display this message"
@@ -18,6 +23,12 @@ function usage {
     echo "                              Default is for templates"
     echo "              -s  DIR         Source directory"
     echo "              -m  Machine     Machine name to run, [Jet or Odin]."
+    echo " "
+    echo "   DEFAULTS:"
+    echo "              desdir     = $desdir"
+    echo "              srcmpassit = $srcmpassitdir"
+    echo "              srcupp     = $srcuppdir"
+    echo "              srcmodel   = $srcuppdir"
     echo " "
     echo "                                     -- By Y. Wang (2022.10.12)"
     echo " "
@@ -30,7 +41,6 @@ function usage {
 #
 #-----------------------------------------------------------------------
 cmd="mpas"
-desdir=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/runscriptv2.0/templates
 
 verb=0
 machine="Jet"
@@ -74,7 +84,7 @@ while [[ $# > 0 ]]
             fi
             shift
             ;;
-         mpas | MPASSIT | UPP | WRF)
+        mpas | MPASSIT | UPP | WRF)
             cmd=${key}
             ;;
         -*)
@@ -101,7 +111,7 @@ done
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\
 
 if [[ $cmd == "MPASSIT" ]]; then
-    srcmpassit=${srcdir-/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MPASSIT}
+    srcmpassit=${srcdir-$srcmodeldir}
 
     cd $desdir/MPASSIT
 
@@ -132,15 +142,15 @@ if [[ $cmd == "MPASSIT" ]]; then
 #    done
 
 elif [[ $cmd == "UPP" ]]; then
-    srcupp=${srcdir-/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/UPP_KATE_kjet}
+    srcupp=${srcdir-$srcuppdir}
 
     cd $desdir/UPP
 
     ln -sf $srcupp/src/lib/crtm2/src/fix crtm2_fix
 
-elif [[ $cmd == "MPAS" ]]; then
+elif [[ $cmd == "mpas" ]]; then
 
-    srcmodeldir=${srcdir-/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MPAS-Model.ted}
+    srcmodel=${srcdir-$srcmodeldir}
 
     cd $desdir
 
@@ -152,7 +162,7 @@ elif [[ $cmd == "MPAS" ]]; then
 
     for fn in ${staticfiles[@]}; do
         echo "Linking $fn ...."
-        ln -sf $srcmodeldir/src/core_atmosphere/physics/physics_wrf/files/$fn .
+        ln -sf $srcmodel/src/core_atmosphere/physics/physics_wrf/files/$fn .
     done
 
     if [[ $run -ne 1 ]]; then
@@ -162,11 +172,11 @@ elif [[ $cmd == "MPAS" ]]; then
 
         for fn in ${streamfiles[@]}; do
             echo "Linking $fn ...."
-            ln -sf $srcmodeldir/$fn .
+            ln -sf $srcmodel/$fn .
         done
     fi
 else
-    echo "Argument should be one of [mpas, MPASSIT, WRF, UPP]. get \"$1\"."
+    echo "Argument should be one of [mpas, MPASSIT, WRF, UPP]. get \"${cmd}\"."
 fi
 
 exit 0

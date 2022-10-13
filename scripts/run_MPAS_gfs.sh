@@ -136,6 +136,7 @@ function usage {
     echo "              -k  [0,1,2]     Keep working directory if exist, 0- as is; 1- overwrite; 2- make a backup as xxxx.bak?"
     echo "                              Default is 0 for ungrib, mpassit, upp and 1 for others"
     echo "              -t  DIR         Template directory for runtime files"
+    echo "              -m  Machine     Machine name to run, [Jet or Odin]."
     echo "              -d  wofs_conus  Domain name to be used"
     echo " "
     echo "   DEFAULTS:"
@@ -780,7 +781,7 @@ function run_mpas {
     config_time_integration_order   = 2
     config_dt                       = 20
     config_start_time               = '${starttime_str}'
-    config_run_duration             = '${fcsthour_str}: 00: 00'
+    config_run_duration             = '${fcsthour_str}:00:00'
     config_split_dynamics_transport = true
     config_number_of_sub_steps      = 2
     config_dynamics_split_steps     = 3
@@ -836,8 +837,8 @@ function run_mpas {
     config_sst_update                = false
     config_sstdiurn_update           = false
     config_deepsoiltemp_update       = false
-    config_radtlw_interval           = '00: 30: 00'
-    config_radtsw_interval           = '00: 30: 00'
+    config_radtlw_interval           = '00:30:00'
+    config_radtsw_interval           = '00:30:00'
     config_bucket_update             = 'none'
     config_physics_suite             = 'convection_permitting'
     config_microp_scheme             = 'mp_nssl2m'
@@ -909,7 +910,7 @@ EOF
     #
     jobscript="run_mpas.slurm"
     sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npefcst/;s/JOBNAME/mpas_${jobname}/" $TEMPDIR/$jobscript > $jobscript
-    sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
+    sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
     echo -n "Submitting $jobscript .... "
     $runcmd $jobscript
 }
@@ -981,7 +982,7 @@ EOF
         #
         jobscript="run_mpassit_$hstr.slurm"
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npepost/;s/JOBNAME/intrp_${jobname}_$hstr/;s/HHHSTR/$hstr/g" $TEMPDIR/run_mpassit.slurm > $jobscript
-        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
+        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
         echo -n "Submitting $jobscript .... "
         $runcmd $jobscript
         echo " "
@@ -1021,12 +1022,14 @@ function run_upp {
         ssmis_f18.TauCoeff.bin    ssmis_f19.TauCoeff.bin ssmis_f20.TauCoeff.bin \
         tmi_trmm.TauCoeff.bin )
 
-    declare -A fixfiles fixdirs
-    fixfiles[AerosolCoeff]=fixfiles_AerosolCoeff[@]
-    fixfiles[CloudCoeff]=fixfiles_CloudCoeff[@]
-    fixfiles[EmisCoeff]=fixfiles_EmisCoeff[@]
-    fixfiles[SpcCoeff]=fixfiles_SpcCoeff[@]
-    fixfiles[TauCoeff]=fixfiles_TauCoeff[@]
+    declare -A fixdirs
+    #declare -A fixfiles fixdirs
+    #fixfiles[AerosolCoeff]=fixfiles_AerosolCoeff[@]
+    #fixfiles[CloudCoeff]=fixfiles_CloudCoeff[@]
+    #fixfiles[EmisCoeff]=fixfiles_EmisCoeff[@]
+    #fixfiles[SpcCoeff]=fixfiles_SpcCoeff[@]
+    #fixfiles[TauCoeff]=fixfiles_TauCoeff[@]
+    fixfiles=( AerosolCoeff CloudCoeff EmisCoeff SpcCoeff TauCoeff )
 
     fixdirs[AerosolCoeff]="$TEMPDIR/UPP/crtm2_fix/AerosolCoeff/Big_Endian"
     fixdirs[CloudCoeff]="$TEMPDIR/UPP/crtm2_fix/CloudCoeff/Big_Endian"
@@ -1061,8 +1064,12 @@ function run_upp {
         mkwrkdir $wrkdir/post_$hstr 1
         cd $wrkdir/post_$hstr
 
-        for coeff in ${!fixfiles[@]}; do
-            for fn in ${!fixfiles[$coeff][@]}; do
+        #for coeff in ${!fixfiles[@]}; do
+        #    echo "$coeff"
+        #    for fn in ${!fixfiles[$coeff][@]}; do
+        for coeff in ${fixfiles[@]}; do
+            eval filearray=\( \${fixfiles_${coeff}[@]} \)
+            for fn in ${filearray[@]}; do
                 #echo "$coeff -> ${fixdirs[$coeff]}/$fn"
                 ln -sf ${fixdirs[$coeff]}/$fn .
             done
@@ -1101,7 +1108,7 @@ EOF
         #
         jobscript="run_upp_$hstr.slurm"
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npepost/;s/JOBNAME/upp_${jobname}_$hstr/;s/HHHSTR/$hstr/g" $TEMPDIR/run_upp.slurm > $jobscript
-        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir/post_$hstr#g;s#EXEDIR#${exedir}#" $jobscript
+        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir/post_$hstr#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
         echo -n "Submitting $jobscript .... "
         $runcmd $jobscript
         echo " "
@@ -1158,11 +1165,12 @@ TEMPDIR="${rootdir}/templates"
 eventdate="$eventdateDF"
 eventtime="00"
 
-domname="wofs_conus"
-runcmd="/apps-local/slurm/default/bin/sbatch"
+domname="wofs_mpas"
+runcmd="sbatch"
 verb=0
 overwrite=1
 jobsfromcmd=0
+machine="Jet"
 
 #-----------------------------------------------------------------------
 #
@@ -1198,6 +1206,17 @@ while [[ $# > 0 ]]
                 TEMPDIR=$2
             else
                 echo "ERROR: Template directory \"$2\" does not exist."
+                usage 1
+            fi
+            shift
+            ;;
+        -m)
+            if [[ ${2^^} == "JET" ]]; then
+                machine=Jet
+            elif [[ ${2^^} == "ODIN" ]]; then
+                machine=Odin
+            else
+                echo "ERROR: Unsupported machine name, got \"$2\"."
                 usage 1
             fi
             shift
@@ -1245,9 +1264,15 @@ done
 #
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-account="hpc-wof1"
-partition="xjet,ujet,vjet,tjet,kjet"
-partition_static="bigmem"
+if [[ $machine == "Jet" ]]; then
+    account="wof"
+    partition="ujet,tjet,xjet,vjet,kjet"
+    partition_static="bigmem"
+else
+    account="largequeue"
+    partition="wofq"
+    partition_static="largequeue"
+fi
 npeics=800
 npefcst=1200
 npepost=72
