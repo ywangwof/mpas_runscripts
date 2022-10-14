@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 #
-#
 # This module plots MPAS forecast 2D/3D fields on a horizontal slice by
 # retriving a collection of MPL Path Patches for the MPAS unstructured mesh.
 #
@@ -23,6 +22,14 @@ import argparse
 
 import numpy as np
 
+''' By default matplotlib will try to open a display windows of the plot, even
+though sometimes we just want to save a plot. Somtimes this can cause the
+program to crash if the display can't open. The two commands below makes it so
+matplotlib doesn't try to open a window
+'''
+import matplotlib
+matplotlib.use('Agg')
+
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 # '''
@@ -32,6 +39,8 @@ import matplotlib.ticker as mticker
 #     - https://matplotlib.org/examples/color/colormaps_reference.html
 # '''
 import matplotlib.cm as cm
+import matplotlib.colors as colors
+from metpy.plots import ctables
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -311,6 +320,8 @@ if __name__ == "__main__":
             pmatched = pattern.match(args.levels)
             if pmatched:
                 levels=range(int(pmatched[1]),int(pmatched[2]))
+            elif args.levels in ["max",]:
+                levels=["max",]
             else:
                 levels = [int(item) for item in args.levels.split(',')]
     else:
@@ -390,10 +401,14 @@ if __name__ == "__main__":
     # - https://matplotlib.org/gallery/style_sheets/style_sheets_reference.html
     #
     #
-    color_map = cm.gist_ncar
+    general_colormap = cm.gist_ncar
+
+    mycolors = ctables.colortables['NWSReflectivity']
+    mycolors.insert(0,(1,1,1))
+    ref_colormap = colors.ListedColormap(mycolors)
     style = 'ggplot'
 
-    # In this example, we will be plotting actual MPAS polygons. The
+    #  we will be plotting actual MPAS polygons. The
     # `get_mpas_patches` function will create a collection of patches for the current
     # mesh for us AND it will save it, so that later we do not need to create it
     # again (Because often time creation is very slow).
@@ -412,12 +427,29 @@ if __name__ == "__main__":
         for l in levels:
 
             if varndim == 3:
-                varplt = vardata[t,:,l]
+                if l == "max":
+                    varplt = np.max(vardata,axis=2)[t,:]
+                    outlvl = f"_{l}"
+                    outtlt = f"colum maximum {varname} at time {fcstfname}"
+                else:
+                    varplt = vardata[t,:,l]
+                    outlvl = f"_K{l:02d}"
+                    outtlt = f"{varname} at time {fcstfname} and on level {l:02d}"
             elif varndim == 2:
                 varplt = vardata[t,:]
+                outlvl = ""
+                outtlt = f"{varname} at time {fcstfname}"
             else:
                 print(f"Variable {varname} is in wrong shape: {varshapes}.")
                 sys.exit(0)
+
+            color_map = general_colormap
+            pmin = varplt.min()
+            pmax = varplt.max()
+            if varname.startswith('refl'):    # Use reflectivity color map and range
+                color_map = ref_colormap
+                pmin = 0.0
+                pmax = 80.0
 
             figure = plt.figure(figsize = (12,12) )
 
@@ -433,6 +465,7 @@ if __name__ == "__main__":
             #patch_collection.set_edgecolors('w')       # No Edge Colors
             patch_collection.set_antialiaseds(False)    # Blends things a little
             patch_collection.set_cmap(color_map)        # Select our color_map
+            patch_collection.set_clim(pmin,pmax)
 
             # Now apply the patch_collection to our axis '''
             ax.add_collection(patch_collection)
@@ -476,15 +509,12 @@ if __name__ == "__main__":
 
             # Create the title as you see fit
             #plt.title(f"{varname} at time {t} and on level {l}")
-            ax.set_title(f"{varname} at time {fcstfname} and on level {l:02d}")
+            ax.set_title(outtlt)
             plt.style.use(style) # Set the style that we choose above
 
             #
             if defaultoutfile:
-                if varndim == 3:
-                    outfile = f"{varname}.{fcstfname}_K{l:02d}.png"
-                else:
-                    outfile = f"{varname}.{fcstfname}.png"
+                outfile = f"{varname}.{fcstfname}{outlvl}.png"
 
             figname = os.path.join(outdir,outfile)
             print(f"Saving figure to {figname} ...")

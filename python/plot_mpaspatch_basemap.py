@@ -18,9 +18,18 @@
 
 import os
 import sys
+import re
 import argparse
 
 import numpy as np
+
+''' By default matplotlib will try to open a display windows of the plot, even
+though sometimes we just want to save a plot. Somtimes this can cause the
+program to crash if the display can't open. The two commands below makes it so
+matplotlib doesn't try to open a window
+'''
+import matplotlib
+matplotlib.use('Agg')
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
@@ -31,6 +40,8 @@ import matplotlib.ticker as mticker
 #     - https://matplotlib.org/examples/color/colormaps_reference.html
 # '''
 import matplotlib.cm as cm
+import matplotlib.colors as colors
+from metpy.plots import ctables
 
 from mpl_toolkits.basemap import Basemap
 
@@ -40,8 +51,6 @@ import pickle as pkle
 import matplotlib.collections as mplcollections
 import matplotlib.patches as patches
 import matplotlib.path as path
-
-import argparse
 
 ########################################################################
 
@@ -252,15 +261,15 @@ if __name__ == "__main__":
 
 
                 print("\n---- Other Variables ----")
-                for varstr in varODlist:
+                for varstr in sorted(varODlist):
                     print(varstr)
 
                 print("\n---- 3D Variables ----")
-                for varstr in var3dlist:
+                for varstr in sorted(var3dlist):
                     print(varstr)
 
                 print("\n---- 2D Variables ----")
-                for varstr in var2dlist:
+                for varstr in sorted(var2dlist):
                     print(varstr)
 
                 sys.exit(0)
@@ -295,24 +304,6 @@ if __name__ == "__main__":
         picklefile = picklefile+'.'+str(nCells)+'.'+'patches'
         picklefile = os.path.join(os.path.dirname(gridfile),picklefile)
 
-    # In this example, we will be plotting actual MPAS polygons. The
-    # `get_mpas_patches` function will create a collection of patches for the current
-    # mesh for us AND it will save it, so that later we do not need to create it
-    # again (Because often time creation is very slow).
-    #
-    # If you have a PickleFile someone where can supply it as the pickleFile argument
-    # to the `get_mpas_patches` function.
-    #
-    # Doing things this way is slower, as we will have to not only loop through
-    # nCells, but also nEdges of all nCells.
-    #
-    #patch_collection = get_mpas_patches(gridfile, picklefile)
-    patch_collection = load_mpas_patches(picklefile)
-
-    levels = range(nlevels)
-    if args.levels is not None:
-        levels = [int(item) for item in args.levels.split(',')]
-
     if varndim == 2:
         levels=[0]
     elif varndim == 3:
@@ -325,7 +316,14 @@ if __name__ == "__main__":
             sys.exit(0)
 
         if args.levels is not None:
-            levels = [int(item) for item in args.levels.split(',')]
+            pattern = re.compile("^([0-9]+)-([0-9]+)$")
+            pmatched = pattern.match(args.levels)
+            if pmatched:
+                levels=range(int(pmatched[1]),int(pmatched[2]))
+            elif args.levels in ["max",]:
+                levels=["max",]
+            else:
+                levels = [int(item) for item in args.levels.split(',')]
     else:
         print(f"Do not supported {varndim} dimensions array.")
         sys.exit(0)
@@ -337,9 +335,11 @@ if __name__ == "__main__":
     if args.outfile is None:
         outdir  = './'
         outfile = None
+        defaultoutfile = True
     elif os.path.isdir(args.outfile):
         outdir  = args.outfile
         outfile = None
+        defaultoutfile = True
     else:
         outdir  = os.path.dirname(args.outfile)
         outfile = os.path.basename(args.outfile)
@@ -407,20 +407,55 @@ if __name__ == "__main__":
     # - https://matplotlib.org/gallery/style_sheets/style_sheets_reference.html
     #
     #
-    color_map = cm.gist_ncar
+    general_colormap = cm.gist_ncar
+
+    mycolors = ctables.colortables['NWSReflectivity']
+    mycolors.insert(0,(1,1,1))
+    ref_colormap = colors.ListedColormap(mycolors)
     style = 'ggplot'
+
+    # In this example, we will be plotting actual MPAS polygons. The
+    # `get_mpas_patches` function will create a collection of patches for the current
+    # mesh for us AND it will save it, so that later we do not need to create it
+    # again (Because often time creation is very slow).
+    #
+    # If you have a PickleFile someone where can supply it as the pickleFile argument
+    # to the `get_mpas_patches` function.
+    #
+    # Doing things this way is slower, as we will have to not only loop through
+    # nCells, but also nEdges of all nCells.
+    #
+    #patch_collection = get_mpas_patches(gridfile, picklefile)
+    patch_collection = load_mpas_patches(picklefile)
 
     times = [0]
     for t in times:
         for l in levels:
 
             if varndim == 3:
-                varplt = vardata[t,:,l]
+                if l == "max":
+                    varplt = np.max(vardata,axis=2)[t,:]
+                    outlvl = f"_{l}"
+                    outtlt = f"colum maximum {varname} at time {fcstfname}"
+                else:
+                    varplt = vardata[t,:,l]
+                    outlvl = f"_K{l:02d}"
+                    outtlt = f"{varname} at time {fcstfname} and on level {l:02d}"
             elif varndim == 2:
                 varplt = vardata[t,:]
+                outlvl = ""
+                outtlt = f"{varname} at time {fcstfname}"
             else:
                 print(f"Variable {varname} is in wrong shape: {varshapes}.")
                 sys.exit(0)
+
+            color_map = general_colormap
+            pmin = varplt.min()
+            pmax = varplt.max()
+            if varname.startswith('refl'):    # Use reflectivity color map and range
+                color_map = ref_colormap
+                pmin = 0.0
+                pmax = 80.0
 
             figure = plt.figure(figsize = (12,12) )
             ax = plt.gca()
@@ -443,6 +478,7 @@ if __name__ == "__main__":
             #patch_collection.set_edgecolors('w')       # No Edge Colors
             patch_collection.set_antialiaseds(False)    # Blends things a little
             patch_collection.set_cmap(color_map)        # Select our color_map
+            patch_collection.set_clim(pmin,pmax)
 
             # Now apply the patch_collection to our axis '''
             ax.add_collection(patch_collection)
@@ -460,12 +496,12 @@ if __name__ == "__main__":
 
             # Create the title as you see fit
             #plt.title(f"{varname} at time {t} and on level {l}")
-            ax.set_title(f"{varname} at time {fcstfname} and on level {l:02d}")
+            ax.set_title(outtlt)
             plt.style.use(style) # Set the style that we choose above
 
             #
-            if outfile is None:
-                outfile = f"{varname}.{fcstfname}_K{l:02d}.{basmap}.png"
+            if defaultoutfile:
+                outfile = f"{varname}.{fcstfname}{outlvl}.png"
 
             figname = os.path.join(outdir,outfile)
             print(f"Saving figure to {figname} ...")

@@ -14,6 +14,9 @@
 #
 # * https://github.com/MiCurry/MPAS-Plotting
 #
+#  Note that the generated Pickle file is Matplotlib version dependent.
+#  You may have to recreate this file after the Python environment is changed.
+#
 #-----------------------------------------------------------------------
 #
 # By Yunheng Wang (NOAA/NSSL, 2022.10.10)
