@@ -1,11 +1,11 @@
 #!/bin/sh -l
 #SBATCH -A wof
-#SBATCH --partition=ujet,tjet,xjet,vjet,kjet
-#SBATCH -J plot_theta
-#SBATCH --ntasks=1 --ntasks-per-node=1
+#SBATCH --partition=ujet,xjet,vjet,kjet
+#SBATCH -J plot_cref
+#SBATCH --ntasks=1 --ntasks-per-node=1 --mem=64000
 #SBATCH --exclusive
 #SBATCH -t 00:30:00
-#SBATCH --output=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/runscriptv2.0/python/plot_theta_%j.log
+#SBATCH --output=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/runscriptv2.0/python/plot_cref_%j.log
 
 #set -eux
 
@@ -21,12 +21,12 @@ ulimit -s unlimited
 cd /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/runscriptv2.0/python
 
 #plot_mpaspatch_basemap.py -p wofs_small.271805.patches /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/run_dirs/2022101000_hrrr_small/fcst/wofs_small.history.2022-10-10_06.00.00.nc qv -l 1
-plot_mpaspatch.py -p wofs_small.271805.patches /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/run_dirs/2022101000_hrrr_small/fcst/wofs_small.history.2022-10-10_06.00.00.nc qv -l 2
+plot_mpaspatch.py -p wofs_mpas.1894063.patches /lfs1/NAGAPE/wof/MPAS/run_dirs/2022101400_hrrr/fcst/wofs_mpas.diag.2022-10-14_06.00.00.nc refl10cm  -l max
 
 #if [[ $? -eq 0 ]]; then
-#    touch done.plot_theta
+#    touch done.plot_cref
 #else
-#    touch error.plot_theta
+#    touch error.plot_cref
 #fi
 
 time2=$(date '+%s')

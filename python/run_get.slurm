@@ -20,13 +20,13 @@ ulimit -s unlimited
 
 cd /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/runscriptv2.0/python
 
-get_mpaspatches.py -n 12 /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/run_dirs/2022101000_hrrr_small/fcst/wofs_small.history.2022-10-10_06.00.00.nc
+get_mpaspatches.py -n 12 /lfs1/NAGAPE/wof/MPAS/run_dirs/2022101400_hrrr/fcst/wofs_mpas.history.2022-10-14_01.00.00.nc
 
-if [[ $? -eq 0 ]]; then
-    touch done.get_patches
-else
-    touch error.get_patches
-fi
+#if [[ $? -eq 0 ]]; then
+#    touch done.get_patches
+#else
+#    touch error.get_patches
+#fi
 
 time2=$(date '+%s')
 
