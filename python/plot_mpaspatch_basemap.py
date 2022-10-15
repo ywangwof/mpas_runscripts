@@ -196,6 +196,30 @@ def load_mpas_patches(pickle_fname):
         sys.exit(-1)
         #return None
 
+def get_var_contours(varname,var2d,colormaps,cntlevels):
+    '''set contour specifications'''
+
+    #
+    # set color map to be used
+    #
+    color_map = colormaps[0]
+    if varname.startswith('refl'):    # Use reflectivity color map and range
+        color_map = colormaps[1]
+
+    #
+    # set contour levels
+    #
+    if cntlevels is not None:
+        cmin,cmax,cinc = cntlevels
+    else:
+        cmin = var2d.min()
+        cmax = var2d.max()
+        if varname.startswith('refl'):    # Use reflectivity color map and range
+            cmin = 0.0
+            cmax = 80.0
+
+    return color_map, cmin, cmax
+
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
 # Main function defined to return correct sys.exit() calls
@@ -215,7 +239,8 @@ if __name__ == "__main__":
     parser.add_argument('-v','--verbose',   help='Verbose output',                             action="store_true", default=False)
     #parser.add_argument('-g','--gridfile',  help='Name of the MPAS file that contains cell grid',         type=str, default=None)
     parser.add_argument('-p','--patchfile', help='Name of the MPAS patch file that contains cell patches',type=str, default=None)
-    parser.add_argument('-l','--levels' ,   help='Vertical levels to be plotted [l1,l2,l3,...]',          type=str, default=None)
+    parser.add_argument('-l','--vertLevels',help='Vertical levels to be plotted [l1,l2,l3,...]',  type=str, default=None)
+    parser.add_argument('-c','--cntLevels', help='Contour levels [cmin,cmin,cinc]',               type=str, default=None)
     parser.add_argument('-o','--outfile',   help='Name of output image or output directory',              type=str, default=None)
 
     args = parser.parse_args()
@@ -307,15 +332,15 @@ if __name__ == "__main__":
             print(f"The 3rd dimension size ({varshapes[2]}) is not in ({nlevels}, {nslevels}).")
             sys.exit(0)
 
-        if args.levels is not None:
+        if args.vertLevels is not None:
             pattern = re.compile("^([0-9]+)-([0-9]+)$")
-            pmatched = pattern.match(args.levels)
+            pmatched = pattern.match(args.vertLevels)
             if pmatched:
                 levels=range(int(pmatched[1]),int(pmatched[2]))
-            elif args.levels in ["max",]:
+            elif args.vertLevels in ["max",]:
                 levels=["max",]
             else:
-                levels = [int(item) for item in args.levels.split(',')]
+                levels = [int(item) for item in args.vertLevels.split(',')]
     else:
         print(f"Do not supported {varndim} dimensions array.")
         sys.exit(0)
@@ -352,6 +377,17 @@ if __name__ == "__main__":
     else:
         outdir  = os.path.dirname(args.outfile)
         outfile = os.path.basename(args.outfile)
+
+    #
+    # decode contour specifications
+    #
+    if args.cntLevels is None:
+        cntlevel = None
+    else:
+        cntlevel = [float(item) for item in args.cntLevels.split(',')]
+        if len(cntlevel) != 3:
+            print(f"Option -c must be [cmin,cmax,cinc]. Got \"{cntlevel}\"")
+            sys.exit(0)
 
     #-----------------------------------------------------------------------
     #
@@ -414,7 +450,7 @@ if __name__ == "__main__":
                 else:
                     varplt = vardata[t,:,l]
                     outlvl = f"_K{l:02d}"
-                    outtlt = f"{varname} ({varunits}) valid at {fcsttime} and on level {l:02d}"
+                    outtlt = f"{varname} ({varunits}) valid at {fcsttime} on level {l:02d}"
             elif varndim == 2:
                 varplt = vardata[t,:]
                 outlvl = ""
@@ -423,13 +459,7 @@ if __name__ == "__main__":
                 print(f"Variable {varname} is in wrong shape: {varshapes}.")
                 sys.exit(0)
 
-            color_map = general_colormap
-            pmin = varplt.min()
-            pmax = varplt.max()
-            if varname.startswith('refl'):    # Use reflectivity color map and range
-                color_map = ref_colormap
-                pmin = 0.0
-                pmax = 80.0
+            color_map, cmin, cmax = get_var_contours(varname,varplt,(general_colormap,ref_colormap),cntlevel)
 
             figure = plt.figure(figsize = (12,12) )
             ax = plt.gca()
@@ -452,7 +482,7 @@ if __name__ == "__main__":
             #patch_collection.set_edgecolors('w')       # No Edge Colors
             patch_collection.set_antialiaseds(False)    # Blends things a little
             patch_collection.set_cmap(color_map)        # Select our color_map
-            patch_collection.set_clim(pmin,pmax)
+            patch_collection.set_clim(cmin,cmax)
 
             # Now apply the patch_collection to our axis '''
             ax.add_collection(patch_collection)

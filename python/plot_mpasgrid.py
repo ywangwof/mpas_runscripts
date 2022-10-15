@@ -73,6 +73,50 @@ def fnormalize(fmin,fmax):
 
     return min_m, max_m, fexp
 
+def get_var_contours(varname,var2d,colormaps,cntlevels):
+    '''set contour specifications'''
+
+    #
+    # set color map to be used
+    #
+    color_map = colormaps[0]
+    if varname.startswith('refl'):    # Use reflectivity color map and range
+        color_map = colormaps[1]
+
+    #
+    # set contour levels
+    #
+    if cntlevels is not None:
+        cmin,cmax,cinc = cntlevels
+        cntlevels = np.arange(cmin,cmax+0.01*cinc,cinc)
+        normc = colors.Normalize(cmin,cmax)
+    else:
+        pmin = var2d.min()
+        pmax = var2d.max()
+        if varname.startswith('refl'):    # Use reflectivity color map and range
+            cmin = 0.0
+            cmax = 5*pmax//5
+            cntlevels = list(np.arange(cmin,cmax,5.0))
+            normc = colors.Normalize(0.0,80.0)
+        else:
+            cmin, cmax, cexp = fnormalize(pmin,pmax)
+            minc = np.floor(cmin)
+            maxc = np.ceil(cmax)
+
+            for n in range(16,7,-1):
+                if (maxc-minc)%n == 0:
+                    break
+            if n == 8: n = 16
+            minc = minc*10**cexp
+            maxc = maxc*10**cexp
+            cntlevels = list(np.linspace(minc,maxc,n+1))
+            maxc = minc + 16* (maxc-minc)/n
+            normc = colors.Normalize(minc,maxc)
+
+    #print(cntlevels)
+
+    return color_map, normc, cntlevels
+
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
 # Main function defined to return correct sys.exit() calls
@@ -96,7 +140,8 @@ if __name__ == "__main__":
     parser.set_defaults(latlon=True)
     parser.add_argument('-d','--domain',    help='Name of the MPAS grid definition file', type=str, default=None)
     parser.add_argument('-g','--gridfile',  help='Name of the MPAS file that contains cell grid', type=str, default=None)
-    parser.add_argument('-l','--levels' ,   help='Vertical levels to be plotted [l1,l2,l3,...]',  type=str, default=None)
+    parser.add_argument('-l','--vertLevels',help='Vertical levels to be plotted [l1,l2,l3,...]',  type=str, default=None)
+    parser.add_argument('-c','--cntLevels', help='Contour levels [cmin,cmin,cinc]',               type=str, default=None)
     parser.add_argument('-o','--outfile',   help='Name of output image or output directory',      type=str, default=None)
 
     args = parser.parse_args()
@@ -187,15 +232,15 @@ if __name__ == "__main__":
             print(f"The 3rd dimension size ({varshapes[2]}) is not in ({nlevels}, {nslevels}).")
             sys.exit(0)
 
-        if args.levels is not None:
+        if args.vertLevels is not None:
             pattern = re.compile("^([0-9]+)-([0-9]+)$")
-            pmatched = pattern.match(args.levels)
+            pmatched = pattern.match(args.vertLevels)
             if pmatched:
                 levels=range(int(pmatched[1]),int(pmatched[2]))
-            elif args.levels in ["max",]:
+            elif args.vertLevels in ["max",]:
                 levels=["max",]
             else:
-                levels = [int(item) for item in args.levels.split(',')]
+                levels = [int(item) for item in args.vertLevels.split(',')]
     else:
         print(f"Do not supported {varndim} dimensions array.")
         sys.exit(0)
@@ -246,6 +291,17 @@ if __name__ == "__main__":
     else:
         outdir  = os.path.dirname(args.outfile)
         outfile = os.path.basename(args.outfile)
+
+    #
+    # decode contour specifications
+    #
+    if args.cntLevels is None:
+        cntlevel = None
+    else:
+        cntlevel = [float(item) for item in args.cntLevels.split(',')]
+        if len(cntlevel) != 3:
+            print(f"Option -c must be [cmin,cmax,cinc]. Got \"{cntlevel}\"")
+            sys.exit(0)
 
     #-----------------------------------------------------------------------
     #
@@ -319,7 +375,7 @@ if __name__ == "__main__":
                 else:
                     varplt = vardata[t,:,l]
                     outlvl = f"_K{l:02d}"
-                    outtlt = f"{varname} ({varunits}) valid at {fcsttime} and on level {l:02d}"
+                    outtlt = f"{varname} ({varunits}) valid at {fcsttime} on level {l:02d}"
             elif varndim == 2:
                 varplt = vardata[t,:]
                 outlvl = ""
@@ -328,36 +384,7 @@ if __name__ == "__main__":
                 print(f"Variable {varname} is in wrong shape: {varshapes}.")
                 sys.exit(0)
 
-            color_map = general_colormap
-            pmin = varplt.min()
-            pmax = varplt.max()
-            #print(pmin, pmax)
-            if varname.startswith('refl'):    # Use reflectivity color map and range
-                color_map = ref_colormap
-                cmin = 0.0
-                cmax = 5*pmax//5
-                cntlevels = list(np.arange(cmin,cmax,5.0))
-                normc = colors.Normalize(0.0,80.0)
-            else:
-                cmin, cmax, cexp = fnormalize(pmin,pmax)
-                minc = np.floor(cmin)
-                maxc = np.ceil(cmax)
-
-                for n in range(16,7,-1):
-                    #print(maxc, minc, n, (maxc-minc)%n)
-                    if (maxc-minc)%n == 0:
-                        break
-                if n == 8: n = 16
-                #print(n, minc, maxc, (maxc-minc)/n)
-                minc = minc*10**cexp
-                maxc = maxc*10**cexp
-                cntlevels = list(np.linspace(minc,maxc,n+1))
-                maxc = minc + 16* (maxc-minc)/n
-                normc = colors.Normalize(minc,maxc)
-                #print(cntlevels)
-                #sys.exit(0)
-
-            #print(cntlevels)
+            color_map, normc, cntlevels = get_var_contours(varname,varplt,(general_colormap,ref_colormap),cntlevel)
 
             figure = plt.figure(figsize = (12,12) )
 
@@ -374,6 +401,13 @@ if __name__ == "__main__":
             #
             #cntr = ax.tricontourf(glons, glats, varplt, levels=24, antialiased=True, cmap=color_map, transform=carr)
             cntr = ax.tricontourf(glons, glats, varplt, cntlevels, antialiased=False, cmap=color_map, norm=normc, transform=carr)
+
+            #
+            # mask out interpolation parts
+            #
+            if out_masked:
+                polygon1 = Polygon( lonlats )
+                ax.add_geometries([polygon1], crs=ccrs.Geodetic(), facecolor='w', edgecolor='none')
 
             # https://matplotlib.org/api/colorbar_api.html
             #
@@ -396,13 +430,6 @@ if __name__ == "__main__":
             gl.left_labels = True  #default already
             gl.right_labels = False
             gl.bottom_labels = True
-
-            #
-            # mask out interpolation parts
-            #
-            if out_masked:
-                polygon1 = Polygon( lonlats )
-                ax.add_geometries([polygon1], crs=ccrs.Geodetic(), facecolor='w', edgecolor='none')
 
             # Create the title as you see fit
             ax.set_title(outtlt)
