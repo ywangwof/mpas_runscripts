@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 #
-#
 # This module plots MPAS forecast 2D/3D fields on a horizontal slice by
 # retriving a collection of MPL Path Patches for the MPAS unstructured mesh.
 #
@@ -214,7 +213,7 @@ if __name__ == "__main__":
     parser.add_argument('varname', help='Name of variable to be plotted',type=str, default=None)
 
     parser.add_argument('-v','--verbose',   help='Verbose output',                             action="store_true", default=False)
-    parser.add_argument('-g','--gridfile',  help='Name of the MPAS file that contains cell grid',         type=str, default=None)
+    #parser.add_argument('-g','--gridfile',  help='Name of the MPAS file that contains cell grid',         type=str, default=None)
     parser.add_argument('-p','--patchfile', help='Name of the MPAS patch file that contains cell patches',type=str, default=None)
     parser.add_argument('-l','--levels' ,   help='Vertical levels to be plotted [l1,l2,l3,...]',          type=str, default=None)
     parser.add_argument('-o','--outfile',   help='Name of output image or output directory',              type=str, default=None)
@@ -229,6 +228,9 @@ if __name__ == "__main__":
         fcstfile = varname
         varname  = args.fcstfile
 
+    #
+    # Load variable
+    #
     if os.path.lexists(fcstfile):
 
         with Dataset(fcstfile, 'r') as mesh:
@@ -292,17 +294,7 @@ if __name__ == "__main__":
 
     fnamelist = os.path.basename(fcstfile).split('.')[2:-1]
     fcstfname = '.'.join(fnamelist)
-
-    gridfile = fcstfile
-    if args.gridfile is not None:
-        gridfile = args.gridfile
-
-    if args.patchfile is not None:
-        picklefile = args.patchfile
-    else:
-        picklefile = os.path.basename(gridfile).split('.')[0]
-        picklefile = picklefile+'.'+str(nCells)+'.'+'patches'
-        picklefile = os.path.join(os.path.dirname(gridfile),picklefile)
+    fcsttime  = ':'.join(fnamelist).replace('_',' ')
 
     if varndim == 2:
         levels=[0]
@@ -332,6 +324,23 @@ if __name__ == "__main__":
         print(f"Do not supported variable shape ({varshapes}).")
         sys.exit(0)
 
+    #
+    # Get patch file name
+    #
+    gridfile = fcstfile
+    #if args.gridfile is not None:
+    #    gridfile = args.gridfile
+
+    if args.patchfile is not None:
+        picklefile = args.patchfile
+    else:
+        picklefile = os.path.basename(gridfile).split('.')[0]
+        picklefile = picklefile+'.'+str(nCells)+'.'+'patches'
+        picklefile = os.path.join(os.path.dirname(gridfile),picklefile)
+
+    #
+    # Output file dir / file name
+    #
     if args.outfile is None:
         outdir  = './'
         outfile = None
@@ -346,40 +355,9 @@ if __name__ == "__main__":
 
     #-----------------------------------------------------------------------
     #
-    # Lambert grid for HRRR
+    # Base map project lat/lon
     #
     #-----------------------------------------------------------------------
-
-    #carr= ccrs.PlateCarree()
-
-    #if basmap == "lambert":
-    #    ctrlat = 38.5
-    #    ctrlon = -97.5    # -97.5  # 262.5
-    #    stdlat1 = 38.5
-    #    stdlat2 = 38.5
-
-    #    nxhr = 1799
-    #    nyhr = 1059
-    #    dxhr = 3000.0
-    #    dyhr = 3000.0
-
-    #    xsize=(nxhr-1)*dxhr
-    #    ysize=(nyhr-1)*dyhr
-
-    #    x1hr = np.linspace(0.0,xsize,num=nxhr)
-    #    y1hr = np.linspace(0.0,ysize,num=nyhr)
-
-    #    x2hr, y2hr = np.meshgrid(x1hr,y1hr)
-
-    #    xctr = (nxhr-1)/2*dxhr
-    #    yctr = (nyhr-1)/2*dyhr
-
-    #    proj_hrrr=ccrs.LambertConformal(central_longitude=ctrlon, central_latitude=ctrlat,
-    #                 false_easting=xctr, false_northing= yctr, secant_latitudes=None,
-    #                 standard_parallels=(stdlat1, stdlat2), globe=None)
-
-    #else:
-    #    proj_hrrr = None
 
     bmap = Basemap(projection='cyl',
                    llcrnrlat=20,
@@ -389,11 +367,7 @@ if __name__ == "__main__":
                    resolution='h')
     #-----------------------------------------------------------------------
     #
-    # Plot grids
-    #
-    # Make plots at vertical levels that is specified the range below, not this will
-    # be vertical plots, 0, 1, 2, 3, and 4 and for all the times in this mesh file
-    # (if there are any).
+    # Plot field
     #
     #-----------------------------------------------------------------------
 
@@ -414,7 +388,7 @@ if __name__ == "__main__":
     ref_colormap = colors.ListedColormap(mycolors)
     style = 'ggplot'
 
-    # In this example, we will be plotting actual MPAS polygons. The
+    #  we will be plotting actual MPAS polygons. The
     # `get_mpas_patches` function will create a collection of patches for the current
     # mesh for us AND it will save it, so that later we do not need to create it
     # again (Because often time creation is very slow).
@@ -436,15 +410,15 @@ if __name__ == "__main__":
                 if l == "max":
                     varplt = np.max(vardata,axis=2)[t,:]
                     outlvl = f"_{l}"
-                    outtlt = f"colum maximum {varname} at time {fcstfname}"
+                    outtlt = f"colum maximum {varname} ({varunits}) valid at {fcsttime}"
                 else:
                     varplt = vardata[t,:,l]
                     outlvl = f"_K{l:02d}"
-                    outtlt = f"{varname} at time {fcstfname} and on level {l:02d}"
+                    outtlt = f"{varname} ({varunits}) valid at {fcsttime} and on level {l:02d}"
             elif varndim == 2:
                 varplt = vardata[t,:]
                 outlvl = ""
-                outtlt = f"{varname} at time {fcstfname}"
+                outtlt = f"{varname} ({varunits}) valid at {fcsttime}"
             else:
                 print(f"Variable {varname} is in wrong shape: {varshapes}.")
                 sys.exit(0)
@@ -460,16 +434,16 @@ if __name__ == "__main__":
             figure = plt.figure(figsize = (12,12) )
             ax = plt.gca()
 
-            bmap.drawcoastlines(linewidth=0.5)
-            bmap.drawcountries(linewidth=0.2)
-            bmap.drawstates(linewidth=0.2)
+            bmap.drawcoastlines(linewidth=0.1)
+            bmap.drawcountries(linewidth=0.1)
+            bmap.drawstates(linewidth=0.1)
 
             bmap.drawparallels(range(-90, 90, 10),
-                               linewidth=0.3,
+                               linewidth=0.2,
                                labels=[1,0,0,0],
                                color='b')
-            bmap.drawmeridians(range(-180, 180, 10),
-                              linewidth=0.3,
+            bmap.drawmeridians(range(-180, 180, 20),
+                              linewidth=0.2,
                               labels=[0,0,0,1],
                               color='b',
                               rotation=45)
@@ -495,7 +469,6 @@ if __name__ == "__main__":
             cbar.set_label(f'{varname} ({varunits})')
 
             # Create the title as you see fit
-            #plt.title(f"{varname} at time {t} and on level {l}")
             ax.set_title(outtlt)
             plt.style.use(style) # Set the style that we choose above
 

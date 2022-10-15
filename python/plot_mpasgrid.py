@@ -12,6 +12,7 @@
 import os
 import sys
 import re
+import math
 import argparse
 
 import numpy as np
@@ -36,9 +37,14 @@ import matplotlib.cm as cm
 import matplotlib.colors as colors
 from metpy.plots import ctables
 
+#import scipy.interpolate as interpolate
+from shapely.geometry.polygon import Polygon
+
+
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 
+import csv
 from netCDF4 import Dataset
 
 #import strmrpt
@@ -57,6 +63,15 @@ def dumpobj(obj, level=0, maxlevel=10):
             if level >= maxlevel:
                 return
             dumpobj(val, level=level+1,maxlevel=maxlevel)
+
+def fnormalize(fmin,fmax):
+    min_e = int(math.floor(math.log10(abs(fmin)))) if fmin != 0 else 0
+    max_e = int(math.floor(math.log10(abs(fmax)))) if fmax != 0 else 0
+    fexp = min(min_e, max_e)-2
+    min_m = fmin/10**fexp
+    max_m = fmax/10**fexp
+
+    return min_m, max_m, fexp
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
@@ -79,6 +94,7 @@ if __name__ == "__main__":
     parser.add_argument('--latlon',         help='Base map latlon',                action='store_true')
     parser.add_argument('--no-latlon',      help='Base map lambert',dest='latlon', action='store_false')
     parser.set_defaults(latlon=True)
+    parser.add_argument('-d','--domain',    help='Name of the MPAS grid definition file', type=str, default=None)
     parser.add_argument('-g','--gridfile',  help='Name of the MPAS file that contains cell grid', type=str, default=None)
     parser.add_argument('-l','--levels' ,   help='Vertical levels to be plotted [l1,l2,l3,...]',  type=str, default=None)
     parser.add_argument('-o','--outfile',   help='Name of output image or output directory',      type=str, default=None)
@@ -158,18 +174,7 @@ if __name__ == "__main__":
 
     fnamelist = os.path.basename(fcstfile).split('.')[2:-1]
     fcstfname = '.'.join(fnamelist)
-
-    gridfile = fcstfile
-    if args.gridfile is not None:
-        gridfile = args.gridfile
-
-    with Dataset(gridfile, 'r') as grid:
-        lats = grid.variables['latCell'][:]
-        lons = grid.variables['lonCell'][:]
-
-        glats = lats * (180 / np.pi)
-        glons = ((lons * (180 / np.pi) )%360 + 540)%360 -180.
-
+    fcsttime  = ':'.join(fnamelist).replace('_',' ')
 
     if varndim == 2:
         levels=[0]
@@ -199,6 +204,37 @@ if __name__ == "__main__":
         print(f"Do not supported variable shape ({varshapes}).")
         sys.exit(0)
 
+    #
+    # decode gridfile for latitudes/longitudes
+    #
+    gridfile = fcstfile
+    if args.gridfile is not None:
+        gridfile = args.gridfile
+
+    with Dataset(gridfile, 'r') as grid:
+        lats = grid.variables['latCell'][:]
+        lons = grid.variables['lonCell'][:]
+
+        glats = lats * (180 / np.pi)
+        glons = ((lons * (180 / np.pi) )%360 + 540)%360 -180.
+
+    #
+    # decode gridfile for latitudes/longitudes
+    #
+    out_masked = False
+    if args.domain is not None and os.path.lexists(args.domain):
+
+        with open(args.domain, 'r') as csvfile:
+            reader = csv.reader(csvfile)
+            next(reader);next(reader);next(reader);
+            lonlats=[]
+            for row in reader:
+                lonlats.append((float(row[1]),float(row[0])))
+        out_masked = True
+        lonlats.append(lonlats[0])
+    #
+    # Output file dir / file name
+    #
     if args.outfile is None:
         outdir  = './'
         outfile = None
@@ -250,11 +286,7 @@ if __name__ == "__main__":
 
     #-----------------------------------------------------------------------
     #
-    # Plot grids
-    #
-    # Make plots at vertical levels that is specified the range below, not this will
-    # be vertical plots, 0, 1, 2, 3, and 4 and for all the times in this mesh file
-    # (if there are any).
+    # Plot field
     #
     #-----------------------------------------------------------------------
 
@@ -283,15 +315,15 @@ if __name__ == "__main__":
                 if l == "max":
                     varplt = np.max(vardata,axis=2)[t,:]
                     outlvl = f"_{l}"
-                    outtlt = f"colum maximum {varname} at time {fcstfname}"
+                    outtlt = f"colum maximum {varname} ({varunits}) valid at {fcsttime}"
                 else:
                     varplt = vardata[t,:,l]
                     outlvl = f"_K{l:02d}"
-                    outtlt = f"{varname} at time {fcstfname} and on level {l:02d}"
+                    outtlt = f"{varname} ({varunits}) valid at {fcsttime} and on level {l:02d}"
             elif varndim == 2:
                 varplt = vardata[t,:]
                 outlvl = ""
-                outtlt = f"{varname} at time {fcstfname}"
+                outtlt = f"{varname} ({varunits}) valid at {fcsttime}"
             else:
                 print(f"Variable {varname} is in wrong shape: {varshapes}.")
                 sys.exit(0)
@@ -300,27 +332,46 @@ if __name__ == "__main__":
             pmin = varplt.min()
             pmax = varplt.max()
             #print(pmin, pmax)
-            cntlevels = list(np.linspace(pmin,pmax,17))
-            normc = colors.Normalize(pmin,pmax)
             if varname.startswith('refl'):    # Use reflectivity color map and range
                 color_map = ref_colormap
-                pmin = 0.0
-                pmax = 5*pmax//5
-                cntlevels = list(np.arange(pmin,pmax,5.0))
+                cmin = 0.0
+                cmax = 5*pmax//5
+                cntlevels = list(np.arange(cmin,cmax,5.0))
                 normc = colors.Normalize(0.0,80.0)
+            else:
+                cmin, cmax, cexp = fnormalize(pmin,pmax)
+                minc = np.floor(cmin)
+                maxc = np.ceil(cmax)
+
+                for n in range(16,7,-1):
+                    #print(maxc, minc, n, (maxc-minc)%n)
+                    if (maxc-minc)%n == 0:
+                        break
+                if n == 8: n = 16
+                #print(n, minc, maxc, (maxc-minc)/n)
+                minc = minc*10**cexp
+                maxc = maxc*10**cexp
+                cntlevels = list(np.linspace(minc,maxc,n+1))
+                maxc = minc + 16* (maxc-minc)/n
+                normc = colors.Normalize(minc,maxc)
+                #print(cntlevels)
+                #sys.exit(0)
 
             #print(cntlevels)
 
             figure = plt.figure(figsize = (12,12) )
 
             if basmap == "latlon":
-                #carr._threshold = carr._threshold/10.
+                carr._threshold = carr._threshold/10.
                 ax = plt.axes(projection=carr)
                 ax.set_extent([-135.0,-60.0,20.0,55.0],crs=carr)
             else:
                 ax = plt.axes(projection=proj_hrrr)
                 ax.set_extent([-125.0,-70.0,22.0,52.0],crs=carr)
 
+            #
+            # Use tricontourf
+            #
             #cntr = ax.tricontourf(glons, glats, varplt, levels=24, antialiased=True, cmap=color_map, transform=carr)
             cntr = ax.tricontourf(glons, glats, varplt, cntlevels, antialiased=False, cmap=color_map, norm=normc, transform=carr)
 
@@ -346,18 +397,14 @@ if __name__ == "__main__":
             gl.right_labels = False
             gl.bottom_labels = True
 
-
-            #plt.text(ctrlon,ctrlat,'o',color='r',horizontalalignment='center',
-            #                                    verticalalignment='center',transform=carr)
-            #transform2 = proj_hrrr._as_mpl_transform(ax)
-            #plt.annotate('HRRR Center', xy=(xctr,yctr), xycoords=transform2,
-            #                xytext=(-48, 24), textcoords='offset points',
-            #                color='r',
-            #                arrowprops=dict(arrowstyle="->")
-            #                )
+            #
+            # mask out interpolation parts
+            #
+            if out_masked:
+                polygon1 = Polygon( lonlats )
+                ax.add_geometries([polygon1], crs=ccrs.Geodetic(), facecolor='w', edgecolor='none')
 
             # Create the title as you see fit
-            #plt.title(f"{varname} at time {t} and on level {l}")
             ax.set_title(outtlt)
             plt.style.use(style) # Set the style that we choose above
 

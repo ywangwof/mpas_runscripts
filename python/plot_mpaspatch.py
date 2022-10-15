@@ -170,7 +170,7 @@ def get_mpas_patches(meshfile, pickle_fname=None):
 
 def load_mpas_patches(pickle_fname):
 
-    print(f"Using pickle file: {pickle_fname}.")
+    print(f"Using pickle file: {pickle_fname}")
 
     if(os.path.isfile(pickle_fname)):
         pickled_patches = open(pickle_fname,'rb')
@@ -214,7 +214,7 @@ if __name__ == "__main__":
     parser.add_argument('varname', help='Name of variable to be plotted',type=str, default=None)
 
     parser.add_argument('-v','--verbose',   help='Verbose output',                             action="store_true", default=False)
-    parser.add_argument('-g','--gridfile',  help='Name of the MPAS file that contains cell grid',         type=str, default=None)
+    #parser.add_argument('-g','--gridfile',  help='Name of the MPAS file that contains cell grid',         type=str, default=None)
     parser.add_argument('-p','--patchfile', help='Name of the MPAS patch file that contains cell patches',type=str, default=None)
     parser.add_argument('-l','--levels' ,   help='Vertical levels to be plotted [l1,l2,l3,...]',          type=str, default=None)
     parser.add_argument('-o','--outfile',   help='Name of output image or output directory',              type=str, default=None)
@@ -229,6 +229,9 @@ if __name__ == "__main__":
         fcstfile = varname
         varname  = args.fcstfile
 
+    #
+    # Load variable
+    #
     if os.path.lexists(fcstfile):
 
         with Dataset(fcstfile, 'r') as mesh:
@@ -292,17 +295,7 @@ if __name__ == "__main__":
 
     fnamelist = os.path.basename(fcstfile).split('.')[2:-1]
     fcstfname = '.'.join(fnamelist)
-
-    gridfile = fcstfile
-    if args.gridfile is not None:
-        gridfile = args.gridfile
-
-    if args.patchfile is not None:
-        picklefile = args.patchfile
-    else:
-        picklefile = os.path.basename(gridfile).split('.')[0]
-        picklefile = picklefile+'.'+str(nCells)+'.'+'patches'
-        picklefile = os.path.join(os.path.dirname(gridfile),picklefile)
+    fcsttime  = ':'.join(fnamelist).replace('_',' ')
 
     if varndim == 2:
         levels=[0]
@@ -332,6 +325,23 @@ if __name__ == "__main__":
         print(f"Do not supported variable shape ({varshapes}).")
         sys.exit(0)
 
+    #
+    # Get patch file name
+    #
+    gridfile = fcstfile
+    #if args.gridfile is not None:
+    #    gridfile = args.gridfile
+
+    if args.patchfile is not None:
+        picklefile = args.patchfile
+    else:
+        picklefile = os.path.basename(gridfile).split('.')[0]
+        picklefile = picklefile+'.'+str(nCells)+'.'+'patches'
+        picklefile = os.path.join(os.path.dirname(gridfile),picklefile)
+
+    #
+    # Output file dir / file name
+    #
     if args.outfile is None:
         outdir  = './'
         outfile = None
@@ -383,11 +393,7 @@ if __name__ == "__main__":
 
     #-----------------------------------------------------------------------
     #
-    # Plot grids
-    #
-    # Make plots at vertical levels that is specified the range below, not this will
-    # be vertical plots, 0, 1, 2, 3, and 4 and for all the times in this mesh file
-    # (if there are any).
+    # Plot field
     #
     #-----------------------------------------------------------------------
 
@@ -430,15 +436,15 @@ if __name__ == "__main__":
                 if l == "max":
                     varplt = np.max(vardata,axis=2)[t,:]
                     outlvl = f"_{l}"
-                    outtlt = f"colum maximum {varname} at time {fcstfname}"
+                    outtlt = f"colum maximum {varname} ({varunits}) valid at {fcsttime}"
                 else:
                     varplt = vardata[t,:,l]
                     outlvl = f"_K{l:02d}"
-                    outtlt = f"{varname} at time {fcstfname} and on level {l:02d}"
+                    outtlt = f"{varname} ({varunits}) valid at {fcsttime} and on level {l:02d}"
             elif varndim == 2:
                 varplt = vardata[t,:]
                 outlvl = ""
-                outtlt = f"{varname} at time {fcstfname}"
+                outtlt = f"{varname} ({varunits}) valid at {fcsttime}"
             else:
                 print(f"Variable {varname} is in wrong shape: {varshapes}.")
                 sys.exit(0)
@@ -508,7 +514,6 @@ if __name__ == "__main__":
             #                )
 
             # Create the title as you see fit
-            #plt.title(f"{varname} at time {t} and on level {l}")
             ax.set_title(outtlt)
             plt.style.use(style) # Set the style that we choose above
 
