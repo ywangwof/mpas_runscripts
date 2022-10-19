@@ -1,6 +1,8 @@
 #!/bin/bash
 
-rootdir="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/runscriptv2.0"
+#rootdir="/scratch/ywang/MPAS/mpas_runscripts"
+scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
+rootdir=$(realpath $(dirname $scpdir))
 eventdateDF=$(date +%Y%m%d)
 
 #-----------------------------------------------------------------------
@@ -253,7 +255,7 @@ function run_geogrid {
   truelat1 = 38.5,
   truelat2 = 38.5,
   stand_lon = -97.5
-  geog_data_path = '/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/',
+  geog_data_path = '${WPSGEOG_PATH}',
   opt_geogrid_tbl_path = './',
 /
 
@@ -300,7 +302,7 @@ function run_static {
     config_nfgsoillevels = 1
 /
 &data_sources
-    config_geog_data_path = '/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/'
+    config_geog_data_path = '${WPSGEOG_PATH}'
     config_met_prefix = 'CFSR'
     config_sfc_prefix = 'SST'
     config_fg_interval = $((EXTINVL*3600))
@@ -376,7 +378,8 @@ EOF
     # Create job script and submit it
     #
     jobscript="run_static.slurm"
-    sed "s/ACCOUNT/$account/g;s/PARTION/${partition_static}/;s/JOBNAME/static_${domname}/" $TEMPDIR/$jobscript > $jobscript
+    sed "s/ACCOUNT/$account/g;s/PARTION/${partition_static}/;" $TEMPDIR/$jobscript > $jobscript
+    sed -i "s/JOBNAME/static_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/g" $jobscript
     #sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${rootdir}/MPAS-Model#" $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
     echo -n "Submitting $jobscript .... "
@@ -684,7 +687,8 @@ EOF
     # Create job script and submit it
     #
     jobscript="run_init.slurm"
-    sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npeics/;s/JOBNAME/init_${jobname}/" $TEMPDIR/$jobscript > $jobscript
+    sed    "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npeics/" $TEMPDIR/$jobscript > $jobscript
+    sed -i "s/JOBNAME/init_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/g" $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
     echo -n "Submitting $jobscript .... "
     $runcmd $jobscript
@@ -816,7 +820,8 @@ EOF
     # Create job script and submit it
     #
     jobscript="run_lbc.slurm"
-    sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npeics/;s/JOBNAME/lbc_${jobname}/" $TEMPDIR/$jobscript > $jobscript
+    sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npeics/;" $TEMPDIR/$jobscript > $jobscript
+    sed -i "s/JOBNAME/lbc_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/g" $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
     echo -n "Submitting $jobscript .... "
     $runcmd $jobscript
@@ -1018,7 +1023,8 @@ EOF
     # Create job script and submit it
     #
     jobscript="run_mpas.slurm"
-    sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npefcst/;s/JOBNAME/mpas_${jobname}/" $TEMPDIR/$jobscript > $jobscript
+    sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npefcst/;" $TEMPDIR/$jobscript > $jobscript
+    sed -i "s/JOBNAME/mpas_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/g" $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
     echo -n "Submitting $jobscript .... "
     $runcmd $jobscript
@@ -1090,7 +1096,8 @@ EOF
         # Create job script and submit it
         #
         jobscript="run_mpassit_$hstr.slurm"
-        sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npepost/;s/JOBNAME/intrp_${jobname}_$hstr/;s/HHHSTR/$hstr/g" $TEMPDIR/run_mpassit.slurm > $jobscript
+        sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npepost/;" $TEMPDIR/run_mpassit.slurm > $jobscript
+        sed -i "s/JOBNAME/intrp_${jobname}_$hstr/;s/HHHSTR/$hstr/g;s/CPUSPEC/${claim_cpu}/;" $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
         echo -n "Submitting $jobscript .... "
         $runcmd $jobscript
@@ -1216,7 +1223,8 @@ EOF
         # Create job script and submit it
         #
         jobscript="run_upp_$hstr.slurm"
-        sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npepost/;s/JOBNAME/upp_${jobname}_$hstr/;s/HHHSTR/$hstr/g" $TEMPDIR/run_upp.slurm > $jobscript
+        sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npepost/;" $TEMPDIR/run_upp.slurm > $jobscript
+        sed -i "s/JOBNAME/upp_${jobname}_$hstr/;s/HHHSTR/$hstr/g;s/MODULE/${modulename}/g" $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir/post_$hstr#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
         echo -n "Submitting $jobscript .... "
         $runcmd $jobscript
@@ -1375,12 +1383,18 @@ done
 
 if [[ $machine == "Jet" ]]; then
     account="wof"
-    partition="ujet,tjet,xjet,vjet,kjet"
-    partition_static="bigmem"
+    partition="ujet,tjet,xjet,vjet,kjet"; claim_cpu="--ntasks-per-node=6"
+    partition_static="bigmem"           ; static_cpu="--cpus-per-task=12"
+
+    modulename="build_jet_intel22_smiol"
+    WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
 else
-    account="largequeue"
-    partition="wofq"
-    partition_static="largequeue"
+    account="smallqueue"
+    partition="wofq"                    ; claim_cpu=""
+    partition_static="smallqueue"       ; static_cpu=""
+
+    modulename="env.mpas_smiol"
+    WPSGEOG_PATH="/scratch/wof/realtime/geog/"
 fi
 npeics=800
 npefcst=1200

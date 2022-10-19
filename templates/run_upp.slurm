@@ -21,9 +21,9 @@ if [[ "MACHINE" == "Jet" ]]; then
     source /etc/profile.d/modules.sh
     module purge
     module use ROOTDIR/modules
-    module load build_jet_intel22
+    module load MODULE
 else
-    source /scratch/ywang/MPAS/env.mpas
+    source /scratch/ywang/MPAS/MODULE
 fi
 module list
 

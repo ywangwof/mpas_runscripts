@@ -2,7 +2,7 @@
 #SBATCH -A ACCOUNT
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
-#SBATCH --ntasks=NOPART --ntasks-per-node=6
+#SBATCH --ntasks=NOPART CPUSPEC
 #SBATCH --exclusive
 #SBATCH -t 06:30:00
 #SBATCH --output=WRKDIR/mpas_%j.log
@@ -15,13 +15,13 @@ echo " "
 
 if [[ "MACHINE" == "Jet" ]]; then
     module use ROOTDIR/modules
-    module load build_jet_intelTed
+    module load MODULE
 
     ncores=6
     #nnode=$(( NOPART/$SLURM_CPUS_ON_NODE ))
     #nnode=$SLURM_JOB_NUM_NODES
 else
-    source /scratch/ywang/MPAS/env.mpas
+    source ROOTDIR/modules/MODULE
     ncores=24
 fi
 nnode=$(( NOPART/ncores ))

@@ -1,9 +1,16 @@
 #!/bin/bash
 
-desdir=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/runscriptv2.0/templates
-srcmpassitdir=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MPASSIT
-srcuppdir=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/UPP_KATE_kjet
-srcmodeldir=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MPAS-Model.ted
+if [[ "$(hostname)" == "odin"* ]]; then
+    desdir=/scratch/ywang/MPAS/mpas_runscripts/templates
+    srcmpassitdir=/scratch/ywang/MPAS/MPASSIT
+    srcuppdir=/scratch/ywang/MPAS/UPP_KATE_kjet
+    srcmodeldir=/scratch/ywang/MPAS/MPAS-Model.smiol
+else
+    desdir=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/runscriptv2.0/templates
+    srcmpassitdir=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MPASSIT
+    srcuppdir=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/UPP_KATE_kjet
+    srcmodeldir=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MPAS-Model.smiol
+fi
 
 function usage {
     echo " "
@@ -28,7 +35,7 @@ function usage {
     echo "              desdir     = $desdir"
     echo "              srcmpassit = $srcmpassitdir"
     echo "              srcupp     = $srcuppdir"
-    echo "              srcmodel   = $srcuppdir"
+    echo "              srcmodel   = $srcmodeldir"
     echo " "
     echo "                                     -- By Y. Wang (2022.10.12)"
     echo " "
@@ -111,7 +118,7 @@ done
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\
 
 if [[ $cmd == "MPASSIT" ]]; then
-    srcmpassit=${srcdir-$srcmodeldir}
+    srcmpassit=${srcdir-$srcmpassitdir}
 
     cd $desdir/MPASSIT
 

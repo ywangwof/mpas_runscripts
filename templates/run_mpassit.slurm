@@ -2,7 +2,7 @@
 #SBATCH -A ACCOUNT
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
-#SBATCH --ntasks=NOPART --ntasks-per-node=6
+#SBATCH --ntasks=NOPART CPUSPEC
 #SBATCH --exclusive
 #SBATCH -t 00:30:00
 #SBATCH --output=WRKDIR/mpassit_HHHSTR_%j.log
