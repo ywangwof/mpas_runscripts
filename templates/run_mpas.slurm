@@ -14,6 +14,7 @@ echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
 if [[ "MACHINE" == "Jet" ]]; then
+    module purge
     module use ROOTDIR/modules
     module load MODULE
 

@@ -1288,6 +1288,9 @@ verb=0
 overwrite=1
 jobsfromcmd=0
 machine="Jet"
+if [[ "$(hostname)" == odin* ]]; then
+    machine="Odin"
+fi
 
 #-----------------------------------------------------------------------
 #
@@ -1390,7 +1393,7 @@ if [[ $machine == "Jet" ]]; then
     WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
 else
     account="smallqueue"
-    partition="wofq"                    ; claim_cpu=""
+    partition="wofq"                    ; claim_cpu="--ntasks-per-node=24"
     partition_static="smallqueue"       ; static_cpu=""
 
     modulename="env.mpas_smiol"
