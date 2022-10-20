@@ -39,7 +39,7 @@ function usage {
     echo "                              Default is for templates"
     echo "              -s  DIR         Source directory"
     echo "              -m  Machine     Machine name to run, [Jet or Odin]"
-    echo "              -cmd cp or ln   Command for linking (default: ln)"
+    echo "              -cmd copy or link Command for linking (default: ln)"
     echo " "
     echo "   DEFAULTS:"
     echo "              desdir     = $desdir"
@@ -102,9 +102,9 @@ while [[ $# > 0 ]]
             shift
             ;;
         -cmd )
-            if [[ $2 == "cp" ]]; then
+            if [[ $2 == "copy" ]]; then
                 runcmd="cp -rf"
-            elif [[ $2 == "ln" ]]; then
+            elif [[ $2 == "link" ]]; then
                 runcmd="ln -sf"
             elif [[ $2 == "clean" ]]; then
                 runcmd="clean"
@@ -270,6 +270,15 @@ for cmd in ${cmds[@]}; do
                     ${runcmd} $srcmodel/$fn .
                 fi
             done
+
+            #domgridfiles=(wofs_mpas.grid.nc)
+            #for domfile in ${domgridfiles[@]}; do
+            #    if [[ ${runcmd} == "clean" ]]; then
+            #        rm $fn
+            #    else
+            #        ${runcmd} $srcroot/$domfile .
+            #    fi
+            #done
 
             cd $exedir
             echo " "
