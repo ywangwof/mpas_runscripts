@@ -3,6 +3,7 @@
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath $(dirname $scpdir))
+
 eventdateDF=$(date +%Y%m%d)
 
 #-----------------------------------------------------------------------
