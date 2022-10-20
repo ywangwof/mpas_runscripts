@@ -1,25 +1,24 @@
 #!/bin/bash
 
-rootdir="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/runscriptv2.0"
-#scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
-#rootdir=$(realpath $(dirname $scpdir))
+srcroot="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS"
 
-upperdir=$(dirname $rootdir)
+scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
+rootdir=$(realpath $(dirname $scpdir))
 
 if [[ "$(hostname)" == "odin"* ]]; then
     desdir=${rootdir}/templates
-    srcmpassitdir=${upperdir}/MPASSIT
-    srcuppdir=${upperdir}/UPP_KATE_kjet
-    srcmodeldir=${upperdir}/MPAS-Model.smiol
+    srcmpassitdir=${srcroot}/MPASSIT
+    srcuppdir=${srcroot}/UPP_KATE_kjet
+    srcmodeldir=${srcroot}/MPAS-Model.smiol
     srcwpsdir=/oldscratch/ywang/NEWSVAR/news3dvar.2021/WPS
     srcwrfdir=/oldscratch/ywang/NEWSVAR/news3dvar.2021/WRFV3.9_WOFS_2021
 else
     desdir=${rootdir}/templates
-    srcmpassitdir=${upperdir}/MPASSIT
-    srcuppdir=${upperdir}/UPP_KATE_kjet
-    srcmodeldir=${upperdir}/MPAS-Model.smiol
-    srcwpsdir=${upperdir}/WPS_SRC
-    srcwrfdir=${upperdir}/WRFV4.0
+    srcmpassitdir=${srcroot}/MPASSIT
+    srcuppdir=${srcroot}/UPP_KATE_kjet
+    srcmodeldir=${srcroot}/MPAS-Model.smiol
+    srcwpsdir=${srcroot}/WPS_SRC
+    srcwrfdir=${srcroot}/WRFV4.0
 fi
 
 function usage {
@@ -107,10 +106,13 @@ while [[ $# > 0 ]]
                 runcmd="cp -rf"
             elif [[ $2 == "ln" ]]; then
                 runcmd="ln -sf"
+            elif [[ $2 == "clean" ]]; then
+                runcmd="clean"
             else
                 echo "Unknown copy command: $2"
                 usage 2
             fi
+            shift
             ;;
         mpas* | MPASSIT* | UPP* | WRF* )
             cmds=(${key//,/ })
@@ -122,6 +124,8 @@ while [[ $# > 0 ]]
         *)
             if [[ -d $key ]]; then
                 desdir=$key
+            elif [[ "$key" == "clean" ]]; then
+                runcmd="clean"
             else
                  echo ""
                  echo "ERROR: unknown option, get [$key]."
@@ -155,14 +159,23 @@ for cmd in ${cmds[@]}; do
         for fn in ${parmfiles[@]}; do
             #if [[ ! -e $fn ]]; then
                 if [[ $verb -eq 1 ]]; then echo "Linking $fn ..."; fi
-                ${runcmd} $srcmpassit/parm/$fn .
+                if [[ ${runcmd} == "clean" ]]; then
+                    rm $fn
+                else
+                    ${runcmd} $srcmpassit/parm/$fn .
+                fi
             #fi
         done
 
         cd $exedir
         echo " "
         echo "CWD: $exedir"
-        ${runcmd} $srcmpassit/build/mpassit .
+        if [[ ${runcmd} == "clean" ]]; then
+            rm mpassit
+        else
+            ${runcmd} $srcmpassit/build/mpassit .
+        fi
+
 
         ;;
    "WRF" )
@@ -187,7 +200,12 @@ for cmd in ${cmds[@]}; do
         cd $exedir
         echo " "
         echo "CWD: $exedir"
-        ${runcmd} $srcwps/ungrib/src/ungrib.exe .
+        if [[ ${runcmd} == "clean" ]]; then
+            rm ungrib.exe
+        else
+            ${runcmd} $srcwps/ungrib/src/ungrib.exe .
+        fi
+
         #${runcmd} $srcwps/geogrid/src/geogrid.exe .
         ;;
 
@@ -198,12 +216,20 @@ for cmd in ${cmds[@]}; do
         echo " "
         echo "CWD: $desdir"
 
-        ${runcmd} $srcupp/src/lib/crtm2/src/fix crtm2_fix
+        if [[ ${runcmd} == "clean" ]]; then
+            rm crtm2_fix
+        else
+            ${runcmd} $srcupp/src/lib/crtm2/src/fix crtm2_fix
+        fi
 
         cd $exedir
         echo " "
         echo "CWD: $exedir"
-        ${runcmd} $srcupp/bin/unipost.exe .
+        if [[ ${runcmd} == "clean" ]]; then
+            rm unipost.exe
+        else
+            ${runcmd} $srcupp/bin/unipost.exe .
+        fi
         ;;
 
     "mpas" )
@@ -222,7 +248,11 @@ for cmd in ${cmds[@]}; do
 
         for fn in ${staticfiles[@]}; do
             if [[ $verb -eq 1 ]]; then echo "Linking $fn ...."; fi
-            ${runcmd} $srcmodel/src/core_atmosphere/physics/physics_wrf/files/$fn .
+            if [[ ${runcmd} == "clean" ]]; then
+                rm $fn
+            else
+                ${runcmd} $srcmodel/src/core_atmosphere/physics/physics_wrf/files/$fn .
+            fi
         done
 
         if [[ $run -ne 1 ]]; then
@@ -234,14 +264,22 @@ for cmd in ${cmds[@]}; do
 
             for fn in ${streamfiles[@]}; do
                 if [[ $verb -eq 1 ]]; then echo "Linking $fn ...."; fi
-                ${runcmd} $srcmodel/$fn .
+                if [[ ${runcmd} == "clean" ]]; then
+                    rm $fn
+                else
+                    ${runcmd} $srcmodel/$fn .
+                fi
             done
 
             cd $exedir
             echo " "
             echo "CWD: $exedir"
-            ${runcmd} $srcmodel/init_atmosphere_model .
-            ${runcmd} $srcmodel/atmosphere_model atmosphere_model.single
+            if [[ ${runcmd} == "clean" ]]; then
+                rm init_atmosphere_model atmosphere_model.single
+            else
+                ${runcmd} $srcmodel/init_atmosphere_model .
+                ${runcmd} $srcmodel/atmosphere_model atmosphere_model.single
+            fi
         fi
 
         ;;
