@@ -688,7 +688,7 @@ EOF
     # Create job script and submit it
     #
     jobscript="run_init.slurm"
-    sed    "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npeics/" $TEMPDIR/$jobscript > $jobscript
+    sed    "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npeics/;s/MACHINE/${machine}/g" $TEMPDIR/$jobscript > $jobscript
     sed -i "s/JOBNAME/init_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/g" $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
     echo -n "Submitting $jobscript .... "
@@ -821,7 +821,7 @@ EOF
     # Create job script and submit it
     #
     jobscript="run_lbc.slurm"
-    sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npeics/;" $TEMPDIR/$jobscript > $jobscript
+    sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npeics/;s/MACHINE/${machine}/g" $TEMPDIR/$jobscript > $jobscript
     sed -i "s/JOBNAME/lbc_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/g" $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
     echo -n "Submitting $jobscript .... "

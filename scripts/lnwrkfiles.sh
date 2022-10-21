@@ -23,26 +23,29 @@ fi
 
 function usage {
     echo " "
-    echo "    USAGE: $0 [options] CMD [DESTDIR]"
+    echo "    USAGE: $0 [options] CMD [DESTDIR] [clean]"
     echo " "
-    echo "    PURPOSE: Link MPAS runtime static files."
+    echo "    PURPOSE: Link MPAS runtime static files and executables."
     echo " "
-    echo "    WORKDIR  - Destination Directory"
+    echo "    DESTDIR  - Destination Directory"
     echo "    CMD      - One or more jobs from [mpas,MPASSIT,UPP,WRF]"
-    echo "               Default \"mpas\""
+    echo "               Default: all in \"[mpas, MPASSIT, UPP, WRF]\""
+    echo "    clean    - Clean the linked or copied files (for relink with a system version change etc.)"
     echo " "
     echo "    OPTIONS:"
     echo "              -h              Display this message"
     echo "              -n              Show command to be run only"
     echo "              -v              Verbose mode"
-    echo "              -r              For run or for templates"
+    echo "              -r              For a run or for templates"
     echo "                              Default is for templates"
     echo "              -s  DIR         Source directory"
-    echo "              -m  Machine     Machine name to run, [Jet or Odin]"
-    echo "              -cmd copy or link Command for linking (default: ln)"
+    echo "              -m  Machine     Machine name to be run, [Jet or Odin]"
+    echo "              -cmd copy       Command for linking or copying [copy, link, clean] (default: link)"
     echo " "
     echo "   DEFAULTS:"
     echo "              desdir     = $desdir"
+    echo "              srcwps     = $srcwpsdir"
+    echo "              srcwrf     = $srcwrfdir"
     echo "              srcmpassit = $srcmpassitdir"
     echo "              srcupp     = $srcuppdir"
     echo "              srcmodel   = $srcmodeldir"
@@ -69,19 +72,19 @@ while [[ $# > 0 ]]
     key="$1"
 
     case $key in
-        -h)
+        -h )
             usage 0
             ;;
-        -n)
+        -n )
             runcmd="echo $runcmd"
             ;;
-        -v)
+        -v )
             verb=1
             ;;
-        -r)
+        -r )
             run=1
             ;;
-        -s)
+        -s )
             if [[ -d $2 ]]; then
                 srcdir=$2
             else
@@ -90,7 +93,7 @@ while [[ $# > 0 ]]
             fi
             shift
             ;;
-        -m)
+        -m )
             if [[ ${2^^} == "JET" ]]; then
                 machine=Jet
             elif [[ ${2^^} == "ODIN" ]]; then
@@ -117,11 +120,11 @@ while [[ $# > 0 ]]
         mpas* | MPASSIT* | UPP* | WRF* )
             cmds=(${key//,/ })
             ;;
-        -*)
+        -* )
             echo "Unknown option: $key"
             usage 2
             ;;
-        *)
+        * )
             if [[ -d $key ]]; then
                 desdir=$key
             elif [[ "$key" == "clean" ]]; then
@@ -145,7 +148,6 @@ done
 exedir="$(dirname $desdir)/exec"
 
 for cmd in ${cmds[@]}; do
-
     case $cmd in
 
     "MPASSIT" )
@@ -158,7 +160,9 @@ for cmd in ${cmds[@]}; do
         parmfiles=(diaglist histlist_2d histlist_3d histlist_soil)
         for fn in ${parmfiles[@]}; do
             #if [[ ! -e $fn ]]; then
-                if [[ $verb -eq 1 ]]; then echo "Linking $fn ..."; fi
+                if [[ $verb -eq 1 ]]; then
+                    echo "Linking $fn ...";
+                fi
                 if [[ ${runcmd} == "clean" ]]; then
                     rm $fn
                 else
@@ -175,10 +179,9 @@ for cmd in ${cmds[@]}; do
         else
             ${runcmd} $srcmpassit/build/mpassit .
         fi
-
-
         ;;
-   "WRF" )
+
+    "WRF" )
         srcwps=${srcdir-$srcwpsdir}
         srcwrf=${srcdir-$srcwrfdir}
 
@@ -240,14 +243,15 @@ for cmd in ${cmds[@]}; do
         echo " "
         echo "CWD: $desdir"
 
-        staticfiles=( CAM_ABS_DATA.DBL  CAM_AEROPT_DATA.DBL GENPARM.TBL       LANDUSE.TBL    \
+        staticfiles=(CAM_ABS_DATA.DBL  CAM_AEROPT_DATA.DBL GENPARM.TBL       LANDUSE.TBL    \
                 OZONE_DAT.TBL     OZONE_LAT.TBL       OZONE_PLEV.TBL    RRTMG_LW_DATA  \
                 RRTMG_LW_DATA.DBL RRTMG_SW_DATA       RRTMG_SW_DATA.DBL SOILPARM.TBL   \
-                VEGPARM.TBL )
-
+                VEGPARM.TBL)
 
         for fn in ${staticfiles[@]}; do
-            if [[ $verb -eq 1 ]]; then echo "Linking $fn ...."; fi
+            if [[ $verb -eq 1 ]]; then
+                echo "Linking $fn ....";
+            fi
             if [[ ${runcmd} == "clean" ]]; then
                 rm $fn
             else
@@ -263,7 +267,9 @@ for cmd in ${cmds[@]}; do
                 namelist.atmosphere namelist.init_atmosphere )
 
             for fn in ${streamfiles[@]}; do
-                if [[ $verb -eq 1 ]]; then echo "Linking $fn ...."; fi
+                if [[ $verb -eq 1 ]]; then
+                    echo "Linking $fn ....";
+                fi
                 if [[ ${runcmd} == "clean" ]]; then
                     rm $fn
                 else
