@@ -15,6 +15,8 @@ echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
 if [[ "MACHINE" == "Jet" ]]; then
+    source /etc/profile.d/modules.sh
+    module purge
     module use ROOTDIR/modules
     module load MODULE
 else
