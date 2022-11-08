@@ -607,7 +607,7 @@ function run_init {
     config_coef_3rd_order = 0.25
 /
 &dimensions
-    config_nvertlevels = 55
+    config_nvertlevels = 59
     config_nsoillevels = 4
     config_nfglevels = ${EXTNFGL}
     config_nfgsoillevels = ${EXTNFLS}
@@ -626,13 +626,14 @@ function run_init {
     config_use_spechumd = false
 /
 &vertical_grid
-    config_ztop = 30000.0
+    config_ztop = 25878.712
     config_nsmterrain = 1
     config_smooth_surfaces = true
     config_dzmin = 0.3
     config_nsm = 30
     config_tc_vertical_grid = true
     config_blend_bdy_terrain = true
+    config_specified_zeta_levels = '${TEMPDIR}/L60.txt'
 /
 &interpolation_control
     config_extrap_airtemp = 'linear'
@@ -739,7 +740,7 @@ function run_lbc {
     config_coef_3rd_order = 0.25
 /
 &dimensions
-    config_nvertlevels = 55
+    config_nvertlevels = 59
     config_nsoillevels = 4
     config_nfglevels = ${EXTNFGL}
     config_nfgsoillevels = ${EXTNFLS}
@@ -758,13 +759,14 @@ function run_lbc {
     config_use_spechumd = false
 /
 &vertical_grid
-    config_ztop = 30000.0
+    config_ztop = 25878.712
     config_nsmterrain = 1
     config_smooth_surfaces = true
     config_dzmin = 0.3
     config_nsm = 30
     config_tc_vertical_grid = true
     config_blend_bdy_terrain = true
+    config_specified_zeta_levels = '${TEMPDIR}/L60.txt'
 /
 &interpolation_control
     config_extrap_airtemp = 'linear'
@@ -1412,7 +1414,7 @@ EXTINVL_STR="${EXTINVL}:00:00"
 EXTNFGL=51
 EXTNFLS=4
 
-OUTINVL_STR="1:00:00"
+OUTINVL_STR="40:00:00"
 OUTIOTYPE="netcdf4"
 ICSIOTYPE="pnetcdf,cdf5"
 
