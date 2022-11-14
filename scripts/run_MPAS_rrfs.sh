@@ -613,7 +613,7 @@ function run_init {
     config_coef_3rd_order = 0.25
 /
 &dimensions
-    config_nvertlevels = 55
+    config_nvertlevels = 59
     config_nsoillevels = 4
     config_nfglevels = ${EXTNFGL}
     config_nfgsoillevels = ${EXTNFLS}
@@ -632,13 +632,14 @@ function run_init {
     config_use_spechumd = false
 /
 &vertical_grid
-    config_ztop = 30000.0
+    config_ztop = 25878.712
     config_nsmterrain = 1
     config_smooth_surfaces = true
     config_dzmin = 0.3
     config_nsm = 30
     config_tc_vertical_grid = true
     config_blend_bdy_terrain = true
+    config_specified_zeta_levels = '${TEMPDIR}/L60.txt'
 /
 &interpolation_control
     config_extrap_airtemp = 'linear'
@@ -745,7 +746,7 @@ function run_lbc {
     config_coef_3rd_order = 0.25
 /
 &dimensions
-    config_nvertlevels = 55
+    config_nvertlevels = 59
     config_nsoillevels = 4
     config_nfglevels = ${EXTNFGL}
     config_nfgsoillevels = ${EXTNFLS}
@@ -764,13 +765,14 @@ function run_lbc {
     config_use_spechumd = false
 /
 &vertical_grid
-    config_ztop = 30000.0
+    config_ztop = 25878.712
     config_nsmterrain = 1
     config_smooth_surfaces = true
     config_dzmin = 0.3
     config_nsm = 30
     config_tc_vertical_grid = true
     config_blend_bdy_terrain = true
+    config_specified_zeta_levels = '${TEMPDIR}/L60.txt'
 /
 &interpolation_control
     config_extrap_airtemp = 'linear'
@@ -900,12 +902,12 @@ function run_mpas {
     cat << EOF > namelist.atmosphere
 &nhyd_model
     config_time_integration_order   = 2
-    config_dt                       = 20
+    config_dt                       = 24
     config_start_time               = '${starttime_str}'
     config_run_duration             = '${fcsthour_str}:00:00'
     config_split_dynamics_transport = true
-    config_number_of_sub_steps      = 2
-    config_dynamics_split_steps     = 3
+    config_number_of_sub_steps      = 6
+    config_dynamics_split_steps     = 2
     config_h_mom_eddy_visc2         = 0.0
     config_h_mom_eddy_visc4         = 0.0
     config_v_mom_eddy_visc2         = 0.0
@@ -947,6 +949,7 @@ function run_mpas {
     config_do_restart                = false
 /
 &printout
+    config_print_global_minmax_sca   = true
     config_print_global_minmax_vel   = true
     config_print_detailed_minmax_vel = false
 /

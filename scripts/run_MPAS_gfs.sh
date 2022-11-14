@@ -1,6 +1,9 @@
 #!/bin/bash
 
-rootdir="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/runscriptv2.0"
+#rootdir="/scratch/ywang/MPAS/mpas_runscripts"
+scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
+rootdir=$(realpath $(dirname $scpdir))
+
 eventdateDF=$(date +%Y%m%d)
 
 #-----------------------------------------------------------------------
@@ -68,6 +71,7 @@ eventdateDF=$(date +%Y%m%d)
 #        WRFV4.0/Vtable.GFS_full            # for GFS initialized run only
 #        WRFV4.0/Vtable.GFS
 #        WRFV4.0/Vtable.raphrrr
+#        WRFV4.0/Vtable.RRFS
 #        WRFV4.0/GEOGRID.TBL.ARW
 #        WRFV4.0/ETAMPNEW_DATA
 #        WRFV4.0/ETAMPNEW_DATA.expanded_rain
@@ -90,8 +94,9 @@ eventdateDF=$(date +%Y%m%d)
 # 3. scripts                                # this scripts
 #    3.1 run_MPAS_hrrr.sh
 #    3.2 run_MPAS_gfs.sh
-#    3.3 lntemplates.sh
-#    3.4 cron.txt
+#    3.3 run_MPAS_rrfs.sh
+#    3.4 lntemplates.sh
+#    3.5 cron.txt
 #
 # 4. /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG
 #
@@ -253,7 +258,7 @@ function run_geogrid {
   truelat1 = 38.5,
   truelat2 = 38.5,
   stand_lon = -97.5
-  geog_data_path = '/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/',
+  geog_data_path = '${WPSGEOG_PATH}',
   opt_geogrid_tbl_path = './',
 /
 
@@ -300,7 +305,7 @@ function run_static {
     config_nfgsoillevels = 1
 /
 &data_sources
-    config_geog_data_path = '/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/'
+    config_geog_data_path = '${WPSGEOG_PATH}'
     config_met_prefix = 'CFSR'
     config_sfc_prefix = 'SST'
     config_fg_interval = $((EXTINVL*3600))
@@ -376,7 +381,8 @@ EOF
     # Create job script and submit it
     #
     jobscript="run_static.slurm"
-    sed "s/ACCOUNT/$account/g;s/PARTION/${partition_static}/;s/JOBNAME/static_${domname}/" $TEMPDIR/$jobscript > $jobscript
+    sed "s/ACCOUNT/$account/g;s/PARTION/${partition_static}/;" $TEMPDIR/$jobscript > $jobscript
+    sed -i "s/JOBNAME/static_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/g" $jobscript
     #sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${rootdir}/MPAS-Model#" $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
     echo -n "Submitting $jobscript .... "
@@ -494,7 +500,7 @@ function run_init {
     config_coef_3rd_order = 0.25
 /
 &dimensions
-    config_nvertlevels = 55
+    config_nvertlevels = 59
     config_nsoillevels = 4
     config_nfglevels = ${EXTNFGL}
     config_nfgsoillevels = ${EXTNFLS}
@@ -513,13 +519,14 @@ function run_init {
     config_use_spechumd = false
 /
 &vertical_grid
-    config_ztop = 30000.0
+    config_ztop = 25878.712
     config_nsmterrain = 1
     config_smooth_surfaces = true
     config_dzmin = 0.3
     config_nsm = 30
     config_tc_vertical_grid = true
     config_blend_bdy_terrain = true
+    config_specified_zeta_levels = '${TEMPDIR}/L60.txt'
 /
 &interpolation_control
     config_extrap_airtemp = 'linear'
@@ -575,7 +582,8 @@ EOF
     # Create job script and submit it
     #
     jobscript="run_init.slurm"
-    sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npeics/;s/JOBNAME/init_${jobname}/" $TEMPDIR/$jobscript > $jobscript
+    sed    "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npeics/;s/MACHINE/${machine}/g" $TEMPDIR/$jobscript > $jobscript
+    sed -i "s/JOBNAME/init_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/g" $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
     echo -n "Submitting $jobscript .... "
     $runcmd $jobscript
@@ -625,7 +633,7 @@ function run_lbc {
     config_coef_3rd_order = 0.25
 /
 &dimensions
-    config_nvertlevels = 55
+    config_nvertlevels = 59
     config_nsoillevels = 4
     config_nfglevels = ${EXTNFGL}
     config_nfgsoillevels = ${EXTNFLS}
@@ -644,13 +652,14 @@ function run_lbc {
     config_use_spechumd = false
 /
 &vertical_grid
-    config_ztop = 30000.0
+    config_ztop = 25878.712
     config_nsmterrain = 1
     config_smooth_surfaces = true
     config_dzmin = 0.3
     config_nsm = 30
     config_tc_vertical_grid = true
     config_blend_bdy_terrain = true
+    config_specified_zeta_levels = '${TEMPDIR}/L60.txt'
 /
 &interpolation_control
     config_extrap_airtemp = 'linear'
@@ -707,7 +716,8 @@ EOF
     # Create job script and submit it
     #
     jobscript="run_lbc.slurm"
-    sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npeics/;s/JOBNAME/lbc_${jobname}/" $TEMPDIR/$jobscript > $jobscript
+    sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npeics/;s/MACHINE/${machine}/g" $TEMPDIR/$jobscript > $jobscript
+    sed -i "s/JOBNAME/lbc_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/g" $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
     echo -n "Submitting $jobscript .... "
     $runcmd $jobscript
@@ -779,12 +789,12 @@ function run_mpas {
     cat << EOF > namelist.atmosphere
 &nhyd_model
     config_time_integration_order   = 2
-    config_dt                       = 20
+    config_dt                       = 24
     config_start_time               = '${starttime_str}'
     config_run_duration             = '${fcsthour_str}:00:00'
     config_split_dynamics_transport = true
-    config_number_of_sub_steps      = 2
-    config_dynamics_split_steps     = 3
+    config_number_of_sub_steps      = 6
+    config_dynamics_split_steps     = 2
     config_h_mom_eddy_visc2         = 0.0
     config_h_mom_eddy_visc4         = 0.0
     config_v_mom_eddy_visc2         = 0.0
@@ -826,6 +836,7 @@ function run_mpas {
     config_do_restart                = false
 /
 &printout
+    config_print_global_minmax_sca   = true
     config_print_global_minmax_vel   = true
     config_print_detailed_minmax_vel = false
 /
@@ -909,7 +920,8 @@ EOF
     # Create job script and submit it
     #
     jobscript="run_mpas.slurm"
-    sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npefcst/;s/JOBNAME/mpas_${jobname}/" $TEMPDIR/$jobscript > $jobscript
+    sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npefcst/;" $TEMPDIR/$jobscript > $jobscript
+    sed -i "s/JOBNAME/mpas_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/g" $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
     echo -n "Submitting $jobscript .... "
     $runcmd $jobscript
@@ -981,7 +993,8 @@ EOF
         # Create job script and submit it
         #
         jobscript="run_mpassit_$hstr.slurm"
-        sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npepost/;s/JOBNAME/intrp_${jobname}_$hstr/;s/HHHSTR/$hstr/g" $TEMPDIR/run_mpassit.slurm > $jobscript
+        sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npepost/;" $TEMPDIR/run_mpassit.slurm > $jobscript
+        sed -i "s/JOBNAME/intrp_${jobname}_$hstr/;s/HHHSTR/$hstr/g;s/CPUSPEC/${claim_cpu}/;" $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
         echo -n "Submitting $jobscript .... "
         $runcmd $jobscript
@@ -1107,7 +1120,8 @@ EOF
         # Create job script and submit it
         #
         jobscript="run_upp_$hstr.slurm"
-        sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npepost/;s/JOBNAME/upp_${jobname}_$hstr/;s/HHHSTR/$hstr/g" $TEMPDIR/run_upp.slurm > $jobscript
+        sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npepost/;" $TEMPDIR/run_upp.slurm > $jobscript
+        sed -i "s/JOBNAME/upp_${jobname}_$hstr/;s/HHHSTR/$hstr/g;s/MODULE/${modulename}/g" $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir/post_$hstr#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
         echo -n "Submitting $jobscript .... "
         $runcmd $jobscript
@@ -1171,6 +1185,9 @@ verb=0
 overwrite=1
 jobsfromcmd=0
 machine="Jet"
+if [[ "$(hostname)" == odin* ]]; then
+    machine="Odin"
+fi
 
 #-----------------------------------------------------------------------
 #
@@ -1266,12 +1283,18 @@ done
 
 if [[ $machine == "Jet" ]]; then
     account="wof"
-    partition="ujet,tjet,xjet,vjet,kjet"
-    partition_static="bigmem"
+    partition="ujet,tjet,xjet,vjet,kjet"; claim_cpu="--ntasks-per-node=6"
+    partition_static="bigmem"           ; static_cpu="--cpus-per-task=12"
+
+    modulename="build_jet_intel22_smiol"
+    WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
 else
-    account="largequeue"
-    partition="wofq"
-    partition_static="largequeue"
+    account="smallqueue"
+    partition="wofq"                    ; claim_cpu="--ntasks-per-node=24"
+    partition_static="smallqueue"       ; static_cpu=""
+
+    modulename="env.mpas_smiol"
+    WPSGEOG_PATH="/scratch/wof/realtime/geog/"
 fi
 npeics=800
 npefcst=1200

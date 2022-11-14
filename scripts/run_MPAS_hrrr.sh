@@ -71,6 +71,7 @@ eventdateDF=$(date +%Y%m%d)
 #        WRFV4.0/Vtable.GFS_full            # for GFS initialized run only
 #        WRFV4.0/Vtable.GFS
 #        WRFV4.0/Vtable.raphrrr
+#        WRFV4.0/Vtable.RRFS
 #        WRFV4.0/GEOGRID.TBL.ARW
 #        WRFV4.0/ETAMPNEW_DATA
 #        WRFV4.0/ETAMPNEW_DATA.expanded_rain
@@ -93,8 +94,9 @@ eventdateDF=$(date +%Y%m%d)
 # 3. scripts                                # this scripts
 #    3.1 run_MPAS_hrrr.sh
 #    3.2 run_MPAS_gfs.sh
-#    3.3 lntemplates.sh
-#    3.4 cron.txt
+#    3.3 run_MPAS_rrfs.sh
+#    3.4 lntemplates.sh
+#    3.5 cron.txt
 #
 # 4. /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG
 #
@@ -896,12 +898,12 @@ function run_mpas {
     cat << EOF > namelist.atmosphere
 &nhyd_model
     config_time_integration_order   = 2
-    config_dt                       = 20
+    config_dt                       = 24
     config_start_time               = '${starttime_str}'
     config_run_duration             = '${fcsthour_str}:00:00'
     config_split_dynamics_transport = true
-    config_number_of_sub_steps      = 2
-    config_dynamics_split_steps     = 3
+    config_number_of_sub_steps      = 6
+    config_dynamics_split_steps     = 2
     config_h_mom_eddy_visc2         = 0.0
     config_h_mom_eddy_visc4         = 0.0
     config_v_mom_eddy_visc2         = 0.0
@@ -943,6 +945,7 @@ function run_mpas {
     config_do_restart                = false
 /
 &printout
+    config_print_global_minmax_sca   = true
     config_print_global_minmax_vel   = true
     config_print_detailed_minmax_vel = false
 /
@@ -1414,7 +1417,7 @@ EXTINVL_STR="${EXTINVL}:00:00"
 EXTNFGL=51
 EXTNFLS=4
 
-OUTINVL_STR="40:00:00"
+OUTINVL_STR="1:00:00"
 OUTIOTYPE="netcdf4"
 ICSIOTYPE="pnetcdf,cdf5"
 
