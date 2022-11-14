@@ -143,6 +143,7 @@ function usage {
     echo "              -t  DIR         Template directory for runtime files"
     echo "              -m  Machine     Machine name to run, [Jet or Odin]."
     echo "              -d  wofs_conus  Domain name to be used"
+    echo "              -p  mp_scheme   MP scheme, nssl or thompson only, default: nssl -> mp_nssl2m"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt = $eventdateDF"
@@ -961,7 +962,7 @@ function run_mpas {
     config_radtsw_interval           = '00:30:00'
     config_bucket_update             = 'none'
     config_physics_suite             = 'convection_permitting'
-    config_microp_scheme             = 'mp_nssl2m'
+    config_microp_scheme             = '${mpscheme}'
 /
 &soundings
     config_sounding_interval         = 'none'
@@ -1289,6 +1290,7 @@ eventdate="$eventdateDF"
 eventtime="00"
 
 domname="wofs_mpas"
+mpscheme="mp_nssl2m"
 runcmd="sbatch"
 verb=0
 overwrite=1
@@ -1343,6 +1345,17 @@ while [[ $# > 0 ]]
                 machine=Odin
             else
                 echo "ERROR: Unsupported machine name, got \"$2\"."
+                usage 1
+            fi
+            shift
+            ;;
+        -p)
+            if [[ ${2^^} == "NSSL" ]]; then
+                mpscheme="mp_nssl2m"
+            elif [[ ${2^^} == "THOMPSON" ]]; then
+                mpscheme="Thompson"
+            else
+                echo "ERROR: Unsupported MP scheme name, got \"$2\"."
                 usage 1
             fi
             shift
@@ -1425,6 +1438,7 @@ echo "---- Jobs started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
 echo "     Event date : $eventdate ${eventtime}:00"
 echo "     Working dir: $WORKDIR"
 echo "     Domain file: $TEMPDIR/$domname.grid.nc"
+echo "     MP   scheme: ${mpscheme}"
 echo " "
 
 starttime_str=$(date -d "$eventdate ${eventtime}:00"                     +%Y-%m-%d_%H:%M:%S)
