@@ -891,24 +891,26 @@ function run_mpas {
         ln -sf ${staticdir}/$fn .
     done
 
-    thompson_tables=( MP_THOMPSON_QRacrQG_DATA.DBL   MP_THOMPSON_QRacrQS_DATA.DBL   \
-                      MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL )
+    if [[ "${mpscheme}" == "Thompson" ]]; then
+        thompson_tables=( MP_THOMPSON_QRacrQG_DATA.DBL   MP_THOMPSON_QRacrQS_DATA.DBL   \
+                          MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL )
 
-    for fn in ${thompson_tables[@]}; do
-        ln -sf ${TEMPDIR}/$fn .
-    done
+        for fn in ${thompson_tables[@]}; do
+            ln -sf ${TEMPDIR}/$fn .
+        done
+    fi
 
     fcsthour_str=$(printf "%02d" $fcst_hours)
 
     cat << EOF > namelist.atmosphere
 &nhyd_model
     config_time_integration_order   = 2
-    config_dt                       = 24
+    config_dt                       = 15
     config_start_time               = '${starttime_str}'
     config_run_duration             = '${fcsthour_str}:00:00'
     config_split_dynamics_transport = true
-    config_number_of_sub_steps      = 6
-    config_dynamics_split_steps     = 2
+    config_number_of_sub_steps      = 4
+    config_dynamics_split_steps     = 3
     config_h_mom_eddy_visc2         = 0.0
     config_h_mom_eddy_visc4         = 0.0
     config_v_mom_eddy_visc2         = 0.0
@@ -933,8 +935,11 @@ function run_mpas {
     config_smdiv                    = 0.1
 /
 &damping
-    config_zd                        = 22000.0
-    config_xnutr                     = 0.2
+    config_mpas_cam_coef            = 2.0
+    config_rayleigh_damp_u          = true
+    config_zd                       = 16000.0
+    config_xnutr                    = 0.2
+    config_nlevels_cam_damp         = 8
 /
 &limited_area
     config_apply_lbcs                = true
@@ -1412,7 +1417,7 @@ if [[ $machine == "Jet" ]]; then
     partition="ujet,tjet,xjet,vjet,kjet"; claim_cpu="--ntasks-per-node=6"
     partition_static="bigmem"           ; static_cpu="--cpus-per-task=12"
 
-    modulename="build_jet_intel22_smiol"
+    modulename="build_jet_intel18_1.6_smiol"
     WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
 else
     account="smallqueue"
@@ -1438,10 +1443,11 @@ OUTINVL_STR="1:00:00"
 OUTIOTYPE="netcdf4"
 ICSIOTYPE="pnetcdf,cdf5"
 
-echo "---- Jobs started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
+echo "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
 echo "     Event date : $eventdate ${eventtime}:00"
+echo "     Root    dir: $rootdir"
 echo "     Working dir: $WORKDIR"
-echo "     Domain file: $TEMPDIR/$domname.grid.nc"
+echo "     Domain name: $domname;      MP scheme: ${mpscheme}"
 echo " "
 
 starttime_str=$(date -d "$eventdate ${eventtime}:00"                     +%Y-%m-%d_%H:%M:%S)

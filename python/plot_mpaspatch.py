@@ -204,7 +204,7 @@ def get_var_contours(varname,var2d,colormaps,cntlevels):
     # set color map to be used
     #
     color_map = colormaps[0]
-    if varname.startswith('refl'):    # Use reflectivity color map and range
+    if varname.startswith('refl') or varname.startswith('rain') :    # Use reflectivity color map and range
         color_map = colormaps[1]
 
     #
@@ -241,7 +241,7 @@ if __name__ == "__main__":
     #parser.add_argument('-g','--gridfile',  help='Name of the MPAS file that contains cell grid',         type=str, default=None)
     parser.add_argument('-p','--patchfile', help='Name of the MPAS patch file that contains cell patches',type=str, default=None)
     parser.add_argument('-l','--vertLevels',help='Vertical levels to be plotted [l1,l2,l3,...]',  type=str, default=None)
-    parser.add_argument('-c','--cntLevels', help='Contour levels [cmin,cmin,cinc]',               type=str, default=None)
+    parser.add_argument('-c','--cntLevels', help='Contour levels [cmin,cmax,cinc]',               type=str, default=None)
     parser.add_argument('-o','--outfile',   help='Name of output image or output directory',              type=str, default=None)
 
     args = parser.parse_args()
@@ -261,7 +261,11 @@ if __name__ == "__main__":
 
         with Dataset(fcstfile, 'r') as mesh:
             nCells   = mesh.dimensions["nCells"].size
-            nlevels  = mesh.dimensions["nVertLevels"].size
+            try:
+                nlevels = mesh.dimensions["nVertLevels"].size
+            except:
+                nlevels = 0
+
             try:
                 nslevels = mesh.dimensions["nSoilLevels"].size
             except:

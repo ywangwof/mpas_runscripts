@@ -102,6 +102,8 @@ if __name__ == "__main__":
         ctrlat1 = args.ctrlat
         stdlat1_1 = args.stdlat1
         stdlat1_2 = args.stdlat2
+    elif not args.outgrid:
+        outgrid = False
     elif os.path.lexists(args.outgrid):
         data = []
         with open(args.outgrid,'r') as f:

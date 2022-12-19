@@ -3,6 +3,7 @@
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=1 CPUSPEC
+#SBATCH --mem=100G
 #SBATCH --exclusive
 #SBATCH -t 02:30:00
 #SBATCH --output=WRKDIR/static_%j.log
@@ -14,6 +15,7 @@ echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
 if [[ "MACHINE" == "Jet" ]]; then
+    module purge
     module use ROOTDIR/modules
     module load MODULE
 else
@@ -24,7 +26,7 @@ ulimit -s unlimited
 
 cd WRKDIR
 
-srun -n 1 EXEDIR/init_atmosphere_model
+srun -n 1 EXEDIR/init_atmosphere_model.pio
 
 if [[ $? -eq 0 ]]; then
     touch done.static
