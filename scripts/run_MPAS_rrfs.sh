@@ -277,7 +277,7 @@ EOF
     jobscript="run_geogrid.slurm"
     sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/geogrid_${geoname}/;s/NOPART/$npepost/" $TEMPDIR/$jobscript > $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-    echo -n "Submitting $jobscript .... "
+    if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
     $runcmd $jobscript
 }
 
@@ -383,10 +383,10 @@ EOF
     #
     jobscript="run_static.slurm"
     sed "s/ACCOUNT/$account/g;s/PARTION/${partition_static}/;" $TEMPDIR/$jobscript > $jobscript
-    sed -i "s/JOBNAME/static_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/g" $jobscript
+    sed -i "s/JOBNAME/static_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/;s/MACHINE/${machine}/g" $jobscript
     #sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${rootdir}/MPAS-Model#" $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-    echo -n "Submitting $jobscript .... "
+    if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
     $runcmd $jobscript
 }
 
@@ -461,7 +461,7 @@ EOF
         jobscript="run_ungrib.slurm"
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/ungrb_rrfs_${jobname}/" $TEMPDIR/$jobscript > $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir1#g;s#EXEDIR#${exedir}#" $jobscript
-        echo -n "Submitting $jobscript .... "
+        if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
         if [[ $runcmd == *"sbatch" ]]; then
             touch queue.ungrib
@@ -513,7 +513,7 @@ EOF
         jobscript="run_ungrib.slurm"
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/ungrb_gfs_${jobname}/" $TEMPDIR/$jobscript > $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir2#g;s#EXEDIR#${exedir}#" $jobscript
-        echo -n "Submitting $jobscript .... "
+        if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
         if [[ $runcmd == *"sbatch" ]]; then
             touch queue.ungrib
@@ -699,7 +699,7 @@ EOF
     sed    "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npeics/;s/MACHINE/${machine}/g" $TEMPDIR/$jobscript > $jobscript
     sed -i "s/JOBNAME/init_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/g" $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-    echo -n "Submitting $jobscript .... "
+    if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
     $runcmd $jobscript
 }
 
@@ -833,7 +833,7 @@ EOF
     sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npeics/;s/MACHINE/${machine}/g" $TEMPDIR/$jobscript > $jobscript
     sed -i "s/JOBNAME/lbc_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/g" $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-    echo -n "Submitting $jobscript .... "
+    if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
     $runcmd $jobscript
 }
 
@@ -905,7 +905,7 @@ function run_mpas {
     cat << EOF > namelist.atmosphere
 &nhyd_model
     config_time_integration_order   = 2
-    config_dt                       = 15
+    config_dt                       = 25
     config_start_time               = '${starttime_str}'
     config_run_duration             = '${fcsthour_str}:00:00'
     config_split_dynamics_transport = true
@@ -971,7 +971,24 @@ function run_mpas {
     config_radtsw_interval           = '00:30:00'
     config_bucket_update             = 'none'
     config_physics_suite             = 'convection_permitting'
+EOF
+
+    if [[ ${mpscheme} == "mp_nssl2m" ]]; then
+
+        cat << EOF >> namelist.atmosphere
     config_microp_scheme             = '${mpscheme}'
+/
+&nssl_mp_params
+    ehw0                             = 0.9
+    ehlw0                            = 0.9
+    icefallfac                       = 1.5
+    snowfallfac                      = 1.25
+    iusewetsnow                      = 0
+EOF
+
+    fi
+
+    cat << EOF >> namelist.atmosphere
 /
 &soundings
     config_sounding_interval         = 'none'
@@ -1042,7 +1059,7 @@ EOF
     sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npefcst/;" $TEMPDIR/$jobscript > $jobscript
     sed -i "s/JOBNAME/mpas_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/g" $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
-    echo -n "Submitting $jobscript .... "
+    if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
     $runcmd $jobscript
 }
 
@@ -1115,7 +1132,7 @@ EOF
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npepost/;" $TEMPDIR/run_mpassit.slurm > $jobscript
         sed -i "s/JOBNAME/intrp_${jobname}_$hstr/;s/HHHSTR/$hstr/g;s/CPUSPEC/${claim_cpu}/;" $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
-        echo -n "Submitting $jobscript .... "
+        if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
         echo " "
         if [[ $runcmd == *"sbatch" ]]; then
@@ -1242,7 +1259,7 @@ EOF
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npepost/;" $TEMPDIR/run_upp.slurm > $jobscript
         sed -i "s/JOBNAME/upp_${jobname}_$hstr/;s/HHHSTR/$hstr/g;s/MODULE/${modulename}/g" $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir/post_$hstr#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
-        echo -n "Submitting $jobscript .... "
+        if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
         echo " "
         if [[ $runcmd == *"sbatch" ]]; then

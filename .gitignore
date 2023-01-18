@@ -23,9 +23,6 @@ templates/SOILPARM.TBL
 templates/VEGPARM.TBL
 templates/namelist.atmosphere
 templates/namelist.init_atmosphere
-templates/stream_list.atmosphere.diagnostics
-templates/stream_list.atmosphere.output
-templates/stream_list.atmosphere.surface
 templates/streams.atmosphere
 templates/streams.init_atmosphere
 templates/UPP/crtm2_fix
