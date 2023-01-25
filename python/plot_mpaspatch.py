@@ -371,6 +371,7 @@ if __name__ == "__main__":
     #
     # Output file dir / file name
     #
+    defaultoutfile = False
     if args.outfile is None:
         outdir  = './'
         outfile = None

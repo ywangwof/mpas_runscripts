@@ -1469,7 +1469,11 @@ echo " "
 
 starttime_str=$(date -d "$eventdate ${eventtime}:00"                     +%Y-%m-%d_%H:%M:%S)
 stoptime_str=$(date -d "$eventdate  ${eventtime}:00 ${fcst_hours} hours" +%Y-%m-%d_%H:%M:%S)
-rundir="$WORKDIR/$eventdate${eventtime}_rrfs"
+if [[ "${mpscheme}" == "Thompson" ]]; then
+    rundir="$WORKDIR/$eventdate${eventtime}_RT"
+else
+    rundir="$WORKDIR/$eventdate${eventtime}_RN"
+fi
 
 if [[ ! -d $rundir ]]; then
     mkdir -p $rundir

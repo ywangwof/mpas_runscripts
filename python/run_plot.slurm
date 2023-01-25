@@ -1,11 +1,11 @@
 #!/bin/sh -l
 #SBATCH -A wof
 #SBATCH --partition=ujet,xjet,vjet,kjet
-#SBATCH -J plot_cref
+#SBATCH -J plot_mpas
 #SBATCH --ntasks=1 --ntasks-per-node=1 --mem=64000
 #SBATCH --exclusive
-#SBATCH -t 00:30:00
-#SBATCH --output=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/runscriptv2.0/python/plot_cref_%j.log
+#SBATCH -t 02:30:00
+#SBATCH --output=/lfs1/NAGAPE/wof/MPAS/run_dirs/2022110400_hrrr/plot_mpas_%j.log
 
 #set -eux
 
@@ -18,16 +18,27 @@ conda activate wofs_post
 
 ulimit -s unlimited
 
-cd /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/runscriptv2.0/python
+cd /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/mpas_scripts/python
 
-#plot_mpaspatch_basemap.py -p wofs_small.271805.patches /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/run_dirs/2022101000_hrrr_small/fcst/wofs_small.history.2022-10-10_06.00.00.nc qv -l 1
-plot_mpaspatch.py -p wofs_mpas.1894063.patches /lfs1/NAGAPE/wof/MPAS/run_dirs/2022101400_hrrr/fcst/wofs_mpas.diag.2022-10-14_06.00.00.nc refl10cm  -l max
+file="diag"
+datestr="2022-11-04"
+times=(00 01 02 03)
+cases=(fcst fcst.nohyb)
+fields=(refl10cm_max refl10cm_1km)
+fcst_dir="/lfs1/NAGAPE/wof/MPAS/run_dirs/2022110400_hrrr"
 
-#if [[ $? -eq 0 ]]; then
-#    touch done.plot_cref
-#else
-#    touch error.plot_cref
-#fi
+for nt in ${times[@]}; do
+    for case in ${cases[@]}; do
+        for field in ${fields[@]}; do
+            # 2D
+            plot_mpaspatch.py -p wofs_mpas.1894063.patches -o ${fcst_dir}/${case}/${field}_${nt}.png ${fcst_dir}/${case}/wofs_mpas.${file}.${datestr}_${nt}.00.00.nc ${field}         # 2D
+            # 3D
+            #plot_mpaspatch.py -p wofs_mpas.1894063.patches -o ${fcst_dir}/${case}/${field}Max_${nt}.png ${fcst_dir}/${case}/wofs_mpas.${file}.${datestr}_${nt}.00.00.nc ${field} -l max   # 3D
+            # init
+            #plot_mpaspatch.py -p wofs_mpas.1894063.patches -o ${fcst_dir}/${case}/init_${field}Max_${nt}.png ${fcst_dir}/${case}/wofs_mpas.${file}.nc ${field} -l max   # 3D
+        done
+    done
+done
 
 time2=$(date '+%s')
 

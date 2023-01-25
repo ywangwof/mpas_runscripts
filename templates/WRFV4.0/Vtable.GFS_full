@@ -1,3 +1,4 @@
+
 GRIB1| Level| From |  To  | metgrid  | metgrid | metgrid                                 |GRIB2|GRIB2|GRIB2|GRIB2|
 Param| Type |Level1|Level2| Name     | Units   | Description                             |Discp|Catgy|Param|Level|
 -----+------+------+------+----------+---------+-----------------------------------------+-----------------------+
@@ -6,6 +7,11 @@ Param| Type |Level1|Level2| Name     | Units   | Description                    
   34 | 100  |   *  |      | VV       | m s-1   | V                                       |  0  |  2  |  3  | 100 |
   52 | 100  |   *  |      | RH       | %       | Relative Humidity                       |  0  |  1  |  1  | 100 |
    7 | 100  |   *  |      | HGT      | m       | Height                                  |  0  |  3  |  5  | 100 |
+ 153 | 109  |   *  |      | QC       | kg kg-1  | Cloud water mixing ratio               |  0  |  1  | 22  | 100 |
+ 170 | 109  |   *  |      | QR       | kg kg-1  | Rain water mixing ratio                |  0  |  1  | 24  | 100 |
+  58 | 109  |   *  |      | QI       | kg kg-1  | Ice mixing ratio                       |  0  |  1  | 23  | 100 |
+ 171 | 109  |   *  |      | QS       | kg kg-1  | Snow water mixing ratio                |  0  |  1  | 25  | 100 |
+ 179 | 109  |   *  |      | QG       | kg kg-1  | Graupel mixing ratio                   |  0  |  1  | 32  | 100 |
   11 | 105  |   2  |      | TT       | K       | Temperature       at 2 m                |  0  |  0  |  0  | 103 |
   52 | 105  |   2  |      | RH       | %       | Relative Humidity at 2 m                |  0  |  1  |  1  | 103 |
   33 | 105  |  10  |      | UU       | m s-1   | U                 at 10 m               |  0  |  2  |  2  | 103 |
@@ -59,7 +65,7 @@ Param| Type |Level1|Level2| Name     | Units   | Description                    
 #
 #  gfs.t12z.pgrb2.0p25    220000 Kb   193  3-h to 240-h  global  0.25 deg  (26 p-levels plus sfc and trop, 1000 to 10 mb).
 #  gfs.t12z.pgrb2.0p50     68000 Kb     4  3-h to 240-h  global  0.5  deg  (26 p-levels plus sfc and trop, 1000 to 10 mb).
-#                                          
+#
 #  Prior to 12z 14 January 2015:
 #
 #  gfs.t12z.pgrb2f00       56000 Kb     4  3-h to 192-h  global  0.5  deg  (26 p-levels plus sfc and trop, 1000 to 10 mb).
