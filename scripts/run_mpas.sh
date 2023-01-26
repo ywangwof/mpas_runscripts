@@ -93,11 +93,9 @@ eventdateDF=$(date +%Y%m%d)
 #        crtm2_fix   [lntemplates]
 #
 # 3. scripts                                # this scripts
-#    3.1 run_MPAS_hrrr.sh
-#    3.2 run_MPAS_gfs.sh
-#    3.3 run_MPAS_rrfs.sh
-#    3.4 lntemplates.sh
-#    3.5 cron.txt
+#    3.1 run_mpas.sh
+#    3.2 lntemplates.sh
+#    3.3 cron.txt
 #
 # 4. /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG
 #
@@ -119,7 +117,7 @@ eventdateDF=$(date +%Y%m%d)
 #     3. Copy existing domain directories $rootdir/run_dirs/wofs_conus & geo_conus to
 #        your run_dirs
 #
-#     4. run_MPAS_hrrr.sh [YYYYmmddHH] [run_dirs] [jobnames]
+#     4. run_mpas.sh [YYYYmmddHH] [run_dirs] [jobnames]
 #
 #-----------------------------------------------------------------------
 
