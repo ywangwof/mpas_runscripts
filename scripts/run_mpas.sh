@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
@@ -141,6 +140,7 @@ function usage {
     echo "                              Default is 0 for ungrib, mpassit, upp and 1 for others"
     echo "              -t  DIR         Template directory for runtime files"
     echo "              -m  Machine     Machine name to run on, [Jet, Odin]."
+    echo "              -a  wof         Account name for job submission."
     echo "              -d  wofs_mpas   Domain name to be used"
     echo "              -i  hrrr        Initialization model, [hrrr, gfs, rrfs], default: hrrr"
     echo "              -p  nssl        MP scheme, [nssl, thompson], default: nssl"
@@ -520,24 +520,31 @@ EOF
     # 3. Concatenate the intermediate files
     #-------------------------------------------------------------------
 
-    echo "$$: Checking: $wrkdir2/done.ungrib"
-    while [[ ! -e $wrkdir2/done.ungrib ]]; do
-        if [[ $verb -eq 1 ]]; then
-            echo "Waiting for $wrkdir2/done.ungrib"
-        fi
-        sleep 10
-    done
+    if [[ $dorun == true ]]; then
+        echo "$$: Checking: $wrkdir2/done.ungrib"
+        while [[ ! -e $wrkdir2/done.ungrib ]]; do
+            if [[ $verb -eq 1 ]]; then
+                echo "Waiting for $wrkdir2/done.ungrib"
+            fi
+            sleep 10
+        done
+        myruncmd=""
+    else
+        myruncmd="$runcmd"
+    fi
 
     secdtime_str=$(date -d "$eventdate ${eventtime}:00 $EXTINVL hours" +%Y-%m-%d_%H)
     secdfile=$wrkdir1/HRRR:${secdtime_str}
 
-    echo "$$: Checking: $secdfile"
-    while [[ ! -e $secdfile ]]; do
-        if [[ $verb -eq 1 ]]; then
-            echo "Waiting for $secdfile ......"
-        fi
-        sleep 10
-    done
+    if [[ $dorun == true ]]; then
+        echo "$$: Checking: $secdfile"
+        while [[ ! -e $secdfile ]]; do
+            if [[ $verb -eq 1 ]]; then
+                echo "Waiting for $secdfile ......"
+            fi
+            sleep 10
+        done
+    fi
 
     wrkdir=$rundir/ungrib
     mkwrkdir $wrkdir 0
@@ -545,22 +552,24 @@ EOF
 
     if [[ ! -f $wrkdir/done.ungrib_ics ]]; then
         inittime_str=$(date -d "$eventdate ${eventtime}:00" +%Y-%m-%d_%H)
-        cat $wrkdir1/HRRR:${inittime_str} $wrkdir2/GFS:${inittime_str} > $EXTHEAD:${inittime_str}
+        $myruncmd cat $wrkdir1/HRRR:${inittime_str} $wrkdir2/GFS:${inittime_str} > $EXTHEAD:${inittime_str}
         touch $wrkdir/done.ungrib_ics
     fi
 
-    echo "$$: Checking: $wrkdir1/done.ungrib"
-    while [[ ! -e $wrkdir1/done.ungrib ]]; do
-        if [[ $verb -eq 1 ]]; then
-            echo "Waiting for $wrkdir1/done.ungrib"
-        fi
-        sleep 10
-    done
+    if [[ $dorun == true ]]; then
+        echo "$$: Checking: $wrkdir1/done.ungrib"
+        while [[ ! -e $wrkdir1/done.ungrib ]]; do
+            if [[ $verb -eq 1 ]]; then
+                echo "Waiting for $wrkdir1/done.ungrib"
+            fi
+            sleep 10
+        done
+    fi
 
     if [[ ! -f $wrkdir/done.ungrib_lbc ]]; then
         for ((i=$EXTINVL;i<=${fcst_hours};i+=$EXTINVL)); do
             time_str=$(date -d "$eventdate ${eventtime}:00 $i hours" +%Y-%m-%d_%H)
-            ln -sf $wrkdir1/HRRR:${time_str} ${EXTHEAD}:${time_str}
+            $myruncmd ln -sf $wrkdir1/HRRR:${time_str} ${EXTHEAD}:${time_str}
         done
         touch $wrkdir/done.ungrib_lbc
     fi
@@ -625,7 +634,7 @@ EOF
         jobscript="run_ungrib.slurm"
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/ungrib_${jobname}/" $TEMPDIR/$jobscript > $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-        echo -n "Submitting $jobscript .... "
+        if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
         if [[ $runcmd == *"sbatch" ]]; then
             touch queue.ungrib
@@ -767,47 +776,57 @@ EOF
     # 3. Concatenate the intermediate files
     #-------------------------------------------------------------------
 
-    echo "$$: Checking: $wrkdir2/done.ungrib"
-    while [[ ! -e $wrkdir2/done.ungrib ]]; do
-        if [[ $verb -eq 1 ]]; then
-            echo "Waiting for $wrkdir2/done.ungrib"
-        fi
-        sleep 10
-    done
+    if [[ $dorun == true ]]; then
+        echo "$$: Checking: $wrkdir2/done.ungrib"
+        while [[ ! -e $wrkdir2/done.ungrib ]]; do
+            if [[ $verb -eq 1 ]]; then
+                echo "Waiting for $wrkdir2/done.ungrib"
+            fi
+            sleep 10
+        done
+        myruncmd=""
+    else
+        myruncmd="$runcmd"
+    fi
 
     secdtime_str=$(date -d "$eventdate ${eventtime}:00 $EXTINVL hours" +%Y-%m-%d_%H)
     secdfile=$wrkdir1/RRFS:${secdtime_str}
 
-    echo "$$: Checking: $secdfile"
-    while [[ ! -e $secdfile ]]; do
-        if [[ $verb -eq 1 ]]; then
-            echo "Waiting for $secdfile ......"
-        fi
-        sleep 10
-    done
+    if [[ $dorun == true ]]; then
+        echo "$$: Checking: $secdfile"
+        while [[ ! -e $secdfile ]]; do
+            if [[ $verb -eq 1 ]]; then
+                echo "Waiting for $secdfile ......"
+            fi
+            sleep 10
+        done
+    fi
 
     wrkdir=$rundir/ungrib
     mkwrkdir $wrkdir 0
     cd $wrkdir
 
+
     if [[ ! -f $wrkdir/done.ungrib_ics ]]; then
         inittime_str=$(date -d "$eventdate ${eventtime}:00" +%Y-%m-%d_%H)
-        cat $wrkdir1/RRFS:${inittime_str} $wrkdir2/GFS:${inittime_str} > $EXTHEAD:${inittime_str}
+        $myruncmd cat $wrkdir1/RRFS:${inittime_str} $wrkdir2/GFS:${inittime_str} > $EXTHEAD:${inittime_str}
         touch $wrkdir/done.ungrib_ics
     fi
 
-    echo "$$: Checking: $wrkdir1/done.ungrib"
-    while [[ ! -e $wrkdir1/done.ungrib ]]; do
-        if [[ $verb -eq 1 ]]; then
-            echo "Waiting for $wrkdir1/done.ungrib"
-        fi
-        sleep 10
-    done
+    if [[ $dorun == true ]]; then
+        echo "$$: Checking: $wrkdir1/done.ungrib"
+        while [[ ! -e $wrkdir1/done.ungrib ]]; do
+            if [[ $verb -eq 1 ]]; then
+                echo "Waiting for $wrkdir1/done.ungrib"
+            fi
+            sleep 10
+        done
+    fi
 
     if [[ ! -f $wrkdir/done.ungrib_lbc ]]; then
         for ((i=$EXTINVL;i<=${fcst_hours};i+=$EXTINVL)); do
             time_str=$(date -d "$eventdate ${eventtime}:00 $i hours" +%Y-%m-%d_%H)
-            ln -sf $wrkdir1/RRFS:${time_str} ${EXTHEAD}:${time_str}
+            $myruncmd ln -sf $wrkdir1/RRFS:${time_str} ${EXTHEAD}:${time_str}
         done
         touch $wrkdir/done.ungrib_lbc
     fi
@@ -830,15 +849,17 @@ function run_init {
         shift
     done
 
-    for cond in ${conditions[@]}; do
-        echo "$$: Checking: $cond"
-        while [[ ! -e $cond ]]; do
-            if [[ $verb -eq 1 ]]; then
-                echo "Waiting for file: $cond"
-            fi
-            sleep 10
+    if [[ $dorun == true ]]; then
+        for cond in ${conditions[@]}; do
+            echo "$$: Checking: $cond"
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    echo "Waiting for file: $cond"
+                fi
+                sleep 10
+            done
         done
-    done
+    fi
 
     wrkdir=$rundir/init
     mkwrkdir $wrkdir $overwrite
@@ -963,15 +984,17 @@ function run_lbc {
         shift
     done
 
-    for cond in ${conditions[@]}; do
-        echo "$$: Checking: $cond"
-        while [[ ! -e $cond ]]; do
-            if [[ $verb -eq 1 ]]; then
-                echo "Waiting for file: $cond"
-            fi
-            sleep 10
+    if [[ $dorun == true ]]; then
+        for cond in ${conditions[@]}; do
+            echo "$$: Checking: $cond"
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    echo "Waiting for file: $cond"
+                fi
+                sleep 10
+            done
         done
-    done
+    fi
 
     wrkdir=$rundir/lbc
     mkwrkdir $wrkdir $overwrite
@@ -1099,15 +1122,17 @@ function run_mpas {
         shift
     done
 
-    for cond in ${conditions[@]}; do
-        echo "$$: Checking: $cond"
-        while [[ ! -e $cond ]]; do
-            if [[ $verb -eq 1 ]]; then
-                echo "Waiting for file: $cond"
-            fi
-            sleep 10
+    if [[ $dorun == true ]]; then
+        for cond in ${conditions[@]}; do
+            echo "$$: Checking: $cond"
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    echo "Waiting for file: $cond"
+                fi
+                sleep 10
+            done
         done
-    done
+    fi
 
     #
     # Build working directory
@@ -1348,24 +1373,26 @@ function run_mpassit {
             continue               # already done, is running or is in queue, skip this hour
         fi
 
-        for fn in $histfile $diagfile; do
-            echo "$$: Checking: $fn ..."
-            while [[ ! -f $fn ]]; do
-                if [[ $jobsfromcmd -eq 1 ]]; then
-                    #return 0
-                    continue 3
-                fi
+        if [[ $dorun == true ]]; then
+            for fn in $histfile $diagfile; do
+                echo "$$: Checking: $fn ..."
+                while [[ ! -f $fn ]]; do
+                    if [[ $jobsfromcmd -eq 1 ]]; then
+                        #return 0
+                        continue 3
+                    fi
 
-                if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for $fn ..."
+                    if [[ $verb -eq 1 ]]; then
+                        echo "Waiting for $fn ..."
+                    fi
+                    sleep 10
+                done
+                fileage=$(( $(date +%s) - $(stat -c %Y -- "$fn") ))
+                if [[ $fileage -lt 30 ]]; then
+                    sleep 30
                 fi
-                sleep 10
             done
-            fileage=$(( $(date +%s) - $(stat -c %Y -- "$fn") ))
-            if [[ $fileage -lt 30 ]]; then
-                sleep 30
-            fi
-        done
+        fi
 
         nmlfile="namelist.fcst_$hstr"
         cat << EOF > $nmlfile
@@ -1453,18 +1480,20 @@ function run_upp {
         mpasfile="$rundir/mpassit/MPAS-A_out.${fcst_time_str}.nc"
         donefile="$rundir/mpassit/done.mpassit$hstr"
 
-        echo "$$: Checking: $donefile ...."
-        while [[ ! -f $donefile ]]; do
-            if [[ $jobsfromcmd -eq 1 ]]; then
-                #return 0
-                continue 2
-            fi
+        if [[ $dorun == true ]]; then
+            echo "$$: Checking: $donefile ...."
+            while [[ ! -f $donefile ]]; do
+                if [[ $jobsfromcmd -eq 1 ]]; then
+                    #return 0
+                    continue 2
+                fi
 
-            if [[ $verb -eq 1 ]]; then
-                echo "Waiting for $donefile ..."
-            fi
-            sleep 10
-        done
+                if [[ $verb -eq 1 ]]; then
+                    echo "Waiting for $donefile ..."
+                fi
+                sleep 10
+            done
+        fi
 
         mkwrkdir $wrkdir/post_$hstr 1
         cd $wrkdir/post_$hstr
@@ -1541,7 +1570,7 @@ function run_clean {
             ;;
         upp )
             #
-            # clean UPP directory
+            # Clean UPP directory
             #
             wrkdir="$rundir/upp"
             for ((h=0;h<=$fcst_hours;h+=$EXTINVL)); do
@@ -1551,6 +1580,25 @@ function run_clean {
                         echo "Cleaning $wrkdir/post_$hstr ......"
                     fi
                     rm -rf $wrkdir/post_$hstr
+                fi
+            done
+            ;;
+        post )
+            #
+            # Clean MPASSIT & UPP as the post-processing is done for the forecast hour
+            #
+            mpassit_dir="$rundir/mpassit"
+            upp_dir="$rundir/upp"
+            for ((h=0;h<=$fcst_hours;h+=$EXTINVL)); do
+                hstr=$(printf "%02d" $h)
+                fcst_time_str=$(date -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
+                if [[ -f $upp_dir/done.upp_$hstr ]]; then
+                    if [[ $verb -eq 1 ]]; then
+                        echo "Cleaning $upp_dir/post_$hstr & $mpassit_dir ......"
+                    fi
+                    rm -rf $upp_dir/post_$hstr
+                    rm -f  $mpassit_dir/MPAS-A_out.${fcst_time_str}.nc
+                    rm -f  $mpassit_dir/done.mpassit$hstr $mpassit_dir/error.mpassit$hstr
                 fi
             done
             ;;
@@ -1575,6 +1623,7 @@ domname="wofs_mpas"
 mpscheme="mp_nssl2m"
 extdm="hrrr"
 runcmd="sbatch"
+dorun=true
 verb=0
 overwrite=1
 jobsfromcmd=0
@@ -1599,6 +1648,7 @@ while [[ $# > 0 ]]
             ;;
         -n)
             runcmd="echo"
+            dorun=false
             ;;
         -v)
             verb=1
@@ -1632,15 +1682,8 @@ while [[ $# > 0 ]]
             fi
             shift
             ;;
-        -p)
-            if [[ ${2^^} == "NSSL" ]]; then
-                mpscheme="mp_nssl2m"
-            elif [[ ${2^^} == "THOMPSON" ]]; then
-                mpscheme="Thompson"
-            else
-                echo "ERROR: Unsupported MP scheme name, got \"$2\"."
-                usage 1
-            fi
+        -a)
+            hpcaccount=$2
             shift
             ;;
         -d)
@@ -1654,14 +1697,10 @@ while [[ $# > 0 ]]
             esac
             shift
             ;;
-         static* | geogrid* | ungrib* | init* | lbc* | mpas* | upp* | clean* )
-            jobs=(${key//,/ })
-            jobsfromcmd=1
-            ;;
         -i)
-            case $2 in
+            case ${2,,} in
             hrrr | gfs | rrfs )
-                extdm=$2
+                extdm=${2,,}
                 ;;
             * )
                 echo "ERROR: initialization model name \"$2\" not supported."
@@ -1669,9 +1708,24 @@ while [[ $# > 0 ]]
             esac
             shift
             ;;
+        -p)
+            if [[ ${2^^} == "NSSL" ]]; then
+                mpscheme="mp_nssl2m"
+            elif [[ ${2^^} == "THOMPSON" ]]; then
+                mpscheme="Thompson"
+            else
+                echo "ERROR: Unsupported MP scheme name, got \"$2\"."
+                usage 1
+            fi
+            shift
+            ;;
         -*)
             echo "Unknown option: $key"
             usage 2
+            ;;
+        static* | geogrid* | ungrib* | init* | lbc* | mpas* | upp* | clean* )
+            jobs=(${key//,/ })
+            jobsfromcmd=1
             ;;
         *)
             if [[ $key =~ ^[0-9]{8}$ ]]; then
@@ -1698,14 +1752,14 @@ done
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 if [[ $machine == "Jet" ]]; then
-    account="wof"
+    account="${hpcaccount-wof}"
     partition="ujet,tjet,xjet,vjet,kjet"; claim_cpu="--ntasks-per-node=6"
     partition_static="bigmem"           ; static_cpu="--cpus-per-task=12"
 
     modulename="build_jet_intel18_1.6_smiol"
     WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
 else
-    account="smallqueue"
+    account="${hpcaccount-smallqueue}"
     partition="wofq"                    ; claim_cpu="--ntasks-per-node=24"
     partition_static="smallqueue"       ; static_cpu=""
 
@@ -1730,7 +1784,7 @@ echo "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
 echo "     Event date : $eventdate ${eventtime}:00"
 echo "     Root    dir: $rootdir"
 echo "     Working dir: $WORKDIR"
-echo "     Domain name: $domname;      MP scheme: ${mpscheme}"
+echo "     Domain name: $domname;  MP scheme: ${mpscheme};  IC/LBCs model: ${extdm^^}"
 echo " "
 
 starttime_str=$(date -d "$eventdate ${eventtime}:00"                     +%Y-%m-%d_%H:%M:%S)
@@ -1790,7 +1844,7 @@ declare -A jobargs=([static]=$WORKDIR/$domname                          \
                     [lbc]="init/done.ics ungrib/done.ungrib_lbc"                  \
                     [mpas]="lbc/done.lbc"                               \
                     [upp]=""                                            \
-                    [clean]="upp"                                       \
+                    [clean]="post"                                      \
                    )
 
 for job in ${jobs[@]}; do
