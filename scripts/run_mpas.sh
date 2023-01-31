@@ -1580,7 +1580,7 @@ EOF
         # Create job script and submit it
         #
         jobscript="run_upp_$hstr.slurm"
-        sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npepost/;" $TEMPDIR/run_upp.slurm > $jobscript
+        sed "s/ACCOUNT/$account/g;s/PARTION/${partition_upp}/;s/NOPART/$npepost/;" $TEMPDIR/run_upp.slurm > $jobscript
         sed -i "s/JOBNAME/upp_${jobname}_$hstr/;s/HHHSTR/$hstr/g;s/MODULE/${modulename}/g" $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir/post_$hstr#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
         if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
@@ -1637,7 +1637,7 @@ function run_clean {
                     fi
                     rm -rf $upp_dir/post_$hstr
                     rm -f  $mpassit_dir/MPAS-A_out.${fcst_time_str}.nc
-                    rm -f  $mpassit_dir/done.mpassit$hstr $mpassit_dir/error.mpassit$hstr
+                    #rm -f  $mpassit_dir/done.mpassit$hstr $mpassit_dir/error.mpassit$hstr
                 fi
             done
             ;;
@@ -1817,6 +1817,7 @@ if [[ $machine == "Jet" ]]; then
     account="${hpcaccount-wof}"
     partition="ujet,tjet,xjet,vjet,kjet"; claim_cpu="--ntasks-per-node=6"
     partition_static="bigmem"           ; static_cpu="--cpus-per-task=12"
+    partition_upp="kjet,xjet,vjet"
 
     modulename="build_jet_intel18_1.6_smiol"
     WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
@@ -1824,6 +1825,7 @@ else
     account="${hpcaccount-smallqueue}"
     partition="wofq"                    ; claim_cpu="--ntasks-per-node=24"
     partition_static="smallqueue"       ; static_cpu=""
+    partition_upp="smallqueue"
 
     modulename="env.mpas_smiol"
     WPSGEOG_PATH="/scratch/wof/realtime/geog/"
