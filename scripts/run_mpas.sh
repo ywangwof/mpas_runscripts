@@ -142,8 +142,9 @@ function usage {
     echo "              -m  Machine     Machine name to run on, [Jet, Odin]."
     echo "              -a  wof         Account name for job submission."
     echo "              -d  wofs_mpas   Domain name to be used"
-    echo "              -i  hrrr        Initialization model, [hrrr, gfs, rrfs], or an absolute run directory from which init & lbc subdirectories are used"
-    echo "                              to initialize this run which will avoid runing processing jobs (ungrib, init/lbc) again. default: hrrr"
+    echo "              -i  hrrr        Initialization model, [hrrr, gfs, rrfs], default: hrrr"
+    echo "              -s  init_dir    Directory name from which init & lbc subdirectories are used to initialize this run"
+    echo "                              which avoids runing duplicated preprocessing jobs (ungrib, init/lbc) again. default: false"
     echo "              -p  nssl        MP scheme, [nssl, thompson], default: nssl"
     echo " "
     echo "   DEFAULTS:"
@@ -1417,9 +1418,8 @@ function run_mpassit {
             for fn in $histfile $diagfile; do
                 echo "$$: Checking: $fn ..."
                 while [[ ! -f $fn ]]; do
-                    if [[ $jobsfromcmd -eq 1 ]]; then
-                        #return 0
-                        continue 3
+                    if [[ $jobsfromcmd -eq 1 ]]; then    # do not wait for it
+                        continue 3                       # go ahead to process next hour
                     fi
 
                     if [[ $verb -eq 1 ]]; then
@@ -1523,9 +1523,8 @@ function run_upp {
         if [[ $dorun == true ]]; then
             echo "$$: Checking: $donefile ...."
             while [[ ! -f $donefile ]]; do
-                if [[ $jobsfromcmd -eq 1 ]]; then
-                    #return 0
-                    continue 2
+                if [[ $jobsfromcmd -eq 1 ]]; then     # do not wait
+                    continue 2                        # go ahread to process next forecast hour
                 fi
 
                 if [[ $verb -eq 1 ]]; then
@@ -1744,22 +1743,27 @@ while [[ $# > 0 ]]
                 extdm=${2,,}
                 ;;
             * )
-                if [[ -d ${2} ]]; then        # use init & lbc from another run directory
-                    init_dir=$2
-                    while [[ ! -d $init_dir/init ]]; do
-                        echo "Waiting for $init_dir/init"
-                        sleep 10
-                    done
-
-                    while [[ ! -d $init_dir/lbc ]]; do
-                        echo "Waiting for $init_dir/lbc"
-                        sleep 10
-                    done
-                else
-                    echo "ERROR: initialization model/directory name \"$2\" not supported/exists."
-                    usage 1
-                fi
+                echo "ERROR: initialization model name \"$2\" not supported."
+                usage 1
             esac
+            shift
+            ;;
+        -s )
+            if [[ -d ${2} ]]; then        # use init & lbc from another run directory
+                init_dir=$2
+                while [[ ! -d $init_dir/init ]]; do
+                    echo "Waiting for $init_dir/init"
+                    sleep 10
+                done
+
+                while [[ ! -d $init_dir/lbc ]]; do
+                    echo "Waiting for $init_dir/lbc"
+                    sleep 10
+                done
+            else
+                echo "ERROR: initialization directory  \"$2\" not exists."
+                usage 1
+            fi
             shift
             ;;
         -p)
