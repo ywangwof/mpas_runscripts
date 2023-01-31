@@ -142,7 +142,8 @@ function usage {
     echo "              -m  Machine     Machine name to run on, [Jet, Odin]."
     echo "              -a  wof         Account name for job submission."
     echo "              -d  wofs_mpas   Domain name to be used"
-    echo "              -i  hrrr        Initialization model, [hrrr, gfs, rrfs], default: hrrr"
+    echo "              -i  hrrr        Initialization model, [hrrr, gfs, rrfs], or an absolute run directory from which init & lbc subdirectories are used"
+    echo "                              to initialize this run which will avoid runing processing jobs (ungrib, init/lbc) again. default: hrrr"
     echo "              -p  nssl        MP scheme, [nssl, thompson], default: nssl"
     echo " "
     echo "   DEFAULTS:"
@@ -836,6 +837,25 @@ EOF
 
 function run_init {
 
+    if [[ -d $init_dir ]]; then  # link it from somewhere
+
+        if [[ $dorun == true ]]; then
+            donefile="$init_dir/init/done.ics"
+            echo "$$: Checking: $donefile"
+            while [[ ! -e $donefile ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    echo "Waiting for file: $donefile"
+                fi
+                sleep 10
+            done
+        fi
+
+        cd $rundir
+        ln -s $init_dir/init init
+        return
+    fi
+
+    # Otherwise, run init normally
     conditions=()
     while [[ $# > 0 ]]; do
         case $1 in
@@ -970,6 +990,26 @@ EOF
 ########################################################################
 
 function run_lbc {
+
+    if [[ -d $init_dir ]]; then  # link it from somewhere
+
+        if [[ $dorun == true ]]; then
+            donefile="$init_dir/lbc/done.lbc"
+            echo "$$: Checking: $donefile"
+            while [[ ! -e $donefile ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    echo "Waiting for file: $donefile"
+                fi
+                sleep 10
+            done
+        fi
+
+        cd $rundir
+        ln -s $init_dir/lbc lbc
+        return
+    fi
+
+    # otherwise, run lbc normally
 
     conditions=()
     while [[ $# > 0 ]]; do
@@ -1622,6 +1662,7 @@ eventtime="00"
 domname="wofs_mpas"
 mpscheme="mp_nssl2m"
 extdm="hrrr"
+init_dir=false
 runcmd="sbatch"
 dorun=true
 verb=0
@@ -1703,8 +1744,21 @@ while [[ $# > 0 ]]
                 extdm=${2,,}
                 ;;
             * )
-                echo "ERROR: initialization model name \"$2\" not supported."
-                usage 1
+                if [[ -d ${2} ]]; then        # use init & lbc from another run directory
+                    init_dir=$2
+                    while [[ ! -d $init_dir/init ]]; do
+                        echo "Waiting for $init_dir/init"
+                        sleep 10
+                    done
+
+                    while [[ ! -d $init_dir/lbc ]]; do
+                        echo "Waiting for $init_dir/lbc"
+                        sleep 10
+                    done
+                else
+                    echo "ERROR: initialization model/directory name \"$2\" not supported/exists."
+                    usage 1
+                fi
             esac
             shift
             ;;
@@ -1744,6 +1798,10 @@ while [[ $# > 0 ]]
     esac
     shift # past argument or value
 done
+
+if [[ $init_dir != false ]]; then
+    jobs=( "${jobs[@]/ungrib}" )
+fi
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
