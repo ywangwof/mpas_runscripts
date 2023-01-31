@@ -852,7 +852,7 @@ function run_init {
         fi
 
         cd $rundir
-        ln -s $init_dir/init init
+        ln -sf $init_dir/init .
         return
     fi
 
@@ -1006,7 +1006,7 @@ function run_lbc {
         fi
 
         cd $rundir
-        ln -s $init_dir/lbc lbc
+        ln -sf $init_dir/lbc .
         return
     fi
 
