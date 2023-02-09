@@ -642,6 +642,18 @@ EOF
             touch queue.ungrib
         fi
     fi
+
+    if [[ $dorun == true ]]; then
+        echo "$$: Checking: $wrkdir/done.ungrib"
+        while [[ ! -e $wrkdir/done.ungrib ]]; do
+            if [[ $verb -eq 1 ]]; then
+                echo "Waiting for $wrkdir/done.ungrib"
+            fi
+            sleep 10
+        done
+        touch $wrkdir/done.ungrib_ics
+        touch $wrkdir/done.ungrib_lbc
+    fi
 }
 
 ########################################################################
@@ -668,14 +680,17 @@ function run_ungrib_rrfs {
     else
         currdate=$(date -d "$eventdate ${eventtime}:00" +%Y%m%d)
         currtime=$(date -d "$eventdate ${eventtime}:00" +%H)
-        rrfs_grib_dir="$rrfs_grib_dir/RRFS_conus_3km.${currdate}/${currtime}"
+        #rrfs_grib_dir="$rrfs_grib_dir/RRFS_conus_3km.${currdate}/${currtime}"
+        rrfs_grib_dir="$rrfs_grib_dir/rrfs_a.${currdate}/${currtime}"
 
         rrfsfiles=()
         for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
             hstr=$(printf "%03d" $h)
-            rrfsfiles+=($rrfs_grib_dir/RRFS_CONUS.t${currtime}z.bgdawpf${hstr}.tm00.grib2)
+            #rrfsfiles+=($rrfs_grib_dir/RRFS_CONUS.t${currtime}z.bgdawpf${hstr}.tm00.grib2)
+            rrfsfiles+=($rrfs_grib_dir/RRFS_CONUS.t${currtime}z.bgrd3df${hstr}.tm00.grib2)
         done
 
+        myrrfsfiles=()
         for fn in ${rrfsfiles[@]}; do
             echo "RRFS file: $fn"
             while [[ ! -f $fn ]]; do
@@ -684,9 +699,15 @@ function run_ungrib_rrfs {
                 fi
                 sleep 10
             done
+
+            # drop un-wanted records
+            basefn=$(basename $fn)
+            echo "Generating working copy of $basefn ..."
+            ${wgrib2path} $fn | grep -v "1-21\|1-61 hybrid layer" | ${wgrib2path} -i $fn -GRIB $basefn >& /dev/null
+            myrrfsfiles+=($basefn)
         done
 
-        link_grib ${rrfsfiles[@]}
+        link_grib ${myrrfsfiles[@]}
 
         ln -sf $TEMPDIR/WRFV4.0/Vtable.RRFS Vtable
 
@@ -1598,13 +1619,23 @@ function run_clean {
 
     for dirname in $@; do
         case $dirname in
+        ungrib )
+            donelbc="$rundir/lbc/done.lbc"
+            for dirsn in ungrib_gfs ungrib_hrrr ungrib_rrfs ungrib; do
+                if [[ -d $rundir/$dirsn && -e $donelbc ]]; then
+                    cd $rundir/$dirsn
+                    rm -rf GFS:* HRRR:* RRFS:* PFILE:* RRFSGFS:* HRRRGFS:*
+                    rm -rf RRFS_CONUS.*
+                fi
+            done
+            ;;
         mpssit )
             wrkdir="$rundir/mpassit"
             for ((h=0;h<=$fcst_hours;h+=$EXTINVL)); do
                 hstr=$(printf "%02d" $h)
                 fcst_time_str=$(date -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
                 rm -rf $wrkdir/MPAS-A_out.${fcst_time_str}.nc
-                rm -rf $wrkdir/done.mpassit$hstr $wrkdir/error.mpassit$hstr
+                #rm -rf $wrkdir/done.mpassit$hstr $wrkdir/error.mpassit$hstr
             done
             ;;
         upp )
@@ -1650,6 +1681,7 @@ function run_clean {
 # Default values
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#@ MAIN
 
 jobs=(ungrib init lbc mpas mpassit upp clean)
 
@@ -1677,6 +1709,7 @@ fi
 # Handle command line arguments
 #
 #-----------------------------------------------------------------------
+#% ARGS
 
 while [[ $# > 0 ]]
     do
@@ -1812,6 +1845,7 @@ fi
 # Perform each task
 #
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#% ENTRY
 
 if [[ $machine == "Jet" ]]; then
     account="${hpcaccount-wof}"
@@ -1821,6 +1855,7 @@ if [[ $machine == "Jet" ]]; then
 
     modulename="build_jet_intel18_1.6_smiol"
     WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
+    wgrib2path="/apps/wgrib2/0.1.9.6a/bin/wgrib2"
 else
     account="${hpcaccount-smallqueue}"
     partition="wofq"                    ; claim_cpu="--ntasks-per-node=24"
@@ -1829,6 +1864,7 @@ else
 
     modulename="env.mpas_smiol"
     WPSGEOG_PATH="/scratch/wof/realtime/geog/"
+    wgrib2path=""
 fi
 npeics=800
 npefcst=1200
@@ -1867,7 +1903,7 @@ case $extdm in
         ;;
     rrfs)
         EXTHEAD="RRFSGFS"
-        EXTNFGL=51
+        EXTNFGL=66
         initname="R"
         ;;
     *)
@@ -1901,15 +1937,16 @@ staticdir="$TEMPDIR"
 
 declare -A jobargs=([static]=$WORKDIR/$domname                          \
                     [geogrid]=$WORKDIR/${domname/*_/geo_}               \
-                    [ungrib_hrrr]="/public/data/grids/hrrr/conus/wrfnat/grib2 /public/data/grids/gfs/0p25deg/grib2"             \
-                    [ungrib_rrfs]="/mnt/lfs4/BMC/nrtrr/NCO_dirs/ptmp/com/RRFS_CONUS/para /public/data/grids/gfs/0p25deg/grib2"  \
+                    [ungrib_hrrr]="/public/data/grids/hrrr/conus/wrfnat/grib2 /public/data/grids/gfs/0p25deg/grib2" \
+                    [ungrib_rrfs]="/mnt/lfs4/BMC/rtwbl/mhu/wcoss/emc/rrfs /public/data/grids/gfs/0p25deg/grib2"     \
                     [ungrib_gfs]="/public/data/grids/gfs/0p25deg/grib2"           \
                     [init]="ungrib/done.ungrib_ics $WORKDIR/$domname/done.static" \
                     [lbc]="init/done.ics ungrib/done.ungrib_lbc"                  \
                     [mpas]="lbc/done.lbc"                               \
                     [upp]=""                                            \
-                    [clean]="post"                                      \
+                    [clean]="post ungrib"                               \
                    )
+#[ungrib_rrfs]="/mnt/lfs4/BMC/nrtrr/NCO_dirs/ptmp/com/RRFS_CONUS/para /public/data/grids/gfs/0p25deg/grib2"  \
 
 for job in ${jobs[@]}; do
     if [[ $verb -eq 1 ]]; then
@@ -1918,8 +1955,8 @@ for job in ${jobs[@]}; do
     fi
 
     if [[ "$job" == "ungrib" ]]; then
-        jobname="${job}_${extdm}"
-        run_${jobname} ${jobargs[${jobname}]}
+        jobfull="${job}_${extdm}"
+        run_${jobfull} ${jobargs[${jobfull}]}
     else
         run_$job ${jobargs[$job]}
     fi
