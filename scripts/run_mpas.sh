@@ -72,6 +72,7 @@ eventdateDF=$(date +%Y%m%d)
 #        WRFV4.0/Vtable.GFS
 #        WRFV4.0/Vtable.raphrrr
 #        WRFV4.0/Vtable.RRFS
+#        WRFV4.0/Vtable.RRFSP
 #        WRFV4.0/GEOGRID.TBL.ARW
 #        WRFV4.0/ETAMPNEW_DATA
 #        WRFV4.0/ETAMPNEW_DATA.expanded_rain
@@ -142,7 +143,7 @@ function usage {
     echo "              -m  Machine     Machine name to run on, [Jet, Odin]."
     echo "              -a  wof         Account name for job submission."
     echo "              -d  wofs_mpas   Domain name to be used"
-    echo "              -i  hrrr        Initialization model, [hrrr, gfs, rrfs], default: hrrr"
+    echo "              -i  hrrr        Initialization model, [hrrr, gfs, rrfs, rrfsp], default: hrrr"
     echo "              -s  init_dir    Directory name from which init & lbc subdirectories are used to initialize this run"
     echo "                              which avoids runing duplicated preprocessing jobs (ungrib, init/lbc) again. default: false"
     echo "              -p  nssl        MP scheme, [nssl, thompson], default: nssl"
@@ -659,12 +660,14 @@ EOF
 ########################################################################
 
 function run_ungrib_rrfs {
-    if [[ $# -ne 2 ]]; then
-        echo "ERROR: run_ungrib require two arguments."
+    if [[ $# -ne 3 ]]; then
+        echo "ERROR: run_ungrib require three arguments."
         exit 2
     fi
     rrfs_grib_dir=$1
     gfs_grib_dir=$2
+
+    subdirname=$3
 
     #-------------------------------------------------------------------
     # 1. run from RRFS datasets
@@ -680,13 +683,11 @@ function run_ungrib_rrfs {
     else
         currdate=$(date -d "$eventdate ${eventtime}:00" +%Y%m%d)
         currtime=$(date -d "$eventdate ${eventtime}:00" +%H)
-        #rrfs_grib_dir="$rrfs_grib_dir/RRFS_conus_3km.${currdate}/${currtime}"
-        rrfs_grib_dir="$rrfs_grib_dir/rrfs_a.${currdate}/${currtime}"
+        rrfs_grib_dir="$rrfs_grib_dir/${subdirname}.${currdate}/${currtime}"
 
         rrfsfiles=()
         for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
             hstr=$(printf "%03d" $h)
-            #rrfsfiles+=($rrfs_grib_dir/RRFS_CONUS.t${currtime}z.bgdawpf${hstr}.tm00.grib2)
             rrfsfiles+=($rrfs_grib_dir/RRFS_CONUS.t${currtime}z.bgrd3df${hstr}.tm00.grib2)
         done
 
@@ -710,6 +711,198 @@ function run_ungrib_rrfs {
         link_grib ${myrrfsfiles[@]}
 
         ln -sf $TEMPDIR/WRFV4.0/Vtable.RRFS Vtable
+
+        cat << EOF > namelist.wps
+&share
+ wrf_core = 'ARW',
+ max_dom = 1,
+ start_date = '${starttime_str}',
+ end_date = '${stoptime_str}',
+ interval_seconds = $((EXTINVL*3600))
+ io_form_geogrid = 2,
+/
+&geogrid
+/
+&ungrib
+ out_format = 'WPS',
+ prefix = 'RRFS',
+/
+&metgrid
+/
+EOF
+
+        #
+        # Create job script and submit it
+        #
+        jobscript="run_ungrib.slurm"
+        sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/ungrb_rrfs_${jobname}/" $TEMPDIR/$jobscript > $jobscript
+        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir1#g;s#EXEDIR#${exedir}#" $jobscript
+        if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
+        $runcmd $jobscript
+        if [[ $runcmd == *"sbatch" ]]; then
+            touch queue.ungrib
+        fi
+    fi
+
+    #-------------------------------------------------------------------
+    # 2. run for soil fields from GFS datasets
+    #-------------------------------------------------------------------
+    wrkdir2=$rundir/ungrib_gfs
+    mkwrkdir $wrkdir2 0
+    cd $wrkdir2
+
+    if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
+        :    # skip
+    else
+        echo "GFS File: $gfs_grib_dir/${julday}000000"
+        while [[ ! -e $gfs_grib_dir/${julday}000000 ]]; do
+            if [[ $verb -eq 1 ]]; then
+                echo "Waiting for: $gfs_grib_dir/${julday}000000 ..."
+            fi
+            sleep 10
+        done
+        link_grib $gfs_grib_dir/${julday}000000
+        ln -sf $TEMPDIR/WRFV4.0/Vtable.GFS Vtable
+
+        cat << EOF > namelist.wps
+&share
+ wrf_core = 'ARW',
+ max_dom = 1,
+ start_date = '${starttime_str}',
+ end_date = '${stoptime_str}',
+ interval_seconds = $((EXTINVL*3600))
+ io_form_geogrid = 2,
+/
+&geogrid
+/
+&ungrib
+ out_format = 'WPS',
+ prefix = 'GFS',
+/
+&metgrid
+/
+EOF
+
+        #
+        # Create job script and submit it
+        #
+        jobscript="run_ungrib.slurm"
+        sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/ungrb_gfs_${jobname}/" $TEMPDIR/$jobscript > $jobscript
+        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir2#g;s#EXEDIR#${exedir}#" $jobscript
+        if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
+        $runcmd $jobscript
+        if [[ $runcmd == *"sbatch" ]]; then
+            touch queue.ungrib
+        fi
+    fi
+
+    #-------------------------------------------------------------------
+    # 3. Concatenate the intermediate files
+    #-------------------------------------------------------------------
+
+    if [[ $dorun == true ]]; then
+        echo "$$: Checking: $wrkdir2/done.ungrib"
+        while [[ ! -e $wrkdir2/done.ungrib ]]; do
+            if [[ $verb -eq 1 ]]; then
+                echo "Waiting for $wrkdir2/done.ungrib"
+            fi
+            sleep 10
+        done
+        myruncmd=""
+    else
+        myruncmd="$runcmd"
+    fi
+
+    secdtime_str=$(date -d "$eventdate ${eventtime}:00 $EXTINVL hours" +%Y-%m-%d_%H)
+    secdfile=$wrkdir1/RRFS:${secdtime_str}
+
+    if [[ $dorun == true ]]; then
+        echo "$$: Checking: $secdfile"
+        while [[ ! -e $secdfile ]]; do
+            if [[ $verb -eq 1 ]]; then
+                echo "Waiting for $secdfile ......"
+            fi
+            sleep 10
+        done
+    fi
+
+    wrkdir=$rundir/ungrib
+    mkwrkdir $wrkdir 0
+    cd $wrkdir
+
+
+    if [[ ! -f $wrkdir/done.ungrib_ics ]]; then
+        inittime_str=$(date -d "$eventdate ${eventtime}:00" +%Y-%m-%d_%H)
+        $myruncmd cat $wrkdir1/RRFS:${inittime_str} $wrkdir2/GFS:${inittime_str} > $EXTHEAD:${inittime_str}
+        touch $wrkdir/done.ungrib_ics
+    fi
+
+    if [[ $dorun == true ]]; then
+        echo "$$: Checking: $wrkdir1/done.ungrib"
+        while [[ ! -e $wrkdir1/done.ungrib ]]; do
+            if [[ $verb -eq 1 ]]; then
+                echo "Waiting for $wrkdir1/done.ungrib"
+            fi
+            sleep 10
+        done
+    fi
+
+    if [[ ! -f $wrkdir/done.ungrib_lbc ]]; then
+        for ((i=$EXTINVL;i<=${fcst_hours};i+=$EXTINVL)); do
+            time_str=$(date -d "$eventdate ${eventtime}:00 $i hours" +%Y-%m-%d_%H)
+            $myruncmd ln -sf $wrkdir1/RRFS:${time_str} ${EXTHEAD}:${time_str}
+        done
+        touch $wrkdir/done.ungrib_lbc
+    fi
+}
+
+########################################################################
+
+function run_ungrib_rrfsp {
+    if [[ $# -ne 3 ]]; then
+        echo "ERROR: run_ungrib require three arguments."
+        exit 2
+    fi
+    rrfs_grib_dir=$1
+    gfs_grib_dir=$2
+
+    subdirname=$3
+
+    #-------------------------------------------------------------------
+    # 1. run from RRFS datasets
+    #-------------------------------------------------------------------
+    wrkdir1=$rundir/ungrib_rrfs
+    mkwrkdir $wrkdir1 0
+    cd $wrkdir1
+
+    julday=$(date -d "$eventdate ${eventtime}:00" +%y%j%H)
+
+    if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
+        :                   # skip
+    else
+        currdate=$(date -d "$eventdate ${eventtime}:00" +%Y%m%d)
+        currtime=$(date -d "$eventdate ${eventtime}:00" +%H)
+        rrfs_grib_dir="$rrfs_grib_dir/${subdirname}.${currdate}/${currtime}"
+
+        rrfsfiles=()
+        for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
+            hstr=$(printf "%03d" $h)
+            rrfsfiles+=($rrfs_grib_dir/RRFS_CONUS.t${currtime}z.bgdawpf${hstr}.tm00.grib2)
+        done
+
+        for fn in ${rrfsfiles[@]}; do
+            echo "RRFS file: $fn"
+            while [[ ! -f $fn ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    echo "Waiting for $fn ..."
+                fi
+                sleep 10
+            done
+        done
+
+        link_grib ${rrfsfiles[@]}
+
+        ln -sf $TEMPDIR/WRFV4.0/Vtable.RRFSP Vtable
 
         cat << EOF > namelist.wps
 &share
@@ -1772,7 +1965,7 @@ while [[ $# > 0 ]]
             ;;
         -i)
             case ${2,,} in
-            hrrr | gfs | rrfs )
+            hrrr | gfs | rrfs | rrfsp )
                 extdm=${2,,}
                 ;;
             * )
@@ -1901,6 +2094,11 @@ case $extdm in
         EXTNFGL=51
         initname="H"
         ;;
+    rrfsp)
+        EXTHEAD="RRFSPGFS"
+        EXTNFGL=46
+        initname="R"
+        ;;
     rrfs)
         EXTHEAD="RRFSGFS"
         EXTNFGL=66
@@ -1938,7 +2136,8 @@ staticdir="$TEMPDIR"
 declare -A jobargs=([static]=$WORKDIR/$domname                          \
                     [geogrid]=$WORKDIR/${domname/*_/geo_}               \
                     [ungrib_hrrr]="/public/data/grids/hrrr/conus/wrfnat/grib2 /public/data/grids/gfs/0p25deg/grib2" \
-                    [ungrib_rrfs]="/mnt/lfs4/BMC/rtwbl/mhu/wcoss/emc/rrfs /public/data/grids/gfs/0p25deg/grib2"     \
+                    [ungrib_rrfs]="/mnt/lfs4/BMC/rtwbl/mhu/wcoss/emc/rrfs /public/data/grids/gfs/0p25deg/grib2  rrfs_a" \
+                    [ungrib_rrfsp]="/mnt/lfs4/BMC/rtwbl/mhu/wcoss/emc/rrfs /public/data/grids/gfs/0p25deg/grib2 rrfs_a" \
                     [ungrib_gfs]="/public/data/grids/gfs/0p25deg/grib2"           \
                     [init]="ungrib/done.ungrib_ics $WORKDIR/$domname/done.static" \
                     [lbc]="init/done.ics ungrib/done.ungrib_lbc"                  \
@@ -1946,7 +2145,7 @@ declare -A jobargs=([static]=$WORKDIR/$domname                          \
                     [upp]=""                                            \
                     [clean]="post ungrib"                               \
                    )
-#[ungrib_rrfs]="/mnt/lfs4/BMC/nrtrr/NCO_dirs/ptmp/com/RRFS_CONUS/para /public/data/grids/gfs/0p25deg/grib2"  \
+#[ungrib_rrfs]="/mnt/lfs4/BMC/nrtrr/NCO_dirs/ptmp/com/RRFS_CONUS/para /public/data/grids/gfs/0p25deg/grib2 RRFS_conus_3km"  \
 
 for job in ${jobs[@]}; do
     if [[ $verb -eq 1 ]]; then
