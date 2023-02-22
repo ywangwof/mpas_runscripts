@@ -3,8 +3,8 @@
 #SBATCH --partition=PARTION
 #SBATCH -q batch
 #SBATCH -J JOBNAME
-#SBATCH -n NOPART
-#SBATCH -t 00:30:00
+#SBATCH --ntasks=NOPART CPUSPEC
+#SBATCH -t 00:45:00
 #SBATCH --output=WRKDIR/upp_HHHSTR_%j.log
 #SBATCH -D .
 #...Automatically change the directory to where

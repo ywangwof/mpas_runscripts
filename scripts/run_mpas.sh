@@ -362,6 +362,7 @@ EOF
                   filename_template="${domname}.static.nc"
                   io_type="netcdf"
                   packages="initial_conds"
+                  clobber_mode="replace_files"
                   output_interval="initial_only" />
 
 <immutable_stream name="surface"
@@ -1173,6 +1174,7 @@ EOF
                   filename_template="$domname.init.nc"
                   io_type="${ICSIOTYPE}"
                   packages="initial_conds"
+                  clobber_mode="replace_files"
                   output_interval="initial_only" />
 
 <immutable_stream name="surface"
@@ -1187,6 +1189,7 @@ EOF
                   filename_template="$domname.lbc.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
                   filename_interval="output_interval"
                   packages="lbcs"
+                  clobber_mode="replace_files"
                   output_interval="${EXTINVL_STR}" />
 
 </streams>
@@ -1343,6 +1346,7 @@ EOF
                   filename_interval="output_interval"
                   packages="lbcs"
                   io_type="${ICSIOTYPE}"
+                  clobber_mode="replace_files"
                   output_interval="${EXTINVL_STR}" />
 
 </streams>
@@ -1530,33 +1534,36 @@ EOF
                   filename_template="${domname}.restart.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
                   io_type="${OUTIOTYPE}"
                   input_interval="initial_only"
+                  clobber_mode="replace_files"
                   output_interval="61:00:00" />
 
 <stream name="output"
-        type="output"
-        filename_template="${domname}.history.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-        io_type="${OUTIOTYPE}"
-        output_interval="${OUTINVL_STR}" >
+                  type="output"
+                  filename_template="${domname}.history.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+                  io_type="${OUTIOTYPE}"
+                  clobber_mode="replace_files"
+                  output_interval="${OUTINVL_STR}" >
 
-	<file name="stream_list.atmosphere.output"/>
+    <file name="stream_list.atmosphere.output"/>
 </stream>
 
 <stream name="diagnostics"
-        type="output"
-        filename_template="${domname}.diag.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-        io_type="${OUTIOTYPE}"
-        output_interval="${OUTINVL_STR}" >
+                  type="output"
+                  filename_template="${domname}.diag.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+                  io_type="${OUTIOTYPE}"
+                  clobber_mode="replace_files"
+                  output_interval="${OUTINVL_STR}" >
 
-	<file name="stream_list.atmosphere.diagnostics"/>
+    <file name="stream_list.atmosphere.diagnostics"/>
 </stream>
 
 <stream name="surface"
-        type="input"
-        filename_template="${domname}.sfc_update.nc"
-        filename_interval="none"
-        input_interval="none" >
+                  type="input"
+                  filename_template="${domname}.sfc_update.nc"
+                  filename_interval="none"
+                  input_interval="none" >
 
-	<file name="stream_list.atmosphere.surface"/>
+    <file name="stream_list.atmosphere.surface"/>
 </stream>
 
 <immutable_stream name="iau"
@@ -1794,7 +1801,7 @@ EOF
         # Create job script and submit it
         #
         jobscript="run_upp_$hstr.slurm"
-        sed "s/ACCOUNT/$account/g;s/PARTION/${partition_upp}/;s/NOPART/$npepost/;" $TEMPDIR/run_upp.slurm > $jobscript
+        sed "s/ACCOUNT/$account/g;s/PARTION/${partition_upp}/;s/NOPART/$npepost/;s/CPUSPEC/${claim_cpu}/" $TEMPDIR/run_upp.slurm > $jobscript
         sed -i "s/JOBNAME/upp_${jobname}_$hstr/;s/HHHSTR/$hstr/g;s/MODULE/${modulename}/g" $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir/post_$hstr#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
         if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
