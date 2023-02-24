@@ -1,3 +1,4 @@
+
 #!/bin/bash
 
 srcroot="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS"
@@ -154,25 +155,28 @@ for cmd in ${cmds[@]}; do
         srcmpassit=${srcdir-$srcmpassitdir}
 
         cd $desdir/MPASSIT
-        echo " "
+        echo "===  MPASSIT"
+        echo "SRC: $srcmpassit"
         echo "CWD: $desdir"
 
-        parmfiles=(diaglist histlist_2d histlist_3d histlist_soil)
-        for fn in ${parmfiles[@]}; do
-            #if [[ ! -e $fn ]]; then
-                if [[ $verb -eq 1 ]]; then
-                    echo "Linking $fn ...";
-                fi
-                if [[ ${runcmd} == "clean" ]]; then
-                    rm $fn
-                else
-                    ${runcmd} $srcmpassit/parm/$fn .
-                fi
-            #fi
-        done
+        # They are now managed through Git
+        #
+        #parmfiles=(diaglist histlist_2d histlist_3d histlist_soil)
+        #for fn in ${parmfiles[@]}; do
+        #    #if [[ ! -e $fn ]]; then
+        #        if [[ $verb -eq 1 ]]; then
+        #            echo "Linking $fn ...";
+        #        fi
+        #        if [[ ${runcmd} == "clean" ]]; then
+        #            rm $fn
+        #        else
+        #            ${runcmd} $srcmpassit/parm/$fn .
+        #        fi
+        #    #fi
+        #done
 
         cd $exedir
-        echo " "
+        echo "---  Executable"
         echo "CWD: $exedir"
         if [[ ${runcmd} == "clean" ]]; then
             rm mpassit
@@ -201,7 +205,8 @@ for cmd in ${cmds[@]}; do
         #done
 
         cd $exedir
-        echo " "
+        echo "===  WRF "
+        echo "SRC: $srcwrf;    $srcwps"
         echo "CWD: $exedir"
         if [[ ${runcmd} == "clean" ]]; then
             rm ungrib.exe
@@ -216,7 +221,8 @@ for cmd in ${cmds[@]}; do
         srcupp=${srcdir-$srcuppdir}
 
         cd $desdir/UPP
-        echo " "
+        echo "===  UPP"
+        echo "SRC: $srcupp"
         echo "CWD: $desdir"
 
         if [[ ${runcmd} == "clean" ]]; then
@@ -226,7 +232,7 @@ for cmd in ${cmds[@]}; do
         fi
 
         cd $exedir
-        echo " "
+        echo "---  Executable"
         echo "CWD: $exedir"
         if [[ ${runcmd} == "clean" ]]; then
             rm unipost.exe
@@ -240,7 +246,8 @@ for cmd in ${cmds[@]}; do
         srcmodel=${srcdir-$srcmodeldir}
 
         cd $desdir
-        echo " "
+        echo "===  MPAS Model"
+        echo "SRC: $srcmodel"
         echo "CWD: $desdir"
 
         staticfiles=(CAM_ABS_DATA.DBL  CAM_AEROPT_DATA.DBL GENPARM.TBL       LANDUSE.TBL    \
@@ -262,20 +269,22 @@ for cmd in ${cmds[@]}; do
         if [[ $run -ne 1 ]]; then
             cd $desdir
 
-            streamfiles=( stream_list.atmosphere.diagnostics stream_list.atmosphere.output  \
-                stream_list.atmosphere.surface streams.atmosphere streams.init_atmosphere   \
-                namelist.atmosphere namelist.init_atmosphere )
+            # These files are not managed by Git
+            #
+            #streamfiles=( stream_list.atmosphere.diagnostics stream_list.atmosphere.output  \
+            #    stream_list.atmosphere.surface streams.atmosphere streams.init_atmosphere   \
+            #    namelist.atmosphere namelist.init_atmosphere )
 
-            for fn in ${streamfiles[@]}; do
-                if [[ $verb -eq 1 ]]; then
-                    echo "Linking $fn ....";
-                fi
-                if [[ ${runcmd} == "clean" ]]; then
-                    rm $fn
-                else
-                    ${runcmd} $srcmodel/$fn .
-                fi
-            done
+            #for fn in ${streamfiles[@]}; do
+            #    if [[ $verb -eq 1 ]]; then
+            #        echo "Linking $fn ....";
+            #    fi
+            #    if [[ ${runcmd} == "clean" ]]; then
+            #        rm $fn
+            #    else
+            #        ${runcmd} $srcmodel/$fn .
+            #    fi
+            #done
 
             #domgridfiles=(wofs_mpas.grid.nc)
             #for domfile in ${domgridfiles[@]}; do
@@ -287,7 +296,7 @@ for cmd in ${cmds[@]}; do
             #done
 
             cd $exedir
-            echo " "
+            echo "---  Executables"
             echo "CWD: $exedir"
             if [[ ${runcmd} == "clean" ]]; then
                 rm init_atmosphere_model atmosphere_model.single
@@ -304,4 +313,4 @@ for cmd in ${cmds[@]}; do
     esac
 done
 
-exit 0
+exit
