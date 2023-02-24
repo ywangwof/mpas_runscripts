@@ -18,12 +18,12 @@ if [[ "MACHINE" == "Jet" ]]; then
     module use ROOTDIR/modules
     module load MODULE
 
-    ncores=6
+    ncores=NCORES
     #nnode=$(( NOPART/$SLURM_CPUS_ON_NODE ))
     #nnode=$SLURM_JOB_NUM_NODES
 else
     source ROOTDIR/modules/MODULE
-    ncores=24
+    ncores=NCORES
 fi
 nnode=$(( NOPART/ncores ))
 

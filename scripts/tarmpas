@@ -25,7 +25,13 @@ target_static_files=(CAM_ABS_DATA.DBL CAM_AEROPT_DATA.DBL GENPARM.TBL LANDUSE.TB
 
 target_log_files=($(ls log.atmosphere.*.out log.atmosphere.*.err mpas_*.log))
 
-target_job_files=(namelist.atmosphere run_mpas.slurm streams.atmosphere            \
+if [[ -f $origfcst_dir/run_mpas.slurm ]]; then
+    jobfile="run_mpas.slurm"
+elif [[ -f $origfcst_dir/run_mpas.pbs ]]; then
+    jobfile="run_mpas.pbs"
+fi
+
+target_job_files=(namelist.atmosphere ${jobfile} streams.atmosphere                \
                   stream_list.atmosphere.diagnostics stream_list.atmosphere.output \
                   stream_list.atmosphere.surface wofs_mpas.graph.info.part.1200 )
 
@@ -36,7 +42,8 @@ target_lbc_files=($(ls wofs_mpas.lbc.*| head -3))
 target_dir="${casename}/fcst"
 
 files=()
-for fn in ${target_static_files[@]} ${target_log_files[@]} ${target_job_files[@]} ${target_init_files[@]} ${target_lbc_files[@]}; do
+#for fn in ${target_static_files[@]} ${target_log_files[@]} ${target_job_files[@]} ${target_init_files[@]} ${target_lbc_files[@]}; do
+for fn in ${target_log_files[@]} ${target_job_files[@]} ${target_init_files[@]} ${target_lbc_files[@]}; do
     #echo "$fn"
     files+=("$target_dir/$fn")
 done

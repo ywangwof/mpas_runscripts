@@ -34,7 +34,14 @@ done
 #
 # Hard copy some files
 #
-cpfiles=(run_mpas.slurm namelist.atmosphere streams.atmosphere          \
+
+if [[ -f $srcabsdir/run_mpas.slurm ]]; then
+    jobfile="run_mpas.slurm"
+elif [[ -f $srcabsdir/run_mpas.pbs ]]; then
+    jobfile="run_mpas.pbs"
+fi
+
+cpfiles=(${jobfile} namelist.atmosphere streams.atmosphere          \
          stream_list.atmosphere.diagnostics stream_list.atmosphere.output stream_list.atmosphere.surface)
 
 
@@ -46,5 +53,5 @@ done
 #
 # Modify job script
 #
-echo "Modify dirname in \"run_mpas.slurm\" ..."
-sed -i "s#$srcabsdir#$destabsdir#g" run_mpas.slurm
+echo "Modify dirname in \"$jobfile\" ..."
+sed -i "s#$srcabsdir#$destabsdir#g" $jobfile

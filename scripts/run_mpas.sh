@@ -1432,7 +1432,7 @@ function run_mpas {
     cat << EOF > namelist.atmosphere
 &nhyd_model
     config_time_integration_order   = 2
-    config_dt                       = 20
+    config_dt                       = 25
     config_start_time               = '${starttime_str}'
     config_run_duration             = '${fcsthour_str}:00:00'
     config_split_dynamics_transport = true
@@ -1586,7 +1586,8 @@ EOF
     # Create job script and submit it
     #
     jobscript="run_mpas.${mach}"
-    sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npefcst/;s/NODESPEC/${claim_nodes}/g" $TEMPDIR/$jobscript > $jobscript
+    sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/" $TEMPDIR/$jobscript > $jobscript
+    sed -i "s/NOPART/$npefcst/;s/NNODES/${nnodes_fcst}/;s/NCORES/${ncores_fcst}/" $jobscript
     sed -i "s/JOBNAME/mpas_${jobname}/;s/CPUSPEC/${claim_cpu}/g;s/MODULE/${modulename}/g" $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
     if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
@@ -2069,9 +2070,11 @@ fi
 #% ENTRY
 
 mach="slurm"
+
 if [[ $machine == "Jet" ]]; then
     account="${hpcaccount-wof}"
-    partition="ujet,tjet,xjet,vjet,kjet"; claim_cpu="--ntasks-per-node=6"; claim_nodes="200"
+    ncores_ics=6; ncores_fcst=6; ncores_post=6
+    partition="ujet,tjet,xjet,vjet,kjet"; claim_cpu="--ntasks-per-node=${ncores_fcst}"
     partition_static="bigmem"           ; static_cpu="--cpus-per-task=12"
     partition_upp="kjet,xjet,vjet"
 
@@ -2083,7 +2086,8 @@ elif [[ $machine == "Cheyenne" ]]; then
         runcmd="qsub"
     fi
     account="${hpcaccount-NMMM0013}"
-    partition="regular"        ; claim_cpu="30";         claim_nodes="40"
+    ncores_ics=30; ncores_fcst=30; ncores_post=30
+    partition="regular"        ; claim_cpu="ncpus=${ncores_fcst}"
     partition_static="regular" ; static_cpu="30"
     partition_upp="regular"
     mach="pbs"
@@ -2093,7 +2097,8 @@ elif [[ $machine == "Cheyenne" ]]; then
     wgrib2path="/apps/wgrib2/0.1.9.6a/bin/wgrib2"
 else
     account="${hpcaccount-smallqueue}"
-    partition="wofq"                    ; claim_cpu="--ntasks-per-node=24"; claim_nodes="50"
+    ncores_ics=24; ncores_fcst=24; ncores_post=24
+    partition="wofq"                    ; claim_cpu="--ntasks-per-node=${ncores_fcst}"
     partition_static="smallqueue"       ; static_cpu=""
     partition_upp="smallqueue"
 
@@ -2101,9 +2106,10 @@ else
     WPSGEOG_PATH="/scratch/wof/realtime/geog/"
     wgrib2path=""
 fi
-npeics=800
-npefcst=1200
-npepost=72
+npeics=800;   nnodes_ics=$((  npeics/ncores_ics   ))
+npefcst=1200; nnodes_fcst=$(( npefcst/ncores_fcst ))
+npepost=72;   nnodes_post=$(( npepost/ncores_post ))
+
 
 fcst_hours=36
 
@@ -2206,3 +2212,6 @@ done
 echo " "
 echo "==== Jobs done $(date +%m-%d_%H:%M:%S) ===="
 echo " "
+
+exit 0
+
