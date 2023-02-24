@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
@@ -281,7 +280,7 @@ EOF
     jobscript="run_geogrid.slurm"
     sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/geogrid_${geoname}/;s/NOPART/$npepost/" $TEMPDIR/$jobscript > $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-    if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
+    if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
     $runcmd $jobscript
 }
 
@@ -391,7 +390,7 @@ EOF
     sed -i "s/JOBNAME/static_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/;s/MACHINE/${machine}/g" $jobscript
     #sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${rootdir}/MPAS-Model#" $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-    if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
+    if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
     $runcmd $jobscript
 }
 
@@ -462,9 +461,9 @@ EOF
         jobscript="run_ungrib.slurm"
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/ungrb_hrrr_${jobname}/" $TEMPDIR/$jobscript > $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir1#g;s#EXEDIR#${exedir}#" $jobscript
-        if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
+        if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
-        if [[ $runcmd == *"sbatch" ]]; then
+        if [[ $runcmd != "echo"  ]]; then
             touch queue.ungrib
         fi
     fi
@@ -514,9 +513,9 @@ EOF
         jobscript="run_ungrib.slurm"
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/ungrb_gfs_${jobname}/" $TEMPDIR/$jobscript > $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir2#g;s#EXEDIR#${exedir}#" $jobscript
-        if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
+        if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
-        if [[ $runcmd == *"sbatch" ]]; then
+        if [[ $runcmd != "echo"  ]]; then
             touch queue.ungrib
         fi
     fi
@@ -639,9 +638,9 @@ EOF
         jobscript="run_ungrib.slurm"
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/ungrib_${jobname}/" $TEMPDIR/$jobscript > $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-        if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
+        if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
-        if [[ $runcmd == *"sbatch" ]]; then
+        if [[ $runcmd != "echo"  ]]; then
             touch queue.ungrib
         fi
     fi
@@ -739,9 +738,9 @@ EOF
         jobscript="run_ungrib.slurm"
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/ungrb_rrfs_${jobname}/" $TEMPDIR/$jobscript > $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir1#g;s#EXEDIR#${exedir}#" $jobscript
-        if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
+        if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
-        if [[ $runcmd == *"sbatch" ]]; then
+        if [[ $runcmd != "echo"  ]]; then
             touch queue.ungrib
         fi
     fi
@@ -791,9 +790,9 @@ EOF
         jobscript="run_ungrib.slurm"
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/ungrb_gfs_${jobname}/" $TEMPDIR/$jobscript > $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir2#g;s#EXEDIR#${exedir}#" $jobscript
-        if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
+        if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
-        if [[ $runcmd == *"sbatch" ]]; then
+        if [[ $runcmd != "echo"  ]]; then
             touch queue.ungrib
         fi
     fi
@@ -931,9 +930,9 @@ EOF
         jobscript="run_ungrib.slurm"
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/ungrb_rrfs_${jobname}/" $TEMPDIR/$jobscript > $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir1#g;s#EXEDIR#${exedir}#" $jobscript
-        if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
+        if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
-        if [[ $runcmd == *"sbatch" ]]; then
+        if [[ $runcmd != "echo"  ]]; then
             touch queue.ungrib
         fi
     fi
@@ -983,9 +982,9 @@ EOF
         jobscript="run_ungrib.slurm"
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/ungrb_gfs_${jobname}/" $TEMPDIR/$jobscript > $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir2#g;s#EXEDIR#${exedir}#" $jobscript
-        if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
+        if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
-        if [[ $runcmd == *"sbatch" ]]; then
+        if [[ $runcmd != "echo"  ]]; then
             touch queue.ungrib
         fi
     fi
@@ -1202,7 +1201,7 @@ EOF
     sed    "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npeics/;s/MACHINE/${machine}/g" $TEMPDIR/$jobscript > $jobscript
     sed -i "s/JOBNAME/init_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/g" $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-    if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
+    if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
     $runcmd $jobscript
 }
 
@@ -1359,7 +1358,7 @@ EOF
     sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npeics/;s/MACHINE/${machine}/g" $TEMPDIR/$jobscript > $jobscript
     sed -i "s/JOBNAME/lbc_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/g" $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-    if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
+    if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
     $runcmd $jobscript
 }
 
@@ -1586,11 +1585,11 @@ EOF
     #
     # Create job script and submit it
     #
-    jobscript="run_mpas.slurm"
-    sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npefcst/;" $TEMPDIR/$jobscript > $jobscript
-    sed -i "s/JOBNAME/mpas_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/g" $jobscript
+    jobscript="run_mpas.${mach}"
+    sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npefcst/;s/NODESPEC/${claim_nodes}/g" $TEMPDIR/$jobscript > $jobscript
+    sed -i "s/JOBNAME/mpas_${jobname}/;s/CPUSPEC/${claim_cpu}/g;s/MODULE/${modulename}/g" $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
-    if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
+    if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
     $runcmd $jobscript
 }
 
@@ -1681,10 +1680,10 @@ EOF
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npepost/;" $TEMPDIR/run_mpassit.slurm > $jobscript
         sed -i "s/JOBNAME/intrp_${jobname}_$hstr/;s/HHHSTR/$hstr/g;s/CPUSPEC/${claim_cpu}/;" $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
-        if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
+        if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
         echo " "
-        if [[ $runcmd == *"sbatch" ]]; then
+        if [[ $runcmd != "echo"  ]]; then
             touch $wrkdir/queue.mpassit$hstr
         fi
     done
@@ -1822,10 +1821,10 @@ EOF
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition_upp}/;s/NOPART/$npepost/;s/CPUSPEC/${claim_cpu}/" $TEMPDIR/run_upp.slurm > $jobscript
         sed -i "s/JOBNAME/upp_${jobname}_$hstr/;s/HHHSTR/$hstr/g;s/MODULE/${modulename}/g" $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir/post_$hstr#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
-        if [[ ${runcmd} != "echo" ]]; then echo -n "Submitting $jobscript .... "; fi
+        if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
         echo " "
-        if [[ $runcmd == *"sbatch" ]]; then
+        if [[ $runcmd != "echo" ]]; then
             touch $wrkdir/queue.upp_$hstr
         fi
     done
@@ -1920,6 +1919,8 @@ jobsfromcmd=0
 machine="Jet"
 if [[ "$(hostname)" == odin* ]]; then
     machine="Odin"
+elif [[ "$(hostname)" == cheyenne* ]]; then
+    machine="Cheyenne"
 fi
 
 #-----------------------------------------------------------------------
@@ -1967,6 +1968,8 @@ while [[ $# > 0 ]]
                 machine=Jet
             elif [[ ${2^^} == "ODIN" ]]; then
                 machine=Odin
+            elif [[ ${2^^} == "CHEYENNE" ]]; then
+                machine=Cheyenne
             else
                 echo "ERROR: Unsupported machine name, got \"$2\"."
                 usage 1
@@ -2065,18 +2068,30 @@ fi
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
 
+mach="slurm"
 if [[ $machine == "Jet" ]]; then
     account="${hpcaccount-wof}"
-    partition="ujet,tjet,xjet,vjet,kjet"; claim_cpu="--ntasks-per-node=6"
+    partition="ujet,tjet,xjet,vjet,kjet"; claim_cpu="--ntasks-per-node=6"; claim_nodes="200"
     partition_static="bigmem"           ; static_cpu="--cpus-per-task=12"
     partition_upp="kjet,xjet,vjet"
 
     modulename="build_jet_intel18_1.6_smiol"
     WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
     wgrib2path="/apps/wgrib2/0.1.9.6a/bin/wgrib2"
+elif [[ $machine == "Cheyenne" ]]; then
+    runcmd="qsub"
+    account="${hpcaccount-NMMM0013}"
+    partition="regular"        ; claim_cpu="30";         claim_nodes="40"
+    partition_static="regular" ; static_cpu="30"
+    partition_upp="regular"
+    mach="pbs"
+
+    modulename="build_jet_intel18_1.6_smiol"
+    WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
+    wgrib2path="/apps/wgrib2/0.1.9.6a/bin/wgrib2"
 else
     account="${hpcaccount-smallqueue}"
-    partition="wofq"                    ; claim_cpu="--ntasks-per-node=24"
+    partition="wofq"                    ; claim_cpu="--ntasks-per-node=24"; claim_nodes="50"
     partition_static="smallqueue"       ; static_cpu=""
     partition_upp="smallqueue"
 
@@ -2189,4 +2204,4 @@ done
 echo " "
 echo "==== Jobs done $(date +%m-%d_%H:%M:%S) ===="
 echo " "
-exit
+exi
