@@ -4,7 +4,7 @@
 #SBATCH -q batch
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
-#SBATCH -t 00:45:00
+#SBATCH -t 00:05:00
 #SBATCH --output=WRKDIR/upp_HHHSTR_%j.log
 #SBATCH -D .
 #...Automatically change the directory to where
@@ -22,6 +22,7 @@ if [[ "MACHINE" == "Jet" ]]; then
     module purge
     module use ROOTDIR/modules
     module load MODULE
+    module load wgrib2/2.0.8
 else
     source /scratch/ywang/MPAS/MODULE
 fi
@@ -36,14 +37,32 @@ rm -rf ../error.upp_HHHSTR ../queue.upp_HHHSTR
 
 touch ../running.upp_HHHSTR
 
-rm -rf fort.*
+rm -rf fort.* core.*
 
 srun EXEDIR/unipost.exe
 
 if [[ $? -eq 0 ]]; then
     touch ../done.upp_HHHSTR
     dtstr=(${wrkdir//\// })
-    mv WRFPRS.GrbFHHHSTR ../MPAS-A_${dtstr[-3]}fHHHSTR.grib2
+
+    grid_specs_hrrr="lambert:-97.5:38.5 -122.719528:1799:3000.0 21.138123:1059:3000.0"
+
+    infile=WRFPRS.GrbFHHHSTR
+    tmpfile=tmpGrbFHHHSTR.grib2
+    outfile=../MPAS-A_${dtstr[-3]}fHHHSTR.grib2
+
+    wgrib2 ${infile} -set_bitmap 1 -set_grib_type c3 -new_grid_winds grid \
+           -new_grid_vectors "UGRD:VGRD:USTM:VSTM:VUCSH:VVCSH" \
+           -new_grid_interpolation neighbor \
+           -new_grid ${grid_specs_hrrr} ${tmpfile}
+
+    # Merge vector field records
+    wgrib2 ${tmpfile} -new_grid_vectors "UGRD:VGRD:USTM:VSTM:VUCSH:VVCSH" -submsg_uv ${outfile}
+
+    # Remove temporary file
+    rm ${tmpfile} ${infile}
+
+    #mv WRFPRS.GrbFHHHSTR ../MPAS-A_${dtstr[-3]}fHHHSTR.grib2
 else
     touch ../error.upp_HHHSTR
 fi

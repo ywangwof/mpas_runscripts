@@ -1,3 +1,4 @@
+
 #!/bin/bash
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
@@ -1432,7 +1433,7 @@ function run_mpas {
     cat << EOF > namelist.atmosphere
 &nhyd_model
     config_time_integration_order   = 2
-    config_dt                       = 25
+    config_dt                       = 20
     config_start_time               = '${starttime_str}'
     config_run_duration             = '${fcsthour_str}:00:00'
     config_split_dynamics_transport = true
@@ -1635,6 +1636,10 @@ function run_mpassit {
             continue               # already done, is running or is in queue, skip this hour
         fi
 
+        if [[ -f error.mpassit$hstr ]]; then
+            rm -f core.*           # Maybe core-dumped, resubmission will solves the problem if the machine is unstable.
+        fi
+
         if [[ $dorun == true ]]; then
             for fn in $histfile $diagfile; do
                 echo "$$: Checking: $fn ..."
@@ -1734,9 +1739,22 @@ function run_upp {
         hstr=$(printf "%02d" $h)
         fcst_time_str=$(date -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
 
-        if [[  -f $wrkdir/done.upp_$hstr || -f $wrkdir/running.upp_$hstr || -f $wrkdir/queue.upp_$hstr ]]; then
-            continue      # already done, is running or is in queue, skip this hour
+        if [[  -f $wrkdir/done.upp_$hstr || -f $wrkdir/queue.upp_$hstr ]]; then
+            continue      # already done, or is in queue, skip this hour
         fi
+
+        if [[  -f $wrkdir/running.upp_$hstr ]]; then
+            fileage=$(( $(date +%s) - $(stat -c %Y -- "$wrkdir/running.upp_$hstr") ))
+            if [[ $fileage -lt 300 ]]; then
+                continue                        # Job is running, skip
+            else                                # > 5 minutes, May be a time out issue
+                rm $wrkdir/running.upp_$hstr
+            fi
+        fi
+
+        #if [[  -f $wrkdir/error.upp_$hstr ]]; then
+            # resubmission may solve the problem
+        #fi
 
         mpasfile="$rundir/mpassit/MPAS-A_out.${fcst_time_str}.nc"
         donefile="$rundir/mpassit/done.mpassit$hstr"
