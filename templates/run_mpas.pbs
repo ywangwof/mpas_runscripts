@@ -2,7 +2,7 @@
 #PBS -A ACCOUNT
 #PBS -q PARTION
 #PBS -N JOBNAME
-#PBS -l select=NODESPEC:ncpus=CPUSEC:mpiprocs=CPUSEC:ompthreads=1
+#PBS -l select=NODESPEC:ncpus=CPUSPEC:mpiprocs=CPUSPEC:ompthreads=1
 #PBS -l walltime=04:30:00
 #PBS -j oe
 #PBS -o WRKDIR/mpas_fcst.log
@@ -14,7 +14,7 @@ echo "Job Started: $(date). Job Id:  $PBS_JOBID"
 echo " "
 
 if [[ "MACHINE" == "Cheyenne" ]]; then
-    ncores=CPUSEC
+    ncores=CPUSPEC
 else
     source ROOTDIR/modules/MODULE
     ncores=24
@@ -27,7 +27,7 @@ cd WRKDIR
 
 sed -i "s/NNNODE/$nnode/;s/NNCORE/$ncores/;" namelist.atmosphere
 
-srun -n NOPART EXEDIR/atmosphere_model.single
+mpiexec EXEDIR/atmosphere_model.single
 
 #if [[ $? -eq 0 ]]; then
 #    touch done.mpas

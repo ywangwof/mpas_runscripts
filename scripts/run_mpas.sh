@@ -2079,7 +2079,9 @@ if [[ $machine == "Jet" ]]; then
     WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
     wgrib2path="/apps/wgrib2/0.1.9.6a/bin/wgrib2"
 elif [[ $machine == "Cheyenne" ]]; then
-    runcmd="qsub"
+    if [[ $dorun == true ]]; then
+        runcmd="qsub"
+    fi
     account="${hpcaccount-NMMM0013}"
     partition="regular"        ; claim_cpu="30";         claim_nodes="40"
     partition_static="regular" ; static_cpu="30"
@@ -2204,4 +2206,3 @@ done
 echo " "
 echo "==== Jobs done $(date +%m-%d_%H:%M:%S) ===="
 echo " "
-exi
