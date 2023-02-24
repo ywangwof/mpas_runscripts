@@ -1,0 +1,50 @@
+#!/bin/bash
+
+srcrundir=${1-../fcst}
+destdir=${2-./}
+
+srcabsdir=$(realpath $srcrundir)
+destabsdir=$(realpath $destdir)
+srcabsdir=${srcabsdir##/mnt}
+destabsdir=${destabsdir##/mnt}
+
+echo ""
+echo "SRCDIR: $srcabsdir"
+echo "DESDIR: $destabsdir"
+echo ""
+
+if [[ ! -r $destabsdir ]]; then
+    mkdir -p $destabsdir
+fi
+
+cd $destabsdir
+
+#
+# find symbolic files
+#
+linkfiles=$(find $srcabsdir -type l)
+
+echo "Linking symbolic files ..."
+for fn in ${linkfiles[@]}; do
+    #echo "$fn -> $(readlink $fn)"
+    #echo "Linking $(basename $fn) ..."
+    ln -sf $(realpath $fn) $(basename $fn)
+done
+
+#
+# Hard copy some files
+#
+cpfiles=(run_mpas.slurm namelist.atmosphere streams.atmosphere          \
+         stream_list.atmosphere.diagnostics stream_list.atmosphere.output stream_list.atmosphere.surface)
+
+
+for fn in ${cpfiles[@]}; do
+    echo "Copying $fn ..."
+    cp $srcabsdir/$fn .
+done
+
+#
+# Modify job script
+#
+echo "Modify dirname in \"run_mpas.slurm\" ..."
+sed -i "s#$srcabsdir#$destabsdir#g" run_mpas.slurm

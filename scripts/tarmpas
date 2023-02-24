@@ -1,0 +1,56 @@
+#!/bin/bash
+
+run_dir=$1
+out_dir=$3
+casename=$2
+
+origfcst_dir="${run_dir}/${casename}/fcst"
+
+if [[ ! -d ${origfcst_dir} ]]; then
+    echo "Directory ${origfcst_dir} not exist"
+    exit 1
+fi
+
+#for subdir in ungrib ungrib_gfs ungrib_rrfs ungrib_hrrr; do
+#    echo "$subdir"
+#done
+
+cd $origfcst_dir
+
+target_static_files=(CAM_ABS_DATA.DBL CAM_AEROPT_DATA.DBL GENPARM.TBL LANDUSE.TBL \
+                     MP_THOMPSON_QIautQS_DATA.DBL MP_THOMPSON_QRacrQG_DATA.DBL   \
+                     MP_THOMPSON_QRacrQS_DATA.DBL MP_THOMPSON_freezeH2O_DATA.DBL \
+                     OZONE_DAT.TBL OZONE_LAT.TBL OZONE_PLEV.TBL RRTMG_LW_DATA    \
+                     RRTMG_LW_DATA.DBL RRTMG_SW_DATA RRTMG_SW_DATA.DBL SOILPARM.TBL VEGPARM.TBL)
+
+target_log_files=($(ls log.atmosphere.*.out log.atmosphere.*.err mpas_*.log))
+
+target_job_files=(namelist.atmosphere run_mpas.slurm streams.atmosphere            \
+                  stream_list.atmosphere.diagnostics stream_list.atmosphere.output \
+                  stream_list.atmosphere.surface wofs_mpas.graph.info.part.1200 )
+
+target_init_files=(wofs_mpas.init.nc)
+
+target_lbc_files=($(ls wofs_mpas.lbc.*| head -3))
+
+target_dir="${casename}/fcst"
+
+files=()
+for fn in ${target_static_files[@]} ${target_log_files[@]} ${target_job_files[@]} ${target_init_files[@]} ${target_lbc_files[@]}; do
+    #echo "$fn"
+    files+=("$target_dir/$fn")
+done
+
+#echo ${files[@]}
+
+tarname="${out_dir}/${casename}.tar.gz"
+
+cd ${run_dir}
+
+echo ""
+echo "From ${run_dir}/${casename}/fcst to ${tarname} ..."
+echo ""
+
+tar czvfh ${tarname} ${files[@]}
+
+exit 0

@@ -1,0 +1,6 @@
+#!/bin/bash
+
+runname=${1-wofs_mpas}
+
+rm -rf log.atmosphere.*.err log.atmosphere.*.out core*
+rm -rf ${runname}.diag.* ${runname}.restart.* ${runname}.history.*
