@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 srcroot="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS"
@@ -84,6 +83,8 @@ while [[ $# > 0 ]]
             ;;
         -r )
             run=1
+            cmds=(mpas)
+            desdir="./"
             ;;
         -s )
             if [[ -d $2 ]]; then
@@ -304,6 +305,22 @@ for cmd in ${cmds[@]}; do
                 ${runcmd} $srcmodel/init_atmosphere_model .
                 ${runcmd} $srcmodel/atmosphere_model atmosphere_model.single
             fi
+        else
+            thompsonfiles=(MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL \
+                           MP_THOMPSON_QRacrQG_DATA.DBL MP_THOMPSON_QRacrQS_DATA.DBL)
+
+            cd $desdir
+
+            for fn in ${thompsonfiles[@]}; do
+                if [[ $verb -eq 1 ]]; then
+                    echo "Linking $fn ....";
+                fi
+                if [[ ${runcmd} == "clean" ]]; then
+                    rm $fn
+                else
+                    ${runcmd} ${rootdir}/templates/$fn .
+                fi
+            done
         fi
 
         ;;
@@ -313,4 +330,4 @@ for cmd in ${cmds[@]}; do
     esac
 done
 
-exit
+exit 0
