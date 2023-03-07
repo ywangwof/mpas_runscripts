@@ -51,6 +51,17 @@ for fn in ${cpfiles[@]}; do
 done
 
 #
+# for ICs/LBCs
+#
+if [[ ! -e *.init.nc ]]; then
+    ln -sf $srcabsdir/*.init.nc .
+fi
+
+if [[ ! -e *.lbc.*.nc ]]; then
+    ln -sf $srcabsdir/*.lbc.*.nc .
+fi
+
+#
 # Modify job script
 #
 echo "Modify dirname in \"$jobfile\" ..."
