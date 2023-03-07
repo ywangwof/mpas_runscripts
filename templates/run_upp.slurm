@@ -94,11 +94,11 @@ if [[ $? -eq 0 ]]; then
                 -if_reg "1:2" -rpn "rcl_2:rcl_1:-:clr_1:clr_2" -set_scaling same same \
                 -set_ftime "${hr1}-${hr2} hour acc fcst" -grib_out ${tmpfile3}
 
-            wgrib2 ${outfile} -not APCP -grib ${tmpfile}
-            cat ${tmpfile3} >> ${tmpfile}
+            cat ${outfile} ${tmpfile3} > ${final_file}
 
-            # Merge vector field records
-            wgrib2 ${tmpfile} -new_grid_vectors "UGRD:VGRD:USTM:VSTM:VUCSH:VVCSH" -submsg_uv ${final_file}
+            #wgrib2 ${outfile} -not APCP -grib ${tmpfile}
+            #cat ${tmpfile3} >> ${tmpfile}
+            #wgrib2 ${tmpfile} -new_grid_vectors "UGRD:VGRD:USTM:VSTM:VUCSH:VVCSH" -submsg_uv ${final_file}
 
             rm -rf ${tmpfile} ${tmpfile1} ${tmpfile2} ${tmpfile3}
         fi
