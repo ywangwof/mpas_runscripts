@@ -1829,9 +1829,14 @@ function run_pcp {
     expectednum=$(( fcst_hours +1))
 
     donefiles=($(ls done.upp_??))
+    pcpfiles=($(ls  MPAS-A_PCP_*))
+
     if [[ ${#donefiles[@]} -lt $expectednum ]]; then
         echo "WARNING: UPPs are still not all done. Skip run_pcp."
-        return
+    elif [[ ${#pcpfiles[@]} -ge $expectednum ]]; then
+        echo "run_pcp already done."
+    elif [[  -f $wrkdir/done.pcp || -f $wrkdir/queue.pcp || -f $wrkdir/running.pcp ]]; then
+        echo "Founding working file for run_pcp. Skip"
     else
         #
         # Create job script and submit it
@@ -1842,6 +1847,7 @@ function run_pcp {
         sed -i "s#WRKDIR#$wrkdir#g;" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
+        if [[ $dorun == true ]]; then touch $wrkdir/queue.pcp; fi
     fi
 }
 
@@ -2050,7 +2056,7 @@ while [[ $# > 0 ]]
             echo "Unknown option: $key"
             usage 2
             ;;
-        static* | geogrid* | ungrib* | init* | lbc* | mpas* | upp* | clean* | pcp )
+        static* | geogrid* | ungrib* | init* | lbc* | mpas* | upp* | clean* | pcp* )
             jobs=(${key//,/ })
             jobsfromcmd=1
             ;;
