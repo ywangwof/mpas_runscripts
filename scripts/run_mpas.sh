@@ -463,9 +463,7 @@ EOF
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir1#g;s#EXEDIR#${exedir}#" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
-        if [[ $runcmd != "echo"  ]]; then
-            touch queue.ungrib
-        fi
+        if [[ $dorun == true ]]; then touch queue.ungrib; fi
     fi
 
     #-------------------------------------------------------------------
@@ -515,9 +513,7 @@ EOF
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir2#g;s#EXEDIR#${exedir}#" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
-        if [[ $runcmd != "echo"  ]]; then
-            touch queue.ungrib
-        fi
+        if [[ $dorun == true ]]; then touch queue.ungrib; fi
     fi
 
     #-------------------------------------------------------------------
@@ -640,9 +636,7 @@ EOF
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
-        if [[ $runcmd != "echo"  ]]; then
-            touch queue.ungrib
-        fi
+        if [[ $dorun == true ]]; then touch queue.ungrib; fi
     fi
 
     if [[ $dorun == true ]]; then
@@ -705,7 +699,7 @@ function run_ungrib_rrfs {
             # drop un-wanted records
             basefn=$(basename $fn)
             echo "Generating working copy of $basefn ..."
-            ${wgrib2path} $fn | grep -v "1-21\|1-61 hybrid layer" | ${wgrib2path} -i $fn -GRIB $basefn >& /dev/null
+            ${wgrib2path} $fn | grep -v "1-21\|1-61 hybrid layer" | grep -v "TMP:10 m above ground" | ${wgrib2path} -i $fn -GRIB $basefn >& /dev/null
             myrrfsfiles+=($basefn)
         done
 
@@ -740,9 +734,7 @@ EOF
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir1#g;s#EXEDIR#${exedir}#" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
-        if [[ $runcmd != "echo"  ]]; then
-            touch queue.ungrib
-        fi
+        if [[ $dorun == true ]]; then touch queue.ungrib; fi
     fi
 
     #-------------------------------------------------------------------
@@ -792,9 +784,7 @@ EOF
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir2#g;s#EXEDIR#${exedir}#" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
-        if [[ $runcmd != "echo"  ]]; then
-            touch queue.ungrib
-        fi
+        if [[ $dorun == true ]]; then touch queue.ungrib; fi
     fi
 
     #-------------------------------------------------------------------
@@ -932,9 +922,7 @@ EOF
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir1#g;s#EXEDIR#${exedir}#" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
-        if [[ $runcmd != "echo"  ]]; then
-            touch queue.ungrib
-        fi
+        if [[ $dorun == true ]]; then touch queue.ungrib; fi
     fi
 
     #-------------------------------------------------------------------
@@ -984,9 +972,7 @@ EOF
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir2#g;s#EXEDIR#${exedir}#" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
-        if [[ $runcmd != "echo"  ]]; then
-            touch queue.ungrib
-        fi
+        if [[ $dorun == true ]]; then touch queue.ungrib; fi
     fi
 
     #-------------------------------------------------------------------
@@ -1684,9 +1670,7 @@ EOF
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
         echo " "
-        if [[ $runcmd != "echo"  ]]; then
-            touch $wrkdir/queue.mpassit$hstr
-        fi
+        if [[ $dorun == true ]]; then touch $wrkdir/queue.mpassit$hstr; fi
     done
 }
 
@@ -1825,10 +1809,40 @@ EOF
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
         echo " "
-        if [[ $runcmd != "echo" ]]; then
-            touch $wrkdir/queue.upp_$hstr
-        fi
+        if [[ $dorun == true ]]; then touch $wrkdir/queue.upp_$hstr; fi
     done
+}
+
+########################################################################
+
+function run_pcp {
+    #
+    # Build working directory
+    #
+    wrkdir=$rundir/upp
+    if [[ ! -d $wrkdir ]]; then
+        echo "Directory: $wrkdir not exist."
+        return
+    fi
+    cd $wrkdir
+
+    expectednum=$(( fcst_hours +1))
+
+    donefiles=($(ls done.upp_??))
+    if [[ ${#donefiles[@]} -lt $expectednum ]]; then
+        echo "WARNING: UPPs are still not all done. Skip run_pcp."
+        return
+    else
+        #
+        # Create job script and submit it
+        #
+        jobscript="run_pcp.slurm"
+        sed "s/ACCOUNT/$account/g;s/PARTION/${partition_upp}/;s/CPUSPEC/${claim_cpu}/" $TEMPDIR/run_pcp.slurm > $jobscript
+        sed -i "s/JOBNAME/pcp_${jobname}/;s/HHHSTR/${fcst_hours}/g;" $jobscript
+        sed -i "s#WRKDIR#$wrkdir#g;" $jobscript
+        if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
+        $runcmd $jobscript
+    fi
 }
 
 ########################################################################
@@ -1983,7 +1997,7 @@ while [[ $# > 0 ]]
             ;;
         -d)
             case $2 in
-            wofs_big | wofs_small | wofs_conus | wofs_mpas )
+            wofs_big | wofs_small | wofs_conus | wofs_mpas | wofs_mpas_small )
                 domname=$2
                 ;;
             * )
@@ -2036,7 +2050,7 @@ while [[ $# > 0 ]]
             echo "Unknown option: $key"
             usage 2
             ;;
-        static* | geogrid* | ungrib* | init* | lbc* | mpas* | upp* | clean* )
+        static* | geogrid* | ungrib* | init* | lbc* | mpas* | upp* | clean* | pcp )
             jobs=(${key//,/ })
             jobsfromcmd=1
             ;;
@@ -2145,7 +2159,7 @@ case $extdm in
     rrfsp)
         EXTHEAD="RRFSPGFS"
         EXTNFGL=46
-        initname="R"
+        initname="RP"
         ;;
     rrfs)
         EXTHEAD="RRFSGFS"
@@ -2191,6 +2205,7 @@ declare -A jobargs=([static]=$WORKDIR/$domname                          \
                     [lbc]="init/done.ics ungrib/done.ungrib_lbc"                  \
                     [mpas]="lbc/done.lbc"                               \
                     [upp]=""                                            \
+                    [pcp]=""                                            \
                     [clean]="post ungrib"                               \
                    )
 #[ungrib_rrfs]="/mnt/lfs4/BMC/nrtrr/NCO_dirs/ptmp/com/RRFS_CONUS/para /public/data/grids/gfs/0p25deg/grib2 RRFS_conus_3km"  \
