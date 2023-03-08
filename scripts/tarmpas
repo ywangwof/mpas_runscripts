@@ -37,7 +37,7 @@ target_job_files=(namelist.atmosphere ${jobfile} streams.atmosphere             
 
 target_init_files=(wofs_mpas.init.nc)
 
-target_lbc_files=($(ls wofs_mpas.lbc.*| head -3))
+target_lbc_files=($(ls wofs_mpas.lbc.*| head -12))
 
 target_dir="${casename}/fcst"
 

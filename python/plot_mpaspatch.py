@@ -326,15 +326,42 @@ if __name__ == "__main__":
     fcstfname = '.'.join(fnamelist)
     fcsttime  = ':'.join(fnamelist).replace('_',' ')
 
-    if varndim == 2:
+    need_levels = False
+    if varndim == 1:
         levels=[0]
+        if varshapes[0] != nCells:
+            print(f"Do not supported variable shape ({varshapes}).")
+            sys.exit(0)
+
+    elif varndim == 2:
+        levels=[0]
+
+        if varshapes[0] == nCells and (varshapes[1] == nlevels or varshapes[1] == nslevels):
+            varndim = 230           # static file
+            need_levels = True
+            vertshape = varshapes[1]
+        elif varshapes[0] != 1 or varshapes[1] != nCells:
+            print(f"Do not supported variable shape ({varshapes}).")
+            sys.exit(0)
     elif varndim == 3:
-        if varshapes[2] == nslevels:
+        need_levels = True
+        vertshape = varshapes[2]
+
+        if varshapes[0] != 1 or varshapes[1] != nCells:
+            print(f"Do not supported variable shape ({varshapes}).")
+            sys.exit(0)
+    else:
+        print(f"Do not supported {varndim} dimensions array.")
+        sys.exit(0)
+
+    # Determine levels to be plotted
+    if need_levels:
+        if vertshape == nslevels:
             levels = range(nslevels)
-        elif varshapes[2] == nlevels:
+        elif vertshape == nlevels:
             levels = range(nlevels)
         else:
-            print(f"The 3rd dimension size ({varshapes[2]}) is not in ({nlevels}, {nslevels}).")
+            print(f"The 3rd dimension size ({vertshape}) is not in ({nlevels} or {nslevels}).")
             sys.exit(0)
 
         if args.vertLevels is not None:
@@ -346,13 +373,6 @@ if __name__ == "__main__":
                 levels=["max",]
             else:
                 levels = [int(item) for item in args.vertLevels.split(',')]
-    else:
-        print(f"Do not supported {varndim} dimensions array.")
-        sys.exit(0)
-
-    if varshapes[0] != 1 or varshapes[1] != nCells:
-        print(f"Do not supported variable shape ({varshapes}).")
-        sys.exit(0)
 
     #
     # Get patch file name
@@ -482,10 +502,18 @@ if __name__ == "__main__":
                     varplt = vardata[t,:,l]
                     outlvl = f"_K{l:02d}"
                     outtlt = f"{varname} ({varunits}) valid at {fcsttime} on level {l:02d}"
+            elif varndim == 230:
+                varplt = vardata[:,l]
+                outlvl = f"_K{l:02d}"
+                outtlt = f"{varname} ({varunits}) on level {l:02d}"
             elif varndim == 2:
                 varplt = vardata[t,:]
                 outlvl = ""
                 outtlt = f"{varname} ({varunits}) valid at {fcsttime}"
+            elif varndim == 1:
+                varplt = vardata[:]
+                outlvl = ""
+                outtlt = f"{varname} ({varunits})"
             else:
                 print(f"Variable {varname} is in wrong shape: {varshapes}.")
                 sys.exit(0)
@@ -537,7 +565,7 @@ if __name__ == "__main__":
             gl.left_labels = True  #default already
             gl.right_labels = False
             gl.bottom_labels = True
-            gl.ylabel_style = {'rotation': 45}
+            #gl.ylabel_style = {'rotation': 45}
 
 
             # Create the title as you see fit
@@ -550,7 +578,7 @@ if __name__ == "__main__":
 
             figname = os.path.join(outdir,outfile)
             print(f"Saving figure to {figname} ...")
-            figure.savefig(figname, format='png', dpi=600)
+            figure.savefig(figname, format='png', dpi=100)
             patch_collection.remove()
             plt.close(figure)
 
