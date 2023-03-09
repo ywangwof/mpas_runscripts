@@ -18,12 +18,14 @@ echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
 if [[ "MACHINE" == "Jet" ]]; then
+    # shellcheck source=/dev/null # to ignore source path error
     source /etc/profile.d/modules.sh
     module purge
     module use ROOTDIR/modules
     module load MODULE
     module load wgrib2/2.0.8
 else
+    # shellcheck source=/dev/null # to ignore source path error
     source /scratch/ywang/MPAS/MODULE
 fi
 module list

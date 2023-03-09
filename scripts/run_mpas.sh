@@ -687,8 +687,8 @@ function run_ungrib_rrfs {
         done
 
         myrrfsfiles=()
-        for fn in ${rrfsfiles[@]}; do
-            echo "RRFS file: $fn"
+        for i in ${!rrfsfiles[@]}; do
+            fn=${rrfsfiles[$i]}
             while [[ ! -f $fn ]]; do
                 if [[ $verb -eq 1 ]]; then
                     echo "Waiting for $fn ..."
@@ -698,8 +698,48 @@ function run_ungrib_rrfs {
 
             # drop un-wanted records
             basefn=$(basename $fn)
+            rm -f $basefn
+
+            fhrstr=$(echo $fn | grep -o -E 'f[0-9]{3}')
+            fhr=${fhrstr//[!0-9]/}
+            fhr=$((10#$fhr))
+
+            if [[ $fhr -eq 0 ]]; then
+                valtime="anl"
+            else
+                valtime="$fhr hour fcst"
+            fi
+            echo "RRFS file: $fn ($valtime)"
+
+            rm -f keep.txt
+            cat << EOF > keep.txt
+:PRES:[0-9]{1,2} hybrid level:${valtime}:
+:CLWMR:[0-9]{1,2} hybrid level:${valtime}:
+:ICMR:[0-9]{1,2} hybrid level:${valtime}:
+:RWMR:[0-9]{1,2} hybrid level:${valtime}:
+:SNMR:[0-9]{1,2} hybrid level:${valtime}:
+:GRLE:[0-9]{1,2} hybrid level:${valtime}:
+:HGT:[0-9]{1,2} hybrid level:${valtime}:
+:TMP:[0-9]{1,2} hybrid level:${valtime}:
+:SPFH:[0-9]{1,2} hybrid level:${valtime}:
+:UGRD:[0-9]{1,2} hybrid level:${valtime}:
+:VGRD:[0-9]{1,2} hybrid level:${valtime}:
+:TMP:2 m above ground:${valtime}:
+:SPFH:2 m above ground:${valtime}:
+:RH:2 m above ground:${valtime}:
+:UGRD:10 m above ground:${valtime}:
+:VGRD:10 m above ground:${valtime}:
+:PRES:surface:${valtime}:
+:SNOD:surface:${valtime}:
+:WEASD:surface:${valtime}:
+:TMP:surface:${valtime}:
+:CNWAT:surface:${valtime}:
+:HGT:surface:${valtime}:
+:MSLET:mean sea level:${valtime}:
+EOF
+
             echo "Generating working copy of $basefn ..."
-            ${wgrib2path} $fn | grep -v "1-21\|1-61 hybrid layer" | grep -v "TMP:10 m above ground" | ${wgrib2path} -i $fn -GRIB $basefn >& /dev/null
+            ${wgrib2path} $fn | grep -Ef keep.txt | wgrib2 -i $fn -GRIB $basefn >& /dev/null
             myrrfsfiles+=($basefn)
         done
 
@@ -1843,8 +1883,8 @@ function run_pcp {
         #
         jobscript="run_pcp.slurm"
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition_upp}/;s/CPUSPEC/${claim_cpu}/" $TEMPDIR/run_pcp.slurm > $jobscript
-        sed -i "s/JOBNAME/pcp_${jobname}/;s/HHHSTR/${fcst_hours}/g;" $jobscript
-        sed -i "s#WRKDIR#$wrkdir#g;" $jobscript
+        sed -i "s/JOBNAME/pcp_${jobname}/;s/HHHSTR/${fcst_hours}/g;s/MODULE/${modulename}/g" $jobscript
+        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s/MACHINE/${machine}/g" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
         if [[ $dorun == true ]]; then touch $wrkdir/queue.pcp; fi
@@ -2239,4 +2279,3 @@ echo "==== Jobs done $(date +%m-%d_%H:%M:%S) ===="
 echo " "
 
 exit 0
-
