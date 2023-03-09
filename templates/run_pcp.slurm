@@ -17,6 +17,7 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
+source /etc/profile.d/modules.sh
 module load wgrib2/2.0.8
 
 #-----------------------------------------------------------------------
@@ -77,11 +78,13 @@ else
             sleep 10
         done
 
+        echo " "
+        echo "current hour = $hr2str"
+
         if [[ $hr2 -lt 2 ]]; then
+            echo "$infile2 => $final_file ...."
             cp $infile2 $final_file
         else
-            echo " "
-            echo "current hour = $hr2str"
             hr1=$((10#$hr2-1))
             hr1str=$(printf "%02d" $hr1)
 

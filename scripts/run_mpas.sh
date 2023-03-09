@@ -1890,6 +1890,10 @@ function run_clean {
                     rm -rf $wrkdir/post_$hstr
                 fi
             done
+
+            if [[ -f $wrkdir/done.pcp ]]; then
+               rm -rf $wrkdir/MPAS-A_${runname}f??.grib2
+            fi
             ;;
         post )
             #

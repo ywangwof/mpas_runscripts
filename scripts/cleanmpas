@@ -1,9 +1,13 @@
 #!/bin/bash
 
-runname=${1-wofs_mpas}
+#runname=${1-wofs_mpas}
 
 rm -rf log.atmosphere.*.err log.atmosphere.*.out core*
 rm -rf *.diag.* *.restart.* *.history.*
 rm -rf [0-9][0-9][0-9][0-9]
-rm -rf *.log
 rm -rf mpas_fcst.log
+
+if [[ "$1" == "-a" ]]; then
+    rm -rf *.log
+fi
+
