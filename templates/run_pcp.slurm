@@ -80,7 +80,8 @@ else
         if [[ $hr2 -lt 2 ]]; then
             cp $infile2 $final_file
         else
-            echo "current hour = $hr2"
+            echo " "
+            echo "current hour = $hr2str"
             hr1=$((10#$hr2-1))
             hr1str=$(printf "%02d" $hr1)
 
@@ -102,7 +103,8 @@ else
                 -if_reg "1:2" -rpn "rcl_2:rcl_1:-:clr_1:clr_2" -set_scaling same same \
                 -set_ftime "${hr1}-${hr2} hour acc fcst" -grib_out ${tmpfile3}
 
-            echo ""
+            sleep 5
+
             echo "$infile2 -> $final_file ...."
             cat ${infile2} ${tmpfile3} > ${final_file}
 

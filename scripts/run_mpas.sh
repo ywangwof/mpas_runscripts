@@ -1817,7 +1817,7 @@ EOF
 
 function run_pcp {
     #
-    # Build working directory
+    # Check working directory
     #
     wrkdir=$rundir/upp
     if [[ ! -d $wrkdir ]]; then
