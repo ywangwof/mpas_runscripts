@@ -26,14 +26,14 @@ SHELL=/bin/bash
 ########################################################################
 # HT
 30    4      * * * $scriptdir/run_mpas.sh -i hrrr -p thompson rundirs ungrib,init,lbc,mpas   >> $rundirs/fcstHT$($curdate).log 2>&1
-15,45 6-18   * * * $scriptdir/run_mpas.sh -i hrrr -p thompson rundirs mpassit,upp,clean      >> $rundirs/postHT$($curdate).log 2>&1
+15,45 6-18   * * * $scriptdir/run_mpas.sh -i hrrr -p thompson rundirs mpassit,upp,pcp,clean      >> $rundirs/postHT$($curdate).log 2>&1
 
 # HN, Use HT processed ungrib
 20    5      * * * $scriptdir/run_mpas.sh -i hrrr -p nssl -s $rundirs/$($curdate)00_HT rundirs init,lbc,mpas >> $rundirs/fcstHN$($curdate).log 2>&1
 # HN, Process ungrib independently
 #20    5      * * * $scriptdir/run_mpas.sh -i hrrr -p nssl    $rundirs ungrib,init,lbc,mpas   >> $rundirs/fcstHN$($curdate).log 2>&1
-17,47 6-18   * * * $scriptdir/run_mpas.sh -i hrrr -p nssl     $rundirs mpassit,upp,clean      >> $rundirs/postHN$($curdate).log 2>&1
+17,47 6-18   * * * $scriptdir/run_mpas.sh -i hrrr -p nssl     $rundirs mpassit,upp,pcp,clean      >> $rundirs/postHN$($curdate).log 2>&1
 
 # RT
 50    4      * * * $scriptdir/run_mpas.sh -i rrfs -p thompson $rundirs ungrib,init,lbc,mpas   >> $rundirs/fcstRT$($curdate).log 2>&1
-19,49 6-18   * * * $scriptdir/run_mpas.sh -i rrfs -p thompson $rundirs mpassit,upp,clean      >> $rundirs/postRT$($curdate).log 2>&1
+19,49 6-18   * * * $scriptdir/run_mpas.sh -i rrfs -p thompson $rundirs mpassit,upp,pcp,clean      >> $rundirs/postRT$($curdate).log 2>&1

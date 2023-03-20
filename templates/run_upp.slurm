@@ -42,7 +42,6 @@ rm -rf fort.* core.*
 srun EXEDIR/unipost.exe
 
 if [[ $? -eq 0 ]]; then
-    touch ../done.upp_HHHSTR
     dtstr=(${wrkdir//\// })
 
     grid_specs_hrrr="lambert:-97.5:38.5 -122.719528:1799:3000.0 21.138123:1059:3000.0"
@@ -63,6 +62,8 @@ if [[ $? -eq 0 ]]; then
     rm ${tmpfile} ${infile}
 
     #mv WRFPRS.GrbFHHHSTR ../MPAS-A_${dtstr[-3]}fHHHSTR.grib2
+
+    touch ../done.upp_HHHSTR
 else
     touch ../error.upp_HHHSTR
 fi

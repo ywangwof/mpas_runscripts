@@ -5,7 +5,7 @@
 #SBATCH --ntasks=1 --ntasks-per-node=1 --mem=64000
 #SBATCH --exclusive
 #SBATCH -t 02:30:00
-#SBATCH --output=/lfs1/NAGAPE/wof/MPAS/run_dirs/2022110400_hrrr/plot_mpas_%j.log
+#SBATCH --output=./plot_mpas_%j.log
 
 #set -eux
 
@@ -18,24 +18,46 @@ conda activate wofs_post
 
 ulimit -s unlimited
 
+fcst_dir=$(pwd)
+
 cd /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/mpas_scripts/python
 
-file="diag"
-datestr="2022-11-04"
-times=(00 01 02 03)
-cases=(fcst fcst.nohyb)
-fields=(refl10cm_max refl10cm_1km)
-fcst_dir="/lfs1/NAGAPE/wof/MPAS/run_dirs/2022110400_hrrr"
+#### USER Modify and Check this block only ####
+ftype="init" # "diag" "history"
+datestr="2023-02-27"
+times=(00)
+cases=(init initp)
+fields=(zz )        #ter surface_pressure skintemp theta relhum theta_base t2m w )
+levels=("0,1,2,3" ) #1d 2d 2d 0 0 0 2d "0,1,2,3")   # "max"  # column maximum values
+#### END of USER Section #######################
 
+n=0
 for nt in ${times[@]}; do
     for case in ${cases[@]}; do
-        for field in ${fields[@]}; do
-            # 2D
-            plot_mpaspatch.py -p wofs_mpas.1894063.patches -o ${fcst_dir}/${case}/${field}_${nt}.png ${fcst_dir}/${case}/wofs_mpas.${file}.${datestr}_${nt}.00.00.nc ${field}         # 2D
-            # 3D
-            #plot_mpaspatch.py -p wofs_mpas.1894063.patches -o ${fcst_dir}/${case}/${field}Max_${nt}.png ${fcst_dir}/${case}/wofs_mpas.${file}.${datestr}_${nt}.00.00.nc ${field} -l max   # 3D
-            # init
-            #plot_mpaspatch.py -p wofs_mpas.1894063.patches -o ${fcst_dir}/${case}/init_${field}Max_${nt}.png ${fcst_dir}/${case}/wofs_mpas.${file}.nc ${field} -l max   # 3D
+        for i in ${!fields[@]}; do
+            field=${fields[$i]}
+            level=${levels[$i]}
+            let n++
+
+            outdir=${fcst_dir}/${case}
+
+            case $ftype in
+            diag | history )
+                infile=${fcst_dir}/${case}/wofs_mpas.${ftype}.${datestr}_${nt}.00.00.nc
+                ;;
+            init)  # init
+                infile=${fcst_dir}/${case}/wofs_mpas.${ftype}.nc
+                ;;
+            *)
+                echo "Unsupported field type: $ftype."
+                exit 1
+                ;;
+            esac
+
+            echo ""
+            echo "--- $n ---"
+            echo "plot_mpaspatch.py -p wofs_mpas.1894063.patches -o ${outdir} ${infile} ${field} -l ${level}"
+            plot_mpaspatch.py -p wofs_mpas.1894063.patches -o ${outdir} ${infile} ${field} -l ${level}
         done
     done
 done
