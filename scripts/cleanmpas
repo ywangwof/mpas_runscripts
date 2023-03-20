@@ -2,6 +2,7 @@
 
 runname=${1-wofs_mpas}
 
-rm -rf log.atmosphere.*.err log.atmosphere.*.out core*
+rm -rf log.atmosphere.*.err log.atmosphere.*.out log.init_atmosphere.*.err log.init_atmosphere.*.out core*
 rm -rf ${runname}.diag.* ${runname}.restart.* ${runname}.history.*
-rm -rf mpas_fcst.log
+rm -rf error.*
+rm -rf mpas_fcst.log mpas_init.log mpas_lbc.log

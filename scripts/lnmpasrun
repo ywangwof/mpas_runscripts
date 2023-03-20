@@ -53,12 +53,22 @@ done
 #
 # for ICs/LBCs
 #
-if [[ ! -e *.init.nc ]]; then
+if compgen -G "*.init.nc" > /dev/null; then
+    :
+else
     ln -sf $srcabsdir/*.init.nc .
 fi
 
-if [[ ! -e *.lbc.*.nc ]]; then
+if compgen -G "*.lbc*.nc" > /dev/null; then
+    :
+else
     ln -sf $srcabsdir/*.lbc.*.nc .
+fi
+
+if compgen -G "*.graph.info.part.*" > /dev/null; then
+    :
+else
+    ln -sf $srcabsdir/*.graph.info.part.* .
 fi
 
 #
