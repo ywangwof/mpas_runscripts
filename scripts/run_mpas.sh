@@ -1651,7 +1651,7 @@ function run_mpassit {
         fi
     done
 
-    for ((h=0;h<=$fcst_hours;h+=$EXTINVL)); do
+    for ((h=0;h<=$fcst_hours;h+=$OUTINVL)); do
         hstr=$(printf "%02d" $h)
         fcst_time_str=$(date -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
 
@@ -1759,7 +1759,7 @@ function run_upp {
     fixdirs[SpcCoeff]="$TEMPDIR/UPP/crtm2_fix/SpcCoeff/Big_Endian"
     fixdirs[TauCoeff]="$TEMPDIR/UPP/crtm2_fix/TauCoeff/ODPS/Big_Endian"
 
-    for ((h=0;h<=$fcst_hours;h+=$EXTINVL)); do
+    for ((h=0;h<=$fcst_hours;h+=$OUTINVL)); do
         hstr=$(printf "%02d" $h)
         fcst_time_str=$(date -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
 
@@ -2175,13 +2175,14 @@ npefcst=1200; nnodes_fcst=$(( npefcst/ncores_fcst ))
 npepost=72;   nnodes_post=$(( npepost/ncores_post ))
 
 
-fcst_hours=36
+fcst_hours=48
 
-EXTINVL=1
+EXTINVL=3
 EXTINVL_STR="${EXTINVL}:00:00"
 EXTNFLS=4
 
-OUTINVL_STR="1:00:00"
+OUTINVL=1
+OUTINVL_STR="${OUTINVL}:00:00"
 OUTIOTYPE="netcdf4"
 ICSIOTYPE="pnetcdf,cdf5"
 
