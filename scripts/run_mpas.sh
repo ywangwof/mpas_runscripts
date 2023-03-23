@@ -678,26 +678,56 @@ function run_ungrib_rrfs {
     else
         currdate=$(date -d "$eventdate ${eventtime}:00" +%Y%m%d)
         currtime=$(date -d "$eventdate ${eventtime}:00" +%H)
-        rrfs_grib_dir="$rrfs_grib_dir/${subdirname}.${currdate}/${currtime}"
+        if [[ "$rrfs_grib_dir" =~ "https://noaa-rrfs-pds.s3.amazonaws.com" ]]; then
+            rrfs_url="$rrfs_grib_dir/rrfs_a/rrfs_a.${currdate}/${currtime}"
+            download_aws=1
+        else
+            rrfs_grib_dir="$rrfs_grib_dir/${subdirname}.${currdate}/${currtime}"
+            download_aws=0
+        fi
+
 
         rrfsfiles=()
         for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
             hstr=$(printf "%03d" $h)
-            rrfsfiles+=($rrfs_grib_dir/RRFS_CONUS.t${currtime}z.bgrd3df${hstr}.tm00.grib2)
+            if [[ $download_aws -eq 1 ]]; then
+                rrfsfile="rrfs.t${currtime}z.natlev.f${hstr}.conus_3km.grib2"
+                if [[ ! -f $rrfsfile ]]; then
+                    rrfsfidx="${rrfsfile}.idx"
+                    wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfidx
+                    while [[ $? -ne 0 ]]; do
+                        sleep 10
+                        echo "wget -c $rrfs_url/$rrfsfidx"
+                        wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfidx
+                    done
+                    rm -f ${rrfsfidx}
+
+                    wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfile
+                    while [[ $? -ne 0 ]]; do
+                        sleep 10
+                        echo "wget -c $rrfs_url/$rrfsfile"
+                        wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfile
+                    done
+                fi
+            else
+                rrfsfile=$rrfs_grib_dir/RRFS_CONUS.t${currtime}z.bgrd3df${hstr}.tm00.grib2
+                while [[ ! -f $rrfsfile ]]; do
+                    if [[ $verb -eq 1 ]]; then
+                        echo "Waiting for $rrfsfile ..."
+                    fi
+                    sleep 10
+                done
+            fi
+            rrfsfiles+=(${rrfsfile})
         done
 
         myrrfsfiles=()
         for i in ${!rrfsfiles[@]}; do
             fn=${rrfsfiles[$i]}
-            while [[ ! -f $fn ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for $fn ..."
-                fi
-                sleep 10
-            done
 
             # drop un-wanted records
             basefn=$(basename $fn)
+            basefn="NSSL_$basefn"
             rm -f $basefn
 
             fhrstr=$(echo $fn | grep -o -E 'f[0-9]{3}')
@@ -913,22 +943,47 @@ function run_ungrib_rrfsp {
     else
         currdate=$(date -d "$eventdate ${eventtime}:00" +%Y%m%d)
         currtime=$(date -d "$eventdate ${eventtime}:00" +%H)
-        rrfs_grib_dir="$rrfs_grib_dir/${subdirname}.${currdate}/${currtime}"
+        if [[ "$rrfs_grib_dir" =~ "https://noaa-rrfs-pds.s3.amazonaws.com" ]]; then
+            rrfs_url="${rrfs_grib_dir}/rrfs_a/rrfs_a.${currdate}/${currtime}"
+            download_aws=1
+        else
+            rrfs_grib_dir="$rrfs_grib_dir/${subdirname}.${currdate}/${currtime}"
+            download_aws=0
+        fi
 
         rrfsfiles=()
         for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
             hstr=$(printf "%03d" $h)
-            rrfsfiles+=($rrfs_grib_dir/RRFS_CONUS.t${currtime}z.bgdawpf${hstr}.tm00.grib2)
-        done
+            if [[ $download_aws -eq 1 ]]; then
+                rrfsfile="rrfs.t${currtime}z.prslev.f${hstr}.conus_3km.grib2"
+                if [[ ! -f $rrfsfile ]]; then
+                    rrfsfidx="${rrfsfile}.idx"
+                    wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfidx
+                    while [[ $? -ne 0 ]]; do
+                        sleep 10
+                        echo "wget -c $rrfs_url/$rrfsfidx"
+                        wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfidx
+                    done
+                    rm -f ${rrfsfidx}
 
-        for fn in ${rrfsfiles[@]}; do
-            echo "RRFS file: $fn"
-            while [[ ! -f $fn ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for $fn ..."
+                    wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfile
+                    while [[ $? -ne 0 ]]; do
+                        sleep 10
+                        echo "wget -c $rrfs_url/$rrfsfile"
+                        wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfile
+                    done
                 fi
-                sleep 10
-            done
+            else
+                rrfsfile=$rrfs_grib_dir/RRFS_CONUS.t${currtime}z.bgdawpf${hstr}.tm00.grib2
+                echo "RRFS file: $rrfsfile"
+                while [[ ! -f $rrfsfile ]]; do
+                    if [[ $verb -eq 1 ]]; then
+                        echo "Waiting for $rrfsfile ..."
+                    fi
+                    sleep 10
+                done
+            fi
+            rrfsfiles+=(${rrfsfile})
         done
 
         link_grib ${rrfsfiles[@]}
@@ -2249,8 +2304,8 @@ staticdir="$TEMPDIR"
 declare -A jobargs=([static]=$WORKDIR/$domname                          \
                     [geogrid]=$WORKDIR/${domname/*_/geo_}               \
                     [ungrib_hrrr]="/public/data/grids/hrrr/conus/wrfnat/grib2 /public/data/grids/gfs/0p25deg/grib2" \
-                    [ungrib_rrfs]="/mnt/lfs4/BMC/rtwbl/mhu/wcoss/emc/rrfs /public/data/grids/gfs/0p25deg/grib2  rrfs_a" \
-                    [ungrib_rrfsp]="/mnt/lfs4/BMC/rtwbl/mhu/wcoss/emc/rrfs /public/data/grids/gfs/0p25deg/grib2 rrfs_a" \
+                    [ungrib_rrfs]="https://noaa-rrfs-pds.s3.amazonaws.com /public/data/grids/gfs/0p25deg/grib2  rrfs_a" \
+                    [ungrib_rrfsp]="https://noaa-rrfs-pds.s3.amazonaws.com /public/data/grids/gfs/0p25deg/grib2 rrfs_a" \
                     [ungrib_gfs]="/public/data/grids/gfs/0p25deg/grib2"           \
                     [init]="ungrib/done.ungrib_ics $WORKDIR/$domname/done.static" \
                     [lbc]="init/done.ics ungrib/done.ungrib_lbc"                  \
@@ -2259,6 +2314,9 @@ declare -A jobargs=([static]=$WORKDIR/$domname                          \
                     [pcp]=""                                            \
                     [clean]="post ungrib"                               \
                    )
+
+#[ungrib_rrfs]="/mnt/lfs4/BMC/rtwbl/mhu/wcoss/emc/rrfs /public/data/grids/gfs/0p25deg/grib2  rrfs_a" \
+#[ungrib_rrfsp]="/mnt/lfs4/BMC/rtwbl/mhu/wcoss/emc/rrfs /public/data/grids/gfs/0p25deg/grib2 rrfs_a" \
 #[ungrib_rrfs]="/mnt/lfs4/BMC/nrtrr/NCO_dirs/ptmp/com/RRFS_CONUS/para /public/data/grids/gfs/0p25deg/grib2 RRFS_conus_3km"  \
 
 for job in ${jobs[@]}; do
