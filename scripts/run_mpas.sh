@@ -1224,7 +1224,7 @@ function run_init {
     config_specified_zeta_levels = '${TEMPDIR}/L60.txt'
 /
 &interpolation_control
-    config_extrap_airtemp = 'linear'
+    config_extrap_airtemp = 'lapse-rate'
 /
 &preproc_stages
     config_static_interp = false
@@ -1381,7 +1381,7 @@ function run_lbc {
     config_specified_zeta_levels = '${TEMPDIR}/L60.txt'
 /
 &interpolation_control
-    config_extrap_airtemp = 'linear'
+    config_extrap_airtemp = 'lapse-rate'
 /
 &preproc_stages
     config_static_interp = false
