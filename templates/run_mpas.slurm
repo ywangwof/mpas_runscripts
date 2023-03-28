@@ -31,15 +31,20 @@ ulimit -s unlimited
 
 cd WRKDIR
 
+touch fcst.running
+rm -rf error.fcst queue.fcst
+
 sed -i "s/NNNODE/$nnode/;s/NNCORE/$ncores/;" namelist.atmosphere
 
 srun -n NOPART EXEDIR/atmosphere_model.single
 
-#if [[ $? -eq 0 ]]; then
-#    touch done.mpas
-#else
-#    touch error.mpas
-#fi
+if [[ $? -eq 0 ]]; then
+    touch done.fcst
+else
+    touch error.fcst
+fi
+
+rm -rf fcst.running
 
 time2=$(date '+%s')
 

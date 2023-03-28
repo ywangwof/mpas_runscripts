@@ -26,6 +26,9 @@ ulimit -s unlimited
 
 cd WRKDIR
 
+touch ics.running
+rm -rf error.ics queue.ics
+
 srun -n NOPART EXEDIR/init_atmosphere_model
 
 if [[ $? -eq 0 ]]; then
@@ -33,6 +36,8 @@ if [[ $? -eq 0 ]]; then
 else
     touch error.ics
 fi
+
+rm -rf ics.running
 
 time2=$(date '+%s')
 
