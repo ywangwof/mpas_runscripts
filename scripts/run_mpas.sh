@@ -1,3 +1,4 @@
+
 #!/bin/bash
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
@@ -1982,7 +1983,13 @@ if [[ $machine == "Jet" ]]; then
 
     modulename="build_jet_intel18_1.6_smiol"
     WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
-    wgrib2path="/apps/wgrib2/0.1.9.6a/bin/wgrib2"
+
+    source /etc/profile.d/modules.sh
+    module purge
+    module use ${rootdir}/modules
+    module load $modulename
+    module load wgrib2/2.0.8
+    wgrib2path="/apps/wgrib2/2.0.8/intel/18.0.5.274/bin/wgrib2"
 elif [[ $machine == "Cheyenne" ]]; then
     if [[ $dorun == true ]]; then
         runcmd="qsub"
@@ -1994,9 +2001,9 @@ elif [[ $machine == "Cheyenne" ]]; then
     partition_upp="regular"
     mach="pbs"
 
-    modulename="build_jet_intel18_1.6_smiol"
-    WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
-    wgrib2path="/apps/wgrib2/0.1.9.6a/bin/wgrib2"
+    modulename="defaults"
+    WPSGEOG_PATH="do_not_know"
+    wgrib2path="wgrib2_not_found"
 else
     account="${hpcaccount-smallqueue}"
     ncores_ics=24; ncores_fcst=24; ncores_post=24

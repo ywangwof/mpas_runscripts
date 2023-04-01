@@ -9,7 +9,7 @@ snow_acc_nc			SNOW_ACC_NC
 refl10cm			REFL_10CM
 refl10cm_max                    COMPOSITE_REFL_10CM
 refl10cm_1km			REFL_10CM_1KM
-refl10cm_1km_max		REFL_10CM_1KM_MAX
+refl10cm_1km_max		REFD_MAX
 u10				U10
 v10				V10
 q2				Q2
