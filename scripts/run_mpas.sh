@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
@@ -313,7 +312,7 @@ function run_static {
 /
 &data_sources
     config_geog_data_path = '${WPSGEOG_PATH}'
-    config_met_prefix = 'CFSR'
+    config_met_prefix = '${EXTHEAD}'
     config_sfc_prefix = 'SST'
     config_fg_interval = $((EXTINVL*3600))
     config_landuse_data = 'MODIFIED_IGBP_MODIS_NOAH_15s'
@@ -389,7 +388,7 @@ EOF
     #
     # Create job script and submit it
     #
-    jobscript="run_static.slurm"
+    jobscript="run_static.${mach}"
     sed "s/ACCOUNT/$account/g;s/PARTION/${partition_static}/;" $TEMPDIR/$jobscript > $jobscript
     sed -i "s/JOBNAME/static_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/;s/MACHINE/${machine}/g" $jobscript
     #sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${rootdir}/MPAS-Model#" $jobscript
@@ -600,13 +599,16 @@ function run_ungrib_rrfs {
             download_aws=0
         fi
 
-
-        rrfsfiles=()
+        rrfsfiles=(); myrrfsfiles=()
         for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
             hstr=$(printf "%03d" $h)
             if [[ $download_aws -eq 1 ]]; then
                 rrfsfile="rrfs.t${currtime}z.natlev.f${hstr}.conus_3km.grib2"
-                if [[ ! -f $rrfsfile ]]; then
+                basefn=$(basename $rrfsfile)
+                basefn="NSSL_$basefn"
+
+                if [[ ! -f $rrfsfile && ! -f $basefn ]]; then
+                    if [[ $verb -eq 1 ]]; then echo "Downloading $rrfsfile ..."; fi
                     rrfsfidx="${rrfsfile}.idx"
                     wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfidx
                     while [[ $? -ne 0 ]]; do
@@ -625,7 +627,9 @@ function run_ungrib_rrfs {
                 fi
             else
                 rrfsfile=$rrfs_grib_dir/RRFS_CONUS.t${currtime}z.bgrd3df${hstr}.tm00.grib2
-                while [[ ! -f $rrfsfile ]]; do
+                basefn=$(basename $rrfsfile)
+                basefn="NSSL_$basefn"
+                while [[ ! -f $rrfsfile && ! -f $basefn ]]; do
                     if [[ $verb -eq 1 ]]; then
                         echo "Waiting for $rrfsfile ..."
                     fi
@@ -633,30 +637,31 @@ function run_ungrib_rrfs {
                 done
             fi
             rrfsfiles+=(${rrfsfile})
+            myrrfsfiles+=($basefn)
         done
 
-        myrrfsfiles=()
+
         for i in ${!rrfsfiles[@]}; do
             fn=${rrfsfiles[$i]}
+            basefn=${myrrfsfiles[$i]}
 
-            # drop un-wanted records
-            basefn=$(basename $fn)
-            basefn="NSSL_$basefn"
-            rm -f $basefn
+            if [[ ! -f $basefn ]]; then
+                #rm -f $basefn
 
-            fhrstr=$(echo $fn | grep -o -E 'f[0-9]{3}')
-            fhr=${fhrstr//[!0-9]/}
-            fhr=$((10#$fhr))
+                # drop un-wanted records
+                fhrstr=$(echo $fn | grep -o -E 'f[0-9]{3}')
+                fhr=${fhrstr//[!0-9]/}
+                fhr=$((10#$fhr))
 
-            if [[ $fhr -eq 0 ]]; then
-                valtime="anl"
-            else
-                valtime="$fhr hour fcst"
-            fi
-            echo "RRFS file: $fn ($valtime)"
+                if [[ $fhr -eq 0 ]]; then
+                    valtime="anl"
+                else
+                    valtime="$fhr hour fcst"
+                fi
+                echo "RRFS file: $fn ($valtime)"
 
-            rm -f keep.txt
-            cat << EOF > keep.txt
+                rm -f keep.txt
+                cat << EOF > keep.txt
 :PRES:[0-9]{1,2} hybrid level:${valtime}:
 :CLWMR:[0-9]{1,2} hybrid level:${valtime}:
 :ICMR:[0-9]{1,2} hybrid level:${valtime}:
@@ -702,9 +707,9 @@ function run_ungrib_rrfs {
 :ICEC:surface:${valtime}:
 EOF
 
-            echo "Generating working copy of $basefn ..."
-            ${wgrib2path} $fn | grep -Ef keep.txt | wgrib2 -i $fn -GRIB $basefn >& /dev/null
-            myrrfsfiles+=($basefn)
+                echo "Generating working copy of $basefn ..."
+                ${wgrib2path} $fn | grep -Ef keep.txt | wgrib2 -i $fn -GRIB $basefn >& /dev/null
+            fi
         done
 
         link_grib ${myrrfsfiles[@]}
@@ -733,7 +738,7 @@ EOF
         #
         # Create job script and submit it
         #
-        jobscript="run_ungrib.slurm"
+        jobscript="run_ungrib.${mach}"
         sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/ungrb_rrfs_${jobname}/" $TEMPDIR/$jobscript > $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
@@ -1047,9 +1052,11 @@ EOF
         #
         # Create job script and submit it
         #
-        jobscript="run_init.slurm"
-        sed    "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npeics/;s/MACHINE/${machine}/g" $TEMPDIR/$jobscript > $jobscript
-        sed -i "s/JOBNAME/init_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/g" $jobscript
+        claim_cpu="ncpus=${ncores_ics}"
+        jobscript="run_init.${mach}"
+        sed    "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/MACHINE/${machine}/g" $TEMPDIR/$jobscript > $jobscript
+        sed -i "s/NOPART/$npeics/;s/NNODES/${nnodes_ics}/;s/NCORES/${ncores_ics}/;s/CPUSPEC/${claim_cpu}/" $jobscript
+        sed -i "s/JOBNAME/init_${jobname}/;s/MODULE/${modulename}/g" $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
@@ -1210,9 +1217,11 @@ EOF
         #
         # Create job script and submit it
         #
-        jobscript="run_lbc.slurm"
-        sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/NOPART/$npeics/;s/MACHINE/${machine}/g" $TEMPDIR/$jobscript > $jobscript
-        sed -i "s/JOBNAME/lbc_${jobname}/;s/CPUSPEC/${claim_cpu}/;s/MODULE/${modulename}/g" $jobscript
+        claim_cpu="ncpus=${ncores_ics}"
+        jobscript="run_lbc.${mach}"
+        sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/MACHINE/${machine}/g" $TEMPDIR/$jobscript > $jobscript
+        sed -i "s/NOPART/$npeics/;s/NNODES/${nnodes_ics}/;s/NCORES/${ncores_ics}/;s/CPUSPEC/${claim_cpu}/" $jobscript
+        sed -i "s/JOBNAME/lbc_${jobname}/;s/MODULE/${modulename}/g" $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
@@ -1995,14 +2004,14 @@ elif [[ $machine == "Cheyenne" ]]; then
         runcmd="qsub"
     fi
     account="${hpcaccount-NMMM0013}"
-    ncores_ics=30; ncores_fcst=30; ncores_post=30
+    ncores_ics=32; ncores_fcst=30; ncores_post=30
     partition="regular"        ; claim_cpu="ncpus=${ncores_fcst}"
-    partition_static="regular" ; static_cpu="30"
+    partition_static="regular" ; static_cpu="ncpus=30"
     partition_upp="regular"
     mach="pbs"
 
     modulename="defaults"
-    WPSGEOG_PATH="do_not_know"
+    WPSGEOG_PATH="/glade/work/ywang/WPS_GEOG/"
     wgrib2path="wgrib2_not_found"
 else
     account="${hpcaccount-smallqueue}"

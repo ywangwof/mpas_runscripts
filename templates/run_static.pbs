@@ -1,0 +1,38 @@
+#!/bin/sh -l
+#PBS -A ACCOUNT
+#PBS -q PARTION
+#PBS -N JOBNAME
+#PBS -l select=1:ncpus=36:mpiprocs=1:ompthreads=1
+#PBS -l walltime=02:30:00
+#PBS -j oe
+#PBS -o WRKDIR/static.log
+
+#set -eux
+
+time1=$(date '+%s')
+echo "Job Started: $(date). Job Id:  $PBS_JOBID"
+echo " "
+
+ulimit -s unlimited
+
+cd WRKDIR
+
+EXEDIR/init_atmosphere_model
+
+if [[ $? -eq 0 ]]; then
+    touch done.static
+else
+    touch error.static
+fi
+
+time2=$(date '+%s')
+
+let diff=time2-time1
+let hour=diff/3600
+let diff=diff%3600
+let min=diff/60
+let sec=diff%60
+
+echo -n "Job   Ended: $(date). "
+printf 'Job run time:  %02d:%02d:%02d' $hour $min $sec
+echo " "

@@ -1,0 +1,41 @@
+#!/bin/sh -l
+#PBS -A NMMM0013
+#PBS -q regular
+#PBS -N get_patches
+#PBS -l select=1:ncpus=30:mpiprocs=30:ompthreads=1
+#PBS -l walltime=01:30:00
+#PBS -j oe
+#PBS -o /glade/work/ywang/mpas_runscripts/python/get_patches.log
+
+#set -eux
+
+time1=$(date '+%s')
+echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
+echo " "
+
+module load conda/latest
+conda activate npl-2023a
+
+ulimit -s unlimited
+
+cd /glade/work/ywang/mpas_runscripts/python
+
+python get_mpaspatches.py -n 30 /glade/scratch/ywang/run_dirs/2023022700_RT/fcst.lapse/wofs_mpas.history.2023-02-27_00.00.00.nc
+
+#if [[ $? -eq 0 ]]; then
+#    touch done.get_patches
+#else
+#    touch error.get_patches
+#fi
+
+time2=$(date '+%s')
+
+let diff=time2-time1
+let hour=diff/3600
+let diff=diff%3600
+let min=diff/60
+let sec=diff%60
+
+echo -n "Job   Ended: $(date). "
+printf 'Job run time:  %02d:%02d:%02d' $hour $min $sec
+echo " "

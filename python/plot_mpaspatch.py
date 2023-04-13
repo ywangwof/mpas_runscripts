@@ -340,14 +340,14 @@ if __name__ == "__main__":
             varndim = 230           # static file
             need_levels = True
             vertshape = varshapes[1]
-        elif varshapes[0] != 1 or varshapes[1] != nCells:
+        elif varshapes[0] != 1 or varshapes[1] not in (nCells,nCells+1):
             print(f"Do not supported variable shape ({varshapes}).")
             sys.exit(0)
     elif varndim == 3:
         need_levels = True
         vertshape = varshapes[2]
 
-        if varshapes[0] != 1 or varshapes[1] != nCells:
+        if varshapes[0] != 1 or varshapes[1] not in (nCells,nCells+1):
             print(f"Do not supported variable shape ({varshapes}).")
             sys.exit(0)
     else:
@@ -360,6 +360,8 @@ if __name__ == "__main__":
             levels = range(nslevels)
         elif vertshape == nlevels:
             levels = range(nlevels)
+        elif vertshape == nlevels+1:
+            levels = range(nlevels+1)
         else:
             print(f"The 3rd dimension size ({vertshape}) is not in ({nlevels} or {nslevels}).")
             sys.exit(0)

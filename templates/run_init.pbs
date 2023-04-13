@@ -3,9 +3,9 @@
 #PBS -q PARTION
 #PBS -N JOBNAME
 #PBS -l select=NNODES:CPUSPEC:mpiprocs=NCORES:ompthreads=1
-#PBS -l walltime=04:30:00
+#PBS -l walltime=00:30:00
 #PBS -j oe
-#PBS -o WRKDIR/mpas_fcst.log
+#PBS -o WRKDIR/mpas_init.log
 
 #set -eux
 
@@ -13,32 +13,22 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $PBS_JOBID"
 echo " "
 
-if [[ "MACHINE" == "Cheyenne" ]]; then
-    ncores=NCORES
-else
-    source ROOTDIR/modules/MODULE
-    ncores=24
-fi
-nnode=$(( NOPART/ncores ))
-
 ulimit -s unlimited
 
 cd WRKDIR
 
-touch fcst.running
-rm -rf error.fcst queue.fcst
+touch ics.running
+rm -rf error.ics queue.ics
 
-sed -i "s/NNNODE/$nnode/;s/NNCORE/$ncores/;" namelist.atmosphere
-
-mpiexec_mpt EXEDIR/atmosphere_model.single
+mpiexec_mpt EXEDIR/init_atmosphere_model
 
 if [[ $? -eq 0 ]]; then
-    touch done.mpas
+    touch done.ics
 else
-    touch error.mpas
+    touch error.ics
 fi
 
-rm -rf fcst.running
+rm -rf ics.running
 
 time2=$(date '+%s')
 
