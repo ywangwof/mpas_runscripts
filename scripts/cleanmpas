@@ -4,11 +4,15 @@
 
 rm -rf log.atmosphere.*.err log.atmosphere.*.out log.init_atmosphere.*.err log.init_atmosphere.*.out core*
 #rm -rf ${runname}.diag.* ${runname}.restart.* ${runname}.history.*
-rm -rf *.diag.* *.restart.* *.history.*
+rm -rf *.diag.* *.history.*  # *.restart.*
 rm -rf error.*
 rm -rf mpas_fcst.log mpas_init.log mpas_lbc.log
 rm -rf [0-9][0-9][0-9][0-9]
 
 if [[ "$1" == "-a" ]]; then
     rm -rf *.log
+fi
+
+if [[ "$1" == "-r" ]]; then
+    rm -rf *.restart.*
 fi
