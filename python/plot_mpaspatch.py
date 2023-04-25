@@ -317,14 +317,19 @@ if __name__ == "__main__":
             varndim  = variable.ndim
             varshapes = variable.shape
             vardata  = variable[:]
+            validtimestring = mesh.getncattr('xtime')
 
     else:
         print("ERROR: need a MPAS history/diag file.")
         sys.exit(0)
 
     fnamelist = os.path.basename(fcstfile).split('.')[2:-1]
-    fcstfname = '.'.join(fnamelist)
-    fcsttime  = ':'.join(fnamelist).replace('_',' ')
+    if len(fnamelist) > 0:
+        fcstfname = '.'.join(fnamelist)
+        fcsttime  = ':'.join(fnamelist).replace('_',' ')
+    else:
+        fcstfname = 'init'
+        fcsttime  = validtimestring.strip()
 
     need_levels = False
     if varndim == 1:

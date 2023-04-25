@@ -23,16 +23,23 @@ fcst_dir=$(pwd)
 cd /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/mpas_scripts/python
 
 #### USER Modify and Check this block only ####
-ftype="init" # "diag" "history"
-datestr="2023-02-27"
-times=(00)
-cases=(init initp)
-fields=(zz )        #ter surface_pressure skintemp theta relhum theta_base t2m w )
-levels=("0,1,2,3" ) #1d 2d 2d 0 0 0 2d "0,1,2,3")   # "max"  # column maximum values
+ftype="diag"   # "diag" "history" "init" "lbc"
+datestr="2023-04-14"
+times=$(seq 0 10 360)
+cases=(fcst.10m)
+fields=(height_500hPa)
+levels=(0 0 0 0 0 0 0 0 "0,1,2" "0,1,2" ) #1d 2d 2d 0 0 0 2d "0,1,2,3")   # "max"  # column maximum values
+cntlvls=("5340,5880,60" none none none none )
+
 #### END of USER Section #######################
 
 n=0
 for nt in ${times[@]}; do
+    thour=$((nt/60))
+    tmin=$((nt-thour*60))
+    ntstr=$(printf "%02d.%02d" $thour $tmin)
+    #echo "$nt - $ntstr"
+
     for case in ${cases[@]}; do
         for i in ${!fields[@]}; do
             field=${fields[$i]}
@@ -42,8 +49,8 @@ for nt in ${times[@]}; do
             outdir=${fcst_dir}/${case}
 
             case $ftype in
-            diag | history )
-                infile=${fcst_dir}/${case}/wofs_mpas.${ftype}.${datestr}_${nt}.00.00.nc
+            diag | history | lbc )
+                infile=${fcst_dir}/${case}/wofs_mpas.${ftype}.${datestr}_${ntstr}.00.nc
                 ;;
             init)  # init
                 infile=${fcst_dir}/${case}/wofs_mpas.${ftype}.nc
@@ -54,10 +61,16 @@ for nt in ${times[@]}; do
                 ;;
             esac
 
+            if [[ "${cntlvls[$i]}" == "none" ]]; then
+                cntlvlstr=""
+            else
+                cntlvlstr="-c ${cntlvls[$i]}"
+            fi
+
             echo ""
-            echo "--- $n ---"
-            echo "plot_mpaspatch.py -p wofs_mpas.1894063.patches -o ${outdir} ${infile} ${field} -l ${level}"
-            plot_mpaspatch.py -p wofs_mpas.1894063.patches -o ${outdir} ${infile} ${field} -l ${level}
+            echo "--- $n: $case $ntstr $field ---"
+            echo "plot_mpaspatch.py -p wofs_mpas.1894063.patches -o ${outdir} ${infile} ${field} -l ${level} ${cntlvlstr}"
+            python plot_mpaspatch.py -p wofs_mpas.1894063.patches -o ${outdir} ${infile} ${field} -l ${level} ${cntlvlstr}
         done
     done
 done
