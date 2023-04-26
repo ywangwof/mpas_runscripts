@@ -317,7 +317,7 @@ if __name__ == "__main__":
             varndim  = variable.ndim
             varshapes = variable.shape
             vardata  = variable[:]
-            validtimestring = mesh.getncattr('xtime')
+            validtimestring = mesh.variables['xtime']
 
     else:
         print("ERROR: need a MPAS history/diag file.")
