@@ -234,7 +234,7 @@ if __name__ == "__main__":
                                             ''')
                                      #formatter_class=CustomFormatter)
 
-    parser.add_argument('fcstfile',help='MPAS forecast file')
+    parser.add_argument('fcstfiles', nargs='+',help='MPAS forecast file')
     parser.add_argument('varname', help='Name of variable to be plotted',type=str, default=None)
 
     parser.add_argument('-v','--verbose',   help='Verbose output',                             action="store_true", default=False)
@@ -248,11 +248,36 @@ if __name__ == "__main__":
 
     basmap = "latlon"
 
-    fcstfile = args.fcstfile
-    varname  = args.varname
-    if not os.path.lexists(fcstfile) and os.path.lexists(varname):  # if the two arguments are out-of-order
-        fcstfile = varname
-        varname  = args.fcstfile
+    fcstfiles = []
+    varnames  = []
+    for fcstfile in args.fcstfiles:
+        if  os.path.lexists(fcstfile):
+            fcstfiles.append(fcstfile)
+        else:
+            varnames.append(fcstfile)
+
+    if os.path.lexists(args.varname):  # if the two arguments are out-of-order
+        fcstfiles.append(args.varname)
+    else:
+        varnames.append(args.varname)
+
+    if len(varnames) > 1:
+        print(f"variable name can only be one. Got \"{varnames}\"")
+        sys.exit(0)
+
+    varname = varnames[0]
+
+    caldiff = False
+    diffstr = ""
+    if len(fcstfiles) == 2:
+        caldiff = True
+        fcstfile = fcstfiles[0]
+        diffstr = "_diff"
+    elif len(fcstfiles) == 1:
+        fcstfile = fcstfiles[0]
+    else:
+        print(f"Found too many files. Got \"{fcstfiles}\"")
+        sys.exit(0)
 
     #
     # Load variable
@@ -316,9 +341,12 @@ if __name__ == "__main__":
             varunits = variable.getncattr('units')
             varndim  = variable.ndim
             varshapes = variable.shape
-            vardata  = variable[:]
+            vardata   = variable[:]
             validtimestring = mesh.variables['xtime']
 
+        if caldiff:
+            with Dataset(fcstfile, 'r') as mesh:
+                vardata = vardata - mesh.variables[varname][:]
     else:
         print("ERROR: need a MPAS history/diag file.")
         sys.exit(0)
@@ -504,23 +532,23 @@ if __name__ == "__main__":
                 if l == "max":
                     varplt = np.max(vardata,axis=2)[t,:]
                     outlvl = f"_{l}"
-                    outtlt = f"colum maximum {varname} ({varunits}) valid at {fcsttime}"
+                    outtlt = f"colum maximum {varname}{diffstr} ({varunits}) valid at {fcsttime}"
                 else:
                     varplt = vardata[t,:,l]
                     outlvl = f"_K{l:02d}"
-                    outtlt = f"{varname} ({varunits}) valid at {fcsttime} on level {l:02d}"
+                    outtlt = f"{varname}{diffstr} ({varunits}) valid at {fcsttime} on level {l:02d}"
             elif varndim == 230:
                 varplt = vardata[:,l]
                 outlvl = f"_K{l:02d}"
-                outtlt = f"{varname} ({varunits}) on level {l:02d}"
+                outtlt = f"{varname}{diffstr} ({varunits}) on level {l:02d}"
             elif varndim == 2:
                 varplt = vardata[t,:]
                 outlvl = ""
-                outtlt = f"{varname} ({varunits}) valid at {fcsttime}"
+                outtlt = f"{varname}{diffstr} ({varunits}) valid at {fcsttime}"
             elif varndim == 1:
                 varplt = vardata[:]
                 outlvl = ""
-                outtlt = f"{varname} ({varunits})"
+                outtlt = f"{varname}{diffstr} ({varunits})"
             else:
                 print(f"Variable {varname} is in wrong shape: {varshapes}.")
                 sys.exit(0)
@@ -581,7 +609,7 @@ if __name__ == "__main__":
 
             #
             if defaultoutfile:
-                outfile = f"{varname}.{fcstfname}{outlvl}.png"
+                outfile = f"{varname}{diffstr}.{fcstfname}{outlvl}.png"
 
             figname = os.path.join(outdir,outfile)
             print(f"Saving figure to {figname} ...")
