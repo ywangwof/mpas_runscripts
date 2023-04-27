@@ -345,7 +345,7 @@ if __name__ == "__main__":
             validtimestring = mesh.variables['xtime']
 
         if caldiff:
-            with Dataset(fcstfile, 'r') as mesh:
+            with Dataset(fcstfiles[1], 'r') as mesh:
                 vardata = vardata - mesh.variables[varname][:]
     else:
         print("ERROR: need a MPAS history/diag file.")

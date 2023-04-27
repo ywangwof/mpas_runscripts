@@ -183,6 +183,7 @@ if __name__ == "__main__":
     if len(fcstfiles) == 2:
         caldiff = True
         fcstfile = fcstfiles[0]
+        diffstr = "_diff"
     elif len(fcstfiles) == 1:
         fcstfile = fcstfiles[0]
     else:
@@ -247,7 +248,6 @@ if __name__ == "__main__":
         if caldiff:
             with xr.open_dataset(fcstfiles[1], engine='cfgrib', filter_by_keys=filters) as mesh:
                 vardata = vardata - mesh[varname].values
-            diffstr = "_diff"
     else:
         print("ERROR: need a GRIB2 file.")
         sys.exit(0)
