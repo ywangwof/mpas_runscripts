@@ -1,0 +1,13 @@
+
+04/26/2023 Version 2.0
+
+    Here are the main updates:
+    1. Upgrade the PNETCDF library because MPAS uses a feature that is not available with version 1.6;
+    2. Add a wgrib2 step to rotate winds for the HRRR datasets;
+    3. Process wgrib2 & ungrib in parallel mode for speedup;
+    4. RRFS-initialized MPAS runs up to 60 hours
+
+    new executables: 
+       atmosphere_model.single
+       init_atmosphere_model
+       ungrib.exe
