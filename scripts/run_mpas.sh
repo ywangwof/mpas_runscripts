@@ -200,6 +200,13 @@ function mkwrkdir {
 
 ########################################################################
 
+function join_by_comma {
+    local IFS=","
+    echo "$*"
+}
+
+########################################################################
+
 function link_grib {
     alpha=( A B C D E F G H I J K L M N O P Q R S T U V W X Y Z )
     i1=0
@@ -224,92 +231,6 @@ function link_grib {
          fi
        fi
     done
-}
-########################################################################
-
-function grid_defn {
-    # 04/25/2023: based on grid_defn.pl by 10/2012 Wesley Ebisuzaki
-    #
-    #   finds the grid definition of the 1st record of a grib2 file
-    #   grid defintion is compatible with wgrib2's -new_grid
-    #
-    #   uses: you want to interpolate to a grid as determined by a grib2 file
-    #
-    #   ex. wgrib2 IN.grib -new_grid_winds earth -new_grid `grid_defn.pl output_grid.grb` OUT.grib
-    #
-    #   usage: grid_defn.pl [grib file]
-    #
-    #   limitations: only supports lambert conformal currently
-    #    #, lat-lon, (global) gaussian, polar stereographic
-    #    # will come later as need is arised.
-    #
-
-    if [[ $# -ne 1 ]]; then
-       echo "grid_defn.sh "
-       echo "argument:  grib2 file"
-       echo "output:    grid definiton that is compatible with wgrib2 -new_grid"
-       exit 8
-    fi
-
-    grid=$(${wgrib2path} -d 1 -grid $1)
-    #echo $grid
-    gridstr=${grid// /_}
-    grids=(${gridstr//:/ })
-    #echo ${grids[@]}
-    if [[ ${grids[4]} == "Lambert_Conformal" ]]; then
-        if [[ ${grids[5]} =~ _\(([0-9]*)_x_([0-9]*)\)_input_([A-Z]{2}) ]]; then
-            nx=${BASH_REMATCH[1]}
-            ny=${BASH_REMATCH[2]}
-            scan=${BASH_REMATCH[3]}
-
-            if [[ ! $scan =~ WE|SN ]]; then
-               echo "grid scan is $scan, unsupported by -new_grid"
-               exit 1
-            fi
-        else
-            echo "5th element is not right, got: ${grids[5]}"
-            exit 1
-        fi
-        #echo $nx, $ny, $scan
-
-
-        if [[ ${grids[8]} =~ Lat1_([0-9.]*)_Lon1_([0-9.]*)_LoV_([0-9.]*) ]]; then
-            lat1=${BASH_REMATCH[1]}
-            lon1=${BASH_REMATCH[2]}
-            lov=${BASH_REMATCH[3]}
-        else
-            echo "8th element is not right, got: ${grids[8]}"
-            exit 2
-        fi
-        #echo $lat1, $lon1, $lov
-
-
-        if [[ ${grids[9]} =~ LatD_([0-9.]*)_Latin1_([0-9.]*)_Latin2_([0-9.]*) ]]; then
-            latd=${BASH_REMATCH[1]}
-            latin1=${BASH_REMATCH[2]}
-            latin2=${BASH_REMATCH[3]}
-        else
-            echo "11th element is not right. got: ${grids[9]}"
-            exit 3
-        fi
-        #echo $latd, $latin1, $latin2
-
-
-        if [[ ${grids[11]} =~ .*_Dx_([0-9.]*)_m_Dy_([0-9.]*)_m_mode_. ]]; then
-            dx=${BASH_REMATCH[1]}
-            dy=${BASH_REMATCH[2]}
-        else
-            echo "11th element is not right. got: ${grids[11]}"
-            exit 4
-        fi
-        #echo $dx, $dy
-
-        echo "lambert:$lov:$latin1:$latin2:$latd $lon1:$nx:$dx $lat1:$ny:$dy"
-    else
-        echo "unknown grid sorry";
-        exit 5
-    fi
-    exit 0
 }
 
 ########################################################################
@@ -498,15 +419,15 @@ function run_ungrib_hrrr {
     cd $wrkdir
 
     julday=$(date -d "$eventdate ${eventtime}:00" +%y%j%H)
+    hrrrbase="${julday}0000"
 
     if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
         :                   # skip
     else
-        myhrrrfiles=()
+        myhrrrfiles=(); jobarrays=()
         for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
-            echo ""
             hstr=$(printf "%02d" $h)
-            hrrrfile="$hrrr_grib_dir/${julday}0000$hstr"
+            hrrrfile="$hrrr_grib_dir/${hrrrbase}$hstr"
             basefn=$(basename $hrrrfile)
             basefn="NSSL_$basefn"
 
@@ -520,150 +441,119 @@ function run_ungrib_hrrr {
 
             if [[ ! -f $basefn ]]; then
                 #rm -f $basefn
-
-                fhr=$((10#$hstr))
-                # drop un-wanted records
-                if [[ $hstr -eq 0 ]]; then
-                    valtime="anl"
-                else
-                    valtime="$fhr hour fcst"
-                fi
-                echo "HRRR file: $hrrrfile ($valtime)"
-
-                rm -f keep.txt
-                cat << EOF > keep.txt
-:PRES:[0-9]{1,2} hybrid level:${valtime}:
-:CLMR:[0-9]{1,2} hybrid level:${valtime}:
-:CIMIXR:[0-9]{1,2} hybrid level:${valtime}:
-:RWMR:[0-9]{1,2} hybrid level:${valtime}:
-:SNMR:[0-9]{1,2} hybrid level:${valtime}:
-:GRLE:[0-9]{1,2} hybrid level:${valtime}:
-:HGT:[0-9]{1,2} hybrid level:${valtime}:
-:TMP:[0-9]{1,2} hybrid level:${valtime}:
-:SPFH:[0-9]{1,2} hybrid level:${valtime}:
-:UGRD:[0-9]{1,2} hybrid level:${valtime}:
-:VGRD:[0-9]{1,2} hybrid level:${valtime}:
-:SPNCR:[0-9]{1,2} hybrid level:${valtime}:
-:NCONCD:[0-9]{1,2} hybrid level:${valtime}:
-:NCCICE:[0-9]{1,2} hybrid level:${valtime}:
-:PMTF:[0-9]{1,2} hybrid level:${valtime}:
-:PMTC:[0-9]{1,2} hybrid level:${valtime}:
-:TMP:2 m above ground:${valtime}:
-:SPFH:2 m above ground:${valtime}:
-:RH:2 m above ground:${valtime}:
-:UGRD:10 m above ground:${valtime}:
-:VGRD:10 m above ground:${valtime}:
-:PRES:surface:${valtime}:
-:SNOD:surface:${valtime}:
-:WEASD:surface:${valtime}:
-:TMP:surface:${valtime}:
-:CNWAT:surface:${valtime}:
-:HGT:surface:${valtime}:
-:MSLMA:mean sea level:${valtime}:
-:TSOIL:0-0 m below ground:${valtime}:
-:TSOIL:0.01-0.01 m below ground:${valtime}:
-:TSOIL:0.04-0.04 m below ground:${valtime}:
-:TSOIL:0.1-0.1 m below ground:${valtime}:
-:TSOIL:0.3-0.3 m below ground:${valtime}:
-:TSOIL:0.6-0.6 m below ground:${valtime}:
-:TSOIL:1-1 m below ground:${valtime}:
-:TSOIL:1.6-1.6 m below ground:${valtime}:
-:TSOIL:3-3 m below ground:${valtime}:
-:SOILW:0-0 m below ground:${valtime}:
-:SOILW:0.01-0.01 m below ground:${valtime}:
-:SOILW:0.04-0.04 m below ground:${valtime}:
-:SOILW:0.1-0.1 m below ground:${valtime}:
-:SOILW:0.3-0.3 m below ground:${valtime}:
-:SOILW:0.6-0.6 m below ground:${valtime}:
-:SOILW:1-1 m below ground:${valtime}:
-:SOILW:1.6-1.6 m below ground:${valtime}:
-:SOILW:3-3 m below ground:${valtime}:
-:LAND:surface:${valtime}:
-:ICEC:surface:${valtime}:
-EOF
-
-                echo "Generating working copy: $basefn ...."
-                grib2cmdstr="${wgrib2path} $hrrrfile | grep -Ef keep.txt | ${wgrib2path} -i $hrrrfile -GRIB tmp_${basefn}"
-                if [[ $verb -eq 1 ]]; then echo "$grib2cmdstr"; fi
-                eval $grib2cmdstr >& /dev/null
-                sleep 2
-
-                #
-                # convert to Earth-relative winds
-                #
-                #griddefn=$(grid_defn tmp_${basefn})
-                #echo "grid defn = \"$griddefn\" "
-                ${wgrib2path} tmp_${basefn} -set_grib_type same -new_grid_winds earth -new_grid $(grid_defn tmp_${basefn}) ${basefn}
-
-                #
-                # Clean working files
-                #
-                rm -rf tmp_${basefn}
-                rm -rf keep.txt
+                jobarrays+=($h)
             fi
+
             myhrrrfiles+=($basefn)
         done
 
-        link_grib ${myhrrrfiles[@]}
+        if [[ ${#jobarrays[@]} -gt 0 ]]; then
+            jobarraystr="--array=$(join_by_comma ${jobarrays[@]})"
+            jobscript="run_wgrib2_hrrr.${mach}"
+            sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/wgrib2_${jobname}/" $TEMPDIR/$jobscript > $jobscript
+            sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#MODULE#${modulename}#g;s#MACHINE#${machine}#g" $jobscript
+            sed -i "s#GRIBFILE#$hrrr_grib_dir/${hrrrbase}#;s#TARGETFILE#NSSL_${hrrrbase}#;s#VERBOSE#$verb#g" $jobscript
+            if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
+            $runcmd $jobarraystr $jobscript
+            if [[ $dorun == true ]]; then touch queue.wgrib2; fi
+        fi
 
-        ln -sf $TEMPDIR/WRFV4.0/Vtable.raphrrr Vtable
+        if [[ $dorun == true ]]; then
+            for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
+                hstr=$(printf "%02d" $h)
+                donefile="done.wgrib2_$hstr"
+                while [[ ! -e $donefile ]]; do
+                    if [[ $verb -eq 1 ]]; then
+                        echo "Waiting for $donefile ......"
+                    fi
+                    sleep 10
+                done
+            done
+        fi
 
-        cat << EOF > namelist.wps
-&share
- wrf_core = 'ARW',
- max_dom = 1,
- start_date = '${starttime_str}',
- end_date = '${stoptime_str}',
- interval_seconds = $((EXTINVL*3600))
- io_form_geogrid = 2,
-/
-&geogrid
-/
-&ungrib
- out_format = 'WPS',
- prefix = '${EXTHEAD}',
-/
-&metgrid
-/
-EOF
+        #link_grib ${myhrrrfiles[@]}
+
+        i=0; jobarrays=()
+        for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
+            hstr=$(printf "%02d" $h)
+
+            mywrkdir="$wrkdir/ungrib_$hstr"
+            donefile="done.ungrib_$hstr"
+            if [[ ! -f $donefile ]]; then
+                mkdir -p $mywrkdir
+                cd $mywrkdir
+
+                ln -sf ../${myhrrrfiles[$i]} GRIBFILE.AAA
+                ln -sf $TEMPDIR/WRFV4.0/Vtable.raphrrr Vtable
+
+                jobarrays+=($h)
+                cd $wrkdir
+            fi
+            let i=i+1
+        done
 
         #
         # Create job script and submit it
         #
-        jobscript="run_ungrib.slurm"
-        sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/ungrb_hrrr_${jobname}/" $TEMPDIR/$jobscript > $jobscript
-        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-        if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
-        $runcmd $jobscript
-        if [[ $dorun == true ]]; then touch queue.ungrib; fi
+        if [[ ${#jobarrays[@]} -gt 0 ]]; then
+            jobscript="run_ungrib.${mach}"
+            jobarraystr="--array=$(join_by_comma ${jobarrays[@]})"
+            sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/ungrb_hrrr_${jobname}/" $TEMPDIR/run_ungrib_parallel.${mach} > $jobscript
+            sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
+            sed -i "s#PREFIX#${EXTHEAD}#g;s#EVENTDATE#${eventdate}#g;s#EVENTTIME#${eventtime}#g;s#EXTINVL#$EXTINVL#g" $jobscript
+            if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
+            $runcmd $jobarraystr $jobscript
+            if [[ $dorun == true ]]; then touch queue.ungrib; fi
+        fi
     fi
 
+    done=0
     if [[ $dorun == true ]]; then
-        secdtime_str=$(date -d "$eventdate ${eventtime}:00 $EXTINVL hours" +%Y-%m-%d_%H)
-        secdfile=$wrkdir/${EXTHEAD}:${secdtime_str}
-
-        echo "$$: Checking: $secdfile"
-        while [[ ! -e $secdfile ]]; do
+        hstr="00"
+        donefile="done.ungrib_$hstr"
+        echo "$$: Checking: $wrkdir/$donefile"
+        while [[ ! -e $wrkdir/$donefile ]]; do
             if [[ $verb -eq 1 ]]; then
-                echo "Waiting for $secdfile ......"
+                echo "Waiting for $wrkdir/$donefile"
             fi
             sleep 10
         done
+        if [[ -f $donefile ]]; then
+            if [[ $verb -ne 1 ]]; then
+                rm -rf $wrkdir/ungrib_$hstr
+            fi
+            rm -f queue.ungrib
+            let done=done+1
+        fi
     fi
 
     touch $wrkdir/done.ungrib_ics
 
     if [[ $dorun == true ]]; then
-        echo "$$: Checking: $wrkdir/done.ungrib"
-        while [[ ! -e $wrkdir/done.ungrib ]]; do
-            if [[ $verb -eq 1 ]]; then
-                echo "Waiting for $wrkdir/done.ungrib"
+        for ((h=EXTINVL;h<=fcst_hours;h+=EXTINVL)); do
+            hstr=$(printf "%02d" $h)
+            donefile="done.ungrib_$hstr"
+            echo "$$: Checking: $wrkdir/$donefile"
+            while [[ ! -e $wrkdir/$donefile ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    echo "Waiting for $wrkdir/$donefile"
+                fi
+                sleep 10
+            done
+            if [[ -f $donefile ]]; then
+                if [[ $verb -ne 1 ]]; then
+                    rm -rf $wrkdir/ungrib_$hstr
+                fi
+                rm -f queue.ungrib
+                let done=done+1
             fi
-            sleep 10
         done
 
     fi
 
+    if [[ $done -eq $((fcst_hours/EXTINVL+1)) ]]; then
+        touch $wrkdir/done.ungrib
+    fi
     touch $wrkdir/done.ungrib_lbc
 }
 
@@ -886,69 +776,93 @@ EOF
                 if [[ $verb -eq 1 ]]; then echo "$grib2cmdstr"; fi
                 eval $grib2cmdstr >& /dev/null
                 sleep 2
+                rm -f keep.txt
             fi
         done
 
-        link_grib ${myrrfsfiles[@]}
+        #link_grib ${myrrfsfiles[@]}
 
-        ln -sf $TEMPDIR/WRFV4.0/Vtable.RRFS Vtable
+        i=0; jobarrays=()
+        for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
+            hstr=$(printf "%02d" $h)
 
-        cat << EOF > namelist.wps
-&share
- wrf_core = 'ARW',
- max_dom = 1,
- start_date = '${starttime_str}',
- end_date = '${stoptime_str}',
- interval_seconds = $((EXTINVL*3600))
- io_form_geogrid = 2,
-/
-&geogrid
-/
-&ungrib
- out_format = 'WPS',
- prefix = '${EXTHEAD}',
-/
-&metgrid
-/
-EOF
+            mywrkdir="$wrkdir/ungrib_$hstr"
+            donefile="done.ungrib_$hstr"
+            if [[ ! -f $donefile ]]; then
+                mkdir -p $mywrkdir
+                cd $mywrkdir
+
+                ln -sf ../${myrrfsfiles[$i]} GRIBFILE.AAA
+                ln -sf $TEMPDIR/WRFV4.0/Vtable.RRFS Vtable
+
+                jobarrays+=($h)
+                cd $wrkdir
+            fi
+            let i=i+1
+        done
 
         #
         # Create job script and submit it
         #
-        jobscript="run_ungrib.${mach}"
-        sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/ungrb_rrfs_${jobname}/" $TEMPDIR/$jobscript > $jobscript
-        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-        if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
-        $runcmd $jobscript
-        if [[ $dorun == true ]]; then touch queue.ungrib; fi
+        if [[ ${#jobarrays[@]} -gt 0 ]]; then
+            jobscript="run_ungrib.${mach}"
+            jobarraystr="--array=$(join_by_comma ${jobarrays[@]})"
+            sed "s/ACCOUNT/$account/g;s/PARTION/${partition}/;s/JOBNAME/ungrb_rrfs_${jobname}/" $TEMPDIR/run_ungrib_parallel.${mach} > $jobscript
+            sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
+            sed -i "s#PREFIX#${EXTHEAD}#g;s#EVENTDATE#${eventdate}#g;s#EVENTTIME#${eventtime}#g;s#EXTINVL#$EXTINVL#g" $jobscript
+            if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
+            $runcmd $jobarraystr $jobscript
+            if [[ $dorun == true ]]; then touch queue.ungrib; fi
+        fi
     fi
 
-
+    done=0
     if [[ $dorun == true ]]; then
-        secdtime_str=$(date -d "$eventdate ${eventtime}:00 $EXTINVL hours" +%Y-%m-%d_%H)
-        secdfile=$wrkdir/${EXTHEAD}:${secdtime_str}
-
-        echo "$$: Checking: $secdfile"
-        while [[ ! -e $secdfile ]]; do
+        hstr="00"
+        donefile="done.ungrib_$hstr"
+        echo "$$: Checking: $wrkdir/$donefile"
+        while [[ ! -e $wrkdir/$donefile ]]; do
             if [[ $verb -eq 1 ]]; then
-                echo "Waiting for $secdfile ......"
+                echo "Waiting for $wrkdir/$donefile"
             fi
             sleep 10
         done
+        if [[ -f $donefile ]]; then
+            if [[ $verb -ne 1 ]]; then
+                rm -rf $wrkdir/ungrib_$hstr
+            fi
+            rm -f queue.ungrib
+            let done=done+1
+        fi
     fi
 
     touch $wrkdir/done.ungrib_ics
 
     if [[ $dorun == true ]]; then
-        echo "$$: Checking: $wrkdir/done.ungrib"
-        while [[ ! -e $wrkdir/done.ungrib ]]; do
-            if [[ $verb -eq 1 ]]; then
-                echo "Waiting for $wrkdir/done.ungrib"
+        for ((h=EXTINVL;h<=fcst_hours;h+=EXTINVL)); do
+            hstr=$(printf "%02d" $h)
+            donefile="done.ungrib_$hstr"
+            echo "$$: Checking: $wrkdir/$donefile"
+            while [[ ! -e $wrkdir/$donefile ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    echo "Waiting for $wrkdir/$donefile"
+                fi
+                sleep 10
+            done
+            if [[ -f $donefile ]]; then
+                if [[ $verb -ne 1 ]]; then
+                    rm -rf $wrkdir/ungrib_$hstr
+                fi
+                rm -f queue.ungrib
+                let done=done+1
             fi
-            sleep 10
         done
+
     fi
 
+    if [[ $done -eq $((fcst_hours/EXTINVL+1)) ]]; then
+        touch $wrkdir/done.ungrib
+    fi
     touch $wrkdir/done.ungrib_lbc
 }
 
@@ -1674,7 +1588,7 @@ function run_mpassit {
         fi
     done
 
-    for ((h=0;h<=$fcst_hours;h+=$OUTINVL)); do
+    for ((h=0;h<=fcst_hours;h+=OUTINVL)); do
         hstr=$(printf "%02d" $h)
         fcst_time_str=$(date -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
 
@@ -1782,7 +1696,7 @@ function run_upp {
     fixdirs[SpcCoeff]="$TEMPDIR/UPP/crtm2_fix/SpcCoeff/Big_Endian"
     fixdirs[TauCoeff]="$TEMPDIR/UPP/crtm2_fix/TauCoeff/ODPS/Big_Endian"
 
-    for ((h=0;h<=$fcst_hours;h+=$OUTINVL)); do
+    for ((h=0;h<=fcst_hours;h+=OUTINVL)); do
         hstr=$(printf "%02d" $h)
         fcst_time_str=$(date -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
 
@@ -1889,7 +1803,7 @@ function run_pcp {
     fi
     cd $wrkdir
 
-    expectednum=$(( fcst_hours +1))
+    expectednum=$(( fcst_hours/OUTINVL +1))
 
     donefiles=($(ls done.upp_??))
     pcpfiles=($(ls  MPAS-A_PCP_*))
@@ -1932,7 +1846,7 @@ function run_clean {
             ;;
         mpssit )
             wrkdir="$rundir/mpassit"
-            for ((h=0;h<=$fcst_hours;h+=$EXTINVL)); do
+            for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
                 hstr=$(printf "%02d" $h)
                 fcst_time_str=$(date -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
                 rm -rf $wrkdir/MPAS-A_out.${fcst_time_str}.nc
@@ -1944,7 +1858,7 @@ function run_clean {
             # Clean UPP directory
             #
             wrkdir="$rundir/upp"
-            for ((h=0;h<=$fcst_hours;h+=$EXTINVL)); do
+            for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
                 hstr=$(printf "%02d" $h)
                 if [[ -f $wrkdir/done.upp_$hstr ]]; then
                     if [[ $verb -eq 1 ]]; then
@@ -1964,7 +1878,7 @@ function run_clean {
             #
             mpassit_dir="$rundir/mpassit"
             upp_dir="$rundir/upp"
-            for ((h=0;h<=$fcst_hours;h+=$EXTINVL)); do
+            for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
                 hstr=$(printf "%02d" $h)
                 fcst_time_str=$(date -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
                 if [[ -f $upp_dir/done.upp_$hstr ]]; then
@@ -2248,7 +2162,6 @@ npeics=800;   nnodes_ics=$((  npeics/ncores_ics   ))
 npefcst=1200; nnodes_fcst=$(( npefcst/ncores_fcst ))
 npepost=72;   nnodes_post=$(( npepost/ncores_post ))
 
-fcst_hours=48
 MPASLSM='ruc'
 MPASNFLS=9
 
@@ -2268,33 +2181,34 @@ echo "     Working dir: $WORKDIR"
 echo "     Domain name: $domname;  MP scheme: ${mpscheme};  IC/LBCs model: ${extdm^^}"
 echo " "
 
-starttime_str=$(date -d "$eventdate ${eventtime}:00"                     +%Y-%m-%d_%H:%M:%S)
-stoptime_str=$(date -d "$eventdate  ${eventtime}:00 ${fcst_hours} hours" +%Y-%m-%d_%H:%M:%S)
-
 case $extdm in
     gfs)
         EXTHEAD="GFS0p25"
         EXTNFGL=57
         EXTNFLS=4
         initname="GFS"
+        fcst_hours=48
         ;;
     hrrr)
         EXTHEAD="HRRR"
         EXTNFGL=51
         EXTNFLS=9
         initname="H"
+        fcst_hours=48
         ;;
     rrfsp)
         EXTHEAD="RRFSP"
         EXTNFGL=46
         EXTNFLS=9
         initname="RP"
+        fcst_hours=60
         ;;
     rrfs)
         EXTHEAD="RRFS"
         EXTNFGL=66
         EXTNFLS=9
         initname="R"
+        fcst_hours=60
         ;;
     *)
         echo "ERROR: unsupported initializaiton model name \"$extdm\"."
@@ -2307,6 +2221,9 @@ if [[ "${mpscheme}" == "Thompson" ]]; then
 else
     mpname="N"
 fi
+
+starttime_str=$(date -d "$eventdate ${eventtime}:00"                     +%Y-%m-%d_%H:%M:%S)
+stoptime_str=$(date -d "$eventdate  ${eventtime}:00 ${fcst_hours} hours" +%Y-%m-%d_%H:%M:%S)
 
 runname="${eventdate}${eventtime}_${initname}${mpname}"
 rundir="$WORKDIR/${runname}"
