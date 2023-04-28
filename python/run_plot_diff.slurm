@@ -5,7 +5,7 @@
 #SBATCH --ntasks=1 --ntasks-per-node=1 --mem=64000
 #SBATCH --exclusive
 #SBATCH -t 02:30:00
-#SBATCH --output=./plot_mpas_%j.log
+#SBATCH --output=./plot_mpas_diff_%j.log
 
 #set -eux
 
@@ -24,33 +24,36 @@ cd /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/mpas_scripts/python
 
 #### USER Modify and Check this block only ####
 ftype="diag"   # "diag" "history" "init" "lbc"
-datestr="2023-04-14 00:00:00"
-times=$(seq 0 10 360)
-cases=(fcst)
+datestr="2023-04-14"
+times=$(seq 0 60 600)
+cases=(fcst fcst.wgrib2rotated)
 fields=(height_500hPa)
 levels=(0 0 0 0 0 0 0 0 "0,1,2" "0,1,2" ) #1d 2d 2d 0 0 0 2d "0,1,2,3")   # "max"  # column maximum values
-cntlvls=("5340,5880,60" none none none none )
+cntlvls=(none "5340,5880,60" none none none none )
 
 #### END of USER Section #######################
 
 n=0
 for nt in ${times[@]}; do
     ntstr=$(date -d "${datestr} $nt minutes" +%Y-%m-%d_%H.%M.%S)
+    #echo "$nt - $ntstr"
 
-    for case in ${cases[@]}; do
+    #for case in ${cases[@]}; do
         for i in ${!fields[@]}; do
             field=${fields[$i]}
             level=${levels[$i]}
             let n++
 
-            outdir=${fcst_dir}/${case}
+            outdir=${fcst_dir}
 
             case $ftype in
             diag | history | lbc )
-                infile=${fcst_dir}/${case}/wofs_mpas.${ftype}.${ntstr}.nc
+                infile1=${fcst_dir}/${cases[0]}/wofs_mpas.${ftype}.${ntstr}.nc
+                infile2=${fcst_dir}/${cases[1]}/wofs_mpas.${ftype}.${ntstr}.nc
                 ;;
             init)  # init
-                infile=${fcst_dir}/${case}/wofs_mpas.${ftype}.nc
+                infile1=${fcst_dir}/${cases[0]}/wofs_mpas.${ftype}.nc
+                infile2=${fcst_dir}/${cases[1]}/wofs_mpas.${ftype}.nc
                 ;;
             *)
                 echo "Unsupported field type: $ftype."
@@ -66,10 +69,10 @@ for nt in ${times[@]}; do
 
             echo ""
             echo "--- $n: $case $ntstr $field ---"
-            echo  "plot_mpaspatch.py -p wofs_mpas.1894063.patches -o ${outdir} ${infile} ${field} -l ${level} ${cntlvlstr}"
-            python plot_mpaspatch.py -p wofs_mpas.1894063.patches -o ${outdir} ${infile} ${field} -l ${level} ${cntlvlstr}
+            echo  "plot_mpaspatch.py -p wofs_mpas.1894063.patches -o ${outdir} ${infile1} ${infile2} ${field} -l ${level} ${cntlvlstr}"
+            python plot_mpaspatch.py -p wofs_mpas.1894063.patches -o ${outdir} ${infile1} ${infile2} ${field} -l ${level} ${cntlvlstr}
         done
-    done
+    #done
 done
 
 time2=$(date '+%s')

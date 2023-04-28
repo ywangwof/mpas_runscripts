@@ -655,7 +655,7 @@ function run_ungrib_rrfs {
         currdate=$(date -d "$eventdate ${eventtime}:00" +%Y%m%d)
         currtime=$(date -d "$eventdate ${eventtime}:00" +%H)
         if [[ "$rrfs_grib_dir" =~ "https://noaa-rrfs-pds.s3.amazonaws.com" ]]; then
-            rrfs_url="$rrfs_grib_dir/rrfs_a/rrfs_a.${currdate}/${currtime}"
+            rrfs_url="$rrfs_grib_dir/rrfs_a/rrfs_a.${currdate}/${currtime}/control"
             download_aws=1
         else
             rrfs_grib_dir="$rrfs_grib_dir/rrfs_a.${currdate}/${currtime}"
@@ -887,7 +887,7 @@ function run_ungrib_rrfsp {
         currdate=$(date -d "$eventdate ${eventtime}:00" +%Y%m%d)
         currtime=$(date -d "$eventdate ${eventtime}:00" +%H)
         if [[ "$rrfs_grib_dir" =~ "https://noaa-rrfs-pds.s3.amazonaws.com" ]]; then
-            rrfs_url="${rrfs_grib_dir}/rrfs_a/rrfs_a.${currdate}/${currtime}"
+            rrfs_url="${rrfs_grib_dir}/rrfs_a/rrfs_a.${currdate}/${currtime}/control"
             download_aws=1
         else
             rrfs_grib_dir="$rrfs_grib_dir/rrfs_a.${currdate}/${currtime}"
@@ -1846,7 +1846,7 @@ function run_clean {
             ;;
         mpssit )
             wrkdir="$rundir/mpassit"
-            for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
+            for ((h=0;h<=fcst_hours;h+=OUTINVL)); do
                 hstr=$(printf "%02d" $h)
                 fcst_time_str=$(date -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
                 rm -rf $wrkdir/MPAS-A_out.${fcst_time_str}.nc
@@ -1858,7 +1858,7 @@ function run_clean {
             # Clean UPP directory
             #
             wrkdir="$rundir/upp"
-            for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
+            for ((h=0;h<=fcst_hours;h+=OUTINVL)); do
                 hstr=$(printf "%02d" $h)
                 if [[ -f $wrkdir/done.upp_$hstr ]]; then
                     if [[ $verb -eq 1 ]]; then
@@ -1878,7 +1878,7 @@ function run_clean {
             #
             mpassit_dir="$rundir/mpassit"
             upp_dir="$rundir/upp"
-            for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
+            for ((h=0;h<=fcst_hours;h+=OUTINVL)); do
                 hstr=$(printf "%02d" $h)
                 fcst_time_str=$(date -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
                 if [[ -f $upp_dir/done.upp_$hstr ]]; then

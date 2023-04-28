@@ -342,7 +342,7 @@ if __name__ == "__main__":
             varndim  = variable.ndim
             varshapes = variable.shape
             vardata   = variable[:]
-            validtimestring = mesh.variables['xtime']
+            validtimestring = mesh.variables['xtime'][0].tobytes().decode('utf-8')
 
         if caldiff:
             with Dataset(fcstfiles[1], 'r') as mesh:
@@ -357,7 +357,7 @@ if __name__ == "__main__":
         fcsttime  = ':'.join(fnamelist).replace('_',' ')
     else:
         fcstfname = 'init'
-        fcsttime  = validtimestring.strip()
+        fcsttime  = validtimestring.strip().replace(':','.')
 
     need_levels = False
     if varndim == 1:

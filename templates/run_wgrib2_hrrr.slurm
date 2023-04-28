@@ -192,7 +192,8 @@ cat << EOF > keep_$hstr.txt
 EOF
 
 echo "Generating working copy: $basefn ...."
-grib2cmdstr="${wgrib2path} $hrrrfile | grep -Ef keep_$hstr.txt | ${wgrib2path} -i $hrrrfile -GRIB tmp_${basefn}"
+#grib2cmdstr="${wgrib2path} $hrrrfile | grep -Ef keep_$hstr.txt | ${wgrib2path} -i $hrrrfile -GRIB tmp_${basefn}"
+grib2cmdstr="${wgrib2path} $hrrrfile | grep -Ef keep_$hstr.txt | ${wgrib2path} -i $hrrrfile -GRIB ${basefn}"
 if [[ $verb -eq 1 ]]; then echo "$grib2cmdstr"; fi
 eval $grib2cmdstr >& /dev/null
 sleep 2
@@ -202,7 +203,7 @@ sleep 2
 #
 #griddefn=$(grid_defn tmp_${basefn})
 #echo "grid defn = \"$griddefn\" "
-${wgrib2path} tmp_${basefn} -set_grib_type same -new_grid_winds earth -new_grid $(grid_defn tmp_${basefn}) ${basefn}
+#${wgrib2path} tmp_${basefn} -set_grib_type same -new_grid_winds earth -new_grid $(grid_defn tmp_${basefn}) ${basefn}
 
 #
 # Clean working files

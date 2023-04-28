@@ -1,3 +1,12 @@
+04/28/2023 Version 3.0
+
+    1. Bill implemented the analysis fields wind rotation in the MPAS init_atmosphere core
+    2. Fix output of various UH values and 1-km max reflectivity
+    3. Fix for RUC LSM soil moisture issues
+
+    new executables:
+       atmosphere_model.single
+       init_atmosphere_model
 
 04/26/2023 Version 2.0
 
