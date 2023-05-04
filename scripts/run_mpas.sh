@@ -288,7 +288,7 @@ EOF
     jobscript="run_geogrid.slurm"
     sed "s/PARTION/${partition}/;s/JOBNAME/geogrid_${geoname}/;s/NOPART/$npepost/" $TEMPDIR/$jobscript > $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-    sed -i "s#ACCTSTR#${job_account_str}#;s#EXCLSTR#${job_exclusive_str}#;s#RUNMPCMD#${job_runmpexe_str}#" $jobscript
+    sed -i "s/ACCTSTR/${job_account_str}/;s/EXCLSTR/${job_exclusive_str}/;s/RUNMPCMD/${job_runmpexe_str}/" $jobscript
     if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
     $runcmd $jobscript
 }
@@ -410,7 +410,7 @@ EOF
     sed -i "s/JOBNAME/static_${jobname}/;s/CPUSPEC/${static_cpu}/;s/MODULE/${modulename}/;s/MACHINE/${machine}/g" $jobscript
     #sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${rootdir}/MPAS-Model#" $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-    sed -i "s#ACCTSTR#${job_account_str}#;s#EXCLSTR#${job_exclusive_str}#;s#RUNMPCMD#${job_runmpexe_str}#" $jobscript
+    sed -i "s/ACCTSTR/${job_account_str}/;s/EXCLSTR/${job_exclusive_str}/;s/RUNMPCMD/${job_runmpexe_str}/" $jobscript
     if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
     $runcmd $jobscript
 }
@@ -463,7 +463,7 @@ function run_ungrib_hrrr {
             sed    "s/PARTION/${partition}/;s/JOBNAME/wgrib2_${jobname}/" $TEMPDIR/$jobscript > $jobscript
             sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#MODULE#${modulename}#g;s#MACHINE#${machine}#g" $jobscript
             sed -i "s#GRIBFILE#$hrrr_grib_dir/${hrrrbase}#;s#TARGETFILE#NSSL_${hrrrbase}#;s#VERBOSE#$verb#g" $jobscript
-            sed -i "s#ACCTSTR#${job_account_str}#;s#EXCLSTR#${job_exclusive_str}#;s#RUNCMD#${job_runexe_str}#" $jobscript
+            sed -i "s/ACCTSTR/${job_account_str}/;s/EXCLSTR/${job_exclusive_str}/;s/RUNCMD/${job_runexe_str}/" $jobscript
             if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
             $runcmd $jobarraystr $jobscript
             if [[ $dorun == true && $? -eq 0 ]]; then touch queue.wgrib2; fi
@@ -512,7 +512,7 @@ function run_ungrib_hrrr {
             sed    "s/PARTION/${partition}/;s/JOBNAME/ungrb_hrrr_${jobname}/" $TEMPDIR/run_ungrib_parallel.${mach} > $jobscript
             sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
             sed -i "s#PREFIX#${EXTHEAD}#g;s#EVENTDATE#${eventdate}#g;s#EVENTTIME#${eventtime}#g;s#EXTINVL#$EXTINVL#g" $jobscript
-            sed -i "s#ACCTSTR#${job_account_str}#;s#EXCLSTR#${job_exclusive_str}#;s#RUNCMD#${job_runexe_str}#" $jobscript
+            sed -i "s/ACCTSTR/${job_account_str}/;s/EXCLSTR/${job_exclusive_str}/;s/RUNCMD/${job_runexe_str}/" $jobscript
             if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
             $runcmd $jobarraystr $jobscript
             if [[ $dorun == true && $? -eq 0 ]]; then touch queue.ungrib; fi
@@ -628,7 +628,7 @@ EOF
         jobscript="run_ungrib.slurm"
         sed    "s/PARTION/${partition}/;s/JOBNAME/ungrib_${jobname}/" $TEMPDIR/$jobscript > $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-        sed -i "s#ACCTSTR#${job_account_str}#;s#EXCLSTR#${job_exclusive_str}#;s#RUNCMD#${job_runexe_str}#" $jobscript
+        sed -i "s/ACCTSTR/${job_account_str}/;s/EXCLSTR/${job_exclusive_str}/;s/RUNCMD/${job_runexe_str}/" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
         if [[ $dorun == true && $? -eq 0 ]]; then touch queue.ungrib; fi
@@ -823,7 +823,7 @@ EOF
             sed    "s/PARTION/${partition}/;s/JOBNAME/ungrb_rrfs_${jobname}/" $TEMPDIR/run_ungrib_parallel.${mach} > $jobscript
             sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
             sed -i "s#PREFIX#${EXTHEAD}#g;s#EVENTDATE#${eventdate}#g;s#EVENTTIME#${eventtime}#g;s#EXTINVL#$EXTINVL#g" $jobscript
-            sed -i "s#ACCTSTR#${job_account_str}#;s#EXCLSTR#${job_exclusive_str}#;s#RUNCMD#${job_runexe_str}#" $jobscript
+            sed -i "s/ACCTSTR/${job_account_str}/;s/EXCLSTR/${job_exclusive_str}/;s/RUNCMD/${job_runexe_str}/" $jobscript
             if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
             $runcmd $jobarraystr $jobscript
             if [[ $dorun == true && $? -eq 0 ]]; then touch queue.ungrib; fi
@@ -972,7 +972,7 @@ EOF
         jobscript="run_ungrib.slurm"
         sed    "s/PARTION/${partition}/;s/JOBNAME/ungrb_rrfs_${jobname}/" $TEMPDIR/$jobscript > $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-        sed -i "s#ACCTSTR#${job_account_str}#;s#EXCLSTR#${job_exclusive_str}#;s#RUNCMD#${job_runexe_str}#" $jobscript
+        sed -i "s/ACCTSTR/${job_account_str}/;s/EXCLSTR/${job_exclusive_str}/;s/RUNCMD/${job_runexe_str}/" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
         if [[ $dorun == true && $? -eq 0 ]]; then touch queue.ungrib; fi
@@ -1163,7 +1163,7 @@ EOF
         sed -i "s/NOPART/$npeics/;s/NNODES/${nnodes_ics}/;s/NCORES/${ncores_ics}/;s/CPUSPEC/${claim_cpu_ics}/" $jobscript
         sed -i "s/JOBNAME/init_${jobname}/;s/MODULE/${modulename}/g" $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-        sed -i "s#ACCTSTR#${job_account_str}#;s#EXCLSTR#${job_exclusive_str}#;s#RUNMPCMD#${job_runmpexe_str}#" $jobscript
+        sed -i "s/ACCTSTR/${job_account_str}/;s/EXCLSTR/${job_exclusive_str}/;s/RUNMPCMD/${job_runmpexe_str}/" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
         if [[ $dorun == true && $? -eq 0 ]]; then touch queue.ics; fi
@@ -1328,7 +1328,7 @@ EOF
         sed -i "s/NOPART/$npeics/;s/NNODES/${nnodes_ics}/;s/NCORES/${ncores_ics}/;s/CPUSPEC/${claim_cpu_ics}/" $jobscript
         sed -i "s/JOBNAME/lbc_${jobname}/;s/MODULE/${modulename}/g" $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-        sed -i "s#ACCTSTR#${job_account_str}#;s#EXCLSTR#${job_exclusive_str}#;s#RUNMPCMD#${job_runmpexe_str}#" $jobscript
+        sed -i "s/ACCTSTR/${job_account_str}/;s/EXCLSTR/${job_exclusive_str}/;s/RUNMPCMD/${job_runmpexe_str}/" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
         if [[ $dorun == true && $? -eq 0 ]]; then touch queue.lbc; fi
@@ -1568,7 +1568,7 @@ EOF
         sed -i "s/NOPART/$npefcst/;s/NNODES/${nnodes_fcst}/;s/NCORES/${ncores_fcst}/" $jobscript
         sed -i "s/JOBNAME/mpas_${jobname}/;s/CPUSPEC/${claim_cpu}/g;s/MODULE/${modulename}/g" $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
-        sed -i "s#ACCTSTR#${job_account_str}#;s#EXCLSTR#${job_exclusive_str}#;s#RUNMPCMD#${job_runmpexe_str}#" $jobscript
+        sed -i "s/ACCTSTR/${job_account_str}/;s/EXCLSTR/${job_exclusive_str}/;s/RUNMPCMD/${job_runmpexe_str}/" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
         if [[ $dorun == true && $? -eq 0 ]]; then touch queue.fcst; fi
@@ -1662,7 +1662,7 @@ EOF
         sed    "s/PARTION/${partition}/;s/NOPART/$npepost/;" $TEMPDIR/run_mpassit.slurm > $jobscript
         sed -i "s/JOBNAME/intrp_${jobname}_$hstr/;s/HHHSTR/$hstr/g;s/CPUSPEC/${claim_cpu}/;" $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
-        sed -i "s#ACCTSTR#${job_account_str}#;s#EXCLSTR#${job_exclusive_str}#;s#RUNMPCMD#${job_runmpexe_str}#" $jobscript
+        sed -i "s/ACCTSTR/${job_account_str}/;s/EXCLSTR/${job_exclusive_str}/;s/RUNMPCMD/${job_runmpexe_str}/" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
         echo " "
@@ -1802,7 +1802,7 @@ EOF
         sed    "s/PARTION/${partition_upp}/;s/NOPART/$npepost/;s/CPUSPEC/${claim_cpu}/" $TEMPDIR/run_upp.slurm > $jobscript
         sed -i "s/JOBNAME/upp_${jobname}_$hstr/;s/HHHSTR/$hstr/g;s/MODULE/${modulename}/g" $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir/post_$hstr#g;s#EXEDIR#${exedir}#;s/MACHINE/${machine}/g" $jobscript
-        sed -i "s#ACCTSTR#${job_account_str}#;s#EXCLSTR#${job_exclusive_str}#;s#RUNMPCMD#${job_runmpexe_str}#" $jobscript
+        sed -i "s/ACCTSTR/${job_account_str}/;s/EXCLSTR/${job_exclusive_str}/;s/RUNMPCMD/${job_runmpexe_str}/" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
         echo " "
@@ -1842,7 +1842,7 @@ function run_pcp {
         sed    "s/PARTION/${partition_upp}/;s/CPUSPEC/${claim_cpu}/" $TEMPDIR/run_pcp.slurm > $jobscript
         sed -i "s/JOBNAME/pcp_${jobname}/;s/HHHSTR/${fcst_hours}/g;s/MODULE/${modulename}/g" $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s/MACHINE/${machine}/g" $jobscript
-        sed -i "s#ACCTSTR#${job_account_str}#;s#EXCLSTR#${job_exclusive_str}#;s#RUNCMD#${job_runexe_str}#" $jobscript
+        sed -i "s/ACCTSTR/${job_account_str}/;s/EXCLSTR/${job_exclusive_str}/;s/RUNCMD/${job_runexe_str}/" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
         if [[ $dorun == true ]]; then touch $wrkdir/queue.pcp; fi
