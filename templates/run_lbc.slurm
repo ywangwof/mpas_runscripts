@@ -1,11 +1,11 @@
 #!/bin/sh -l
-#SBATCH -A ACCOUNT
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
-#SBATCH --exclusive
 #SBATCH -t 01:30:00
 #SBATCH --output=WRKDIR/lbc_%j.log
+ACCTSTR
+EXCLSTR
 
 
 #set -eux
@@ -19,9 +19,10 @@ if [[ "MACHINE" == "Jet" ]]; then
     module purge
     module use ROOTDIR/modules
     module load MODULE
-else
-    source ROOTDIR/modules/MODULE
+#else
+#    source ROOTDIR/modules/MODULE
 fi
+
 ulimit -s unlimited
 
 cd WRKDIR
@@ -29,7 +30,7 @@ cd WRKDIR
 touch lbc.running
 rm -rf error.lbc queue.lbc
 
-srun -n NOPART EXEDIR/init_atmosphere_model
+RUNMPCMD -n NOPART EXEDIR/init_atmosphere_model
 
 if [[ $? -eq 0 ]]; then
     touch done.lbc

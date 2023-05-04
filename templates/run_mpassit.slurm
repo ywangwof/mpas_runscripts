@@ -1,11 +1,11 @@
 #!/bin/sh -l
-#SBATCH -A ACCOUNT
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
-#SBATCH --exclusive
 #SBATCH -t 00:30:00
 #SBATCH --output=WRKDIR/mpassit_HHHSTR_%j.log
+ACCTSTR
+EXCLSTR
 
 #set -eux
 
@@ -29,7 +29,7 @@ rm -rf error.mpassitHHHSTR queue.mpassitHHHSTR
 
 touch running.mpassitHHHSTR
 
-srun -n NOPART EXEDIR/mpassit namelist.fcst_HHHSTR
+RUNMPCMD -n NOPART EXEDIR/mpassit namelist.fcst_HHHSTR
 
 if [[ $? -eq 0 ]]; then
     touch done.mpassitHHHSTR

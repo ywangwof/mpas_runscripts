@@ -1,11 +1,11 @@
 #!/bin/sh -l
-#SBATCH -A ACCOUNT
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=1 --cpus-per-task=12
-#SBATCH --exclusive
 #SBATCH -t 0:30:00
 #SBATCH --output=WRKDIR/wgrib2_%j_%a.log
+ACCTSTR
+EXCLSTR
 
 #set -eux
 

@@ -1,11 +1,11 @@
 #!/bin/sh -l
-#SBATCH -A ACCOUNT
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART
-#SBATCH --exclusive
 #SBATCH -t 00:30:00
 #SBATCH --output=WRKDIR/geogrid_%j.log
+ACCTSTR
+EXCLSTR
 
 #set -eux
 
@@ -15,12 +15,13 @@ echo " "
 
 module use ROOTDIR/modules
 module load build_jet_intel
+#source /home/yunheng.wang/.wrfenv
 
 ulimit -s unlimited
 
 cd WRKDIR
 
-srun -n NOPART EXEDIR/geogrid.exe
+RUNMPCMD -n NOPART EXEDIR/geogrid.exe
 
 if [[ $? -eq 0 ]]; then
     touch done.geogrid
@@ -39,3 +40,4 @@ let sec=diff%60
 echo -n "Job   Ended: $(date). "
 printf 'Job run time:  %02d:%02d:%02d' $hour $min $sec
 echo " "
+

@@ -1,12 +1,12 @@
 #!/bin/sh -l
-#SBATCH -A ACCOUNT
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=1 CPUSPEC
 #SBATCH --mem=100G
-#SBATCH --exclusive
 #SBATCH -t 02:30:00
 #SBATCH --output=WRKDIR/static_%j.log
+ACCTSTR
+EXCLSTR
 
 #set -eux
 
@@ -18,15 +18,15 @@ if [[ "MACHINE" == "Jet" ]]; then
     module purge
     module use ROOTDIR/modules
     module load MODULE
-else
-    source ROOTDIR/modules/MODULE
+#else
+#    source ROOTDIR/modules/MODULE
 fi
 
 ulimit -s unlimited
 
 cd WRKDIR
 
-srun -n 1 EXEDIR/init_atmosphere_model.pio
+RUNMPCMD -n 1 EXEDIR/init_atmosphere_model
 
 if [[ $? -eq 0 ]]; then
     touch done.static

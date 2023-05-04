@@ -1,5 +1,5 @@
 #!/bin/sh -l
-#PBS -A ACCOUNT
+ACCTSTR
 #PBS -q PARTION
 #PBS -N JOBNAME
 #PBS -l select=NNODES:CPUSPEC:mpiprocs=NCORES:ompthreads=1
@@ -30,7 +30,7 @@ rm -rf error.fcst queue.fcst
 
 sed -i "s/NNNODE/$nnode/;s/NNCORE/$ncores/;" namelist.atmosphere
 
-mpiexec_mpt EXEDIR/atmosphere_model.single
+RUNMPCMD EXEDIR/atmosphere_model.single
 
 if [[ $? -eq 0 ]]; then
     touch done.mpas

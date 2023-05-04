@@ -1,5 +1,5 @@
 #!/bin/sh -l
-#PBS -A ACCOUNT
+ACCTSTR
 #PBS -q PARTION
 #PBS -N JOBNAME
 #PBS -l select=NNODES:CPUSPEC:mpiprocs=NCORES:ompthreads=1
@@ -20,7 +20,7 @@ cd WRKDIR
 touch ics.running
 rm -rf error.ics queue.ics
 
-mpiexec_mpt EXEDIR/init_atmosphere_model
+RUNMPCMD EXEDIR/init_atmosphere_model
 
 if [[ $? -eq 0 ]]; then
     touch done.ics

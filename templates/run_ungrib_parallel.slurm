@@ -1,11 +1,11 @@
 #!/bin/sh -l
-#SBATCH -A ACCOUNT
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=1 --cpus-per-task=12
-#SBATCH --exclusive
 #SBATCH -t 00:30:00
 #SBATCH --output=WRKDIR/ungrib_%j_%a.log
+ACCTSTR
+EXCLSTR
 
 #set -eux
 
@@ -42,7 +42,7 @@ cat << EOF > namelist.wps
 /
 EOF
 
-srun -n 1 EXEDIR/ungrib.exe
+RUNCMD -n 1 EXEDIR/ungrib.exe
 
 if [[ $? -eq 0 ]]; then
     mv PREFIX:${time_str} ../

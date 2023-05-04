@@ -1,11 +1,11 @@
 #!/bin/sh -l
-#SBATCH -A ACCOUNT
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
-#SBATCH --exclusive
 #SBATCH -t 06:30:00
 #SBATCH --output=WRKDIR/mpas_%j.log
+ACCTSTR
+EXCLSTR
 
 #set -eux
 
@@ -22,7 +22,7 @@ if [[ "MACHINE" == "Jet" ]]; then
     #nnode=$(( NOPART/$SLURM_CPUS_ON_NODE ))
     #nnode=$SLURM_JOB_NUM_NODES
 else
-    source ROOTDIR/modules/MODULE
+#    source ROOTDIR/modules/MODULE
     ncores=NCORES
 fi
 nnode=$(( NOPART/ncores ))
@@ -36,7 +36,7 @@ rm -rf error.fcst queue.fcst
 
 sed -i "s/NNNODE/$nnode/;s/NNCORE/$ncores/;" namelist.atmosphere
 
-srun -n NOPART EXEDIR/atmosphere_model.single
+RUNMPCMD -n NOPART EXEDIR/atmosphere_model.single
 
 if [[ $? -eq 0 ]]; then
     touch done.fcst

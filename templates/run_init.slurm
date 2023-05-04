@@ -1,11 +1,11 @@
 #!/bin/sh -l
-#SBATCH -A ACCOUNT
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
-#SBATCH --exclusive
 #SBATCH -t 00:30:00
 #SBATCH --output=WRKDIR/init_%j.log
+ACCTSTR
+EXCLSTR
 
 #set -eux
 
@@ -18,8 +18,8 @@ if [[ "MACHINE" == "Jet" ]]; then
     module purge
     module use ROOTDIR/modules
     module load MODULE
-else
-    source ROOTDIR/modules/MODULE
+#else
+#    source ROOTDIR/modules/MODULE
 fi
 
 ulimit -s unlimited
@@ -29,7 +29,7 @@ cd WRKDIR
 touch ics.running
 rm -rf error.ics queue.ics
 
-srun -n NOPART EXEDIR/init_atmosphere_model
+RUNMPCMD -n NOPART EXEDIR/init_atmosphere_model
 
 if [[ $? -eq 0 ]]; then
     touch done.ics

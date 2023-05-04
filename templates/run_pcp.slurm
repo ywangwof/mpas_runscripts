@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -A ACCOUNT
+ACCTSTR
 #SBATCH --partition=PARTION
 #SBATCH -q batch
 #SBATCH -J JOBNAME

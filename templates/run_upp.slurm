@@ -1,11 +1,11 @@
 #!/bin/bash
-#SBATCH -A ACCOUNT
 #SBATCH --partition=PARTION
 #SBATCH -q batch
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
 #SBATCH -t 00:05:00
 #SBATCH --output=WRKDIR/upp_HHHSTR_%j.log
+ACCTSTR
 #SBATCH -D .
 #...Automatically change the directory to where
 #   the job was launched
@@ -26,7 +26,7 @@ if [[ "MACHINE" == "Jet" ]]; then
     module load wgrib2/2.0.8
 else
     # shellcheck source=/dev/null # to ignore source path error
-    source /scratch/ywang/MPAS/MODULE
+    source /scratch/ywang/MPAS/mpas_runscripts/MODULE
 fi
 module list
 
@@ -41,7 +41,7 @@ touch ../running.upp_HHHSTR
 
 rm -rf fort.* core.*
 
-srun EXEDIR/unipost.exe
+RUNMPCMD EXEDIR/unipost.exe
 
 if [[ $? -eq 0 ]]; then
     dtstr=(${wrkdir//\// })

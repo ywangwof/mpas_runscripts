@@ -1,5 +1,5 @@
 #!/bin/sh -l
-#PBS -A ACCOUNT
+ACCTSTR
 #PBS -q PARTION
 #PBS -N JOBNAME
 #PBS -l select=1:ncpus=36:mpiprocs=1:ompthreads=1

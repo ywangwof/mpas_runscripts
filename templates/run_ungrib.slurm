@@ -1,11 +1,11 @@
 #!/bin/sh -l
-#SBATCH -A ACCOUNT
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=1 --cpus-per-task=12
-#SBATCH --exclusive
 #SBATCH -t 02:00:00
 #SBATCH --output=WRKDIR/ungrib_%j.log
+ACCTSTR
+EXCLSTR
 
 #set -eux
 
@@ -18,7 +18,7 @@ cd WRKDIR
 touch ungrib.running
 rm -rf error.ungrib queue.ungrib
 
-srun -n 1 EXEDIR/ungrib.exe
+RUNCMD -n 1 EXEDIR/ungrib.exe
 
 if [[ $? -eq 0 ]]; then
     touch done.ungrib
