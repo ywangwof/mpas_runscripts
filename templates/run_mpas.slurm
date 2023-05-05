@@ -18,14 +18,24 @@ if [[ "MACHINE" == "Jet" ]]; then
     module use ROOTDIR/modules
     module load MODULE
 
-    ncores=NCORES
+    #ncores=NCORES
+
     #nnode=$(( NOPART/$SLURM_CPUS_ON_NODE ))
     #nnode=$SLURM_JOB_NUM_NODES
 else
     source ROOTDIR/modules/MODULE
-    ncores=NCORES
+    #ncores=NCORES
 fi
-nnode=$(( NOPART/ncores ))
+#nnode=$(( NOPART/ncores ))
+
+nnode=$SLURM_JOB_NUM_NODES
+if (( NOPART % nnode == 0 )); then
+    ncores=$(( NOPART/nnode ))
+#else
+#    echo "Number of tasks (NOPART) is not divisible by number of nodes ($nnode) allocated."
+#    echo "Job cannot be run becasue the setting for \"pio_num_iotasks\""
+#    exit 0
+fi
 
 ulimit -s unlimited
 
@@ -33,6 +43,9 @@ cd WRKDIR
 
 touch fcst.running
 rm -rf error.fcst queue.fcst
+
+# first recover namelist parameters for possibly an old run.
+sed -i -e "/config_pio_num_iotasks/s/[0-9]\+/NNNODE/;/config_pio_stride/s/[0-9]\+/NNCORE/" namelist.atmosphere
 
 sed -i "s/NNNODE/$nnode/;s/NNCORE/$ncores/;" namelist.atmosphere
 
