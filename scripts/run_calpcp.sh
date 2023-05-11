@@ -16,7 +16,7 @@ function usage {
     echo "    OPTIONS:"
     echo "              -h              Display this message"
     echo "              -s  [0-36]      Forecast starting hour. Default: 0"
-    echo "              -e  [0-36]      Forecast end hour. Default: 36"
+    echo "              -e  [0-36]      Forecast end hour. Default: 48"
     echo " "
     echo "                                     -- By Y. Wang (2023.03.08)"
     echo " "
@@ -34,7 +34,7 @@ function usage {
 wrkdir='./'
 
 starthour=0
-endhour=36
+endhour=48
 
 while [[ $# > 0 ]]; do
     key="$1"
@@ -110,17 +110,17 @@ for hr2 in $(seq $starthour $endhour); do
     hr2str=$(printf "%02d" $hr2)
     infile2="MPAS-A_${dtstr}_${castr}f$hr2str.grib2"
 
-    final_file="MPAS-A_PCP_${dtstr}_${castr}f$hr2str.grib2"
+    final_file="HR_PCP_${dtstr}_${castr}f$hr2str.grib2"
 
     if [[ -e $final_file ]]; then
         echo "File: $final_file exists. Skiping hour: $hr2str."
         continue
     fi
 
-    while [[ ! -e done.upp_${hr2str} ]]; do
-        echo "Waiting for done.upp_${hr2str}"
-        sleep 10
-    done
+    #while [[ ! -e done.upp_${hr2str} ]]; do
+    #    echo "Waiting for done.upp_${hr2str}"
+    #    sleep 10
+    #done
 
     if [[ $hr2 -lt 2 ]]; then
         cp $infile2 $final_file
@@ -135,20 +135,23 @@ for hr2 in $(seq $starthour $endhour); do
         tmpfile2="pcp2.grib2"
         tmpfile3="pcp3.grib2"
 
-        while [[ ! -e done.upp_${hr1str} ]]; do
-            echo "Waiting for done.upp_${hr1str}"
-            sleep 10
-        done
+        #while [[ ! -e done.upp_${hr1str} ]]; do
+        #    echo "Waiting for done.upp_${hr1str}"
+        #    sleep 10
+        #done
 
-        wgrib2 $infile1 -match_fs "APCP" -grib_out $tmpfile1
-        wgrib2 $infile2 -match_fs "APCP" -grib_out $tmpfile2
+        #wgrib2 $infile1 -match_fs "APCP" -grib_out $tmpfile1
+        #wgrib2 $infile2 -match_fs "APCP" -grib_out $tmpfile2
+        wgrib2 $infile1 -for 98:98 -grib_out $tmpfile1
+        wgrib2 $infile2 -for 98:98 -grib_out $tmpfile2
 
         wgrib2 $tmpfile1 -rpn sto_1 -import_grib $tmpfile2 -rpn sto_2 -set_grib_type same \
             -if_reg "1:2" -rpn "rcl_2:rcl_1:-:clr_1:clr_2" -set_scaling same same \
             -set_ftime "${hr1}-${hr2} hour acc fcst" -grib_out ${tmpfile3}
 
-        echo "$infile2 -> $final_file ...."
-        cat ${infile2} ${tmpfile3} > ${final_file}
+        #echo "$infile2 -> $final_file ...."
+        #cat ${infile2} ${tmpfile3} > ${final_file}
+        mv ${tmpfile3} ${final_file}
 
         #tmpfile="nopcp.grib2"
         #wgrib2 ${outfile} -not APCP -grib ${tmpfile}

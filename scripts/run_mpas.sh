@@ -821,8 +821,8 @@ function run_ungrib_rrfs {
                 fi
                 echo "RRFS file: $fn ($valtime)"
 
-                rm -f keep.txt
-                cat << EOF > keep.txt
+                rrfs_records=$(mktemp -t RRFS_$fhrstr.XXX)
+                cat << EOF > ${rrfs_records}
 :PRES:[0-9]{1,2} hybrid level:${valtime}:
 :CLWMR:[0-9]{1,2} hybrid level:${valtime}:
 :ICMR:[0-9]{1,2} hybrid level:${valtime}:
@@ -869,11 +869,11 @@ function run_ungrib_rrfs {
 EOF
 
                 echo "Generating working copy: $basefn ...."
-                grib2cmdstr="${wgrib2path} $fn | grep -Ef keep.txt | ${wgrib2path} -i $fn -GRIB $basefn"
+                grib2cmdstr="${wgrib2path} $fn | grep -Ef ${rrfs_records} | ${wgrib2path} -i $fn -GRIB $basefn"
                 if [[ $verb -eq 1 ]]; then echo "$grib2cmdstr"; fi
                 eval $grib2cmdstr >& /dev/null
                 sleep 2
-                if [[ $verb -ne 1 ]]; then rm -f keep.txt; fi
+                if [[ $verb -ne 1 ]]; then rm -f ${rrfs_records}; fi
             fi
         done
 

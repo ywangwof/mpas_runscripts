@@ -35,7 +35,7 @@ import matplotlib.ticker as mticker
 #     - https://matplotlib.org/examples/color/colormaps_reference.html
 # '''
 import matplotlib.cm as cm
-import matplotlib.colors as colors
+import matplotlib.colors as mcolors
 from metpy.plots import ctables
 
 #import scipy.interpolate as interpolate
@@ -74,31 +74,89 @@ def fnormalize(fmin,fmax):
 
     return min_m, max_m, fexp
 
-def get_var_contours(varname,var2d,colormaps,cntlevels):
+def get_var_contours(varname,var2d,cntlevels):
     '''set contour specifications'''
+
+    # Colormaps can be choosen using MatPlotLib's colormaps collection. A
+    # reference of the colormaps can be found below.:
+    #
+    # - https://matplotlib.org/examples/color/colormaps_reference.html
+    #
+    # We can also alter the styles of the plots we produce if we desire:
+    #
+    # - https://matplotlib.org/gallery/style_sheets/style_sheets_reference.html
+    #
+    #
 
     #
     # set color map to be used
     #
-    color_map = colormaps[0]
-    if varname.startswith('refl'):    # Use reflectivity color map and range
-        color_map = colormaps[1]
+
+    if varname.startswith('refl'):
+        # Use reflectivity color map and range
+        mycolors = ctables.colortables['NWSReflectivity']
+        mycolors.insert(0,(1,1,1))
+        color_map = mcolors.ListedColormap(mycolors)
+    elif varname.startswith('tp'):
+        #clevs = [0, 1, 2.5, 5, 7.5, 10, 15, 20, 30, 40,
+        #         50, 70, 100, 150, 200, 250, 300, 400, 500, 600, 750]
+        # In future MetPy
+        # norm, cmap = ctables.registry.get_with_boundaries('precipitation', clevs)
+        cmap_data = [(1.0, 1.0, 1.0),
+                     (0.3137255012989044, 0.8156862854957581, 0.8156862854957581),
+                     (0.0, 1.0, 1.0),
+                     (0.0, 0.8784313797950745, 0.501960813999176),
+                     (0.0, 0.7529411911964417, 0.0),
+                     (0.501960813999176, 0.8784313797950745, 0.0),
+                     (1.0, 1.0, 0.0),
+                     (1.0, 0.6274510025978088, 0.0),
+                     (1.0, 0.0, 0.0),
+                     (1.0, 0.125490203499794, 0.501960813999176),
+                     (0.9411764740943909, 0.250980406999588, 1.0),
+                     (0.501960813999176, 0.125490203499794, 1.0),
+                     (0.250980406999588, 0.250980406999588, 1.0),
+                     (0.125490203499794, 0.125490203499794, 0.501960813999176),
+                     (0.125490203499794, 0.125490203499794, 0.125490203499794),
+                     (0.501960813999176, 0.501960813999176, 0.501960813999176),
+                     (0.8784313797950745, 0.8784313797950745, 0.8784313797950745),
+                     (0.9333333373069763, 0.8313725590705872, 0.7372549176216125),
+                     (0.8549019694328308, 0.6509804129600525, 0.47058823704719543),
+                     (0.6274510025978088, 0.42352941632270813, 0.23529411852359772),
+                     (0.4000000059604645, 0.20000000298023224, 0.0)]
+
+        color_map = mcolors.ListedColormap(cmap_data, 'precipitation')
+
+    else:
+        color_map = cm.gist_ncar
 
     #
     # set contour levels
     #
     if cntlevels is not None:
-        cmin,cmax,cinc = cntlevels
-        cntlevels = np.arange(cmin,cmax+0.01*cinc,cinc)
-        normc = colors.Normalize(cmin,cmax)
+        if len(cntlevels) > 3:
+            cmin = cntlevels[0]
+            cmax = cntlevels[-1]
+            normc = mcolors.BoundaryNorm(cntlevels, len(cntlevels))
+            ticks_list = cntlevels[0::2]
+        else:
+            cmin,cmax,cinc = cntlevels
+            cntlevels = np.arange(cmin,cmax+0.01*cinc,cinc)
+            normc = mcolors.Normalize(cmin,cmax)
+            ticks_list = [lvl for lvl in np.arange(cmin,cmax+cinc,2*cinc)]
     else:
+        ticks_list = None
         pmin = var2d.min()
         pmax = var2d.max()
         if varname.startswith('refl'):    # Use reflectivity color map and range
             cmin = 0.0
             cmax = 5*pmax//5
             cntlevels = list(np.arange(cmin,cmax,5.0))
-            normc = colors.Normalize(0.0,80.0)
+            normc = mcolors.Normalize(0.0,80.0)
+        elif varname.startswith('tp'):    # Use precipitation color map and range
+            #cntlevels = [0.0,0.01,0.10,0.25,0.50,0.75,1.00,1.25,1.50,1.75,2.00,2.50,3,4,5,7,10,15,20]  # inch
+            cntlevels = [0, 1, 2.5, 5, 7.5, 10, 15, 20, 30, 40, 50, 70, 100, 150, 200, 250, 300, 400, 500, 600, 750] # mm
+            normc = mcolors.BoundaryNorm(cntlevels, len(cntlevels))
+            ticks_list = cntlevels
         else:
             cmin, cmax, cexp = fnormalize(pmin,pmax)
             minc = np.floor(cmin)
@@ -112,11 +170,11 @@ def get_var_contours(varname,var2d,colormaps,cntlevels):
             maxc = maxc*10**cexp
             cntlevels = list(np.linspace(minc,maxc,n+1))
             maxc = minc + 16* (maxc-minc)/n
-            normc = colors.Normalize(minc,maxc)
+            normc = mcolors.Normalize(minc,maxc)
 
     #print(cntlevels)
 
-    return color_map, normc, cntlevels
+    return color_map, normc, cntlevels, ticks_list
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
@@ -276,6 +334,7 @@ if __name__ == "__main__":
     #
     # Output file dir / file name
     #
+    defaultoutfile = False
     if args.outfile is None:
         outdir  = './'
         outfile = None
@@ -295,9 +354,9 @@ if __name__ == "__main__":
         cntlevel = None
     else:
         cntlevel = [float(item) for item in args.cntLevels.split(',')]
-        if len(cntlevel) != 3:
-            print(f"Option -c must be [cmin,cmax,cinc]. Got \"{cntlevel}\"")
-            sys.exit(0)
+        #if len(cntlevel) != 3:
+        #    print(f"Option -c must be [cmin,cmax,cinc]. Got \"{cntlevel}\"")
+        #    sys.exit(0)
 
     #-----------------------------------------------------------------------
     #
@@ -342,21 +401,6 @@ if __name__ == "__main__":
     #
     #-----------------------------------------------------------------------
 
-    # Colormaps can be choosen using MatPlotLib's colormaps collection. A
-    # reference of the colormaps can be found below.:
-    #
-    # - https://matplotlib.org/examples/color/colormaps_reference.html
-    #
-    # We can also alter the styles of the plots we produce if we desire:
-    #
-    # - https://matplotlib.org/gallery/style_sheets/style_sheets_reference.html
-    #
-    #
-    general_colormap = cm.gist_ncar
-
-    mycolors = ctables.colortables['NWSReflectivity']
-    mycolors.insert(0,(1,1,1))
-    ref_colormap = colors.ListedColormap(mycolors)
     style = 'ggplot'
 
     for l in levels:
@@ -378,9 +422,9 @@ if __name__ == "__main__":
             print(f"Variable {varname} is in wrong shape: {varshapes}.")
             sys.exit(0)
 
-        color_map, normc, cntlevels = get_var_contours(varname,varplt,(general_colormap,ref_colormap),cntlevel)
+        color_map, normc, cntlevels, ticks_list = get_var_contours(varname,varplt,cntlevel)
 
-        figure = plt.figure(figsize = (10,8.5) )
+        figure = plt.figure(figsize = (12,12) )
 
         if basmap == "latlon":
             carr._threshold = carr._threshold/10.
@@ -401,7 +445,7 @@ if __name__ == "__main__":
         # https://matplotlib.org/api/colorbar_api.html
         #
         cax = figure.add_axes([ax.get_position().x1+0.01,ax.get_position().y0,0.02,ax.get_position().height])
-        cbar = plt.colorbar(cntr, cax=cax)
+        cbar = plt.colorbar(cntr, cax=cax, ticks=ticks_list)
         cbar.set_label(f'{varname} ({varunits})')
 
         ax.coastlines(resolution='50m')
@@ -430,7 +474,7 @@ if __name__ == "__main__":
 
         figname = os.path.join(outdir,outfile)
         print(f"Saving figure to {figname} ...")
-        figure.savefig(figname, format='png', dpi=300)
+        figure.savefig(figname, format='png', dpi=100)
         plt.close(figure)
 
         #plt.show()

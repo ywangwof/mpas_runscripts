@@ -17,16 +17,16 @@
 
 import os
 import sys
-import re
+import re, math
 import argparse
 
 import numpy as np
 
-''' By default matplotlib will try to open a display windows of the plot, even
-though sometimes we just want to save a plot. Somtimes this can cause the
-program to crash if the display can't open. The two commands below makes it so
-matplotlib doesn't try to open a window
-'''
+#''' By default matplotlib will try to open a display windows of the plot, even
+#though sometimes we just want to save a plot. Somtimes this can cause the
+#program to crash if the display can't open. The two commands below makes it so
+#matplotlib doesn't try to open a window
+#'''
 import matplotlib
 matplotlib.use('Agg')
 
@@ -39,7 +39,7 @@ import matplotlib.ticker as mticker
 #     - https://matplotlib.org/examples/color/colormaps_reference.html
 # '''
 import matplotlib.cm as cm
-import matplotlib.colors as colors
+import matplotlib.colors as mcolors
 from metpy.plots import ctables
 
 import cartopy.crs as ccrs
@@ -69,6 +69,17 @@ def dumpobj(obj, level=0, maxlevel=10):
 
 ########################################################################
 
+def fnormalize(fmin,fmax):
+    min_e = int(math.floor(math.log10(abs(fmin)))) if fmin != 0 else 0
+    max_e = int(math.floor(math.log10(abs(fmax)))) if fmax != 0 else 0
+    fexp = min(min_e, max_e)-2
+    min_m = fmin/10**fexp
+    max_m = fmax/10**fexp
+
+    return min_m, max_m, fexp
+
+########################################################################
+
 def update_progress(job_title, progress):
     length = 40
     block = int(round(length*progress))
@@ -86,7 +97,7 @@ def get_mpas_patches(meshfile, pickle_fname=None):
     if(pickle_fname is not None and os.path.isfile(pickle_fname)):
         pickled_patches = open(pickle_fname,'rb')
         try:
-            patch_collection = pkle.load(pickled_patches)
+            mypatch_collection = pkle.load(pickled_patches)
             pickled_patches.close()
             print("Pickle file (", pickle_fname, ") loaded succsfully")
 
@@ -95,7 +106,7 @@ def get_mpas_patches(meshfile, pickle_fname=None):
             #print(yaml.dump(yaml.load(serialized), indent=2))
             #dump(patch_collection,0,2)
 
-            return patch_collection
+            return mypatch_collection
         except Exception as ex:
             print(ex)
             print("ERROR: Error while trying to read the pickled patches")
@@ -106,12 +117,12 @@ def get_mpas_patches(meshfile, pickle_fname=None):
     print("\nNo pickle file found, creating patches...")
     print("If this is a large mesh, then this proccess will take a while...")
 
-    with Dataset(meshfile, 'r') as mesh:
-        nCells         = len(mesh.dimensions['nCells'])
-        nEdgesOnCell   = mesh.variables['nEdgesOnCell']
-        verticesOnCell = mesh.variables['verticesOnCell']
-        latVertex      = mesh.variables['latVertex']
-        lonVertex      = mesh.variables['lonVertex']
+    with Dataset(meshfile, 'r') as mymesh:
+        nCells         = len(mymesh.dimensions['nCells'])
+        nEdgesOnCell   = mymesh.variables['nEdgesOnCell']
+        verticesOnCell = mymesh.variables['verticesOnCell']
+        latVertex      = mymesh.variables['latVertex']
+        lonVertex      = mymesh.variables['lonVertex']
 
 
         mesh_patches = [None] * nCells
@@ -193,33 +204,110 @@ def load_mpas_patches(pickle_fname):
 
         return patch_collection
     else:
-        print(f"A valid pickle file for MPAS patches is required.")
+        print("A valid pickle file for MPAS patches is required.")
         sys.exit(-1)
         #return None
 
-def get_var_contours(varname,var2d,colormaps,cntlevels):
+def get_var_contours(varname,var2d,cntlevels):
     '''set contour specifications'''
-
     #
     # set color map to be used
     #
-    color_map = colormaps[0]
-    if varname.startswith('refl') or varname.startswith('rain') :    # Use reflectivity color map and range
-        color_map = colormaps[1]
+
+    # Colormaps can be choosen using MatPlotLib's colormaps collection. A
+    # reference of the colormaps can be found below.:
+    #
+    # - https://matplotlib.org/examples/color/colormaps_reference.html
+    #
+    # We can also alter the styles of the plots we produce if we desire:
+    #
+    # - https://matplotlib.org/gallery/style_sheets/style_sheets_reference.html
+    #
+    #
+
+    # Use reflectivity color map and range
+    if varname.startswith('refl'):
+        mycolors = ctables.colortables['NWSReflectivity']
+        mycolors.insert(0,(1,1,1))
+        color_map = mcolors.ListedColormap(mycolors)
+    elif varname.startswith('rain') or varname.startswith('prec_'):
+        #clevs = [0, 1, 2.5, 5, 7.5, 10, 15, 20, 30, 40,
+        #         50, 70, 100, 150, 200, 250, 300, 400, 500, 600, 750]
+        # In future MetPy
+        # norm, cmap = ctables.registry.get_with_boundaries('precipitation', clevs)
+        cmap_data = [(1.0, 1.0, 1.0),
+                     (0.3137255012989044, 0.8156862854957581, 0.8156862854957581),
+                     (0.0, 1.0, 1.0),
+                     (0.0, 0.8784313797950745, 0.501960813999176),
+                     (0.0, 0.7529411911964417, 0.0),
+                     (0.501960813999176, 0.8784313797950745, 0.0),
+                     (1.0, 1.0, 0.0),
+                     (1.0, 0.6274510025978088, 0.0),
+                     (1.0, 0.0, 0.0),
+                     (1.0, 0.125490203499794, 0.501960813999176),
+                     (0.9411764740943909, 0.250980406999588, 1.0),
+                     (0.501960813999176, 0.125490203499794, 1.0),
+                     (0.250980406999588, 0.250980406999588, 1.0),
+                     (0.125490203499794, 0.125490203499794, 0.501960813999176),
+                     (0.125490203499794, 0.125490203499794, 0.125490203499794),
+                     (0.501960813999176, 0.501960813999176, 0.501960813999176),
+                     (0.8784313797950745, 0.8784313797950745, 0.8784313797950745),
+                     (0.9333333373069763, 0.8313725590705872, 0.7372549176216125),
+                     (0.8549019694328308, 0.6509804129600525, 0.47058823704719543),
+                     (0.6274510025978088, 0.42352941632270813, 0.23529411852359772),
+                     (0.4000000059604645, 0.20000000298023224, 0.0)]
+
+        color_map = mcolors.ListedColormap(cmap_data, 'precipitation')
+    else:
+        color_map = cm.gist_ncar
 
     #
     # set contour levels
     #
     if cntlevels is not None:
-        cmin,cmax,cinc = cntlevels
+        if len(cntlevels) > 3:
+            cmin = cntlevels[0]
+            cmax = cntlevels[-1]
+            normc = mcolors.BoundaryNorm(cntlevels, len(cntlevels))
+            ticks_list = cntlevels[0::2]
+        else:
+            cmin,cmax,cinc = cntlevels
+            normc = mcolors.Normalize(cmin,cmax)
+            ticks_list = [lvl for lvl in np.arange(cmin,cmax+cinc,2*cinc)]
     else:
+        ticks_list = None
         cmin = var2d.min()
         cmax = var2d.max()
         if varname.startswith('refl'):    # Use reflectivity color map and range
             cmin = 0.0
             cmax = 80.0
+            cntlevels = list(np.arange(cmin,cmax,5.0))
+            normc = mcolors.Normalize(cmin,cmax)
+        elif varname.startswith('rain') or varname.startswith('prec_'):
+            #cntlevels = [0.0,0.01,0.10,0.25,0.50,0.75,1.00,1.25,1.50,1.75,2.00,2.50,3,4,5,7,10,15,20]  # inch
+            cntlevels = [0, 1, 2.5, 5, 7.5, 10, 15, 20, 30, 40, 50, 70, 100, 150, 200, 250, 300, 400, 500, 600, 750]  # mm
+            normc = mcolors.BoundaryNorm(cntlevels, len(cntlevels))
+            ticks_list = cntlevels
+            cmin = cntlevels[0]
+            cmax = cntlevels[-1]
+        else:
+            cmin, cmax, cexp = fnormalize(cmin,cmax)
+            minc = np.floor(cmin)
+            maxc = np.ceil(cmax)
 
-    return color_map, cmin, cmax
+            for n in range(16,7,-1):
+                if (maxc-minc)%n == 0:
+                    break
+            if n == 8: n = 16
+            minc = minc*10**cexp
+            maxc = maxc*10**cexp
+            cntlevels = list(np.linspace(minc,maxc,n+1))
+            maxc = minc + 16* (maxc-minc)/n
+            normc = mcolors.Normalize(minc, maxc)
+            cmin = minc
+            cmax = maxc
+
+    return color_map, normc, cmin, cmax, ticks_list
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
@@ -266,6 +354,14 @@ if __name__ == "__main__":
         sys.exit(0)
 
     varname = varnames[0]
+    varname = varnames[0]
+    operator= None
+    opmatch = re.match(r'([\w_]+)([+\-\*\/])([\w_]+)',varname)
+    if opmatch:
+        varnames=[opmatch.group(1),opmatch.group(3)]
+        operator=opmatch.group(2)
+    else:
+        varnames=[varname]
 
     caldiff = False
     diffstr = ""
@@ -296,7 +392,7 @@ if __name__ == "__main__":
             except:
                 nslevels = 0
 
-            if varname == "list":
+            if varnames[0] == "list":
                 var2dlist = []
                 var3dlist = []
                 varODlist = []
@@ -330,19 +426,27 @@ if __name__ == "__main__":
                     print(varstr)
 
                 sys.exit(0)
-            elif varname not in mesh.variables.keys():
-                # Check to see the variable is in the mesh
-                print(f"This variable ({varname}) was not found in this mpas mesh!")
-                sys.exit(-1)
+            else:
+                for varname in varnames:
+                    if varname not in mesh.variables.keys():
+                        # Check to see the variable is in the mesh
+                        print(f"This variable ({varname}) was not found in this mpas mesh!")
+                        sys.exit(-1)
 
             # Pull the variable out of the mesh. Now we can manipulate it any way we choose
             # do some 'post-processing' or other meteorological stuff
-            variable = mesh.variables[varname]
+            variable = mesh.variables[varnames[0]]
             varunits = variable.getncattr('units')
             varndim  = variable.ndim
             varshapes = variable.shape
             vardata   = variable[:]
             validtimestring = mesh.variables['xtime'][0].tobytes().decode('utf-8')
+            if operator is not None:
+                vardata1 = mesh.variables[varnames[1]][:]
+                vardata = eval(f"x {operator} y",{"x":vardata,"y":vardata1})
+                varname = f"{varnames[0]}{operator}{varnames[1]}"
+            else:
+                varname = varnames[0]
 
         if caldiff:
             with Dataset(fcstfiles[1], 'r') as mesh:
@@ -493,21 +597,6 @@ if __name__ == "__main__":
     #
     #-----------------------------------------------------------------------
 
-    # Colormaps can be choosen using MatPlotLib's colormaps collection. A
-    # reference of the colormaps can be found below.:
-    #
-    # - https://matplotlib.org/examples/color/colormaps_reference.html
-    #
-    # We can also alter the styles of the plots we produce if we desire:
-    #
-    # - https://matplotlib.org/gallery/style_sheets/style_sheets_reference.html
-    #
-    #
-    general_colormap = cm.gist_ncar
-
-    mycolors = ctables.colortables['NWSReflectivity']
-    mycolors.insert(0,(1,1,1))
-    ref_colormap = colors.ListedColormap(mycolors)
     style = 'ggplot'
 
     #  we will be plotting actual MPAS polygons. The
@@ -553,7 +642,7 @@ if __name__ == "__main__":
                 print(f"Variable {varname} is in wrong shape: {varshapes}.")
                 sys.exit(0)
 
-            color_map, cmin, cmax = get_var_contours(varname,varplt,(general_colormap,ref_colormap),cntlevel)
+            color_map, normc,cmin, cmax, ticks_list = get_var_contours(varname,varplt,cntlevel)
 
             figure = plt.figure(figsize = (12,12) )
 
@@ -569,6 +658,7 @@ if __name__ == "__main__":
             #patch_collection.set_edgecolors('w')       # No Edge Colors
             patch_collection.set_antialiaseds(False)    # Blends things a little
             patch_collection.set_cmap(color_map)        # Select our color_map
+            patch_collection.set_norm(normc)            # Select our normalization
             patch_collection.set_clim(cmin,cmax)
 
             # Now apply the patch_collection to our axis '''
@@ -582,7 +672,7 @@ if __name__ == "__main__":
             # https://matplotlib.org/api/colorbar_api.html
             #
             cax = figure.add_axes([ax.get_position().x1+0.01,ax.get_position().y0,0.02,ax.get_position().height])
-            cbar = plt.colorbar(patch_collection, cax=cax)
+            cbar = plt.colorbar(patch_collection, cax=cax,ticks=ticks_list)
             cbar.set_label(f'{varname} ({varunits})')
 
             ax.coastlines(resolution='50m')
