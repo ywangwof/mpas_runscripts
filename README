@@ -1,3 +1,16 @@
+  Version History
+
+05/12/2023 Version 3.1
+
+    1. Fixed bug with hourly precipitation in convective_diagnostics.F.
+    2. Improved resource usage on Jet.
+    3. Used 768 core for jobs of ICs and LBCs instead of 800.
+    4. Improved python scripts of plotting, especially for plotting precipitation fields.
+
+    new executables:
+       atmosphere_model.single
+       init_atmosphere_model
+
 04/28/2023 Version 3.0
 
     1. Bill implemented the analysis fields wind rotation in the MPAS init_atmosphere core
@@ -11,6 +24,7 @@
 04/26/2023 Version 2.0
 
     Here are the main updates:
+
     1. Upgrade the PNETCDF library because MPAS uses a feature that is not available with version 1.6;
     2. Add a wgrib2 step to rotate winds for the HRRR datasets;
     3. Process wgrib2 & ungrib in parallel mode for speedup;

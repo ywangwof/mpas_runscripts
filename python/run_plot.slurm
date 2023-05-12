@@ -2,7 +2,7 @@
 #SBATCH -A wof
 #SBATCH --partition=ujet,xjet,vjet,kjet
 #SBATCH -J plot_mpas
-#SBATCH --ntasks=1 --ntasks-per-node=1 --mem=64000
+#SBATCH --ntasks=1 --ntasks-per-node=1 --mem=6G
 #SBATCH --exclusive
 #SBATCH -t 02:30:00
 #SBATCH --output=./plot_mpas_%j.log
@@ -53,7 +53,7 @@ for nt in ${times[@]}; do
                 infile=${fcst_dir}/${case}/wofs_mpas.${ftype}.nc
                 ;;
             *)
-                echo "Unsupported field type: $ftype."
+                echo "Unsupported file type: $ftype."
                 exit 1
                 ;;
             esac

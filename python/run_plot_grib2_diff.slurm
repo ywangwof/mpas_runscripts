@@ -26,39 +26,40 @@ cd /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/mpas_scripts/python
 
 files=(tp hp)
 times=$(seq 0 60 2880)
-cases=(upp)
+cases=(upp upp.realtime)
 fields=(tp)
 levels=("0" "0" )  # "max"  # column maximum values
 cntlvls=("none")
 
 #### END of USER Section #######################
 
-for case in ${cases[@]}; do
+#for case in ${cases[@]}; do
     for nt in ${times[@]}; do
         fhr=$((nt/60))
         fhrstr=$(printf "%02d" $fhr)
         for fn in ${files[@]}; do
-            infile=$fcst_dir/${case}/${fn}_${fhrstr}.grib2
+            infile1=$fcst_dir/${cases[0]}/${fn}_${fhrstr}.grib2
+            infile2=$fcst_dir/${cases[1]}/${fn}_${fhrstr}.grib2
             outdir=$fcst_dir/${case}/${fn}_${fhrstr}.png
 
-            for i in ${!fields[@]}; do
-                field=${fields[$i]}
-                level=${levels[$i]}
+        for i in ${!fields[@]}; do
+            field=${fields[$i]}
+            level=${levels[$i]}
 
-                if [[ "${cntlvls[$i]}" == "none" ]]; then
-                   cntlvlstr=""
-                else
-                   cntlvlstr="-c ${cntlvls[$i]}"
-                fi
+           if [[ "${cntlvls[$i]}" == "none" ]]; then
+               cntlvlstr=""
+           else
+               cntlvlstr="-c ${cntlvls[$i]}"
+           fi
 
-                echo ""
-                echo "--- $infile $field ---"
-                echo "plot_grib2.py -o ${outdir} ${infile} ${field} -l ${level} $cntlvlstr -t surface"
-                plot_grib2.py -o ${outdir} ${infile} ${field} -l ${level} $cntlvlstr -t surface
+            echo ""
+            echo "--- $infile $field ---"
+            echo "plot_grib2.py -o ${outdir} ${infile1} ${infile2} ${field} -l ${level} $cntlvlstr -t surface"
+            plot_grib2.py -o ${outdir} ${infile1} ${infile2} ${field} -l ${level} $cntlvlstr -t surface
             done
         done
     done
-done
+#done
 
 time2=$(date '+%s')
 

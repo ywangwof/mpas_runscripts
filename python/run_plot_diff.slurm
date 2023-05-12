@@ -2,7 +2,7 @@
 #SBATCH -A wof
 #SBATCH --partition=ujet,xjet,vjet,kjet
 #SBATCH -J plot_mpas
-#SBATCH --ntasks=1 --ntasks-per-node=1 --mem=64000
+#SBATCH --ntasks=1 --ntasks-per-node=1 --mem=6G
 #SBATCH --exclusive
 #SBATCH -t 02:30:00
 #SBATCH --output=./plot_mpas_diff_%j.log
@@ -29,7 +29,7 @@ times=$(seq 0 60 600)
 cases=(fcst fcst.wgrib2rotated)
 fields=(height_500hPa)
 levels=(0 0 0 0 0 0 0 0 "0,1,2" "0,1,2" ) #1d 2d 2d 0 0 0 2d "0,1,2,3")   # "max"  # column maximum values
-cntlvls=(none "5340,5880,60" none none none none )
+cntlvls=("5340,5880,60" none none none none )
 
 #### END of USER Section #######################
 
@@ -56,7 +56,7 @@ for nt in ${times[@]}; do
                 infile2=${fcst_dir}/${cases[1]}/wofs_mpas.${ftype}.nc
                 ;;
             *)
-                echo "Unsupported field type: $ftype."
+                echo "Unsupported file type: $ftype."
                 exit 1
                 ;;
             esac
@@ -71,7 +71,7 @@ for nt in ${times[@]}; do
             echo "--- $n: $case $ntstr $field ---"
             echo  "plot_mpaspatch.py -p wofs_mpas.1894063.patches -o ${outdir} ${infile1} ${infile2} ${field} -l ${level} ${cntlvlstr}"
             python plot_mpaspatch.py -p wofs_mpas.1894063.patches -o ${outdir} ${infile1} ${infile2} ${field} -l ${level} ${cntlvlstr}
-        done
+    done
     #done
 done
 
