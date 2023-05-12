@@ -131,22 +131,23 @@ function usage {
     echo " "
     echo "    USAGE: $0 [options] DATETIME [WORKDIR] [JOBS]"
     echo " "
-    echo "    PURPOSE: Run MPAS on Jet."
+    echo "    PURPOSE: Run MPAS CONUS workflow."
     echo " "
-    echo "    DATETIME - Case date and time in YYYYMMDD"
-    echo "               Default for today"
-    echo "    WORKDIR  - Run Directory on Jet"
-    echo "    JOBS     - One or more jobs from [static,ungrib,init,lbc,mpas]"
+    echo "    DATETIME - Case date and time in YYYYMMDD, Default for today"
+    echo "    WORKDIR  - Run Directory"
+    echo "    JOBS     - One or more jobs from [ungrib,init,lbc,mpas,mpassit,upp] or [static,geogrid]"
     echo "               Default all jobs in sequence"
     echo " "
     echo "    OPTIONS:"
     echo "              -h              Display this message"
-    echo "              -n              Show command to be run only"
+    echo "              -n              Show command to be run and generate job scripts only"
     echo "              -v              Verbose mode"
     echo "              -k  [0,1,2]     Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
     echo "                              Default is 0 for ungrib, mpassit, upp and 1 for others"
     echo "              -t  DIR         Template directory for runtime files"
-    echo "              -m  Machine     Machine name to run on, [Jet, Vecna]."
+    echo "              -w              Hold script to wait for all job conditions are satified and submitted (for mpassit & upp)."
+    echo "                              By default, the script will exit after submitting all possible jobs."
+    echo "              -m  Machine     Machine name to run on, [Jet, Cheyenne, Vecna]."
     echo "              -a  wof         Account name for job submission."
     echo "              -d  wofs_mpas   Domain name to be used"
     echo "              -i  hrrr        Initialization model, [hrrr, gfs, rrfs, rrfsp], default: hrrr"
@@ -1748,8 +1749,8 @@ function run_mpassit {
             for fn in $histfile $diagfile; do
                 echo "$$: Checking: $fn ..."
                 while [[ ! -f $fn ]]; do
-                    if [[ $jobsfromcmd -eq 1 ]]; then    # do not wait for it
-                        continue 3                       # go ahead to process next hour
+                    if [[ $jobwait -eq 0 ]]; then    # do not wait for it
+                        continue 3                   # go ahead to process next hour
                     fi
 
                     if [[ $verb -eq 1 ]]; then
@@ -1874,8 +1875,8 @@ function run_upp {
         if [[ $dorun == true ]]; then
             echo "$$: Checking: $donefile ...."
             while [[ ! -f $donefile ]]; do
-                if [[ $jobsfromcmd -eq 1 ]]; then     # do not wait
-                    continue 2                        # go ahread to process next forecast hour
+                if [[ $jobwait -eq 0 ]]; then     # do not wait
+                    continue 2                    # go ahread to process next forecast hour
                 fi
 
                 if [[ $verb -eq 1 ]]; then
@@ -2081,7 +2082,7 @@ runcmd="sbatch"
 dorun=true
 verb=0
 overwrite=1
-jobsfromcmd=0
+jobwait=0
 machine="Jet"
 if [[ "$(hostname)" == ln? ]]; then
     machine="Vecna"
@@ -2119,6 +2120,9 @@ while [[ $# > 0 ]]
                 echo "ERROR: option for '-k' can only be [0-2], but got \"$2\"."
                 usage 1
             fi
+            ;;
+        -w)
+            jobwait=1
             ;;
         -t)
             if [[ -d $2 ]]; then
@@ -2203,7 +2207,6 @@ while [[ $# > 0 ]]
             ;;
         static* | geogrid* | ungrib* | init* | lbc* | mpas* | upp* | clean* | pcp* )
             jobs=(${key//,/ })
-            jobsfromcmd=1
             ;;
         *)
             if [[ $key =~ ^[0-9]{8}$ ]]; then
@@ -2269,7 +2272,7 @@ while [[ $# > 0 ]]
 done
 
 if [[ $init_dir != false ]]; then
-    jobs=( "${jobs[@]/ungrib}" )
+    jobs=( "${jobs[@]/ungrib}" )          # drop ungrib from the jobs list
 fi
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
