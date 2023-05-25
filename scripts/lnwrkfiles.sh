@@ -5,8 +5,9 @@ srcroot="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath $(dirname $scpdir))
 
+desdir=${rootdir}/fix_files
+
 if [[ "$(hostname)" == "odin"* ]]; then
-    desdir=${rootdir}/templates
     srcmpassitdir=${srcroot}/MPASSIT
     srcuppdir=${srcroot}/UPP_KATE_kjet
     srcmodeldir=${srcroot}/MPAS-Model.smiol
@@ -15,7 +16,6 @@ if [[ "$(hostname)" == "odin"* ]]; then
 elif [[ "$(hostname)" == "cheyenne"* ]]; then
     rootdir="/glade/work/ywang/mpas_runscripts"
     scpdir="/glade/work/ywang/mpas_runscripts/scripts"
-    desdir=${rootdir}/templates
     srcroot="/glade/work/ywang"
     srcmpassitdir=${srcroot}/MPASSIT
     srcuppdir=${srcroot}/UPP_KATE_kjet
@@ -23,7 +23,6 @@ elif [[ "$(hostname)" == "cheyenne"* ]]; then
     srcwpsdir=${srcroot}/WPS_SRC
     srcwrfdir=${srcroot}/WRFV4.0
 else
-    desdir=${rootdir}/templates
     srcmpassitdir=${srcroot}/MPASSIT
     srcuppdir=${srcroot}/UPP_KATE_kjet
     srcmodeldir=${srcroot}/MPAS-Model.smiol
@@ -46,8 +45,8 @@ function usage {
     echo "              -h              Display this message"
     echo "              -n              Show command to be run only"
     echo "              -v              Verbose mode"
-    echo "              -r              For a run or for templates"
-    echo "                              Default is for templates"
+    echo "              -r              For a run or for fix_files"
+    echo "                              Default is for fix_files"
     echo "              -s  DIR         Source directory"
     echo "              -m  Machine     Machine name to be run, [Jet or Odin]"
     echo "              -cmd copy       Command for linking or copying [copy, link, clean] (default: link)"
@@ -328,7 +327,7 @@ for cmd in ${cmds[@]}; do
                 if [[ ${runcmd} == "clean" ]]; then
                     rm $fn
                 else
-                    ${runcmd} ${rootdir}/templates/$fn .
+                    ${runcmd} ${rootdir}/fix_files/$fn .
                 fi
             done
         fi
