@@ -22,7 +22,7 @@ eventdateDF=$(date +%Y%m%d)
 #     geogrid.exe
 #     unipost.exe
 #
-# 2. templates                              # templates for this scripts
+# 2. templates                              # templates used in this scripts
 #    README
 #
 #    2.1 SLURM scripts on Jet
@@ -1588,6 +1588,7 @@ function run_mpas {
     config_lsm_scheme                = '${MPASLSM}'
     num_soil_layers                  = ${MPASNFLS}
     config_physics_suite             = 'convection_permitting'
+    config_microp_re                 = true
 EOF
 
         if [[ ${mpscheme} == "mp_nssl2m" ]]; then
