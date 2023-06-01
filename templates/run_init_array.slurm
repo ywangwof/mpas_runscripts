@@ -1,10 +1,9 @@
 #!/bin/sh -l
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
-#SBATCH --ntasks=1 CPUSPEC
-#SBATCH --mem=100G
-#SBATCH -t 02:30:00
-#SBATCH --output=WRKDIR/static_%j.log
+#SBATCH --ntasks=NOPART CPUSPEC
+#SBATCH -t 00:30:00
+#SBATCH --output=WRKDIR/init_%a_%j.log
 ACCTSTR
 EXCLSTR
 
@@ -15,6 +14,7 @@ echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
 if [[ "MACHINE" == "Jet" ]]; then
+    source /etc/profile.d/modules.sh
     module purge
     module use ROOTDIR/modules
     module load MODULE
@@ -24,21 +24,24 @@ fi
 
 ulimit -s unlimited
 
-cd WRKDIR
+mem=${SLURM_ARRAY_TASK_ID}
+memstr=$(printf "%02d" $mem)
 
-rm -f queue.static error.static
+cd WRKDIR/init_$memstr
 
-touch running.static
+touch init.running_$memstr
+rm -rf error.init_$memstr queue.init_$memstr 
 
-RUNMPCMD -n 1 EXEDIR/init_atmosphere_model
+RUNMPCMD -n NOPART EXEDIR/init_atmosphere_model
 
 if [[ $? -eq 0 ]]; then
-    touch done.static
+    mv PREFIX_${memstr}.init.nc ..
+    touch done.init_$memstr
 else
-    touch error.static
+    touch error.init_$memstr
 fi
 
-rm -f running.static
+rm -rf init.running_$memstr
 
 time2=$(date '+%s')
 

@@ -1,9 +1,9 @@
 #!/bin/sh -l
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
-#SBATCH --ntasks=NOPART
-#SBATCH -t 00:30:00
-#SBATCH --output=WRKDIR/geogrid_%j.log
+#SBATCH --ntasks=1 --cpus-per-task=12 --mem-per-cpu=4G
+#SBATCH -t 02:00:00
+#SBATCH --output=WRKDIR/ungrib_%a_%j.log
 ACCTSTR
 EXCLSTR
 
@@ -13,26 +13,24 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-module use ROOTDIR/modules
-module load MODULE
-#source /home/yunheng.wang/.wrfenv
+mem=${SLURM_ARRAY_TASK_ID}
+memstr=$(printf "%02d" $mem)
 
-ulimit -s unlimited
+cd WRKDIR/ungrib_$memstr
 
-cd WRKDIR
-rm -f queue.geogrid error.geogrid
+touch ungrib.running_$memstr
+rm -rf error.ungrib_$memstr 
 
-touch running.geogrid
-
-RUNMPCMD -n NOPART EXEDIR/geogrid.exe
+RUNCMD -n 1 EXEDIR/ungrib.exe
 
 if [[ $? -eq 0 ]]; then
-    touch done.geogrid
+    mv PREFIX${memstr}:* ..
+    touch done.ungrib_$memstr
 else
-    touch error.geogrid
+    touch error.ungrib_$memstr
 fi
 
-rm -f running.geogrid
+rm -rf ungrib.running_$memstr
 
 time2=$(date '+%s')
 
@@ -45,4 +43,3 @@ let sec=diff%60
 echo -n "Job   Ended: $(date). "
 printf 'Job run time:  %02d:%02d:%02d' $hour $min $sec
 echo " "
-

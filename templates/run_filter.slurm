@@ -1,11 +1,12 @@
 #!/bin/sh -l
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
-#SBATCH --ntasks=NOPART
-#SBATCH -t 00:30:00
-#SBATCH --output=WRKDIR/geogrid_%j.log
+#SBATCH --ntasks=NOPART CPUSPEC
+#SBATCH -t 01:30:00
+#SBATCH --output=WRKDIR/filter_%j.log
 ACCTSTR
 EXCLSTR
+
 
 #set -eux
 
@@ -13,26 +14,31 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-module use ROOTDIR/modules
-module load MODULE
-#source /home/yunheng.wang/.wrfenv
+if [[ "MACHINE" == "Jet" ]]; then
+    source /etc/profile.d/modules.sh
+    module purge
+    module use ROOTDIR/modules
+    module load MODULE
+#else
+#    source ROOTDIR/modules/MODULE
+fi
 
 ulimit -s unlimited
 
 cd WRKDIR
-rm -f queue.geogrid error.geogrid
 
-touch running.geogrid
+touch filter.running
+rm -rf error.filter queue.filter
 
-RUNMPCMD -n NOPART EXEDIR/geogrid.exe
+RUNMPCMD -n NOPART EXEDIR/filter
 
 if [[ $? -eq 0 ]]; then
-    touch done.geogrid
+    touch done.filter
 else
-    touch error.geogrid
+    touch error.filter
 fi
 
-rm -f running.geogrid
+rm -rf filter.running
 
 time2=$(date '+%s')
 
@@ -45,4 +51,3 @@ let sec=diff%60
 echo -n "Job   Ended: $(date). "
 printf 'Job run time:  %02d:%02d:%02d' $hour $min $sec
 echo " "
-

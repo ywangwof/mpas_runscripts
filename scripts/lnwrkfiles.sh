@@ -7,7 +7,7 @@ rootdir=$(realpath $(dirname $scpdir))
 
 desdir=${rootdir}/fix_files
 
-if [[ "$(hostname)" == "odin"* ]]; then
+if [[ "$(hostname)" == "ln"* ]]; then
     srcmpassitdir=${srcroot}/MPASSIT
     srcuppdir=${srcroot}/UPP_KATE_kjet
     srcmodeldir=${srcroot}/MPAS-Model.smiol
@@ -28,6 +28,8 @@ else
     srcmodeldir=${srcroot}/MPAS-Model.smiol
     srcwpsdir=${srcroot}/WPS_SRC
     srcwrfdir=${srcroot}/WRFV4.0
+    srcdartdir=${srcroot}/DART
+    srcmpasregion=${srcroot}/MPAS-Limited-Area
 fi
 
 function usage {
@@ -37,8 +39,8 @@ function usage {
     echo "    PURPOSE: Link MPAS runtime static files and executables."
     echo " "
     echo "    DESTDIR  - Destination Directory"
-    echo "    CMD      - One or more jobs from [mpas,MPASSIT,UPP,WRF]"
-    echo "               Default: all in \"[mpas, MPASSIT, UPP, WRF]\""
+    echo "    CMD      - One or more jobs from [mpas,MPASSIT,UPP,WRF,DART,mpasregion]"
+    echo "               Default: all in \"[mpas, MPASSIT, UPP, WRF,DART,mpasregion]\""
     echo "    clean    - Clean the linked or copied files (for relink with a system version change etc.)"
     echo " "
     echo "    OPTIONS:"
@@ -128,7 +130,7 @@ while [[ $# > 0 ]]
             fi
             shift
             ;;
-        mpas* | MPASSIT* | UPP* | WRF* )
+        mpas* | MPASSIT* | UPP* | WRF* | DART* )
             cmds=(${key//,/ })
             ;;
         -* )
@@ -251,6 +253,29 @@ for cmd in ${cmds[@]}; do
         fi
         ;;
 
+    "DART" )
+        if [[ $run -ne 1 ]]; then
+            cd $exedir
+            echo "---  Executables of DART"
+            echo "CWD: $exedir"
+            if [[ ${runcmd} == "clean" ]]; then
+                rm -f filter update_mpas_states
+            else
+                ${runcmd} $srcdartdir/models/mpas_atm/work/filter .
+                ${runcmd} $srcdartdir/models/mpas_atm/work/update_mpas_states .
+            fi
+        ;;
+    "mpasregion" )
+        if [[ $run -ne 1 ]]; then
+            cd $(dirname $desdir)
+            echo "---  Linking ${srcmpasregion}/MPAS-Limited-Area"
+            echo "CWD: $(dirname $desdir)"
+            if [[ ${runcmd} == "clean" ]]; then
+                rm -f MPAS-Limited-Area
+            else
+                ${runcmd} ${srcmpasregion}/MPAS-Limited-Area .
+            fi
+        ;;
     "mpas" )
 
         srcmodel=${srcdir-$srcmodeldir}
@@ -278,6 +303,8 @@ for cmd in ${cmds[@]}; do
 
         if [[ $run -ne 1 ]]; then
             cd $desdir
+
+            ln -sf /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/mesh_3km/x1.65536002.grid.nc .
 
             # These files are not managed by Git
             #

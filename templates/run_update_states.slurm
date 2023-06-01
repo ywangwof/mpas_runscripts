@@ -1,12 +1,12 @@
 #!/bin/sh -l
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
-#SBATCH --ntasks=1 CPUSPEC
-#SBATCH --mem=100G
-#SBATCH -t 02:30:00
-#SBATCH --output=WRKDIR/static_%j.log
+#SBATCH --ntasks=NOPART CPUSPEC
+#SBATCH -t 01:30:00
+#SBATCH --output=WRKDIR/update_states_%j.log
 ACCTSTR
 EXCLSTR
+
 
 #set -eux
 
@@ -15,6 +15,7 @@ echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
 if [[ "MACHINE" == "Jet" ]]; then
+    source /etc/profile.d/modules.sh
     module purge
     module use ROOTDIR/modules
     module load MODULE
@@ -26,19 +27,18 @@ ulimit -s unlimited
 
 cd WRKDIR
 
-rm -f queue.static error.static
+touch update_states.running
+rm -rf error.update_states queue.update_states
 
-touch running.static
-
-RUNMPCMD -n 1 EXEDIR/init_atmosphere_model
+RUNMPCMD -n NOPART EXEDIR/update_mpas_states
 
 if [[ $? -eq 0 ]]; then
-    touch done.static
+    touch done.update_states
 else
-    touch error.static
+    touch error.update_states
 fi
 
-rm -f running.static
+rm -rf update_states.running
 
 time2=$(date '+%s')
 

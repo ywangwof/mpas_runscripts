@@ -1,15 +1,17 @@
 #!/usr/bin/env python
-#
-from asyncore import read
+
 import os, sys
 import numpy as np
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+import matplotlib.patches as mpatches
+
 from shapely.geometry.polygon import Polygon
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
+import cartopy.geodesic as geodesic
 
 import csv
 import ast
@@ -18,6 +20,41 @@ import argparse
 
 #import strmrpt
 
+########################################################################
+
+def read_radar_location(radar_filename):
+
+    radar_locations_dict = {}
+    with open(radar_filename, 'r') as f:
+        f.readline()
+        for line in f:
+            col = line.split()
+            lat = float(col[-5])
+            lon = float(col[-4])
+            alt = 0.0003048 * float(col[-3])
+            radar_locations_dict[col[1]] = (lat, lon, alt)
+
+    return radar_locations_dict
+
+########################################################################
+
+def find_radars(radar_dict,rad_grd_lats, rad_grd_lons):
+    #
+    # Match radar name and table name
+    #
+    radars_inside = {}
+    radars_outside = []
+    for radar,radar_loc in radar_dict.items():
+        if radar_loc[0]>rad_grd_lats[0] and radar_loc[0]<rad_grd_lats[1] and    \
+           radar_loc[1]>rad_grd_lons[0] and radar_loc[1]<rad_grd_lons[1] :
+
+            #radar.distance = (radar.lat-rlat)**2+(radar.lon-rlon)**2
+
+            radars_inside[radar] = radar_dict[radar]
+        else:
+            radars_outside.append( radar )
+
+    return radars_inside
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
@@ -42,7 +79,8 @@ if __name__ == "__main__":
     parser.add_argument('-ny'            ,help='number of grid in Y direction',         type=int,   default=961  )
     parser.add_argument('-dx'            ,help='grid resolution in X direction (meter)',type=float, default=3000.0)
     parser.add_argument('-dy'            ,help='grid resolution in Y direction (meter)',type=float, default=3000.0)
-    parser.add_argument('-range'         ,help='grid rnage in degrees [lat1,lat2,lon1,lon2]',type=str, default=None)
+    parser.add_argument('-range'         ,help='Map range in degrees [lat1,lat2,lon1,lon2]',type=str, default=None)
+    parser.add_argument('-radarfile'     ,help='NEXRAD radar file name',                type=str, default=None)
     parser.add_argument('-outgrid'       ,help='Plot an output grid, "True" get grid from arguments, or filename',type=str, default=False)
     parser.add_argument('-latlon'        ,help='Base map latlon or lambert',action='store_true', default=False)
     parser.add_argument('-name'          ,help='Name of the WoF grid',type=str, default="wofs_poly")
@@ -67,33 +105,51 @@ if __name__ == "__main__":
         filename = f"{os.path.splitext(os.path.basename(args.pts_file))[0]}.png"
 
         figname = filename.replace("custom",basmap)
+    else:
+        print("ERROR: need a WoF grid file.")
+        sys.exit(0)
+
+    # Note that MPAS requires the order to be clockwise
+    # Python polygon requires anti-clockwise
+    lonlats.reverse()
+    lonlats.append(lonlats[0])
+    #print(lonlats)
+
+    plt_hrrr = False
+    if args.range == 'hrrr':
+        plt_hrrr = True
+        if args.latlon:
+            ranges = [-135.0,-60.0,20.0,55.0]
+        else:
+            ranges = [-125.0,-70.0,22.0,52.0]
 
     elif args.range is not None:
         rlist = [float(item) for item in args.range.split(',')]
         if len(rlist) < 4:
-            print(f"-range expects 4 or more degrees as [lat1,lon1,lat2,lon2, ...].")
+            print("-range expects 4 or more degrees as [lat1,lon1,lat2,lon2, ...].")
             sys.exit(0)
         rlist = [float(item) for item in args.range.split(',')]
 
         lats=rlist[0::2]
         lons=rlist[1::2]
-        lonlats = list(zip(lons, lats))
+        ranges = [min(lons)-2.0,max(lons)+2.0,min(lats)-2.0,max(lats)+2.0]
 
-        print(f"Name: {args.name}")
-        print("Type: custom")
-        print(f"Point: {args.ctrlon}, {args.ctrlat}")
-        for lon,lat in lonlats:
-            print(f"{lat}, {lon}")
+        #print(f"Name: {args.name}")
+        #print("Type: custom")
+        #print(f"Point: {args.ctrlon}, {args.ctrlat}")
+        #for lon,lat in ranges:
+        #    print(f"{lat}, {lon}")
         print(" ")
-
     else:
-        print("ERROR: need a WoF grid file or range specifications.")
-        sys.exit(0)
+        lats = [ l[1] for l in lonlats]
+        lons = [ l[0] for l in lonlats]
+        ranges = [ min(lons)-2.0, max(lons)+2.0, min(lats)-2.0, max(lats)+2.0]
 
-    lonlats.append(lonlats[0])
+    print(f"ranges = {ranges}")
 
+    plt_outgrid = False
     if args.outgrid == "True":
-        outgrid = True
+        plt_outgrid = True
         nx1 = args.nx
         ny1 = args.ny
         dx1 = args.dx
@@ -102,8 +158,6 @@ if __name__ == "__main__":
         ctrlat1 = args.ctrlat
         stdlat1_1 = args.stdlat1
         stdlat1_2 = args.stdlat2
-    elif not args.outgrid:
-        outgrid = False
     elif os.path.lexists(args.outgrid):
         data = []
         with open(args.outgrid,'r') as f:
@@ -115,7 +169,7 @@ if __name__ == "__main__":
         # reconstructing the data as a dictionary
         ogrid = ast.literal_eval(' '.join(data))
 
-        outgrid = True
+        plt_outgrid = True
         nx1       = ogrid["nx"]
         ny1       = ogrid["ny"]
         dx1       = ogrid["dx"]
@@ -124,14 +178,25 @@ if __name__ == "__main__":
         ctrlat1   = ogrid["ctrlat"]
         stdlat1_1 = ogrid["stdlat1"]
         stdlat1_2 = ogrid["stdlat2"]
-
+    elif not args.outgrid:
+        plt_outgrid = False
     else:
         print("ERROR: need an output grid file or command line arguments.")
         sys.exit(0)
 
+    plt_radar = False
+    if args.radarfile is not None:
+        if not os.path.lexists(args.radarfile):
+            print(f"Radar file {args.radarfile} not exist.")
+        else:
+            radar_locations = read_radar_location(args.radarfile)
+
+        if len(radar_locations) > 0:
+            plt_radar = True
+
     #-----------------------------------------------------------------------
     #
-    # Lambert grid for HRRR
+    # Lambert conformal map projection for the HRRR domain
     #
     #-----------------------------------------------------------------------
 
@@ -151,7 +216,7 @@ if __name__ == "__main__":
     x1hr = np.linspace(0.0,xsize,num=nxhr)
     y1hr = np.linspace(0.0,ysize,num=nyhr)
 
-    x2hr, y2hr = np.meshgrid(x1hr,y1hr)
+    #x2hr, y2hr = np.meshgrid(x1hr,y1hr)
 
     xctr = (nxhr-1)/2*dxhr
     yctr = (nyhr-1)/2*dyhr
@@ -159,49 +224,18 @@ if __name__ == "__main__":
     carr= ccrs.PlateCarree()
 
     proj_hrrr=ccrs.LambertConformal(central_longitude=ctrlon, central_latitude=ctrlat,
-                 false_easting=xctr, false_northing= yctr, secant_latitudes=None,
+                 false_easting=xctr, false_northing= yctr,
                  standard_parallels=(stdlat1, stdlat2), globe=None)
 
-
-    ##-----------------------------------------------------------------------
-    ##
-    ## Lambert grid, CLUE map projection
-    ##
-    ##-----------------------------------------------------------------------
-    #
-    #nx0 = 1799   #1301
-    #ny0 = 1059    #921
-    #dx0 = 3000.
-    #dy0 = 3000.
-    #xsize0=(nx0-1)*dx0
-    #ysize0=(ny0-1)*dy0
-
-    #x0_1d = np.linspace(0.0,xsize0,num=nx0)
-    #y0_1d = np.linspace(0.0,ysize0,num=ny0)
-
-    #x0_2d, y0_2d = np.meshgrid(x0_1d,y0_1d)
-
-    #xctr = (nx0-1)/2*dx0
-    #yctr = (ny0-1)/2*dy0
-
-    #ctrlat0 =  38.5
-    #ctrlon0 = -97.5
-
-    #proj0=ccrs.LambertConformal(central_longitude=ctrlon0, central_latitude=ctrlat0,
-    #             false_easting=xctr, false_northing= yctr, secant_latitudes=None,
-    #             standard_parallels=(38.5, 38.5), globe=None)
-
-    ##lonlat1 = carr.transform_point(0.0,0.0,proj1)
-    ##
-    ##print('lat1 = %f, lon1 = %f' %(lonlat1[1],lonlat1[0]))
+    lonlat_sw = carr.transform_point(0.0,0.0,proj_hrrr)
 
     #-----------------------------------------------------------------------
     #
-    # Lambert grid for input domain
+    # Lambert Conformal Map projection for the output domain
     #
     #-----------------------------------------------------------------------
 
-    if outgrid:
+    if plt_outgrid:
 
         xsize1=(nx1-1)*dx1
         ysize1=(ny1-1)*dy1
@@ -209,13 +243,13 @@ if __name__ == "__main__":
         x1d = np.linspace(0.0,xsize1,num=nx1)
         y1d = np.linspace(0.0,ysize1,num=ny1)
 
-        x2d1, y2d1 = np.meshgrid(x1d,y1d)
+        #x2d1, y2d1 = np.meshgrid(x1d,y1d)
 
         xctr1 = (nx1-1)/2*dx1
         yctr1 = (ny1-1)/2*dy1
 
         proj1=ccrs.LambertConformal(central_longitude=ctrlon1, central_latitude=ctrlat1,
-                     false_easting=xctr1, false_northing=yctr1, secant_latitudes=None,
+                     false_easting=xctr1, false_northing=yctr1,
                      standard_parallels=(args.stdlat1, args.stdlat2), globe=None)
 
         lonlat1 = carr.transform_point(0.0,0.0,proj1)
@@ -230,7 +264,7 @@ if __name__ == "__main__":
 
     #-----------------------------------------------------------------------
     #
-    # Plot grids
+    # Main Plotting code here
     #
     #-----------------------------------------------------------------------
 
@@ -239,14 +273,14 @@ if __name__ == "__main__":
     if args.latlon:
         carr._threshold = carr._threshold/10.
         ax = plt.axes(projection=carr)
-        ax.set_extent([-135.0,-60.0,20.0,55.0],crs=carr)
+        ax.set_extent(ranges,crs=carr)
     else:
-        ax = plt.axes(projection=proj_hrrr)
-        ax.set_extent([-125.0,-70.0,22.0,52.0],crs=carr)
+        if plt_hrrr:
+            ax = plt.axes(projection=proj_hrrr)
+        else:
+            ax = plt.axes(projection=proj1)
 
-    #ax.pcolormesh(glon, glat, aspect,transform=carr)
-    #im = ax.contourf(x0[1:,1:], y0[1:,1:], aspect,transform=proj0)
-    #plt.colorbar(im, shrink=0.3)
+        ax.set_extent(ranges,crs=carr)
 
     ax.coastlines(resolution='50m')
     #ax.stock_img()
@@ -267,149 +301,53 @@ if __name__ == "__main__":
 
     plt.text(ctrlon,ctrlat,'o',color='r',horizontalalignment='center',
                                         verticalalignment='center',transform=carr)
-    transform2 = proj_hrrr._as_mpl_transform(ax)
-    plt.annotate('HRRR Center', xy=(xctr,yctr), xycoords=transform2,
+
+    plt.title("WoF-MPAS domain")
+
+    #-----------------------------------------------------------------------
+    #
+    # Plot HRRR grid outlines
+    #
+    #-----------------------------------------------------------------------
+    if plt_hrrr:
+        ax.add_patch(mpatches.Rectangle(xy=[0, 0], width=xsize, height=ysize,
+                    facecolor='none',edgecolor='r',linewidth=1.0,
+                    transform=proj_hrrr))
+
+        transform2 = proj_hrrr._as_mpl_transform(ax)
+        plt.annotate('HRRR Center', xy=(xctr,yctr), xycoords=transform2,
                     xytext=(-48, 24), textcoords='offset points',
                     color='r',
                     arrowprops=dict(arrowstyle="->")
                     )
 
-    plt.title("WoF domain within HRRR grid")
-
-
+        plt.text(lonlat_sw[0]+0.2,lonlat_sw[1]+0.4,'HRRR grid', color='r', transform=carr)
 
     #-----------------------------------------------------------------------
     #
-    # Plot original HRRR grid range
-    #
-    #-----------------------------------------------------------------------
-    if args.latlon:
-        nx, ny = x2hr.shape
-        for i in range(0,nx):
-            plt.text(x2hr[i,    0], y2hr[i,    0], '.', color='r', transform=proj_hrrr)
-            plt.text(x2hr[i, ny-1], y2hr[i, ny-1], '.', color='r', transform=proj_hrrr)
-
-        for j in range(0,ny):
-            plt.text(x2hr[0,    j], y2hr[0,   j], '.', color='r', transform=proj_hrrr)
-            plt.text(x2hr[nx-1, j], y2hr[nx-1,j], '.', color='r', transform=proj_hrrr)
-    else:
-        plt.plot(x2hr[:,      0], y2hr[:,     0], color='r', linewidth=0.5, transform=proj_hrrr)
-        plt.plot(x2hr[:, nxhr-1], y2hr[:,nxhr-1], color='r', linewidth=0.5, transform=proj_hrrr)
-        plt.plot(x2hr[0,      :], y2hr[0,     :], color='r', linewidth=0.5, transform=proj_hrrr)
-        plt.plot(x2hr[nyhr-1, :], y2hr[nyhr-1,:], color='r', linewidth=0.5, transform=proj_hrrr)
-
-    plt.text(x2hr[30,30],y2hr[30,30],'HRRR grid', color='r', transform=proj_hrrr)
-
-    #-----------------------------------------------------------------------
-    #
-    # plot CLUE grid
+    # Plot the WoFS domain
     #
     #-----------------------------------------------------------------------
 
-    #if args.latlon:
-    #    nx, ny = x0_2d.shape
-    #    for i in range(0,nx):
-    #        plt.text(x0_2d[i,    0], y0_2d[i,    0], '.', color='g', transform=proj0)
-    #        plt.text(x0_2d[i, ny-1], y0_2d[i, ny-1], '.', color='g', transform=proj0)
-
-    #    for j in range(0,ny):
-    #        plt.text(x0_2d[0,    j], y0_2d[0,   j], '.', color='g', transform=proj0)
-    #        plt.text(x0_2d[nx-1, j], y0_2d[nx-1,j], '.', color='g', transform=proj0)
-    #else:
-    #    plt.plot(x0_2d[:,     0], y0_2d[:,    0], color='g', linewidth=1.0, transform=proj0)
-    #    plt.plot(x0_2d[:, nx0-1], y0_2d[:,nx0-1], color='g', linewidth=1.0, transform=proj0)
-    #    plt.plot(x0_2d[0,     :], y0_2d[0,    :], color='g', linewidth=1.0, transform=proj0)
-    #    plt.plot(x0_2d[ny0-1, :], y0_2d[ny0-1,:], color='g', linewidth=1.0, transform=proj0)
-    #plt.text(x0_2d[ny0-40,nx0-240],y0_2d[ny0-40,nx0-240],'CLUE grid',color='g', transform=proj0)
-
-    #plt.annotate('CLUE SW corner', xy=(0.0,0.0),  xycoords='data',
-    #                xytext=(24, 2), textcoords='offset points',
-    #                color='r',
-    #                arrowprops=dict(arrowstyle="fancy", color='r')
-    #                )
-
-    #-----------------------------------------------------------------------
-    #
-    # plot WoFS grid
-    #
-    #-----------------------------------------------------------------------
-
-    if args.latlon:
-        polygon1 = Polygon( lonlats )
-        ax.add_geometries([polygon1], crs=ccrs.Geodetic(), facecolor='w', edgecolor='b', alpha=0.6,zorder=0)
-    else:
-
-        lon0,lat0 = lonlats[0]
-        for lon,lat in lonlats[1:]:
-            #plt.plot([lon0, lon], [lat0, lat], color='blue',  transform=carr)
-            plt.plot([lon0, lon], [lat0, lat], color='blue',  transform=ccrs.Geodetic())
-            lon0,lat0 = lon,lat
-
-        #tension = 300
-        #px0 = lonlats[0][0]
-        #py0 = lonlats[0][1]
-        #lat1d = np.zeros(len(lonlats)*tension)
-        #lon1d = np.zeros(len(lonlats)*tension)
-        #k = 0
-        #for px,py in lonlats[1:]:
-        #    lat1d[k:tension+k] = np.linspace(py0,py,num=tension)
-        #    lon1d[k:tension+k] = np.linspace(px0,px,num=tension)
-        #    px0 = px
-        #    py0 = py
-        #    k += tension
-
-        #for x,y in zip(lon1d,lat1d):
-        #    plt.text(x, y, '.', color='blue', horizontalalignment='center',
-        #                verticalalignment='bottom',transform=carr)
+    polygon1 = Polygon( lonlats )
+    ax.add_geometries([polygon1], crs=ccrs.Geodetic(), facecolor='blue',
+                      edgecolor='navy', linewidth=1.5, alpha=0.2,zorder=1)
 
     for lon,lat in lonlats:
         plt.text(lon, lat, '*', color='r', horizontalalignment='center',
                                            verticalalignment='center',transform=carr)
 
-
-    #ctrlat1 = (rlist[0]+rlist[1])/2.0
-    #ctrlon1 = (rlist[2]+rlist[3])/2.0
-
-    #plt.plot(lon2d[:,   0], lat2d[:,  0], color='blue', linewidth=1.5,transform=carr)
-    #plt.plot(lon2d[:, 299], lat2d[:,299], color='blue', linewidth=1.5,transform=carr)
-    #plt.plot(lon2d[0,   :], lat2d[0,  :], color='blue', linewidth=1.5,transform=carr)
-    #plt.plot(lon2d[299, :], lat2d[299,:], color='blue', linewidth=1.5,transform=carr)
-    #plt.text(lon2d[260,20], lat2d[260,20],'WoF grid',color='blue',transform=carr)
-
-
-    #plt.text(ctrlon1,ctrlat1,'o',color='g',horizontalalignment='center',
-    #                                    verticalalignment='center',transform=carr)
-    #
-    #transform1 = carr._as_mpl_transform(ax)
-    #
-    #plt.annotate('WoF Center', xy=(ctrlon1,ctrlat1), xycoords=transform1,
-    #                xytext=(5, 12), textcoords='offset points',
-    #                color='g',
-    #                arrowprops=dict(arrowstyle="->")
-    #                )
-    #
-
     #-----------------------------------------------------------------------
     #
-    # plot new output Lambert grid
+    # Plot the output grid outlines
     #
     #-----------------------------------------------------------------------
 
-    if outgrid:
-        if args.latlon:
-            for i in range(0,ny1):
-                plt.text(x2d1[i,     0], y2d1[i,     0], '.', color='g', transform=proj1)
-                plt.text(x2d1[i, nx1-1], y2d1[i, nx1-1], '.', color='g', transform=proj1)
+    if plt_outgrid:
 
-            for j in range(0,nx1):
-                plt.text(x2d1[0,     j], y2d1[0,    j], '.', color='g', transform=proj1)
-                plt.text(x2d1[ny1-1, j], y2d1[ny1-1,j], '.', color='g', transform=proj1)
-        else:
-            plt.plot(x2d1[:,     0], y2d1[:,    0], color='g', linewidth=1.5,transform=proj1)
-            plt.plot(x2d1[:, nx1-1], y2d1[:,nx1-1], color='g', linewidth=1.5,transform=proj1)
-            plt.plot(x2d1[0,     :], y2d1[0,    :], color='g', linewidth=1.5,transform=proj1)
-            plt.plot(x2d1[ny1-1, :], y2d1[ny1-1,:], color='g', linewidth=1.5,transform=proj1)
-            plt.text(x2d1[ny1-40,20],y2d1[ny1-40,20],'Output grid',color='g',transform=proj1)
+        ax.add_patch(mpatches.Rectangle(xy=[0, 0], width=xsize1, height=ysize1,
+                                    facecolor='none',edgecolor='green',linewidth=2.0,
+                                    transform=proj1))
 
         plt.text(ctrlon1,ctrlat1,'o',color='g',horizontalalignment='center',
                                             verticalalignment='center',transform=carr)
@@ -421,9 +359,48 @@ if __name__ == "__main__":
                         color='green',
                         arrowprops=dict(arrowstyle="fancy")
                         )
-        #print('Output grid: ctrlat1 = %f, ctrlon1 = %f' %(ctrlat1,ctrlon1))
     #
+    #-----------------------------------------------------------------------
+    #
+    # Plot radar rings as possible
+    #
+    #-----------------------------------------------------------------------
+    if plt_radar and plt_outgrid:
+
+        xextradar = 100000.0    # extend range for radar searching 140 km
+        yextradar = 100000.0
+
+        xrad1 = x1d[0]  - xextradar
+        xrad2 = x1d[-1] + xextradar
+        yrad1 = y1d[0]  - yextradar
+        yrad2 = y1d[-1] + yextradar
+
+        (nothing,     rad_grd_lat1) = carr.transform_point(xrad1,yrad1, src_crs=proj1)
+        (rad_grd_lon1,rad_grd_lat2) = carr.transform_point(xrad1,yrad2, src_crs=proj1)
+        #(rad_grd_lon3,rad_grd_lat3) = carr.transform_point(xrad2,yrad1, src_crs=proj1)
+        (rad_grd_lon2,nothing     ) = carr.transform_point(xrad2,yrad2, src_crs=proj1)
+
+        print (f'Lat/lon at the SW corner of base grid= {rad_grd_lat1}, {rad_grd_lon1}.' )
+        print (f'Lat/lon at the NE corner of base grid= {rad_grd_lat2}, {rad_grd_lon2}.' )
+
+        radars = find_radars(radar_locations,[rad_grd_lat1, rad_grd_lat2],[rad_grd_lon1,rad_grd_lon2])
+
+        for radar, radloc in radars.items():
+            circle_points = geodesic.Geodesic().circle(lon=radloc[1], lat=radloc[0], radius=150000,
+                                                       n_samples=300, endpoint=False)
+            geom = Polygon(circle_points)
+            ax.add_geometries((geom,), crs=carr, facecolor='none', edgecolor='darkgrey', linewidth=1.0)
+
+            plt.text(radloc[1],radloc[0],radar,horizontalalignment='center',
+                     verticalalignment='center',color='purple', transform=carr)
+    #
+    #-------------------------------------------------------------------
+    #
+    # Finally, save the images to a file and show it as well
+    #
+    #-------------------------------------------------------------------
+
     print(f"Saving figure to {figname} ...")
     figure.savefig(figname, format='png')
 
-    plt.show()
+    #plt.show()
