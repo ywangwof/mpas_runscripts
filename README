@@ -2,13 +2,14 @@
 
 05/12/2023 Version 4.0
 
-    1. Added DA cycles scripts for MPAS-WoFS. 
-	scripts/setup_mpas-wofs_grid.sh
-	scripts/make_ics.sh
-	scripts/make_lbc.sh
-	scripts/run_dacycles.sh
-    2. Separated subdirectories templates from fix_files
-    3. Started to use scripts/Common_Utilfuncs.sh
+    a. Added DA cycles scripts for MPAS-WoFS. 
+	1. scripts/setup_mpas-wofs_grid.sh
+	2. scripts/make_ics.sh
+	3. scripts/make_lbc.sh
+	4. scripts/run_dacycles.sh
+	5. scripts/run_fcst.sh
+    b. Separated subdirectories templates from fix_files
+    c. Started to use scripts/Common_Utilfuncs.sh
 
 05/12/2023 Version 3.1
 
