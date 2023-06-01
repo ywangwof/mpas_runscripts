@@ -56,6 +56,9 @@ RUNMPCMD -n NOPART EXEDIR/atmosphere_model.single
 
 if [[ $? -eq 0 ]]; then
     touch done.fcst_$memstr
+    mv *.restart.*.nc ..
+    mv *.history.*.nc ..
+    mv *.diag.*.nc ..
 else
     touch error.fcst_$memstr
 fi

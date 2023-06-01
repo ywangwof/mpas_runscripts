@@ -251,7 +251,7 @@ function run_lbc {
         cd $memwrkdir
 
         ln -sf ../ungrib/${EXTHEAD}${memstr}:* .
-        ln -sf $rundir/init/$domname_${memstr}.init.nc .
+        ln -sf $rundir/init/${domname}_${memstr}.init.nc .
 
         if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npelbc} ]]; then
             cd $rundir/$domname
@@ -329,7 +329,7 @@ EOF
 <streams>
 <immutable_stream name="input"
                   type="input"
-                  filename_template="$domname.init.nc"
+                  filename_template="${domname}_${memstr}.init.nc"
                   input_interval="initial_only" />
 
 <immutable_stream name="output"
@@ -674,7 +674,7 @@ echo "     Working dir: $WORKDIR"
 echo "     Domain name: $domname"
 echo " "
 
-starttime_str=$(date -d "$eventdate ${eventtime}:00" +%Y-%m-%d_%H:%M:%S)
+starttime_str=$(date -d "$eventdate ${eventtime}:00 $EXTINVL hours" +%Y-%m-%d_%H:%M:%S)
 stoptime_str=$(date -d "$eventdate  ${eventend}:00 1 day" +%Y-%m-%d_%H:%M:%S)
 
 rundir="$WORKDIR/${eventdate}"
@@ -689,7 +689,7 @@ exedir="$rootdir/exec"
 
 declare -A jobargs=([ungrib]="${hrrr_dir} ${hrrr_time}"                 \
                     [lbc]="lbc/ungrib/done.ungrib init/done.ics"        \
-                    [clean]="ungrib"                                    \
+                    [clean]="ungrib lbc"                                \
                    )
 
 for job in ${jobs[@]}; do

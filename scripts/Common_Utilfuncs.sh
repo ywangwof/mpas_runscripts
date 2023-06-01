@@ -117,7 +117,8 @@ function check_and_resubmit {
     numtry=0; done=0
 
     runjobs=$(seq 1 $donenum)
-    while [[ $done -lt $donenum && $numtry -lt $numtries ]]; do
+    #echo ${runjobs[@]}
+    while [[ $done -lt $donenum && ($numtry -lt $numtries || $numtries -eq 0 ) ]]; do
         jobarrays=()
         for mem in ${runjobs}; do
             memstr=$(printf "%02d" $mem)
@@ -138,6 +139,7 @@ function check_and_resubmit {
                 fi
                 sleep 10
             done
+            #if [[ $verb -eq 1 ]]; then echo $donefile; fi
             let done+=1
         done
 
@@ -145,7 +147,7 @@ function check_and_resubmit {
             touch $mywrkdir/done.${jobname}
             rm -f $mywrkdir/queue.${jobname}
             break
-        elif [[ $myjobscript && ${#jobarrays[@]} -gt 0 ]]; then
+        elif [[ $myjobscript && ${#jobarrays[@]} -gt 0 && $numtry -lt $numtries ]]; then
             runjobs=( "${jobarrays[@]} ")
             echo "Try these failed jobs again: ${runjobs[@]}"
             $runcmd "--array=$(join_by_comma ${runjobs[@]})" $myjobscript
@@ -220,6 +222,7 @@ function clean_mem_runfiles {
         memdir="${jobname}_$memstr"
         donefile="$memdir/done.${jobname}_$memstr"
 
+        #echo $donefile
         if [[ -e $donefile ]]; then
             rm -rf $memdir
             rm -f  ${jobname}_${mem}_*.log

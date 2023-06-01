@@ -1,7 +1,7 @@
 #!/bin/sh -l
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
-#SBATCH --ntasks=1 --cpus-per-task=12 --mem-per-cpu=4G
+#SBATCH --ntasks=1 --cpus-per-task=12 --mem-per-cpu=10G
 #SBATCH -t 02:00:00
 #SBATCH --output=WRKDIR/ungrib_%a_%j.log
 ACCTSTR
