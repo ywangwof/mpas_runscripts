@@ -155,6 +155,10 @@ function check_and_resubmit {
         let numtry+=1
     done
 
+    if [[ $done -lt $donenum && ($numtry -ge $numtries || $numtries -ne 0 ) ]]; then
+        echo "There are failed members of $jobname: ${jobarrays[@]}"
+        exit 9
+    fi
 }
 
 ########################################################################
@@ -217,6 +221,7 @@ function clean_mem_runfiles {
 
     cd $mywrkdir
 
+    done=0
     for mem in $(seq 1 $nummem); do
         memstr=$(printf "%02d" $mem)
         memdir="${jobname}_$memstr"
@@ -226,8 +231,14 @@ function clean_mem_runfiles {
         if [[ -e $donefile ]]; then
             rm -rf $memdir
             rm -f  ${jobname}_${mem}_*.log
+            let done+=1
         fi
     done
+
+    if [[ $done -eq $nummem ]]; then
+        rm -f queue.$jobname
+        touch done.$jobname
+    fi
 }
 
 ########################################################################

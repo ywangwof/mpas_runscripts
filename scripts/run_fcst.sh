@@ -197,22 +197,23 @@ function run_mpas {
     fi
 
     currtime_str=$(date -d @$iseconds +%Y-%m-%d_%H:%M:%S)
+    currtime_fil=${currtime_str//:/.}
 
     #
     # Preparation for each member
     #
     jobarrays=()
     for iens in $(seq 1 $ENS_SIZE); do
-        memstr=$(printf "02d" $iens)
+        memstr=$(printf "%02d" $iens)
 
-        memwrkdir=$wrkdir/mem$memstr
+        memwrkdir=$wrkdir/fcst_$memstr
         mkwrkdir $memwrkdir 1
         cd $memwrkdir
 
         #
         # init files
         #
-        ln -sf $dawrkdir/${domname}_${memstr}.restart.${currtime_str}.nc .
+        ln -sf $dawrkdir/${domname}_${memstr}.restart.${currtime_fil}.nc .
         do_restart="true"
         do_dacyle="true"
 
@@ -220,12 +221,14 @@ function run_mpas {
         # lbc files
         #
         jens=$(( (iens-1)%nenslbc+1 ))
-        mlbcstr=$(printf "02d" $jens)
+        mlbcstr=$(printf "%02d" $jens)
 
-        for ((i=EXTINVL;i<=fcst_seconds;i+=EXTINVL)); do
-            isec=$(( iseconds+i ))
-            lbctime_str=$(date -d @$isec +%Y-%m-%d_%H:%M:%S)
-            ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str}.nc ${domname}_${memstr}.lbc.${lbctime_str}.nc
+        for ((i=0;i<=fcst_seconds;i+=EXTINVL)); do
+            isec=$(( iseconds+i ))           # MPAS expects time string
+            jsec=$(( iseconds/3600*3600+i )) # External GRIB file provided around to whole hour
+            lbctime_str=$(date  -d @$jsec +%Y-%m-%d_%H.%M.%S)
+            mpastime_str=$(date -d @$isec +%Y-%m-%d_%H.%M.%S)
+            ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str}.nc ${domname}_${memstr}.lbc.${mpastime_str}.nc
         done
 
         ln -sf $rundir/$domname/$domname.graph.info.part.${npefcst} .
@@ -328,8 +331,8 @@ function run_mpas {
     config_lsm_scheme                = '${MPASLSM}'
     num_soil_layers                  = ${MPASNFLS}
     config_physics_suite             = 'convection_permitting'
-    config_microp_re                 = true
 EOF
+    #config_microp_re                 = true
 
         if [[ ${mpscheme} == "mp_nssl2m" ]]; then
 
@@ -421,7 +424,7 @@ EOF
     #
     cd $wrkdir
 
-    jobscript="run_mpas.${mach}"
+    mpas_jobscript="run_mpas.${mach}"
     jobarraystr="--array=$(join_by_comma ${jobarrays[@]})"
 
     sedfile=$(mktemp -t mpas_${eventtime}.sed_XXXX)
@@ -438,13 +441,13 @@ s/MACHINE/${machine}/g
 s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/RUNMPCMD/${job_runmpexe_str}/
+s/SAVETAG/nothing_xxx/
 EOF
     if [[ "${mach}" == "pbs" ]]; then
         echo "s/NNODES/${nnodes_filter}/;s/NCORES/${ncores_filter}/" >> $sedfile
     fi
 
-    submit_a_jobscript $wrkdir "fcst" $sedfile $TEMPDIR/run_mpas_array.${mach} $jobscript ${jobarraystr}
-    echo "$jobscript"
+    submit_a_jobscript $wrkdir "fcst" $sedfile $TEMPDIR/run_mpas_array.${mach} $mpas_jobscript ${jobarraystr}
 }
 
 ########################################################################
@@ -507,8 +510,8 @@ function run_mpassit {
             done
 
             fcstmemdir=$(upnlevels $memdir 2)
-            histfile="$fcstmemdir/${domname}_${memstr}.history.${fcst_time_str}.nc"
-            diagfile="$fcstmemdir/${domname}_${memstr}.diag.${fcst_time_str}.nc"
+            histfile="$fcstmemdir/fcst_$memstr/${domname}_${memstr}.history.${fcst_time_str}.nc"
+            diagfile="$fcstmemdir/fcst_$memstr/${domname}_${memstr}.diag.${fcst_time_str}.nc"
 
             if [[ $dorun == true ]]; then
                 for fn in $histfile $diagfile; do
@@ -774,7 +777,7 @@ function fcst_driver() {
     #------------------------------------------
     # Time Cylces start here
     #------------------------------------------
-    local date_beg, date_end
+    local date_beg date_end
     date_beg=$(date -d @$start_sec +%Y%m%d%H%M)
     date_end=$(date -d @$end_sec +%Y%m%d%H%M)
 
@@ -794,7 +797,8 @@ function fcst_driver() {
             #------------------------------------------------------
             if [[ $verb -eq 1 ]]; then echo "    Run model forecast at $eventtime"; fi
 
-            mpas_jobscript=$(run_mpas $fcstwrkdir $isec)
+            mpas_jobscript="to_be_set"
+            run_mpas $fcstwrkdir $isec
 
             if [[ $dorun == true && $jobwait -eq 1 ]]; then
                 #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
@@ -836,81 +840,98 @@ function fcst_driver() {
             #fi
         fi
 
-        if [[ " ${jobs[*]} " =~ " clean " ]]; then
-            #------------------------------------------------------
-            # 4. Clean working files for this cycle only
-            #------------------------------------------------------
-            if [[ $verb -eq 1 ]]; then echo "    Cleaning working directory at $eventtime"; fi
-            run_clean $fcstwrkdir mpas mpassit upp
-        fi
-
     done
 }
 
 ########################################################################
 
 function run_clean {
+    # $1    $2    $3
+    # start  end
+    local start_sec=$1
+    local end_sec=$2
 
-    local wrkdir="$1"
-    local dirnames=("${@:2}")
+    wrkdir=$rundir/fcst
 
-    for dirname in ${dirnames[@]}; do
-        case $dirname in
-        mpas )
-            clean_mem_runfiles "fcst" $wrkdir $ENS_SIZE
-            ;;
-        mpassit )
-            mywrkdir=$wrkdir/mpassit
-            cd $mywrkdir
-            for ((i=0;i<=fcst_seconds;i+=OUTINVL)); do
-                minstr=$(printf "%03d" $((i/60)))
+    for isec in $(seq $start_sec 3600 $end_sec ); do
+        timestr_curr=$(date -d @$isec +%Y%m%d%H%M)
+        eventtime=$(date    -d @$isec +%H%M)
 
-                done=0
-                for mem in $(seq 1 $ENS_SIZE); do
-                    memstr=$(printf "%02d" $mem)
-                    memdir="$mywrkdir/mem$memstr"
+        fcstwrkdir=$wrkdir/$timestr_curr
+        if [[ -d $fcstwrkdir ]]; then
+            cd $fcstwrkdir
 
-                    donefile="$memdir/done.mpassit${minstr}_$memstr"
-                    if [[ -e $donefile ]]; then
-                        rm -f $mywrkdir/mpassit${minstr}_${mem}_*.log
-                        let done+=1
+            if [[ $verb -eq 1 ]]; then echo "    Cleaning working directory $fcstwrkdir"; fi
+
+            for dirname in mpas mpassit upp; do
+
+                cd $fcstwrkdir
+
+                case $dirname in
+                mpas )
+                    rm -f error.fcst_* log.????.abort
+                    rm -f log.atmosphere.????.out log.atmosphere.????.err fcst_*_*.log
+                    #echo "clean mpas in $dawrkdir"
+                    #clean_mem_runfiles "fcst" $fcstwrkdir $ENS_SIZE
+                    ;;
+                mpassit )
+                    mywrkdir=$fcstwrkdir/mpassit
+                    if [[ -d $mywrkdir ]]; then
+                        cd $mywrkdir
+                        for ((i=0;i<=fcst_seconds;i+=OUTINVL)); do
+                            minstr=$(printf "%03d" $((i/60)))
+
+                            done=0
+                            for mem in $(seq 1 $ENS_SIZE); do
+                                memstr=$(printf "%02d" $mem)
+                                memdir="$mywrkdir/mem$memstr"
+
+                                donefile="$memdir/done.mpassit${minstr}_$memstr"
+                                if [[ -e $donefile ]]; then
+                                    rm -f $mywrkdir/mpassit${minstr}_${mem}_*.log
+                                    let done+=1
+                                fi
+                            done
+
+                            if [[ $done -eq $ENS_SIZE ]]; then
+                                rm -f queue.mpassit${minstr} running.mpassit$minstr
+                                touch done.mpassit${minstr}
+                            fi
+                        done
                     fi
-                done
+                    ;;
+                upp )
+                    mywrkdir=$fcstwrkdir/upp
+                    if [[ -r $mywrkdir ]]; then
+                        cd $mywrkdir
+                        for ((i=0;i<=fcst_seconds;i+=OUTINVL)); do
+                            minstr=$(printf "%03d" $((i/60)))
 
-                if [[ $done -eq $ENS_SIZE ]]; then
-                    rm -f queue.mpassit${minstr} running.mpassit$minstr
-                    touch done.mpassit${minstr}
-                fi
-            done
-            ;;
-        upp )
-            mywrkdir=$wrkdir/upp
-            cd $mywrkdir
-            for ((i=0;i<=fcst_seconds;i+=OUTINVL)); do
-                minstr=$(printf "%03d" $((i/60)))
+                            done=0
+                            for mem in $(seq 1 $ENS_SIZE); do
+                                memstr=$(printf "%02d" $mem)
+                                memdir="$mywrkdir/mem$memstr"
 
-                done=0
-                for mem in $(seq 1 $ENS_SIZE); do
-                    memstr=$(printf "%02d" $mem)
-                    memdir="$mywrkdir/mem$memstr"
+                                postdir="$memdir/post_${minstr}"
 
-                    postdir="$memdir/post_${minstr}"
+                                donefile="$memdir/done.upp${minstr}_$memstr"
+                                if [[ -e $donefile ]]; then
+                                    rm -f $mywrkdir/upp${minstr}_${mem}_*.log
+                                    rm -rf $postdir
+                                    let done+=1
+                                fi
+                            done
 
-                    donefile="$memdir/done.upp${minstr}_$memstr"
-                    if [[ -e $donefile ]]; then
-                        rm -f $mywrkdir/upp${minstr}_${mem}_*.log
-                        rm -rf $postdir
-                        let done+=1
+                            if [[ $done -eq $ENS_SIZE ]]; then
+                                rm -f queue.upp${minstr} running.upp$minstr
+                                touch done.upp${minstr}
+                            fi
+                        done
                     fi
-                done
-
-                if [[ $done -eq $ENS_SIZE ]]; then
-                    rm -f queue.upp${minstr} running.upp$minstr
-                    touch done.upp${minstr}
-                fi
+                    ;;
+                esac
             done
-            ;;
-        esac
+        fi
     done
 }
 
@@ -928,7 +949,7 @@ FIXDIR="${rootdir}/fix_files"
 eventdate="$eventdateDF"
 eventtime="1700"
 initdatetime=""
-enddatetime=$(date -d "$eventdate 03:00 1 day" +%Y%m%d%H%M)
+enddatetime=""
 fcst_seconds=21600    # 6*3600
 
 ENS_SIZE=18
@@ -951,7 +972,7 @@ OUTIOTYPE="netcdf4"
 ICSIOTYPE="pnetcdf,cdf5"
 
 verb=0
-overwrite=1
+overwrite=0
 jobwait=0
 runcmd="sbatch"
 dorun=true
@@ -1206,9 +1227,13 @@ if [[ "$initdatetime" == "" ]]; then
     initdatetime="${eventdate}1500"
 fi
 
-inittime_sec=$(date -d "${initdatetime:0:8} ${initdatetime:8:4}00" +%s)
-starttime_sec=$(date -d "$eventdate ${eventtime}00 $startday"      +%s)
-stoptime_sec=$(date -d "${enddatetime:0:8}  ${enddatetime:8:4}00"  +%s)
+if [[ "$enddatetime" == "" ]]; then
+    enddatetime=$(date -d "$eventdate 03:00 1 day" +%Y%m%d%H%M)
+fi
+
+inittime_sec=$(date -d "${initdatetime:0:8} ${initdatetime:8:4}" +%s)
+starttime_sec=$(date -d "$eventdate ${eventtime} $startday"      +%s)
+stoptime_sec=$(date -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
 
 rundir="$WORKDIR/${eventdate}"
 if [[ ! -d $rundir ]]; then
@@ -1217,9 +1242,14 @@ fi
 
 exedir="$rootdir/exec"
 
-# $1    $2    $3
-# init start  end
-fcst_driver $inittime_sec $starttime_sec $stoptime_sec
+if [[ " ${jobs[*]} " =~ " mpas " || " ${jobs[*]} " =~ " mpassit " || " ${jobs[*]} " =~ " upp " ]]; then
+    # $1    $2    $3
+    # init start  end
+    fcst_driver $inittime_sec $starttime_sec $stoptime_sec
+elif [[ " ${jobs[*]} " =~ " clean " ]]; then
+    run_clean $starttime_sec $stoptime_sec
+fi
+
 
 echo " "
 echo "==== Jobs done $(date +%m-%d_%H:%M:%S) ===="

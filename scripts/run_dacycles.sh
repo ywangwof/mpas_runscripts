@@ -143,17 +143,16 @@ function run_filter {
     cd $wrkdir
 
     timesec_pre=$((iseconds-intvl_sec))
-    timestr_pre=$(date -d @$timesec_pre +%y%m%d%H%M)
-    timestr_cur=$(date -d @$iseconds    +%y%m%d%H%M)
+    timestr_pre=$(date -d @$timesec_pre +%Y%m%d%H%M)
+    timestr_cur=$(date -d @$iseconds    +%Y%m%d%H%M)
 
-    currtime_str=$(date -d @$iseconds +%Y-%m-%d_%H:%M:%S)
     parentdir=$(dirname $wrkdir)
 
     #
     # Waiting for job conditions
     #
     if [[ $icycle -eq 0 ]]; then
-        conditions=($rundir/init/done.init)
+        conditions=($rundir/init/done.ics)
     else
         conditions=($parentdir/$timestr_pre/done.fcst)
     fi
@@ -180,6 +179,8 @@ function run_filter {
     #------------------------------------------------------
     # 1. Update input files to get filter started
     #------------------------------------------------------
+
+    currtime_str=$(date -d @$iseconds +%Y-%m-%d_%H.%M.%S)
 
     rm -f filter_in.txt filter_out.txt
     input_file_list=()
@@ -224,7 +225,8 @@ function run_filter {
     # 3. Obs sequence for this analysis cycle
     #    - one obs time at each analysis cycle
     #------------------------------------------------------
-    fn_obs=${OBS_DIR}/obs_seq${timestr_cur}
+
+    fn_obs=${OBS_DIR}/obs_seq.1800obs
     if [[ ! -e ${fn_obs} ]]; then
        echo "File: ${fn_obs} does not exist. Stop."
        exit 3
@@ -791,10 +793,14 @@ function run_update_states {
     #------------------------------------------------------
     # Run update_mpas_states for all ensemble members
     #------------------------------------------------------
-    update_input_file_list='filter_out.txt'
+    state_input_file=$(awk '/input_state_file_list/{print $3}' input.nml)
+    readarray -t input_file_list < ${state_input_file:1:${#state_input_file}-2}
+    #update_input_file_list='filter_out.txt'
+
     if [[ $update_in_place == true ]]; then
         update_output_file_list='filter_in.txt'
         for fn in ${input_file_list[@]}; do
+            if [[ $verb -eq 1 ]]; then echo "Update_states: Linking $fn ...."; fi
             ln -sf $fn .
         done
     else
@@ -897,16 +903,19 @@ function run_mpas {
 
     intvl_min=$((intvl_sec/60))
 
+    fcst_sec=$(( iseconds + intvl_sec ))
     currtime_str=$(date -d @$iseconds +%Y-%m-%d_%H:%M:%S)
+    currtime_fil=${currtime_str//:/.}
+    fcsttime_fil=$(date -d @$fcst_sec +%Y-%m-%d_%H.%M.%S)
 
     #
     # Preparation for each member
     #
     jobarrays=()
     for iens in $(seq 1 $ENS_SIZE); do
-        memstr=$(printf "02d" $iens)
+        memstr=$(printf "%02d" $iens)
 
-        memwrkdir=$wrkdir/mem$memstr
+        memwrkdir=$wrkdir/fcst_$memstr
         mkwrkdir $memwrkdir 1
         cd $memwrkdir
 
@@ -918,7 +927,7 @@ function run_mpas {
             do_restart="false"
             do_dacyle="false"
         else
-            ln -sf ../${domname}_${memstr}.restart.${currtime_str}.nc .
+            ln -sf ../${domname}_${memstr}.restart.${currtime_fil}.nc .
             do_restart="true"
             do_dacyle="true"
         fi
@@ -927,14 +936,23 @@ function run_mpas {
         # lbc files
         #
         jens=$(( (iens-1)%nenslbc+1 ))
-        mlbcstr=$(printf "02d" $jens)
-        isec_nlbc=$(( iseconds/3600*3600 + EXTINVL))
+        mlbcstr=$(printf "%02d" $jens)
+        isec_nlbc1=$(( iseconds/3600*3600 ))
+        isec_nlbc2=${isec_nlbc1}
         isec_elbc=$(( iseconds+intvl_sec ))
-        while [[ $isec_elbc -gt $isec_nlbc ]]; do
-            let isec_nlbc+=EXTINVL
+        while [[ $isec_elbc -gt $isec_nlbc2 ]]; do
+            let isec_nlbc2+=EXTINVL
         done
-        lbctime_str=$(date -d @$isec_nlbc +%Y-%m-%d_%H:%M:%S)
-        ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str}.nc ${domname}_${memstr}.lbc.${lbctime_str}.nc
+        # External GRIB file provided file times
+        lbctime_str1=$(date -d @$isec_nlbc1 +%Y-%m-%d_%H.%M.%S)
+        lbctime_str2=$(date -d @$isec_nlbc2 +%Y-%m-%d_%H.%M.%S)
+
+        # MPAS expected boundary file times
+        isec_elbc=$((iseconds+EXTINVL))
+        mpastime_str1=$(date -d @$iseconds  +%Y-%m-%d_%H.%M.%S)
+        mpastime_str2=$(date -d @$isec_elbc +%Y-%m-%d_%H.%M.%S)
+        ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc ${domname}_${memstr}.lbc.${mpastime_str1}.nc
+        ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc ${domname}_${memstr}.lbc.${mpastime_str2}.nc
 
         ln -sf $rundir/$domname/$domname.graph.info.part.${npefcst} .
 
@@ -1036,8 +1054,8 @@ function run_mpas {
     config_lsm_scheme                = '${MPASLSM}'
     num_soil_layers                  = ${MPASNFLS}
     config_physics_suite             = 'convection_permitting'
-    config_microp_re                 = true
 EOF
+    #config_microp_re                 = true
 
         if [[ ${mpscheme} == "mp_nssl2m" ]]; then
 
@@ -1129,7 +1147,7 @@ EOF
     #
     cd $wrkdir
 
-    jobscript="run_mpas.${mach}"
+    mpas_jobscript="run_mpas.${mach}"
     jobarraystr="--array=$(join_by_comma ${jobarrays[@]})"
 
     sedfile=$(mktemp -t mpas_${eventtime}.sed_XXXX)
@@ -1146,13 +1164,13 @@ s/MACHINE/${machine}/g
 s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/RUNMPCMD/${job_runmpexe_str}/
+s/SAVETAG/${domname}_??.restart.${fcsttime_fil}.nc/
 EOF
     if [[ "${mach}" == "pbs" ]]; then
         echo "s/NNODES/${nnodes_filter}/;s/NCORES/${ncores_filter}/" >> $sedfile
     fi
 
-    submit_a_jobscript $wrkdir "fcst" $sedfile $TEMPDIR/run_mpas_array.${mach} $jobscript ${jobarraystr}
-    echo "$jobscript"
+    submit_a_jobscript $wrkdir "fcst" $sedfile $TEMPDIR/run_mpas_array.${mach} $mpas_jobscript ${jobarraystr}
 }
 
 ########################################################################
@@ -1195,13 +1213,14 @@ function da_cycle_driver() {
     #------------------------------------------
     # Time Cylces start here
     #------------------------------------------
-    local date_beg, date_end, intvl_min, n_cycles
+    local date_beg date_end intvl_min n_cycles
     date_beg=$(date -d @$start_sec +%Y%m%d%H%M)
     date_end=$(date -d @$end_sec +%Y%m%d%H%M)
     intvl_min=$((intvl_sec/60))
     n_cycles=$(( (end_sec-start_sec)/intvl_sec ))
 
-    echo "Total of ${n_cycles} cycles from $date_beg to $date_end will be run every $intv_min minutes."
+    echo "Total of ${n_cycles} cycles from $date_beg to $date_end will be run every $intvl_min minutes."
+    echo ""
 
     local icyc=$(( (start_sec-init_sec)/intvl_sec ))
     for isec in $(seq $start_sec $intvl_sec $end_sec ); do
@@ -1212,13 +1231,13 @@ function da_cycle_driver() {
         mkwrkdir $dawrkdir 0    # keep original directory
         cd $dawrkdir
 
-        echo "Cycle $icyc at ${timestr_curr}"
+        echo "- Cycle $icyc at ${timestr_curr}"
 
         if [[ " ${jobs[*]} " =~ " filter " ]]; then
             #------------------------------------------------------
             # 1. Run filter
             #------------------------------------------------------
-            if [[ $verb -eq 1 ]]; then echo "    Run filter"; fi
+            if [[ $verb -eq 1 ]]; then echo ""; echo "    Run filter at $eventtime"; fi
             run_filter $dawrkdir $icyc $isec
         fi
 
@@ -1226,7 +1245,7 @@ function da_cycle_driver() {
             #------------------------------------------------------
             # 2. Run update_states for all ensemble members
             #------------------------------------------------------
-            if [[ $verb -eq 1 ]]; then echo "    Run update_mpas_state"; fi
+            if [[ $verb -eq 1 ]]; then echo ""; echo "    Run update_mpas_state at $eventtime"; fi
             run_update_states $dawrkdir
         fi
 
@@ -1235,47 +1254,67 @@ function da_cycle_driver() {
             # 3. Advance model for each member
             #------------------------------------------------------
             # Run forecast for ensemble members until the next analysis time
-            if [[ $verb -eq 1 ]]; then echo "    Run advance model"; fi
+            if [[ $verb -eq 1 ]]; then echo ""; echo "    Run advance model at $eventtime"; fi
 
-            mpas_jobscript=$(run_mpas $dawrkdir $icyc $isec)
+            mpas_jobscript="to_be_set_in_run_mpas"
+            run_mpas $dawrkdir $icyc $isec
 
             if [[ $dorun == true ]]; then
-                #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                check_and_resubmit "fcst" $dawrkdir $ENS_SIZE $mpas_jobscript 2
+                if [[ ! -e done.fcst ]]; then
+                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+                    check_and_resubmit "fcst" $dawrkdir $ENS_SIZE $mpas_jobscript 2
+                fi
             fi
         fi
 
-        if [[ " ${jobs[*]} " =~ " clean " ]]; then
-            #------------------------------------------------------
-            # 4. Clean working files for this da cycle only
-            #------------------------------------------------------
-            if [[ $verb -eq 1 ]]; then echo "    Cleaning working directory"; fi
-            run_clean $wrkdir filter update_states mpas
-        fi
-
-        @ icyc++
+        let icyc+=1
     done
 }
 
 ########################################################################
 
 function run_clean {
+    # $1    $2    $3
+    # start  end
+    local start_sec=$1
+    local end_sec=$2
 
-    local wrkdir="$1"
-    local dirnames=("${@:2}")
+    wrkdir=$rundir/dacycles
 
-    for dirname in ${dirnames[@]}; do
-        case $dirname in
-        mpas )
-            clean_mem_runfiles "fcst" $wrkdir $ENS_SIZE
-            ;;
-        filter )
-            :
-            ;;
-        update_states )
-            :
-            ;;
-        esac
+    for isec in $(seq $start_sec $intvl_sec $end_sec ); do
+        timestr_curr=$(date -d @$isec +%Y%m%d%H%M)
+        eventtime=$(date    -d @$isec +%H%M)
+
+        dawrkdir=$wrkdir/$timestr_curr
+        if [[ -d $dawrkdir ]]; then
+            cd $dawrkdir
+
+            if [[ $verb -eq 1 ]]; then echo "    Cleaning working directory $dawrkdir"; fi
+
+            for dirname in mpas filter update_states; do
+
+                cd $dawrkdir
+
+                case $dirname in
+                mpas )
+                    rm -f error.fcst_* log.????.abort
+                    #rm -f log.atmosphere.????.out log.atmosphere.????.err fcst_*_*.log
+                    #echo "clean mpas in $dawrkdir"
+                    clean_mem_runfiles "fcst" $dawrkdir $ENS_SIZE
+                    ;;
+                filter )
+                    if [[ -e done.filter ]]; then
+                        rm -f filter_*.log error.filter
+                    fi
+                    ;;
+                update_states )
+                    if [[ -e done.update_states ]]; then
+                        rm -f update_states_*.log error.update_states
+                    fi
+                    ;;
+                esac
+            done
+        fi
     done
 }
 
@@ -1293,7 +1332,7 @@ FIXDIR="${rootdir}/fix_files"
 eventdate="$eventdateDF"
 eventtime="1500"
 initdatetime=""
-enddatetime=$(date -d "$eventdate 03:00 1 day" +%Y%m%d%H%M)
+enddatetime=""
 
 ENS_SIZE=36
 nenslbc=9
@@ -1316,11 +1355,11 @@ OUTIOTYPE="netcdf4"
 ICSIOTYPE="pnetcdf,cdf5"
 
 ADAPTIVE_INF=true
-update_in_place=false           # update MPAS states in-place or making a copy of the restart files
-OBS_DIR="./"
+update_in_place=true           # update MPAS states in-place or making a copy of the restart files
+OBS_DIR="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/DART/models/mpas_atm/work"
 
 verb=0
-overwrite=1
+overwrite=0
 jobwait=0
 runcmd="sbatch"
 dorun=true
@@ -1575,9 +1614,13 @@ if [[ "$initdatetime" == "" ]]; then
     initdatetime="${eventdate}1500"
 fi
 
-inittime_sec=$(date -d "${initdatetime:0:8} ${initdatetime:8:4}00" +%s)
-starttime_sec=$(date -d "$eventdate ${eventtime}00 $startday"      +%s)
-stoptime_sec=$(date -d "${enddatetime:0:8}  ${enddatetime:8:4}00"  +%s)
+if [[ "$enddatetime" == "" ]]; then
+    enddatetime=$(date -d "$eventdate 03:00 1 day" +%Y%m%d%H%M)
+fi
+
+inittime_sec=$(date -d "${initdatetime:0:8} ${initdatetime:8:4}" +%s)
+starttime_sec=$(date -d "$eventdate ${eventtime} $startday"      +%s)
+stoptime_sec=$(date -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
 
 rundir="$WORKDIR/${eventdate}"
 if [[ ! -d $rundir ]]; then
@@ -1588,7 +1631,11 @@ exedir="$rootdir/exec"
 
 # $1    $2    $3
 # init start  end
-da_cycle_driver $inittime_sec $starttime_sec $stoptime_sec
+if [[ " ${jobs[*]} " =~ " filter " || " ${jobs[*]} " =~ " mpas " || " ${jobs[*]} " =~ " update_states " ]]; then
+    da_cycle_driver $inittime_sec $starttime_sec $stoptime_sec
+elif [[ " ${jobs[*]} " =~ " clean " ]]; then
+    run_clean $starttime_sec $stoptime_sec
+fi
 
 echo " "
 echo "==== Jobs done $(date +%m-%d_%H:%M:%S) ===="

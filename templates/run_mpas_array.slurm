@@ -2,8 +2,8 @@
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
-#SBATCH -t 06:30:00
-#SBATCH --output=WRKDIR/mpas_%a_%j.log
+#SBATCH -t 01:30:00
+#SBATCH --output=WRKDIR/fcst_%a_%j.log
 ACCTSTR
 EXCLSTR
 
@@ -42,7 +42,7 @@ ulimit -s unlimited
 mem=${SLURM_ARRAY_TASK_ID}
 memstr=$(printf "%02d" $mem)
 
-cd WRKDIR/mem${memstr}
+cd WRKDIR/fcst_${memstr}
 
 touch fcst.running_$memstr
 rm -rf error.fcst_$memstr queue.fcst_$memstr
@@ -56,9 +56,9 @@ RUNMPCMD -n NOPART EXEDIR/atmosphere_model.single
 
 if [[ $? -eq 0 ]]; then
     touch done.fcst_$memstr
-    mv *.restart.*.nc ..
-    mv *.history.*.nc ..
-    mv *.diag.*.nc ..
+    for fn in SAVETAG; do
+       mv ${fn} ..
+    done
 else
     touch error.fcst_$memstr
 fi

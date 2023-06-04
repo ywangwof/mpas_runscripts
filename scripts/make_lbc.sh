@@ -102,7 +102,7 @@ function run_ungrib {
     jobarrays=()
     for mem in $(seq 1 $nenslbc); do
         memstr=$(printf "%02d" $mem)
-        starthr=$((eventtime-gribtime+EXTINVL))
+        starthr=$((eventtime-gribtime))
 
         starts=$(date -d "$eventdate $gribtime:00" +%s)
         ends=$(date -d "$eventdate $eventend:00 1 day" +%s)
@@ -674,7 +674,7 @@ echo "     Working dir: $WORKDIR"
 echo "     Domain name: $domname"
 echo " "
 
-starttime_str=$(date -d "$eventdate ${eventtime}:00 $EXTINVL hours" +%Y-%m-%d_%H:%M:%S)
+starttime_str=$(date -d "$eventdate ${eventtime}:00"      +%Y-%m-%d_%H:%M:%S)
 stoptime_str=$(date -d "$eventdate  ${eventend}:00 1 day" +%Y-%m-%d_%H:%M:%S)
 
 rundir="$WORKDIR/${eventdate}"
