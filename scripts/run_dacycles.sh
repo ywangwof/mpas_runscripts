@@ -1373,6 +1373,8 @@ fi
 
 jobs=(filter update_states mpas clean)
 
+source $scpdir/Common_Utilfuncs.sh
+
 #-----------------------------------------------------------------------
 #
 # Handle command line arguments (override default settings)
@@ -1586,8 +1588,6 @@ else    # Vecna at NSSL
     modulename="env.mpas_smiol"
     source ${modulename}
 fi
-
-source $scpdir/Common_Utilfuncs.sh
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #

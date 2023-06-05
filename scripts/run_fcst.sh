@@ -628,7 +628,8 @@ function run_upp {
     fixdirs[TauCoeff]="$FIXDIR/UPP/crtm2_fix/TauCoeff/ODPS/Big_Endian"
 
     for ((i=0;i<=fcst_seconds;i+=OUTINVL)); do
-        minstr=$(printf "%03d" $h)
+        imin=$((i/60))
+        minstr=$(printf "%03d" $imin)
 
         if [[  -f $wrkdir/done.upp$minstr || -f $wrkdir/queue.upp$minstr ]]; then
             continue      # already done, or is in queue, skip this hour
@@ -735,9 +736,9 @@ EOF
 
             sedfile=$(mktemp -t upp_${eventtime}_$minstr.sed_XXXX)
             cat <<EOF > $sedfile
-s/PARTION/${partition_upp}/
+s/PARTION/${partition_post}/
 s/NOPART/$npepost/
-s/CPUSPEC/${claim_cpu}/
+s/CPUSPEC/${post_cpu}/
 s/JOBNAME/upp${minstr}_${eventtime}/
 s/HHMINSTR/$minstr/g
 s/MODULE/${modulename}/g
@@ -870,9 +871,25 @@ function run_clean {
                 case $dirname in
                 mpas )
                     rm -f error.fcst_* log.????.abort
-                    rm -f log.atmosphere.????.out log.atmosphere.????.err fcst_*_*.log
+                    #rm -f log.atmosphere.????.out log.atmosphere.????.err fcst_*_*.log
                     #echo "clean mpas in $dawrkdir"
                     #clean_mem_runfiles "fcst" $fcstwrkdir $ENS_SIZE
+                    done=0
+                    for mem in $(seq 1 $ENS_SIZE); do
+                        memstr=$(printf "%02d" $mem)
+                        memdir="$fcstwrkdir/fcst_$memstr"
+
+                        donefile="$memdir/done.fcst_$memstr"
+                        if [[ -e $donefile ]]; then
+                            rm -f fcst_${mem}_*.log
+                            #rm $donefile
+                            let done+=1
+                        fi
+                    done
+                    if [[ $done -eq $ENS_SIZE ]]; then
+                        rm -f queue.fcst
+                        touch done.fcst
+                    fi
                     ;;
                 mpassit )
                     mywrkdir=$fcstwrkdir/mpassit
@@ -889,6 +906,7 @@ function run_clean {
                                 donefile="$memdir/done.mpassit${minstr}_$memstr"
                                 if [[ -e $donefile ]]; then
                                     rm -f $mywrkdir/mpassit${minstr}_${mem}_*.log
+                                    rm $donefile
                                     let done+=1
                                 fi
                             done
@@ -985,6 +1003,8 @@ elif [[ "$(hostname)" == cheyenne* ]]; then
 fi
 
 jobs=(mpas mpassit upp clean)
+
+source $scpdir/Common_Utilfuncs.sh
 
 #-----------------------------------------------------------------------
 #
@@ -1199,8 +1219,6 @@ else    # Vecna at NSSL
     modulename="env.mpas_smiol"
     source ${modulename}
 fi
-
-source $scpdir/Common_Utilfuncs.sh
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
