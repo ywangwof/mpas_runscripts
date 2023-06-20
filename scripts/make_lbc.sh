@@ -54,7 +54,7 @@ function usage {
     echo " "
     echo "    DATETIME - Case date and time in YYYYMMDD, Default for today"
     echo "    WORKDIR  - Run Directory"
-    echo "    JOBS     - One or more jobs from [ungrib,init,clean]"
+    echo "    JOBS     - One or more jobs from [ungrib,init,clean,cleanungrib]"
     echo "               Default all jobs in sequence"
     echo " "
     echo "    OPTIONS:"
@@ -102,19 +102,19 @@ function run_ungrib {
     jobarrays=()
     for mem in $(seq 1 $nenslbc); do
         memstr=$(printf "%02d" $mem)
-        starthr=$((eventtime-gribtime))
+        starthr=$(((eventtime-gribtime)/100))
 
-        starts=$(date -d "$eventdate $gribtime:00" +%s)
-        ends=$(date -d "$eventdate $eventend:00 1 day" +%s)
+        starts=$(date -d "$eventdate $gribtime" +%s)
+        ends=$(date -d "$eventdate $eventend 1 day" +%s)
         endhr=$(( (ends-starts)/3600 ))
 
-        gribstart_str=$(date -d "$eventdate $gribtime:00 $starthr hours" +%Y-%m-%d_%H:%M:%S )
-        gribendtm_str=$(date -d "$eventdate $gribtime:00 $endhr hours"   +%Y-%m-%d_%H:%M:%S )
+        gribstart_str=$(date -d "$eventdate $gribtime $starthr hours" +%Y-%m-%d_%H:%M:%S )
+        gribendtm_str=$(date -d "$eventdate $gribtime $endhr hours"   +%Y-%m-%d_%H:%M:%S )
 
         gribfiles=()
         for ((h=starthr;h<=endhr;h+=EXTINVL)); do
             hstr=$(printf "%02d" $h)
-            gribfile=$grib_dir/$eventdate/${gribtime}00/postprd_mem00${memstr}/wrfnat_pert_hrrr_mem00${memstr}_${hstr}.grib2
+            gribfile=$grib_dir/$eventdate/${gribtime}/mem${memstr}/wrfnat_pert_hrrr_mem00${memstr}_${hstr}.grib2
 
             echo "GRIB file: $gribfile"
             while [[ ! -f $gribfile ]]; do
@@ -228,6 +228,7 @@ function run_lbc {
                 if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
                 fi
+                check_and_resubmit "init" $rundir/init $nensics
                 check_and_resubmit "ungrib" $rundir/lbc/ungrib $nenslbc
                 sleep 10
             done
@@ -256,11 +257,11 @@ function run_lbc {
         if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npelbc} ]]; then
             cd $rundir/$domname
             if [[ $verb -eq 1 ]]; then
-                echo "Generating ${domname}.graph.info.part.${npelbc} in $rundir/$domname using $exedir/gpmetis"
+                echo "Generating ${domname}.graph.info.part.${npelbc} in $rundir/$domname using ${gpmetis}"
             fi
-            $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npelbc} > $exedir/gpmetis.out$npelbc
+            ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npelbc} > gpmetis.out$npelbc
             if [[ $? -ne 0 ]]; then
-                echo "$?: $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npelbc}"
+                echo "$?: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npelbc}"
                 exit $?
             fi
             cd $mywrkdir
@@ -418,6 +419,13 @@ function run_clean {
     done
 }
 
+########################################################################
+
+function run_cleanungrib {
+    cd $rundir/lbc
+    rm -rf ungrib
+}
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #
 # Default values
@@ -433,12 +441,11 @@ WORKDIR="${rootdir}/run_dirs"
 TEMPDIR="${rootdir}/templates"
 FIXDIR="${rootdir}/fix_files"
 eventdate="$eventdateDF"
-eventtime="15"
-eventend="09"
+eventtime="1500"
+eventend="0900"
 
-nenslbc=9
-hrrr_dir="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MODEL_DATA/HRRRE"
-hrrr_time="12"
+nensics=36
+nenslbc=18
 EXTHEAD="HRRRE"
 EXTNFGL=51
 EXTNFLS=9
@@ -611,7 +618,10 @@ if [[ $machine == "Jet" ]]; then
     module load $modulename
     module load wgrib2/2.0.8
     wgrib2path="/apps/wgrib2/2.0.8/intel/18.0.5.274/bin/wgrib2"
+    gpmetis="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/bin/gpmetis"
 
+    hrrr_dir="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MODEL_DATA/HRRRE"
+    hrrr_time="1200"
 elif [[ $machine == "Cheyenne" ]]; then
 
     if [[ $dorun == true ]]; then
@@ -648,6 +658,10 @@ else    # Vecna at NSSL
     source ${modulename}
     WPSGEOG_PATH="/scratch/ywang/MPAS/WPS_GEOG/"
     wgrib2path="/scratch/ywang/tools/hpc-stack/intel-2021.8.0/wgrib2/2.0.8/bin/wgrib2"
+    gpmetis="/scratch/ywang/tools/bin/gpmetis"
+
+    hrrr_dir="/scratch/wofuser/MODEL_DATA/HRRRE"
+    hrrr_time="1200"
 fi
 
 MPASLSM='ruc'
@@ -668,14 +682,14 @@ source $scpdir/Common_Utilfuncs.sh
 #% ENTRY
 
 echo "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
-echo "     Event date : $eventdate ${eventtime}:00"
+echo "     Event date : $eventdate ${eventtime}"
 echo "     Root    dir: $rootdir"
 echo "     Working dir: $WORKDIR"
 echo "     Domain name: $domname"
 echo " "
 
-starttime_str=$(date -d "$eventdate ${eventtime}:00"      +%Y-%m-%d_%H:%M:%S)
-stoptime_str=$(date -d "$eventdate  ${eventend}:00 1 day" +%Y-%m-%d_%H:%M:%S)
+starttime_str=$(date -d "$eventdate ${eventtime}"      +%Y-%m-%d_%H:%M:%S)
+stoptime_str=$(date -d "$eventdate  ${eventend} 1 day" +%Y-%m-%d_%H:%M:%S)
 
 rundir="$WORKDIR/${eventdate}"
 
@@ -688,8 +702,9 @@ jobname="${eventdate:4:4}"
 exedir="$rootdir/exec"
 
 declare -A jobargs=([ungrib]="${hrrr_dir} ${hrrr_time}"                 \
-                    [lbc]="lbc/ungrib/done.ungrib init/done.ics"        \
+                    [lbc]="lbc/ungrib/done.ungrib init/done.init"       \
                     [clean]="ungrib lbc"                                \
+                    [cleanungrib]=""                                    \
                    )
 
 for job in ${jobs[@]}; do

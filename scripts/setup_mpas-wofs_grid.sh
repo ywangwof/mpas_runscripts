@@ -142,7 +142,7 @@ function run_geogrid {
   wrf_core = 'ARW',
   max_dom = 1,
   start_date = '${starttime_str}',
-  end_date = '${stoptime_str}',
+  end_date = '${starttime_str}',
   interval_seconds = 3600,
   io_form_geogrid = 2,
   opt_output_from_geogrid_path = './',
@@ -248,6 +248,8 @@ function run_createWOFS {
         echo "Found file \"done.create\", skipping run_createWOFS ...."
         echo ""
         return
+    elif [[ -f create.running || -f queue.create ]]; then
+        return                   # skip
     fi
 
     local mrpythondir
@@ -256,7 +258,7 @@ function run_createWOFS {
     # Extract WRF domain attributes
     #
     function ncattget {
-      ncks -x -M $1 | grep -E "(corner_lats|corner_lons|CEN_LAT|CEN_LON)"
+      ${nckspath} -x -M $1 | grep -E "(corner_lats|corner_lons|CEN_LAT|CEN_LON)"
     }
 
     # Check MPAS-Limited-Area
@@ -346,6 +348,7 @@ EOF
     sedfile=$(mktemp -t createWOFS.sed_XXXX)
     cat <<EOF > $sedfile
 s/PARTION/${partition_create}/
+s/CPUSPEC/${create_cpu}/
 s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/JOBNAME/createWOFS/
@@ -389,10 +392,21 @@ function run_static {
     mkwrkdir $wrkdir $overwrite
     cd $wrkdir
 
+    if [[ ! -f $domname.graph.info.part.${npepost} ]]; then
+        if [[ $verb -eq 1 ]]; then
+            echo "Generating ${domname}.graph.info.part.${npepost} in $wrkdir using ${gpmetis}"
+        fi
+        ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npepost} > gpmetis.out$npepost
+        if [[ $? -ne 0 ]]; then
+            echo "$?: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npepost}"
+            exit $?
+        fi
+    fi
+
     # The program needs a time string in file $domname.grid.nc
     #
-    inittime_str=$(date -d "$hrrrdate ${hrrrtime}:00" +%Y-%m-%d_%H)
-    starttime_str=$(date -d "$hrrrdate ${hrrrtime}:00" +%Y-%m-%d_%H:%M:%S)
+    inittime_str=$(date -d "$hrrrdate ${hrrrtime}" +%Y-%m-%d_%H)
+    starttime_str=$(date -d "$hrrrdate ${hrrrtime}" +%Y-%m-%d_%H:%M:%S)
 
     initfile="../ungrib/${EXTHEAD}:$inittime_str"
     if [[ ! -f $initfile ]]; then
@@ -423,10 +437,12 @@ function run_static {
     config_sfc_prefix = 'SST'
     config_fg_interval = $((EXTINVL*3600))
     config_landuse_data = 'MODIFIED_IGBP_MODIS_NOAH_15s'
+    config_soilcat_data = 'BNU'
     config_topo_data = 'GMTED2010'
     config_vegfrac_data = 'MODIS'
     config_albedo_data = 'MODIS'
     config_maxsnowalbedo_data = 'MODIS'
+    config_lai_data = 'MODIS'
     config_supersample_factor = 1
     config_use_spechumd = false
 /
@@ -464,6 +480,7 @@ EOF
 <streams>
 <immutable_stream name="input"
                   type="input"
+                  io_type="netcdf"
                   filename_template="${domname}.grid.nc"
                   input_interval="initial_only" />
 
@@ -500,6 +517,7 @@ EOF
     sedfile=$(mktemp -t static_${jobname}.sed_XXXX)
     cat <<EOF > $sedfile
 s/PARTION/${partition_static}/
+s/NOPART/$npepost/
 s/JOBNAME/static_${jobname}/
 s/CPUSPEC/${static_cpu}/
 s/MODULE/${modulename}/
@@ -531,16 +549,17 @@ function run_ungrib_hrrr {
         return                   # skip
     fi
 
-    h=${hrrrtime#0}
-    hstr=$(printf "%02d" $h)
+    h=${hrrrtime:0:2}
+    hstr=$(printf "%02d" ${h#0})
     if [[ -f $hrrr_grib_dir ]]; then
         hrrrfile=$hrrr_grib_dir
         vtime=$($wgrib2path $hrrrfile -for 1:1 -vt)
         gribtime=${vtime##*=}
         hrrrdate=${gribtime:0:8}
-        hrrrtime=${hrrrdate:8:2}
+        hrrrtime=${gribtime:8:2}
+        #echo $hrrrtime, $hrrrdate, $vtime, $gribtime
     else
-        julday=$(date -d "$hrrrdate ${hrrrtime}:00" +%y%j%H)
+        julday=$(date -d "$hrrrdate ${hrrrtime}" +%y%j%H)
         hrrrbase="${julday}0000"
         hrrrfile="$hrrr_grib_dir/${hrrrbase}$hstr"
     fi
@@ -555,81 +574,10 @@ function run_ungrib_hrrr {
         sleep 10
     done
 
-#        if [[ ! -f $basefn ]]; then
-#            # drop un-wanted records
-#            if [[ $h -eq 0 ]]; then
-#                valtime="anl"
-#            else
-#                valtime="$h hour fcst"
-#            fi
-#            echo "HRRR file: $hrrrfile ($valtime)"
-#
-#            keepfile=$(mktemp -t keephrrr_${hstr}.txt_XXXX)
-#
-#            cat << EOF > ${keepfile}
-#:PRES:[0-9]{1,2} hybrid level:${valtime}:
-#:CLMR:[0-9]{1,2} hybrid level:${valtime}:
-#:CIMIXR:[0-9]{1,2} hybrid level:${valtime}:
-#:RWMR:[0-9]{1,2} hybrid level:${valtime}:
-#:SNMR:[0-9]{1,2} hybrid level:${valtime}:
-#:GRLE:[0-9]{1,2} hybrid level:${valtime}:
-#:HGT:[0-9]{1,2} hybrid level:${valtime}:
-#:TMP:[0-9]{1,2} hybrid level:${valtime}:
-#:SPFH:[0-9]{1,2} hybrid level:${valtime}:
-#:UGRD:[0-9]{1,2} hybrid level:${valtime}:
-#:VGRD:[0-9]{1,2} hybrid level:${valtime}:
-#:SPNCR:[0-9]{1,2} hybrid level:${valtime}:
-#:NCONCD:[0-9]{1,2} hybrid level:${valtime}:
-#:NCCICE:[0-9]{1,2} hybrid level:${valtime}:
-#:PMTF:[0-9]{1,2} hybrid level:${valtime}:
-#:PMTC:[0-9]{1,2} hybrid level:${valtime}:
-#:TMP:2 m above ground:${valtime}:
-#:SPFH:2 m above ground:${valtime}:
-#:RH:2 m above ground:${valtime}:
-#:UGRD:10 m above ground:${valtime}:
-#:VGRD:10 m above ground:${valtime}:
-#:PRES:surface:${valtime}:
-#:SNOD:surface:${valtime}:
-#:WEASD:surface:${valtime}:
-#:TMP:surface:${valtime}:
-#:CNWAT:surface:${valtime}:
-#:HGT:surface:${valtime}:
-#:MSLMA:mean sea level:${valtime}:
-#:TSOIL:0-0 m below ground:${valtime}:
-#:TSOIL:0.01-0.01 m below ground:${valtime}:
-#:TSOIL:0.04-0.04 m below ground:${valtime}:
-#:TSOIL:0.1-0.1 m below ground:${valtime}:
-#:TSOIL:0.3-0.3 m below ground:${valtime}:
-#:TSOIL:0.6-0.6 m below ground:${valtime}:
-#:TSOIL:1-1 m below ground:${valtime}:
-#:TSOIL:1.6-1.6 m below ground:${valtime}:
-#:TSOIL:3-3 m below ground:${valtime}:
-#:SOILW:0-0 m below ground:${valtime}:
-#:SOILW:0.01-0.01 m below ground:${valtime}:
-#:SOILW:0.04-0.04 m below ground:${valtime}:
-#:SOILW:0.1-0.1 m below ground:${valtime}:
-#:SOILW:0.3-0.3 m below ground:${valtime}:
-#:SOILW:0.6-0.6 m below ground:${valtime}:
-#:SOILW:1-1 m below ground:${valtime}:
-#:SOILW:1.6-1.6 m below ground:${valtime}:
-#:SOILW:3-3 m below ground:${valtime}:
-#:LAND:surface:${valtime}:
-#:ICEC:surface:${valtime}:
-#EOF
-#
-#            echo "Generating working copy: $basefn ...."
-#            #grib2cmdstr="${wgrib2path} $hrrrfile | grep -Ef keep_$hstr.txt | ${wgrib2path} -i $hrrrfile -GRIB tmp_${basefn}"
-#            grib2cmdstr="${wgrib2path} $hrrrfile | grep -Ef ${keepfile} | ${wgrib2path} -i $hrrrfile -GRIB ${basefn}"
-#            if [[ $verb -eq 1 ]]; then echo "$grib2cmdstr"; fi
-#            eval $grib2cmdstr >& /dev/null
-#            sleep 2
-#            rm -f $keepfile
-#        fi
-
     ln -sf ${hrrrfile} GRIBFILE.AAA
     ln -sf $FIXDIR/WRFV4.0/${hrrrvtable} Vtable
 
-    hrrrtime_str=$(date -d "$hrrrdate ${hrrrtime}:00" +%Y-%m-%d_%H:%M:%S)
+    hrrrtime_str=$(date -d "$hrrrdate ${hrrrtime}" +%Y-%m-%d_%H:%M:%S)
     cat << EOF > namelist.wps
 &share
  wrf_core = 'ARW',
@@ -683,19 +631,23 @@ function run_clean {
             fi
             ;;
         createWOFS )
-            cd $rundir/$domname
+            if [[ -d $rundir/$domname ]]; then
+                cd $rundir/$domname
 
-            donecreate="$rundir/$domname/done.create"
-            if [[ -e $donecreate ]]; then
-                rm -rf create_region limited_area create_*.log x1.65536002.grid.nc
+                donecreate="$rundir/$domname/done.create"
+                if [[ -e $donecreate ]]; then
+                    rm -rf create_region limited_area create_*.log x1.65536002.grid.nc
+                fi
             fi
             ;;
         static )
-            cd $rundir/$domname
+            if [[ -d $rundir/$domname ]]; then
+                cd $rundir/$domname
 
-            donestatic="$rundir/$domname/done.static"
-            if [[ -e $donestatic ]]; then
-                rm -f log.init_atmosphere.* static_*.log  #$EXTHEAD:*
+                donestatic="$rundir/$domname/done.static"
+                if [[ -e $donestatic ]]; then
+                    rm -f log.init_atmosphere.* static_*.log  #$EXTHEAD:*
+                fi
             fi
             ;;
 
@@ -716,14 +668,10 @@ WORKDIR="${rootdir}/run_dirs"
 TEMPDIR="${rootdir}/templates"
 FIXDIR="${rootdir}/fix_files"
 eventdate="$eventdateDF"
-eventtime="15"
+eventtime="1500"
 domname="wofs_mpas"
 EXTHEAD="HRRRE"
 
-hrrrdate="$(date +%Y%m%d)"
-hrrrtime="$(date +%H)"
-hrrrdir="/public/data/grids/hrrr/conus/wrfnat/grib2"
-hrrrfile="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MODEL_DATA/HRRRE/20220520/1400/postprd_mem0001/wrfnat_hrrre_newse_mem0001_01.grib2"
 #hrrrvtable="Vtable.raphrrr"
 hrrrvtable="Vtable.HRRRE.2018"
 
@@ -858,13 +806,12 @@ done
 mach="slurm"
 
 if [[ $machine == "Jet" ]]; then
-    #ncores_ics=5; ncores_fcst=6; ncores_post=6
-    partition="ujet,tjet,xjet,vjet,kjet"; claim_cpu="--cpus-per-task=2"
-                                          claim_cpu_ics="--cpus-per-task=2"
-    partition_static="bigmem"           ; static_cpu="--cpus-per-task=12"
-    partition_create="bigmem"
+    #ncores_ics=5; ncores_static=6; ncores_post=6
+    partition="ujet,tjet,xjet,vjet,kjet"         ; claim_cpu="--cpus-per-task=2"
+    partition_static="ujet,tjet,xjet,vjet,kjet"  ; static_cpu="--cpus-per-task=12"
+    partition_create="bigmem"                    ; create_cpu="--mem-per-cpu=128G"
 
-    npepost=72   #; nnodes_post=$(( npepost/ncores_post ))
+    npepost=24   #; nnodes_post=$(( npepost/ncores_post ))
 
     mach="slurm"
     job_exclusive_str="#SBATCH --exclusive"
@@ -872,26 +819,33 @@ if [[ $machine == "Jet" ]]; then
     job_runmpexe_str="srun"
     job_runexe_str="srun"
 
-    modulename="build_jet_intel18_1.11_smiol"
+    modulename="build_jet_intel18_1.11"
     WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
 
     source /etc/profile.d/modules.sh
     module purge
     module use ${rootdir}/modules
     module load $modulename
-    module load nco
+    #module load nco
     module load wgrib2/2.0.8
     wgrib2path="/apps/wgrib2/2.0.8/intel/18.0.5.274/bin/wgrib2"
+    nckspath="/apps/nco/4.9.3/gnu/9.2.0/bin/ncks"
+    gpmetis="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/bin/gpmetis"
+
+    hrrrdir="/public/data/grids/hrrr/conus/wrfnat/grib2"
+    hrrrfile="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MODEL_DATA/HRRRE/${eventdate}/1400/mem01/wrfnat_hrrre_newse_mem0001_01.grib2"
+    hrrrdate="${eventdate}"
+    hrrrtime="${eventtime}"
 
 elif [[ $machine == "Cheyenne" ]]; then
 
     if [[ $dorun == true ]]; then
         runcmd="qsub"
     fi
-    ncores_ics=32; ncores_fcst=32; ncores_post=32
-    partition="regular"        ; claim_cpu="ncpus=${ncores_fcst}"; claim_cpu_ics="ncpus=${ncores_ics}"
-    partition_static="regular" ; static_cpu="ncpus=${ncores_post}"
-    partition_create="regular"
+    ncores_static=32; ncores_post=32
+    partition="regular"        ; claim_cpu="ncpus=${ncores_static}"
+    partition_static="regular" ; static_cpu="ncpus=${ncores_static}"
+    partition_create="regular" ; create_cpu="ncpus=${ncores_post}"
 
     npepost=72   ; nnodes_post=$(( npepost/ncores_post ))
 
@@ -907,13 +861,12 @@ elif [[ $machine == "Cheyenne" ]]; then
 else    # Vecna at NSSL
 
     account="${hpcaccount-batch}"
-    ncores_ics=96; ncores_fcst=96; ncores_post=24
-    partition="batch"           ; claim_cpu="--ntasks-per-node=${ncores_fcst} --mem-per-cpu=4G";
-                                  claim_cpu_ics="--ntasks-per-node=${ncores_ics} --mem-per-cpu=4G"
-    partition_static="batch"    ; static_cpu=""
-    partition_create="batch"
+    ncores_static=96; ncores_post=96
+    partition="batch"           ; claim_cpu="--ntasks-per-node=${ncores_static} --mem-per-cpu=4G";
+    partition_static="batch"    ; static_cpu="--mem-per-cpu=8G"
+    partition_create="batch"    ; create_cpu="--mem-per-cpu=128G"
 
-    npepost=72   #; nnodes_post=$(( npepost/ncores_post ))
+    npepost=24
 
     mach="slurm"
     job_exclusive_str=""
@@ -922,15 +875,23 @@ else    # Vecna at NSSL
     job_runexe_str="srun"
 
     modulename="env.mpas_smiol"
-    source ${modulename}
+    #source ${rootdir}/modules/${modulename}
     WPSGEOG_PATH="/scratch/ywang/MPAS/WPS_GEOG/"
     wgrib2path="/scratch/ywang/tools/hpc-stack/intel-2021.8.0/wgrib2/2.0.8/bin/wgrib2"
+    nckspath="/scratch/software/miniconda3/bin/ncks"
+    gpmetis="/scratch/ywang/tools/bin/gpmetis"
+
+    hrrrdir="/scratch/wofuser/MODEL_DATA/HRRRE"
+    hrrrfile="/scratch/wofuser/MODEL_DATA/HRRRE/${eventdate}/1400/mem01/wrfnat_hrrre_newse_mem0001_01.grib2"
+    hrrrdate="${eventdate}"
+    hrrrtime="${eventtime}"
 fi
 
 EXTINVL=3
 EXTINVL_STR="${EXTINVL}:00:00"
 
 source $scpdir/Common_Utilfuncs.sh
+
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
@@ -940,16 +901,14 @@ source $scpdir/Common_Utilfuncs.sh
 #% ENTRY
 
 echo "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
-echo "     Event date : $eventdate ${eventtime}:00"
+echo "     Event date : ${eventdate} ${eventtime}"
 echo "     Root    dir: $rootdir"
 echo "     Working dir: $WORKDIR"
 echo " "
 
-starttime_str=$(date -d "$eventdate ${eventtime}:00" +%Y-%m-%d_%H:%M:%S)
-stoptime_str=$(date -d "$eventdate  ${eventtime}:00" +%Y-%m-%d_%H:%M:%S)
+starttime_str=$(date -d "${eventdate} ${eventtime}" +%Y-%m-%d_%H:%M:%S)
 
-runname="${eventdate}"
-rundir="$WORKDIR/${runname}"
+rundir="$WORKDIR/${eventdate}"
 
 if [[ ! -d $rundir ]]; then
     mkdir -p $rundir

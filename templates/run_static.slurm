@@ -1,9 +1,8 @@
 #!/bin/sh -l
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
-#SBATCH --ntasks=1 CPUSPEC
-#SBATCH --mem=100G
-#SBATCH -t 02:30:00
+#SBATCH --ntasks=NOPART CPUSPEC
+#SBATCH -t 00:30:00
 #SBATCH --output=WRKDIR/static_%j.log
 ACCTSTR
 EXCLSTR
@@ -18,8 +17,8 @@ if [[ "MACHINE" == "Jet" ]]; then
     module purge
     module use ROOTDIR/modules
     module load MODULE
-#else
-#    source ROOTDIR/modules/MODULE
+else
+    source ROOTDIR/modules/MODULE
 fi
 
 ulimit -s unlimited
@@ -30,7 +29,7 @@ rm -f queue.static error.static
 
 touch running.static
 
-RUNMPCMD -n 1 EXEDIR/init_atmosphere_model
+RUNMPCMD -n NOPART EXEDIR/init_atmosphere_model.static
 
 if [[ $? -eq 0 ]]; then
     touch done.static

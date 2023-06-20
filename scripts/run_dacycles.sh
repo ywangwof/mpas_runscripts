@@ -1335,7 +1335,7 @@ initdatetime=""
 enddatetime=""
 
 ENS_SIZE=36
-nenslbc=9
+nenslbc=18
 intvl_sec=900
 
 domname="wofs_mpas"

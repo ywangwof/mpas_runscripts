@@ -1,8 +1,8 @@
 #!/bin/sh -l
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
-#SBATCH --ntasks=1  --cpus-per-task=12
-#SBATCH -t 02:30:00
+#SBATCH --ntasks=1 CPUSPEC
+#SBATCH -t 00:30:00
 #SBATCH --output=WRKDIR/create_%j.log
 ACCTSTR
 EXCLSTR

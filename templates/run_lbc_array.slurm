@@ -2,7 +2,7 @@
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
-#SBATCH -t 01:30:00
+#SBATCH -t 00:30:00
 #SBATCH --output=WRKDIR/lbc_%a_%j.log
 ACCTSTR
 EXCLSTR
@@ -19,8 +19,8 @@ if [[ "MACHINE" == "Jet" ]]; then
     module purge
     module use ROOTDIR/modules
     module load MODULE
-#else
-#    source ROOTDIR/modules/MODULE
+else
+    source ROOTDIR/modules/MODULE
 fi
 
 ulimit -s unlimited
