@@ -55,6 +55,8 @@ import matplotlib.path as path
 ########################################################################
 
 def dumpobj(obj, level=0, maxlevel=10):
+    ''' Print object members nicely'''
+
     for a in dir(obj):
         val = getattr(obj, a)
         if  a.startswith("__") and a.endswith("__") or a.startswith("_"):

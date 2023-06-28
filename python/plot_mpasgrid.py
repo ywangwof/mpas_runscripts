@@ -51,19 +51,6 @@ from netCDF4 import Dataset
 
 ########################################################################
 
-def dumpobj(obj, level=0, maxlevel=10):
-    for a in dir(obj):
-        val = getattr(obj, a)
-        if  a.startswith("__") and a.endswith("__") or a.startswith("_"):
-            continue
-        elif isinstance(val, (int, float, str, list, dict, set)):
-            print(f"{level*'    '} {a} -> {val}")
-        else:
-            print(f"{level*'    '} {a} -> {val}")
-            if level >= maxlevel:
-                return
-            dumpobj(val, level=level+1,maxlevel=maxlevel)
-
 def fnormalize(fmin,fmax):
     min_e = int(math.floor(math.log10(abs(fmin)))) if fmin != 0 else 0
     max_e = int(math.floor(math.log10(abs(fmax)))) if fmax != 0 else 0

@@ -53,21 +53,6 @@ import matplotlib.path as path
 
 ########################################################################
 
-def dumpobj(obj, level=0, maxlevel=10):
-    for a in dir(obj):
-        val = getattr(obj, a)
-        if  a.startswith("__") and a.endswith("__") or a.startswith("_"):
-            continue
-        elif isinstance(val, (int, float, str, list, dict, set)):
-            print(f"{level*'    '} {a} -> {val}")
-        else:
-            print(f"{level*'    '} {a} -> {val}")
-            if level >= maxlevel:
-                return
-            dumpobj(val, level=level+1,maxlevel=maxlevel)
-
-########################################################################
-
 def update_progress(job_title, progress):
     length = 40
     block = int(round(length*progress))
