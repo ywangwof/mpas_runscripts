@@ -160,6 +160,7 @@ function usage {
     echo "              rootdir = $rootdir"
     echo "              WORKDIR = $rootdir/run_dirs"
     echo "              TEMPDIR = $rootdir/templates"
+    echo "              FIXDIR  = $rootdir/fix_files"
     echo " "
     echo "                                     -- By Y. Wang (2023.01.25)"
     echo " "
@@ -297,7 +298,7 @@ function run_geogrid {
     mkwrkdir $wrkdir $overwrite
     cd $wrkdir
 
-    ln -sf ${TEMPDIR}/WRFV4.0/GEOGRID.TBL.ARW GEOGRID.TBL
+    ln -sf ${FIXDIR}/WRFV4.0/GEOGRID.TBL.ARW GEOGRID.TBL
 
     cat <<EOF > namelist.wps
 &share
@@ -356,8 +357,19 @@ function run_static {
     mkwrkdir $wrkdir $overwrite
     cd $wrkdir
 
-    cp $TEMPDIR/$domname.graph.info      .
-    cp $TEMPDIR/$domname.grid.nc         .
+    cp $FIXDIR/$domname.graph.info      .
+    cp $FIXDIR/$domname.grid.nc         .
+
+    if [[ ! -f $domname.graph.info.part.${npepost} ]]; then
+        if [[ $verb -eq 1 ]]; then
+            echo "Generating ${domname}.graph.info.part.${npepost} in $wrkdir using ${gpmetis}"
+        fi
+        ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npepost} > gpmetis.out$npepost
+        if [[ $? -ne 0 ]]; then
+            echo "$?: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npepost}"
+            exit $?
+        fi
+    fi
 
     inittime_str=$(date -d "$eventdate ${eventtime}:00" +%Y-%m-%d_%H)
     initfile="../$runname/ungrib/${EXTHEAD}:$inittime_str"
@@ -389,10 +401,12 @@ function run_static {
     config_sfc_prefix = 'SST'
     config_fg_interval = $((EXTINVL*3600))
     config_landuse_data = 'MODIFIED_IGBP_MODIS_NOAH_15s'
-    config_topo_data = 'GMTED2010'
+    config_soilcat_data = 'BNU'
+    config_topo_data    = 'GMTED2010'
     config_vegfrac_data = 'MODIS'
-    config_albedo_data = 'MODIS'
+    config_albedo_data  = 'MODIS'
     config_maxsnowalbedo_data = 'MODIS'
+    config_lai_data           = 'MODIS'
     config_supersample_factor = 1
     config_use_spechumd = false
 /
@@ -402,9 +416,9 @@ function run_static {
     config_smooth_surfaces = true
     config_dzmin = 0.3
     config_nsm = 30
-    config_tc_vertical_grid = true
-    config_blend_bdy_terrain = true
-    config_specified_zeta_levels = '${TEMPDIR}/L60.txt'
+    config_tc_vertical_grid = false
+    config_blend_bdy_terrain = false
+    config_specified_zeta_levels = '${FIXDIR}/L60.txt'
 /
 &interpolation_control
     config_extrap_airtemp = 'linear'
@@ -430,6 +444,7 @@ EOF
 <streams>
 <immutable_stream name="input"
                   type="input"
+                  io_type="netcdf"
                   filename_template="${domname}.grid.nc"
                   input_interval="initial_only" />
 
@@ -466,6 +481,7 @@ EOF
     sedfile=$(mktemp -t static_${jobname}.sed_XXXX)
     cat <<EOF > $sedfile
 s/PARTION/${partition_static}/
+s/NOPART/$npepost/
 s/JOBNAME/static_${jobname}/
 s/CPUSPEC/${static_cpu}/
 s/MODULE/${modulename}/
@@ -570,7 +586,7 @@ EOF
                 cd $mywrkdir
 
                 ln -sf ../${myhrrrfiles[$i]} GRIBFILE.AAA
-                ln -sf $TEMPDIR/WRFV4.0/Vtable.raphrrr Vtable
+                ln -sf $FIXDIR/WRFV4.0/Vtable.raphrrr Vtable
 
                 jobarrays+=($h)
                 cd $wrkdir
@@ -686,7 +702,7 @@ function run_ungrib_gfs {
 
         link_grib ${gfsfiles[@]}
 
-        ln -sf $TEMPDIR/WRFV4.0/Vtable.GFS_full Vtable
+        ln -sf $FIXDIR/WRFV4.0/Vtable.GFS_full Vtable
 
         cat << EOF > namelist.wps
 &share
@@ -891,7 +907,7 @@ EOF
                 cd $mywrkdir
 
                 ln -sf ../${myrrfsfiles[$i]} GRIBFILE.AAA
-                ln -sf $TEMPDIR/WRFV4.0/Vtable.RRFS Vtable
+                ln -sf $FIXDIR/WRFV4.0/Vtable.RRFS Vtable
 
                 jobarrays+=($h)
                 cd $wrkdir
@@ -1030,7 +1046,7 @@ function run_ungrib_rrfsp {
 
         link_grib ${rrfsfiles[@]}
 
-        ln -sf $TEMPDIR/WRFV4.0/Vtable.RRFSP Vtable
+        ln -sf $FIXDIR/WRFV4.0/Vtable.RRFSP Vtable
 
         cat << EOF > namelist.wps
 &share
@@ -1148,7 +1164,7 @@ function run_init {
 
         ln -sf $rundir/ungrib/${EXTHEAD}:${starttime_str:0:13} .
         ln -sf $WORKDIR/$domname/$domname.static.nc .
-        ln -sf $TEMPDIR/$domname.graph.info.part.${npeics} .
+        ln -sf $FIXDIR/$domname.graph.info.part.${npeics} .
 
         cat << EOF > namelist.init_atmosphere
 &nhyd_model
@@ -1186,7 +1202,7 @@ function run_init {
     config_nsm = 30
     config_tc_vertical_grid = true
     config_blend_bdy_terrain = true
-    config_specified_zeta_levels = '${TEMPDIR}/L60.txt'
+    config_specified_zeta_levels = '${FIXDIR}/L60.txt'
 /
 &interpolation_control
     config_extrap_airtemp = 'lapse-rate'
@@ -1326,7 +1342,7 @@ function run_lbc {
 
         ln -sf $rundir/ungrib/${EXTHEAD}* .
         ln -sf $rundir/init/$domname.init.nc .
-        ln -sf $TEMPDIR/$domname.graph.info.part.${npeics} .
+        ln -sf $FIXDIR/$domname.graph.info.part.${npeics} .
 
         cat << EOF > namelist.init_atmosphere
 &nhyd_model
@@ -1364,7 +1380,7 @@ function run_lbc {
     config_nsm = 30
     config_tc_vertical_grid = true
     config_blend_bdy_terrain = true
-    config_specified_zeta_levels = '${TEMPDIR}/L60.txt'
+    config_specified_zeta_levels = '${FIXDIR}/L60.txt'
 /
 &interpolation_control
     config_extrap_airtemp = 'lapse-rate'
@@ -1490,11 +1506,11 @@ function run_mpas {
 
         ln -sf $rundir/lbc/${domname}.lbc.* .
         ln -sf $rundir/init/$domname.init.nc .
-        ln -sf $TEMPDIR/$domname.graph.info.part.${npefcst} .
+        ln -sf $FIXDIR/$domname.graph.info.part.${npefcst} .
 
         streamlists=(stream_list.atmosphere.diagnostics stream_list.atmosphere.output stream_list.atmosphere.surface)
         for fn in ${streamlists[@]}; do
-            cp -f ${staticdir}/$fn .
+            cp -f ${FIXDIR}/$fn .
         done
 
         datafiles=(  CAM_ABS_DATA.DBL  CAM_AEROPT_DATA.DBL GENPARM.TBL       LANDUSE.TBL    \
@@ -1503,7 +1519,7 @@ function run_mpas {
                      VEGPARM.TBL )
 
         for fn in ${datafiles[@]}; do
-            ln -sf ${staticdir}/$fn .
+            ln -sf ${FIXDIR}/$fn .
         done
 
         if [[ "${mpscheme}" == "Thompson" ]]; then
@@ -1511,7 +1527,7 @@ function run_mpas {
                               MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL )
 
             for fn in ${thompson_tables[@]}; do
-                ln -sf ${TEMPDIR}/$fn .
+                ln -sf ${FIXDIR}/$fn .
             done
         fi
 
@@ -1720,12 +1736,12 @@ function run_mpassit {
     for fn in ${parmfiles[@]}; do
         if [[ ! -e $fn ]]; then
             if [[ $verb -eq 1 ]]; then echo "Linking $fn ..."; fi
-            if [[ -e $TEMPDIR/MPASSIT/${fn}.${fileappend} ]]; then
-                ln -sf $TEMPDIR/MPASSIT/${fn}.${fileappend} $fn
-            elif [[ -e $TEMPDIR/MPASSIT/${fn} ]]; then
-                ln -sf $TEMPDIR/MPASSIT/$fn .
+            if [[ -e $FIXDIR/MPASSIT/${fn}.${fileappend} ]]; then
+                ln -sf $FIXDIR/MPASSIT/${fn}.${fileappend} $fn
+            elif [[ -e $FIXDIR/MPASSIT/${fn} ]]; then
+                ln -sf $FIXDIR/MPASSIT/$fn .
             else
-                echo "ERROR: file \"$TEMPDIR/MPASSIT/${fn}\" not exist."
+                echo "ERROR: file \"$FIXDIR/MPASSIT/${fn}\" not exist."
                 return
             fi
         fi
@@ -1843,11 +1859,11 @@ function run_upp {
     #fixfiles[TauCoeff]=fixfiles_TauCoeff[@]
     fixfiles=( AerosolCoeff CloudCoeff EmisCoeff SpcCoeff TauCoeff )
 
-    fixdirs[AerosolCoeff]="$TEMPDIR/UPP/crtm2_fix/AerosolCoeff/Big_Endian"
-    fixdirs[CloudCoeff]="$TEMPDIR/UPP/crtm2_fix/CloudCoeff/Big_Endian"
-    fixdirs[EmisCoeff]="$TEMPDIR/UPP/crtm2_fix/EmisCoeff/Big_Endian"
-    fixdirs[SpcCoeff]="$TEMPDIR/UPP/crtm2_fix/SpcCoeff/Big_Endian"
-    fixdirs[TauCoeff]="$TEMPDIR/UPP/crtm2_fix/TauCoeff/ODPS/Big_Endian"
+    fixdirs[AerosolCoeff]="$FIXDIR/UPP/crtm2_fix/AerosolCoeff/Big_Endian"
+    fixdirs[CloudCoeff]="$FIXDIR/UPP/crtm2_fix/CloudCoeff/Big_Endian"
+    fixdirs[EmisCoeff]="$FIXDIR/UPP/crtm2_fix/EmisCoeff/Big_Endian"
+    fixdirs[SpcCoeff]="$FIXDIR/UPP/crtm2_fix/SpcCoeff/Big_Endian"
+    fixdirs[TauCoeff]="$FIXDIR/UPP/crtm2_fix/TauCoeff/ODPS/Big_Endian"
 
     for ((h=0;h<=fcst_hours;h+=OUTINVL)); do
         hstr=$(printf "%02d" $h)
@@ -1905,8 +1921,8 @@ function run_upp {
         #...Link microphysic's tables - code will use based on mp_physics option
         #   found in data
         #
-        ln -sf $TEMPDIR/WRFV4.0/ETAMPNEW_DATA               nam_micro_lookup.dat
-        ln -sf $TEMPDIR/WRFV4.0/ETAMPNEW_DATA.expanded_rain hires_micro_lookup.dat
+        ln -sf $FIXDIR/WRFV4.0/ETAMPNEW_DATA               nam_micro_lookup.dat
+        ln -sf $FIXDIR/WRFV4.0/ETAMPNEW_DATA.expanded_rain hires_micro_lookup.dat
 
         #
         #...For GRIB2 the code uses postcntrl.xml to select variables for output
@@ -1918,7 +1934,7 @@ function run_upp {
         #
         parmfiles=(params_grib2_tbl_new post_avblflds.xml postcntrl.xml postxconfig-NT.txt )
         for fn in ${parmfiles[@]}; do
-            ln -sf $TEMPDIR/UPP/hrrr_$fn $fn
+            ln -sf $FIXDIR/UPP/hrrr_$fn $fn
         done
 
         nmlfile="itag"
@@ -2072,6 +2088,7 @@ jobs=(ungrib init lbc mpas mpassit upp clean)
 
 WORKDIR="${rootdir}/run_dirs"
 TEMPDIR="${rootdir}/templates"
+FIXDIR="${rootdir}/fix_files"
 eventdate="$eventdateDF"
 eventtime="00"
 
@@ -2289,7 +2306,7 @@ if [[ $machine == "Jet" ]]; then
     #ncores_ics=5; ncores_fcst=6; ncores_post=6
     partition="ujet,tjet,xjet,vjet,kjet"; claim_cpu="--cpus-per-task=2"
                                           claim_cpu_ics="--cpus-per-task=2"
-    partition_static="bigmem"           ; static_cpu="--cpus-per-task=12"
+    partition_static="${partition}"     ; static_cpu="--cpus-per-task=12"
     partition_upp="kjet,xjet,vjet"
 
     npeics=768   #; nnodes_ics=$((  npeics/ncores_ics   ))
@@ -2311,6 +2328,7 @@ if [[ $machine == "Jet" ]]; then
     module load $modulename
     module load wgrib2/2.0.8
     wgrib2path="/apps/wgrib2/2.0.8/intel/18.0.5.274/bin/wgrib2"
+    gpmetis="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/bin/gpmetis"
 
 elif [[ $machine == "Cheyenne" ]]; then
 
@@ -2359,6 +2377,7 @@ else    # Vecna at NSSL
     source ${modulename}
     WPSGEOG_PATH="/scratch/ywang/MPAS/WPS_GEOG/"
     wgrib2path="/scratch/ywang/tools/hpc-stack/intel-2021.8.0/wgrib2/2.0.8/bin/wgrib2"
+    gpmetis="/scratch/ywang/tools/bin/gpmetis"
 fi
 
 MPASLSM='ruc'
@@ -2432,13 +2451,7 @@ fi
 
 jobname="${eventdate:4:4}"
 
-#MPASModel="MPAS-Model.hrrr"
-#exedir="${rootdir}/${MPASModel}"
-#staticdir="${rootdir}/${MPASModel}"
-
 exedir="$rootdir/exec"
-
-staticdir="$TEMPDIR"
 
 declare -A jobargs=([static]=$WORKDIR/$domname                          \
                     [geogrid]=$WORKDIR/${domname/*_/geo_}               \

@@ -1,5 +1,12 @@
   Version History
 
+06/20/2023 Version 3.2
+
+    1. Added option config_microp_re following Ted's suggestion
+    2. Updated static processing with new BNU soil type and parallel 
+       processing capability
+    3. Separated subdirectory fix_files from templates.
+
 05/12/2023 Version 3.1
 
     1. Fixed bug with hourly precipitation in convective_diagnostics.F.
