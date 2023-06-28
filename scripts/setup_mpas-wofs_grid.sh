@@ -110,6 +110,14 @@ function usage {
 }
 
 ########################################################################
+#
+# Extract WRF domain attributes
+#
+function ncattget {
+  ${nckspath} -x -M $1 | grep -E "(corner_lats|corner_lons|CEN_LAT|CEN_LON)"
+}
+
+########################################################################
 
 function run_geogrid {
 
@@ -253,13 +261,6 @@ function run_createWOFS {
     fi
 
     local mrpythondir
-
-    #
-    # Extract WRF domain attributes
-    #
-    function ncattget {
-      ${nckspath} -x -M $1 | grep -E "(corner_lats|corner_lons|CEN_LAT|CEN_LON)"
-    }
 
     # Check MPAS-Limited-Area
     mrpythondir="$rootdir/MPAS-Limited-Area"
@@ -534,6 +535,128 @@ EOF
 
 ########################################################################
 
+function run_rotate {
+
+    conditions=()
+    while [[ $# > 0 ]]; do
+        case $1 in
+        /*)
+            conditions+=($1)
+            ;;
+        *)
+            conditions+=($rundir/$1)
+            ;;
+        esac
+        shift
+    done
+
+    if [[ $dorun == true ]]; then
+        for cond in ${conditions[@]}; do
+            echo "$$: Checking: $cond"
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    echo "Waiting for file: $cond"
+                fi
+                sleep 10
+            done
+        done
+    fi
+
+    wrkdir="$rundir/$domname"
+    mkwrkdir $wrkdir $overwrite
+    cd $wrkdir
+
+    if [[ -f done.rotate ]]; then
+        echo "Found file \"done.rotate\", skipping run_rotate ...."
+        echo ""
+        return
+    elif [[ -f rotate.running || -f queue.rotate ]]; then
+        return                   # skip
+    fi
+
+    local geofile wrfdomain wrfkey vals newsval val keyval domelements
+    # Get lat/lon ranges
+    geofile=$(dirname ${conditions[0]})/geo_em.d01.nc
+    wrfdomain=$(ncattget $geofile)
+
+    IFS=$'\n' domelements=($wrfdomain)
+    for var in ${domelements[@]}; do
+        IFS='= ' keyval=(${var%%;})
+        wrfkey=${keyval[0]:1}
+        vals=(${keyval[@]:1})
+
+        #echo "${wrfkey} -> ${vals[@]}"
+
+        case $wrfkey in
+        CEN_LAT | CEN_LON)
+            newval=${vals[0]%%f}
+            declare "$wrfkey=$newval"
+            ;;
+        corner_lats | corner_lons)
+            minval=360.0
+            maxval=-360.0
+            for val in ${vals[@]}; do
+                newval=${val%%f*}
+                if (( $(echo "$newval > $maxval" | bc -l) )); then
+                    maxval=$newval
+                fi
+
+                if (( $(echo "$newval < $minval" | bc -l) )); then
+                    minval=$newval
+                fi
+            done
+            declare "${wrfkey}_min=$minval"
+            declare "${wrfkey}_max=$maxval"
+            ;;
+        *)
+            continue
+            ;;
+      esac
+    done
+    #echo $CEN_LAT
+    #echo $CEN_LON
+    #echo $corner_lats_min, $corner_lats_max
+    #echo $corner_lons_min, $corner_lons_max
+    #exit 0
+
+    #ang_rotate=$(echo $CEN_LON - -84.24591 | bc -l)
+    ang_rotate="0.0"
+    ln -sf ${FIXDIR}/WOFSdomain.grid.nc input_filename.nc
+    ln -sf ${FIXDIR}/WOFSdomain.graph.info wofs_mpas.graph.info
+
+    cat <<EOF > namelist.input
+&input
+   config_original_latitude_degrees =    43.33296
+   config_original_longitude_degrees =  -84.24591
+
+   config_new_latitude_degrees =   $CEN_LAT
+   config_new_longitude_degrees =  $CEN_LON
+   config_birdseye_rotation_counter_clockwise_degrees = ${ang_rotate}
+/
+EOF
+
+    #
+    # Create job script and submit it
+    #
+    jobscript="run_rotate.slurm"
+
+    sedfile=$(mktemp -t grid_rotate.sed_XXXX)
+    cat <<EOF > $sedfile
+s/PARTION/${partition_create}/
+s/CPUSPEC/${create_cpu}/
+s/ACCTSTR/${job_account_str}/
+s/EXCLSTR/${job_exclusive_str}/
+s/JOBNAME/grid_rotate/
+s/DOMNAME/${domname}/
+s#WRKDIR#$wrkdir#g
+s#EXEDIR#${exedir}#
+s/RUNCMD/${job_runexe_str}/
+EOF
+    submit_a_jobscript $wrkdir "rotate" $sedfile $TEMPDIR/$jobscript $jobscript ""
+}
+
+########################################################################
+
 function run_ungrib_hrrr {
     if [[ $# -ne 1 ]]; then
         echo "ERROR: run_ungrib require 1 arguments."
@@ -617,6 +740,65 @@ EOF
 
 ########################################################################
 
+function run_meshplot {
+
+    conditions=()
+    while [[ $# > 0 ]]; do
+        case $1 in
+        /*)
+            conditions+=($1)
+            ;;
+        *)
+            conditions+=($rundir/$1)
+            ;;
+        esac
+        shift
+    done
+
+    if [[ $dorun == true ]]; then
+        for cond in ${conditions[@]}; do
+            echo "$$: Checking: $cond"
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    echo "Waiting for file: $cond"
+                fi
+                sleep 10
+            done
+        done
+    fi
+
+    wrkdir="$rundir/$domname"
+    if [[ ! -f $wrkdir/$domname.grid.nc ]]; then
+        echo "Working file: $wrkdir/$domname.grid.nc not exist."
+        return
+    fi
+    cd $wrkdir
+
+    ln -sf ../geo_${domname##*_}/geo_em.d01.nc .
+
+    #
+    # Create job script and submit it
+    #
+    datestring=$()
+    jobscript="wofs_mesh.ncl"
+
+    sedfile=$(mktemp -t rotate_ncl.sed_XXXX)
+    cat <<EOF > $sedfile
+s#INPUTFILENAME#$domname.grid.nc#
+s#OUTFILENAME#$domname#
+s/DATESTRING/${starttime_str:0:10}/
+EOF
+
+    sed -f $sedfile $TEMPDIR/$jobscript > $jobscript
+    $nclpath $jobscript
+
+    if [[ -f $domname.png ]]; then
+        echo "Domain on ${starttime_str:0:10} is saved as $wrkdir/$domame.png."
+    fi
+}
+
+########################################################################
+
 function run_clean {
 
     for dirname in $@; do
@@ -662,7 +844,8 @@ function run_clean {
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #@ MAIN
 
-jobs=(geogrid ungrib_hrrr createWOFS static)
+#jobs=(geogrid ungrib_hrrr createWOFS static)
+jobs=(geogrid rotate static)
 
 WORKDIR="${rootdir}/run_dirs"
 TEMPDIR="${rootdir}/templates"
@@ -768,7 +951,7 @@ while [[ $# > 0 ]]
             echo "Unknown option: $key"
             usage 2
             ;;
-        static* | geogrid* | createWOFS | clean* )
+        static* | geogrid* | createWOFS | meshplot | clean* )
             jobs=(${key//,/ })
             ;;
         *)
@@ -880,6 +1063,8 @@ else    # Vecna at NSSL
     wgrib2path="/scratch/ywang/tools/hpc-stack/intel-2021.8.0/wgrib2/2.0.8/bin/wgrib2"
     nckspath="/scratch/software/miniconda3/bin/ncks"
     gpmetis="/scratch/ywang/tools/bin/gpmetis"
+    export LD_LIBRARY_PATH=/scratch/ywang/MPAS/tools/lib
+    nclpath="/scratch/software/miniconda3/bin/ncl"
 
     hrrrdir="/scratch/wofuser/MODEL_DATA/HRRRE"
     hrrrfile="/scratch/wofuser/MODEL_DATA/HRRRE/${eventdate}/1400/mem01/wrfnat_hrrre_newse_mem0001_01.grib2"
@@ -920,7 +1105,10 @@ exedir="$rootdir/exec"
 
 declare -A jobargs=([geogrid]="${rundir}/geo_${domname##*_}"            \
                     [createWOFS]="geo_${domname##*_}/done.geogrid"      \
-                    [static]="$domname/done.create ungrib/done.ungrib"  \
+                    #[static]="$domname/done.create ungrib/done.ungrib"  \
+                    [rotate]="geo_${domname##*_}/done.geogrid"          \
+                    [meshplot]="$domname/done.rotate"                   \
+                    [static]="$domname/done.rotate ungrib/done.ungrib"  \
                     [ungrib_hrrr]="${hrrrfile}"                         \
                     [clean]="geogrid static createWOFS"                 \
                    )

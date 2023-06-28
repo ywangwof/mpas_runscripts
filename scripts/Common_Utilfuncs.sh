@@ -97,6 +97,7 @@ function submit_a_jobscript {
     if [[ $dorun == true && $? -eq 0 ]]; then touch $mywrkdir/queue.$myjobname; fi
     echo " "
 }
+
 ########################################################################
 
 function check_and_resubmit {

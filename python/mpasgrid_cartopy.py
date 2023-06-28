@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import os, sys
+import os, sys, math
 import numpy as np
 
 import matplotlib.pyplot as plt
@@ -16,6 +16,7 @@ import cartopy.geodesic as geodesic
 import csv
 import ast
 
+from netCDF4 import Dataset
 import argparse
 
 #import strmrpt
@@ -95,25 +96,62 @@ if __name__ == "__main__":
 
     if os.path.lexists(args.pts_file):
 
-        with open(args.pts_file, 'r') as csvfile:
-            reader = csv.reader(csvfile)
-            next(reader);next(reader);next(reader);
-            lonlats=[]
-            for row in reader:
-                lonlats.append((float(row[1]),float(row[0])))
+        fileroot,filext = os.path.splitext(args.pts_file)
+        #print(fileroot, filext)
+        filename = f"{os.path.basename(fileroot)}.png"
+        if filext == ".pts":                       # custom.pts file
+            with open(args.pts_file, 'r') as csvfile:
+                reader = csv.reader(csvfile)
+                next(reader);next(reader);next(reader);
+                lonlats=[]
+                for row in reader:
+                    lonlats.append((float(row[1]),float(row[0])))
 
-        filename = f"{os.path.splitext(os.path.basename(args.pts_file))[0]}.png"
+            figname = filename.replace("custom",basmap)
 
-        figname = filename.replace("custom",basmap)
+            # Note that MPAS requires the order to be clockwise
+            # Python polygon requires anti-clockwise
+            lonlats.reverse()
+            lonlats.append(lonlats[0])
+            #print(lonlats)
+
+            lats = [ l[1] for l in lonlats]
+            lons = [ l[0] for l in lonlats]
+
+            plt_wofs = "pts"
+        elif filext == ".nc":                       # netcdf grid file
+
+            r2d = 57.2957795             # radians to degrees
+
+            with Dataset(args.pts_file,'r') as mesh:
+                #xVertex = mesh.variables['xVertex'][:]
+                #yVertex = mesh.variables['yVertex'][:]
+                #zVertex = mesh.variables['zVertex'][:]
+
+                #verticesOnCell = mesh.variables['verticesOnCell'][:,:]
+                #nEdgesOnCell   = mesh.variables['nEdgesOnCell'][:]
+                verticesOnEdge = mesh.variables['verticesOnEdge'][:,:]
+                #lonCell = mesh.variables['lonCell'][:] * r2d
+                #latCell = mesh.variables['latCell'][:] * r2d
+                lonVertex = mesh.variables['lonVertex'][:] * r2d
+                latVertex = mesh.variables['latVertex'][:] * r2d
+                #lonEdge = mesh.variables['lonEdge'][:] * r2d
+                #latEdge = mesh.variables['latEdge'][:] * r2d
+                #hvar     = mesh.variables['areaCell'][:]
+                nedges    = mesh.dimensions['nEdges'].size
+
+            lats = [ l for l in latVertex]
+            lons = [ l for l in lonVertex]
+
+            figname = filename.replace("grid",basmap)
+            plt_wofs = "grid"
+        else:
+            print("ERROR: need a MPAS grid file or custom pts file.")
+            sys.exit(0)
     else:
         print("ERROR: need a WoF grid file.")
         sys.exit(0)
 
-    # Note that MPAS requires the order to be clockwise
-    # Python polygon requires anti-clockwise
-    lonlats.reverse()
-    lonlats.append(lonlats[0])
-    #print(lonlats)
 
     plt_hrrr = False
     if args.range == 'hrrr':
@@ -141,8 +179,6 @@ if __name__ == "__main__":
         #    print(f"{lat}, {lon}")
         print(" ")
     else:
-        lats = [ l[1] for l in lonlats]
-        lons = [ l[0] for l in lonlats]
         ranges = [ min(lons)-2.0, max(lons)+2.0, min(lats)-2.0, max(lats)+2.0]
 
     print(f"ranges = {ranges}")
@@ -158,6 +194,8 @@ if __name__ == "__main__":
         ctrlat1 = args.ctrlat
         stdlat1_1 = args.stdlat1
         stdlat1_2 = args.stdlat2
+    elif not args.outgrid:
+        plt_outgrid = False
     elif os.path.lexists(args.outgrid):
         data = []
         with open(args.outgrid,'r') as f:
@@ -178,8 +216,6 @@ if __name__ == "__main__":
         ctrlat1   = ogrid["ctrlat"]
         stdlat1_1 = ogrid["stdlat1"]
         stdlat1_2 = ogrid["stdlat2"]
-    elif not args.outgrid:
-        plt_outgrid = False
     else:
         print("ERROR: need an output grid file or command line arguments.")
         sys.exit(0)
@@ -282,27 +318,32 @@ if __name__ == "__main__":
 
         ax.set_extent(ranges,crs=carr)
 
+    if plt_hrrr:
+        lonsticks = [-140,-120, -100, -80, -60]
+        latsticks = [10,20,30,40,50,60]
+        skipedges = 10
+    else:
+        lonsticks = np.arange(math.floor(ranges[0]),math.ceil(ranges[1]), 2)
+        latsticks = np.arange(math.floor(ranges[2]),math.ceil(ranges[3]), 4)
+        skipedges = 4
+
     ax.coastlines(resolution='50m')
     #ax.stock_img()
-    #ax.add_feature(cfeature.OCEAN)
-    #ax.add_feature(cfeature.LAND, edgecolor='black')
-    #ax.add_feature(cfeature.LAKES, edgecolor='black',facecolor='white')
-    #ax.add_feature(cfeature.RIVERS)
-    ax.add_feature(cfeature.BORDERS)
-    ax.add_feature(cfeature.STATES,linewidth=0.1)
-    gl = ax.gridlines(draw_labels=True,linewidth=0.2, color='gray', alpha=0.7, linestyle='--')
-    gl.xlocator = mticker.FixedLocator([-140,-120, -100, -80, -60])
-    gl.ylocator = mticker.FixedLocator([10,20,30,40,50,60])
+    ax.add_feature(cfeature.OCEAN,facecolor='skyblue')
+    ax.add_feature(cfeature.LAND, facecolor='#666666')
+    ax.add_feature(cfeature.LAKES, facecolor='skyblue')
+    #ax.add_feature(cfeature.RIVERS,facecolor='skyblue')
+    ax.add_feature(cfeature.BORDERS,linewidth=0.1)
+    ax.add_feature(cfeature.STATES,linewidth=0.2)
+    gl = ax.gridlines(draw_labels=True,linewidth=0.2, color='brown', alpha=1.0, linestyle='--')
+    gl.xlocator = mticker.FixedLocator(lonsticks)
+    gl.ylocator = mticker.FixedLocator(latsticks)
     gl.top_labels = False
-    gl.left_labels = True  #default already
+    gl.left_labels = True            # default already
     gl.right_labels = True
     gl.bottom_labels = True
 
-
-    plt.text(ctrlon,ctrlat,'o',color='r',horizontalalignment='center',
-                                        verticalalignment='center',transform=carr)
-
-    plt.title("WoF-MPAS domain")
+    plt.title("WoF-MPAS Domain")
 
     #-----------------------------------------------------------------------
     #
@@ -321,6 +362,9 @@ if __name__ == "__main__":
                     arrowprops=dict(arrowstyle="->")
                     )
 
+        plt.text(ctrlon,ctrlat,'o',color='r',horizontalalignment='center',
+                                        verticalalignment='center',transform=carr)
+
         plt.text(lonlat_sw[0]+0.2,lonlat_sw[1]+0.4,'HRRR grid', color='r', transform=carr)
 
     #-----------------------------------------------------------------------
@@ -329,13 +373,35 @@ if __name__ == "__main__":
     #
     #-----------------------------------------------------------------------
 
-    polygon1 = Polygon( lonlats )
-    ax.add_geometries([polygon1], crs=ccrs.Geodetic(), facecolor='blue',
-                      edgecolor='navy', linewidth=1.5, alpha=0.2,zorder=1)
+    if plt_wofs is "pts":
+        polygon1 = Polygon( lonlats )
+        ax.add_geometries([polygon1], crs=ccrs.Geodetic(), facecolor='blue',
+                          edgecolor='navy', linewidth=1.5, alpha=0.2,zorder=1)
 
-    for lon,lat in lonlats:
-        plt.text(lon, lat, '*', color='r', horizontalalignment='center',
+        for lon,lat in lonlats:
+            plt.text(lon, lat, '*', color='r', horizontalalignment='center',
                                            verticalalignment='center',transform=carr)
+    elif plt_wofs is "grid":
+        ecx = np.zeros((nedges,2),dtype=np.double)
+        ecy = np.zeros((nedges,2),dtype=np.double)
+
+        looprange=list(range(0,nedges,skipedges))
+
+        ecy[:,0] = latVertex[verticesOnEdge[:,0]-1]
+        ecx[:,0] = lonVertex[verticesOnEdge[:,0]-1]
+        ecy[:,1] = latVertex[verticesOnEdge[:,1]-1]
+        ecx[:,1] = lonVertex[verticesOnEdge[:,1]-1]
+
+        for j in looprange:
+            if abs(ecx[j,0] - ecx[j,1]) > 180.0:
+              if ecx[j,0] > ecx[j,1]:
+                 ecx[j,0] = ecx[j,0] - 360.0
+              else:
+                 ecx[j,1] = ecx[j,1] - 360.0
+
+            plt.plot(ecx[j,:], ecy[j,:],
+                    color='blue', linewidth=0.1, marker='o', markersize=0.2,alpha=.2,
+                    transform=carr) # Be explicit about which transform you want:
 
     #-----------------------------------------------------------------------
     #

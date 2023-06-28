@@ -661,7 +661,7 @@ if __name__ == "__main__":
             patch_collection.set_norm(normc)            # Select our normalization
             patch_collection.set_clim(cmin,cmax)
 
-            # Now apply the patch_collection to our axis '''
+            # Now apply the patch_collection to our axis
             ax.add_collection(patch_collection)
 
             #
