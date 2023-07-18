@@ -123,6 +123,239 @@ function usage {
 
 ########################################################################
 
+function run_obsmerge {
+    # $1        $2          $3
+    # wrkdir    iseconds    seqfilename
+    local wrkdir=$1
+    local iseconds=$2
+    local outfilename=$3
+
+    if [[ ! -d $wrkdir ]]; then
+        echo "run_obsmerge: Working directory $wrkdir not exist"
+        exit 1
+    fi
+
+    anlys_date=$(date -d @$iseconds  +%Y%m%d)
+    anlys_time=$(date -d @$iseconds  +%H%M)
+
+    if [[ $verb -eq 1 ]]; then
+        srunout="1"
+    else
+        srunout="output.srun"
+    fi
+
+    if [[ $verb -eq 1 ]]; then echo "Runing ${exedir}/dart/convertdate"; fi
+    g_datestr=($(${exedir}/dart/convertdate << EOF
+1
+${anlys_date:0:4} ${anlys_date:4:2} ${anlys_date:6:2} ${anlys_time:0:2} ${anlys_time:2:2} 00
+EOF
+))
+    g_date=${g_datestr[-2]}
+    g_sec=${g_datestr[-1]}
+    #echo $g_date, $g_sec
+
+    mkwrkdir $wrkdir/OBSDIR 1     # 0: Keep existing directory as is
+                                  # 1: Remove existing same name directory
+    cd $wrkdir/OBSDIR
+
+    rm -fr obsflist.hfmetar obsflist.meso obsflist.sat obsflist.rad obsflist obs_seq.*
+
+    obspreprocess=${exedir}/dart/mpas_dart_obs_preprocess
+
+    #ln -sf ${wrkdir}/input.nml ./input.nml
+    cp ${wrkdir}/input.nml input.nml
+    template_inputfile=$(head -1 $wrkdir/filter_in.txt)
+    ln -sf $template_inputfile init.nc
+
+    obsflists=()
+    #=================================================
+    # PREPROCESS OK MESONET DATA
+    #=================================================
+
+    if [[ -e ${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time} ]]; then
+        echo "    Using Mesonet observations in ${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time}"
+        echo ${OBSDIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time} > obsflist.meso
+        obsflists+=(obsflist.meso)
+    else
+        echo "    Mesonet not found: ${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time}"
+    fi
+
+    #=================================================
+    # PREPROCESS GOES SATELLITE CWP DATA
+    #=================================================
+
+    CWP_DIR=${OBS_DIR}/CWP
+    if [[ -e ${CWP_DIR}/obs_seq_cwp.G16_V04.${anlys_date}${anlys_time} ]]; then
+        echo "    Using CWP data in ${CWP_DIR}/obs_seq_cwp.G16_V04.${anlys_date}${anlys_time}"
+
+        cp ${CWP_DIR}/obs_seq_cwp.G16_V04.${anlys_date}${anlys_time} ./obs_seq.old
+
+        if [[ $verb -eq 1 ]]; then
+            echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
+        fi
+        srun echo "${g_date} ${g_sec}" | ${obspreprocess} >& $srunout
+
+        if [[ $? -eq 0 ]]; then
+            mv ./obs_seq.new ./obs_seq.cwp
+
+            rm ./obs_seq.old
+
+            echo $wrkdir/OBSDIR/obs_seq.cwp > obsflist.cwp
+
+            obsflists+=(obsflist.cwp)
+        else
+            echo "Error with command ${obspreprocess} for CWP data"
+        fi
+    else
+        echo "    CWP not found: ${CWP_DIR}/obs_seq_cwp.GOES-16_V04.${anlys_date}${anlys_time}"
+    fi
+
+    #=================================================
+    # PREPROCESS RADAR DATA
+    #=================================================
+
+    ############
+    ### MRMS ###
+    ############
+
+    DBZ_DIR=${OBS_DIR}/REF
+    if [[ -e ${DBZ_DIR}/${eventdate}/obs_seq_RF_${anlys_date}_${anlys_time}.out ]]; then
+
+        echo "    Using REF data in ${DBZ_DIR}/${eventdate}/obs_seq_RF_${anlys_date}_${anlys_time}.out"
+
+        cp ${DBZ_DIR}/${eventdate}/obs_seq_RF_${anlys_date}_${anlys_time}.out ./obs_seq.old
+
+        if [[ $verb -eq 1 ]]; then
+            echo "    Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
+        fi
+        srun echo "$g_date $g_sec" | ${obspreprocess} >& $srunout
+
+        if [[ $? -eq 0 ]]; then
+            mv ./obs_seq.new ./obs_seq.mrms
+
+            rm ./obs_seq.old
+
+            echo $wrkdir/OBSDIR/obs_seq.mrms > obsflist.mrms
+
+            obsflists+=(obsflist.mrms)
+        else
+            echo "Error with command ${obspreprocess} for REF data"
+        fi
+    else
+        echo "    REF data not found: ${DBZ_DIR}/${eventdate}/obs_seq_RF_${anlys_date}_${anlys_time}.out"
+    fi
+    echo "    "
+
+    #############
+    ### Radial Velocity
+    #############
+
+    #
+    # Source environment for radars
+    #
+
+    if [[ -e $rundir/$domname/radars.${eventdate}.sh ]]; then
+        source $rundir/$domname/radars.${eventdate}.sh
+    else
+        echo "ERROR: File $rundir/$domname/radars.${eventdate}.sh not exist"
+        exit 0
+    fi
+
+    VR_DIR=${OBS_DIR}/VEL
+
+    j=0; n=0
+    while [[ ${j} -lt ${num_rad} ]]; do
+
+        if [[ -e ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out ]]; then
+
+            echo "    Using VEL data in ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out"
+
+            cp ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out ./obs_seq.old
+
+            if [[ $verb -eq 1 ]]; then
+                echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
+            fi
+            srun echo "$g_date $g_sec" | ${obspreprocess} >& $srunout
+
+            if [[ -e ./obs_seq.new ]]; then
+                mv ./obs_seq.new ./obs_seq.vr${j}
+                rm ./obs_seq.old
+                echo $wrkdir/OBSDIR/obs_seq.vr${j} >> obsflist.rad
+                let n++
+            fi
+
+        fi
+
+        let j++
+    done
+
+    if [[ $n -gt 0 ]]; then
+        obsflists+=(obsflist.rad)
+    else
+        echo "    No valid radial velocity data is processed"
+    fi
+
+    #=================================================
+
+    if [[ ${#obsflists[@]} -gt 0 ]]; then
+        cat ${obsflists[*]} > obsflist
+    else
+        echo "    No valid observation was found"
+        exit 0
+    fi
+
+    #=================================================
+
+    if [[ $verb -eq 1 ]]; then echo "Runing ${exedir}/dart/advance_time"; fi
+    gobef=($(echo ${anlys_date}${anlys_time} -5m-29s -g | ${exedir}/dart/advance_time))
+    goaft=($(echo ${anlys_date}${anlys_time} +2m+30s -g |  ${exedir}/dart/advance_time))
+
+    sedfile=$(mktemp -t input.nml_${eventtime}.sed_XXXX)
+
+    cat <<EOF > $sedfile
+/first_obs_days/s/-1/${gobef[0]}/
+/first_obs_seconds/s/-1/${gobef[1]}/
+/last_obs_days/s/-1/${goaft[0]}/
+/last_obs_seconds/s/-1/${goaft[1]}/
+EOF
+
+    sed -f $sedfile -i input.nml
+
+    #=================================================
+
+    #COMBINE obs-seq FILES HERE
+    if [[ $verb -eq 1 ]]; then echo "Runing ${exedir}/dart/obs_sequence_tool"; fi
+    srun ${exedir}/dart/obs_sequence_tool >& $srunout
+
+    if [[ $? -eq 0 && -e obs_seq.${anlys_date}${anlys_time} ]]; then
+        echo "    Observation file ${wrkdir}/OBSDIR/obs_seq.${anlys_date}${anlys_time} created"
+    else
+        echo "ERROR: srun ${exedir}/dart/obs_sequence_tool"
+    fi
+
+#    # Recover input.nml to the original state
+#    cat <<EOF > $sedfile
+#/first_obs_days/s/=.*$/= -1/
+#/first_obs_seconds/s/=.*$/= -1/
+#/last_obs_days/s/=.*$/= -1/
+#/last_obs_seconds/s/=.*$/= -1/
+#EOF
+#
+#    sed -f $sedfile -i input.nml
+
+    rm -f $sedfile
+
+    #rm -f ./obs_seq.hfmetar ./obs_seq.meso ./obs_seq.cwp ./obs_seq.mrms ./obs_seq.rad ./obs_seq.vr*
+
+    #rm -f dart_log.* obsflist* init.nc
+    #rm -f obsflist* wrfinput_d0*
+
+    echo " "
+    cd $wrkdir
+}
+
+########################################################################
+
 function run_filter {
     # $1        $2      $3
     # wrkdir    icycle    iseconds
@@ -142,19 +375,27 @@ function run_filter {
     mkwrkdir $wrkdir 0
     cd $wrkdir
 
+    #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/filter.running || -f $wrkdir/done.filter || -f $wrkdir/queue.filter ]]; then
+        return
+    fi
+
     timesec_pre=$((iseconds-intvl_sec))
-    timestr_pre=$(date -d @$timesec_pre +%Y%m%d%H%M)
+    event_pre=$(date -d @$timesec_pre   +%H%M)
     timestr_cur=$(date -d @$iseconds    +%Y%m%d%H%M)
 
     parentdir=$(dirname $wrkdir)
 
-    #
-    # Waiting for job conditions
-    #
+    #------------------------------------------------------
+    # Waiting for job conditions before submit the job
+    #------------------------------------------------------
+
     if [[ $icycle -eq 0 ]]; then
-        conditions=($rundir/init/done.ics)
+        conditions=($rundir/init/done.init)
     else
-        conditions=($parentdir/$timestr_pre/done.fcst)
+        conditions=($parentdir/${event_pre}/done.fcst)
     fi
 
     if [[ $dorun == true ]]; then
@@ -167,13 +408,6 @@ function run_filter {
                 sleep 10
             done
         done
-    fi
-
-    #
-    # Return if is running or is done
-    #
-    if [[ -f $wrkdir/filter.running || -f $wrkdir/done.filter || -f $wrkdir/queue.filter ]]; then
-        return
     fi
 
     #------------------------------------------------------
@@ -190,7 +424,7 @@ function run_filter {
         if [[ $icycle -eq 0 ]]; then
             input_file="$rundir/init/wofs_mpas_${memstr}.init.nc"
         else
-            input_file="$parentdir/$timestr_pre/wofs_mpas_${memstr}.restart.$currtime_str.nc"
+            input_file="$parentdir/${event_pre}/wofs_mpas_${memstr}.restart.$currtime_str.nc"
         fi
 
         if [[ ! -f $input_file ]]; then
@@ -200,45 +434,40 @@ function run_filter {
         echo $input_file >> filter_in.txt
         input_file_list+=($input_file)
 
-        output_file="analysis${memstr}.nc"
+        output_file="${domname}_${memstr}.analysis.nc"
         echo $output_file >> filter_out.txt
         output_file_list+=($output_file)
     done
 
+    if [[ $icycle -eq 0 ]]; then
+        # Skip filter at cycle 0 temporarily
+        return
+    fi
+
+    firstfile=$(head -1 filter_in.txt)
+    ln -sf $firstfile init.nc             # The name of the MPAS analysis file to
+                                         # be read and/or written by the DART
+                                         # programs for the state data.
     #------------------------------------------------------
     # 2. Adaptive inflation
     #------------------------------------------------------
 
     inf_initial=(".false" ".false.")
-    if [[ $ADAPTIVE_INF == true && $icycle -gt 0 ]]; then
-        if [[ ! -e ${parentdir}/${timestr_pre}/output_priorinf_mean.nc ]]; then
-          echo "File ${parentdir}/${timestr_pre}/output_priorinf_mean.nc does not exist. Stop."
+    if [[ $ADAPTIVE_INF == true && $icycle -gt 1 ]]; then
+        if [[ ! -e ${parentdir}/${event_pre}/output_priorinf_mean.nc ]]; then
+          echo "File ${parentdir}/${event_pre}/output_priorinf_mean.nc does not exist. Stop."
           exit 2
         fi
-        ln -sf ${parentdir}/${timestr_pre}/output_priorinf_mean.nc input_priorinf_mean.nc
-        ln -sf ${parentdir}/${timestr_pre}/output_priorinf_sd.nc   input_priorinf_sd.nc
+        ln -sf ${parentdir}/${event_pre}/output_priorinf_mean.nc input_priorinf_mean.nc
+        ln -sf ${parentdir}/${event_pre}/output_priorinf_sd.nc   input_priorinf_sd.nc
 
         inf_initial=(".true" ".true.")
     fi
 
     #------------------------------------------------------
-    # 3. Obs sequence for this analysis cycle
-    #    - one obs time at each analysis cycle
+    # 3. Prepare namelist file
     #------------------------------------------------------
-
-    fn_obs=${OBS_DIR}/obs_seq.1800obs
-    if [[ ! -e ${fn_obs} ]]; then
-       echo "File: ${fn_obs} does not exist. Stop."
-       exit 3
-    fi
-    ln -sf ${fn_obs} obs_seq.in
-
-    #------------------------------------------------------
-    # 4. Run filter
-    #------------------------------------------------------
-    #cp $rundir/init/wofs_mpas_01.init.nc init.nc
-
-    cat << EOF >> input.nml
+    cat << EOF > input.nml
 &perfect_model_obs_nml
    read_input_state_from_file = .true.
    single_file_in             = .false.
@@ -270,10 +499,10 @@ function run_filter {
 
 &filter_nml
    async                    = 0
-   adv_ens_command          = './advance_model.csh'
+   adv_ens_command          = 'no_model_advance'
    ens_size                 = ${ENS_SIZE}
    output_members           = .true.
-   obs_sequence_in_name     = 'obs_seq.out'
+   obs_sequence_in_name     = 'obs_seq.in'
    obs_sequence_out_name    = 'obs_seq.final'
    input_state_file_list    = 'filter_in.txt'
    output_state_file_list   = 'filter_out.txt'
@@ -401,6 +630,9 @@ function run_filter {
                                 'ACARS_TEMPERATURE',
                                 'SAT_U_WIND_COMPONENT',
                                 'SAT_V_WIND_COMPONENT',
+                                'RADAR_REFLECTIVITY',
+                                'RADAR_CLEARAIR_REFLECTIVITY',
+                                'DOPPLER_RADIAL_VELOCITY'
 
    evaluate_these_obs_types = ''
   /
@@ -409,6 +641,28 @@ function run_filter {
    max_gpsro_obs = 100000
   /
 
+&obs_def_radar_mod_nml
+   apply_ref_limit_to_obs     =  .true. ,
+   reflectivity_limit_obs     =     0.0 ,
+   lowest_reflectivity_obs    =     0.0 ,
+   apply_ref_limit_to_fwd_op  =  .true. ,
+   reflectivity_limit_fwd_op  =     0.0 ,
+   lowest_reflectivity_fwd_op =     0.0 ,
+   dielectric_factor          =   0.224 ,
+   n0_rain                    =   8.0e6 ,
+   n0_graupel                 =   4.0e6 ,
+   n0_snow                    =   3.0e6 ,
+   rho_rain                   =  1000.0 ,
+   rho_graupel                =   400.0 ,
+   rho_snow                   =   100.0 ,
+   allow_wet_graupel          = .false. ,
+   microphysics_type          =       5 ,
+   allow_dbztowt_conv         = .true.
+/
+&obs_def_cwp_nml
+   pressure_top               = 15000.0,
+   physics                    = 8
+/
 
 &model_nml
    init_template_filename       = 'init.nc'
@@ -434,11 +688,6 @@ function run_filter {
 !                          'u',                     'QTY_EDGE_NORMAL_SPEED',
 !                          'w',                     'QTY_VERTICAL_VELOCITY',
 !                          'qv',                    'QTY_VAPOR_MIXING_RATIO',
-!                          'qc',                    'QTY_CLOUDWATER_MIXING_RATIO',
-!                          'qr',                    'QTY_RAINWATER_MIXING_RATIO',
-!                          'qi',                    'QTY_ICE_MIXING_RATIO',
-!                          'qs',                    'QTY_SNOW_MIXING_RATIO',
-!                          'qg',                    'QTY_GRAUPEL_MIXING_RATIO',
 !                          'rho',                   'QTY_DENSITY',
 !                          'u10',                   'QTY_10M_U_WIND_COMPONENT',
 !                          'v10',                   'QTY_10M_V_WIND_COMPONENT',
@@ -453,7 +702,36 @@ function run_filter {
                           'w',                     'QTY_VERTICAL_VELOCITY',
                           'qv',                    'QTY_VAPOR_MIXING_RATIO',
                           'surface_pressure',      'QTY_SURFACE_PRESSURE',
+                          'qc',                    'QTY_CLOUDWATER_MIXING_RATIO',
+                          'qr',                    'QTY_RAINWATER_MIXING_RATIO',
+                          'qi',                    'QTY_ICE_MIXING_RATIO',
+                          'qs',                    'QTY_SNOW_MIXING_RATIO',
+                          'qg',                    'QTY_GRAUPEL_MIXING_RATIO',
+                          'qh',                    'QTY_HAIL_MIXING_RATIO',
+                          'volg',                  'QTY_GRAUPEL_VOLUME',
+                          'volh',                  'QTY_HAIL_VOLUME',
+                          'nc',                    'QTY_DROPLET_NUMBER_CONCENTR',
+                          'nr',                    'QTY_RAIN_NUMBER_CONCENTR',
+                          'ni',                    'QTY_ICE_NUMBER_CONCENTRATION',
+                          'ns',                    'QTY_SNOW_NUMBER_CONCENTR',
+                          'ng',                    'QTY_GRAUPEL_NUMBER_CONCENTR',
+                          'nh',                    'QTY_HAIL_NUMBER_CONCENTR',
+                          'refl10cm',              'QTY_RADAR_REFLECTIVITY',
    mpas_state_bounds    = 'qv','0.0','NULL','CLAMP',
+                          'qc','0.0','NULL','CLAMP',
+                          'qr','0.0','NULL','CLAMP',
+                          'qi','0.0','NULL','CLAMP',
+                          'qs','0.0','NULL','CLAMP',
+                          'qg','0.0','NULL','CLAMP',
+                          'qh','0.0','NULL','CLAMP',
+                          'volg','0.0','NULL','CLAMP',
+                          'volh','0.0','NULL','CLAMP',
+                          'nc','0.0','NULL','CLAMP',
+                          'nr','0.0','NULL','CLAMP',
+                          'ni','0.0','NULL','CLAMP',
+                          'ns','0.0','NULL','CLAMP',
+                          'ng','0.0','NULL','CLAMP',
+                          'ng','0.0','NULL','CLAMP',
   /
 
 &update_mpas_states_nml
@@ -491,15 +769,16 @@ function run_filter {
                              '../../../observations/forward_operators/obs_def_gps_mod.f90',
                              '../../../observations/forward_operators/obs_def_vortex_mod.f90',
                              '../../../observations/forward_operators/obs_def_rel_humidity_mod.f90',
-                             '../../../observations/forward_operators/obs_def_dew_point_mod.f90'
+                             '../../../observations/forward_operators/obs_def_dew_point_mod.f90',
+                             '../../../observations/forward_operators/obs_def_radar_mod.f90',
+                             '../../../observations/forward_operators/obs_def_cwp_mod.f90'
    quantity_files          = '../../../assimilation_code/modules/observations/atmosphere_quantities_mod.f90'
   /
 
 &obs_sequence_tool_nml
    num_input_files   = 1
-   filename_seq      = 'obs_seq.final'
-   filename_seq_list = ''
-   filename_out      = 'obs_seq.subset'
+   filename_seq_list = 'obsflist'
+   filename_out      = 'obs_seq.${timestr_cur}'
    first_obs_days    = -1
    first_obs_seconds = -1
    last_obs_days     = -1
@@ -511,7 +790,7 @@ function run_filter {
    max_lon           = 360.0
    gregorian_cal     = .true.
    keep_types        = .true.
-   obs_types = 'RADIOSONDE_TEMPERATURE'
+   obs_types         = ''
   /
 
 # The times in the namelist for the obs_diag program are vectors
@@ -723,6 +1002,27 @@ function run_filter {
 /
 EOF
 
+    #------------------------------------------------------
+    # 4. Prepare Obs sequence for this analysis cycle
+    #------------------------------------------------------
+
+    if [[ ! -e OBSDIR/obs_seq.${timestr_cur} ]]; then
+        if [[ $verb -eq 1 ]]; then echo "run_obsmerge $wrkdir $iseconds"; fi
+        run_obsmerge $wrkdir $iseconds
+
+        if [[ -e OBSDIR/obs_seq.${timestr_cur} ]]; then
+            ln -sf OBSDIR/obs_seq.${timestr_cur} obs_seq.in
+        else
+            echo "ERROR: Observation file \"${wrkdir}/OBSDIR/obs_seq.${timestr_cur}\" not found"
+            exit 3
+        fi
+    fi
+
+    #------------------------------------------------------
+    # 5. Run filter
+    #------------------------------------------------------
+    #cp $rundir/init/wofs_mpas_01.init.nc init.nc
+
     #
     # Create job script and submit it
     #
@@ -736,7 +1036,7 @@ s/CPUSPEC/${filter_cpu}/g
 s/MODULE/${modulename}/g
 s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}#
+s#EXEDIR#${exedir}/dart#
 s/MACHINE/${machine}/g
 s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
@@ -767,6 +1067,35 @@ function run_update_states {
     cd $wrkdir
 
     #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/update_states.running || -f $wrkdir/done.update_states || -f $wrkdir/queue.update_states ]]; then
+        return
+    fi
+
+    #------------------------------------------------------
+    # Prepare update_mpas_states by copying/linking the background files
+    #------------------------------------------------------
+    state_input_file=$(awk '/input_state_file_list/{print $3}' input.nml)
+    readarray -t input_file_list < ${state_input_file:1:${#state_input_file}-2}
+    #update_input_file_list='filter_out.txt'
+
+    if [[ $update_in_place == true ]]; then
+        cpcmd="ln -sf"
+    else
+        cpcmd="cp"
+    fi
+
+    update_output_file_list='update_out.txt'
+    for fn in ${input_file_list[@]}; do
+        echo "${cpcmd} $fn ."
+        ${cpcmd} $fn .
+        fnbase=$(basename $fn)
+        echo "./$fnbase" >> update_out.txt
+    done
+    sed -i "/update_output_file_list/s/filter_in.txt/${update_output_file_list}/" input.nml
+
+    #
     # Waiting for job conditions
     #
     conditions=(done.filter)
@@ -783,38 +1112,9 @@ function run_update_states {
         done
     fi
 
-    #
-    # Return if is running or is done
-    #
-    if [[ -f $wrkdir/update_states.running || -f $wrkdir/done.update_states || -f $wrkdir/queue.update_states ]]; then
-        return
-    fi
-
     #------------------------------------------------------
     # Run update_mpas_states for all ensemble members
     #------------------------------------------------------
-    state_input_file=$(awk '/input_state_file_list/{print $3}' input.nml)
-    readarray -t input_file_list < ${state_input_file:1:${#state_input_file}-2}
-    #update_input_file_list='filter_out.txt'
-
-    if [[ $update_in_place == true ]]; then
-        update_output_file_list='filter_in.txt'
-        for fn in ${input_file_list[@]}; do
-            if [[ $verb -eq 1 ]]; then echo "Update_states: Linking $fn ...."; fi
-            ln -sf $fn .
-        done
-    else
-        update_output_file_list='update_out.txt'
-        for fn in ${input_file_list[@]}; do
-            cp $fn .
-            fnbase=$(basename $fn)
-            cat ./$fnbase >> update_out.txt
-        done
-    fi
-
-    sed -i "/update_output_file_list/s/filter_in/update_out/" input.nml
-
-    #${DART_DIR}/update_mpas_states >! logs/update_mpas_states.${icyc}.log
 
     #
     # Create job script and submit it
@@ -829,7 +1129,7 @@ s/CPUSPEC/${claim_cpu}/g
 s/MODULE/${modulename}/g
 s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}#
+s#EXEDIR#${exedir}/dart#
 s/MACHINE/${machine}/g
 s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
@@ -893,7 +1193,7 @@ function run_mpas {
         if [[ $verb -eq 1 ]]; then
             echo "Generating ${domname}.graph.info.part.${npefcst} in $rundir/$domname using $exedir/gpmetis"
         fi
-        $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst} > $exedir/gpmetis.out$npefcst
+        $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst} > $rundir/$domname/gpmetis.out$npefcst
         if [[ $? -ne 0 ]]; then
             echo "$?: $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst}"
             exit $?
@@ -923,7 +1223,9 @@ function run_mpas {
         # init files
         #
         if [[ $icycle -eq 0 ]]; then
-            ln -sf ../${domname}_${memstr}.init.nc .
+            #ln -sf ../${domname}_${memstr}.init.nc .
+            initfile=$(sed -n "$iens{p;q}" ../filter_in.txt)
+            ln -sf $initfile .
             do_restart="false"
             do_dacyle="false"
         else
@@ -1156,7 +1458,7 @@ s/PARTION/${partition}/
 s/NOPART/$npefcst/
 s/JOBNAME/mpas_${eventtime}/
 s/CPUSPEC/${claim_cpu}/g
-s/MODULE/${modulename}/g
+s#MODULE#${modulename}#g
 s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
 s#EXEDIR#${exedir}#
@@ -1227,7 +1529,7 @@ function da_cycle_driver() {
         timestr_curr=$(date -d @$isec +%Y%m%d%H%M)
         eventtime=$(date    -d @$isec +%H%M)
 
-        dawrkdir=$wrkdir/$timestr_curr
+        dawrkdir=${wrkdir}/${eventtime}
         mkwrkdir $dawrkdir 0    # keep original directory
         cd $dawrkdir
 
@@ -1245,8 +1547,12 @@ function da_cycle_driver() {
             #------------------------------------------------------
             # 2. Run update_states for all ensemble members
             #------------------------------------------------------
-            if [[ $verb -eq 1 ]]; then echo ""; echo "    Run update_mpas_state at $eventtime"; fi
-            run_update_states $dawrkdir
+            if [[ $icyc -eq 0 ]]; then
+                touch $dawrkdir/done.update_states
+            else
+                if [[ $verb -eq 1 ]]; then echo ""; echo "    Run update_mpas_state at $eventtime"; fi
+                run_update_states $dawrkdir
+            fi
         fi
 
         if [[ " ${jobs[*]} " =~ " mpas " ]]; then
@@ -1282,10 +1588,10 @@ function run_clean {
     wrkdir=$rundir/dacycles
 
     for isec in $(seq $start_sec $intvl_sec $end_sec ); do
-        timestr_curr=$(date -d @$isec +%Y%m%d%H%M)
+        #timestr_curr=$(date -d @$isec +%Y%m%d%H%M)
         eventtime=$(date    -d @$isec +%H%M)
 
-        dawrkdir=$wrkdir/$timestr_curr
+        dawrkdir=$wrkdir/$eventtime
         if [[ -d $dawrkdir ]]; then
             cd $dawrkdir
 
@@ -1355,8 +1661,7 @@ OUTIOTYPE="netcdf4"
 ICSIOTYPE="pnetcdf,cdf5"
 
 ADAPTIVE_INF=true
-update_in_place=true           # update MPAS states in-place or making a copy of the restart files
-OBS_DIR="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/DART/models/mpas_atm/work"
+update_in_place=false           # update MPAS states in-place or making a copy of the restart files
 
 verb=0
 overwrite=0
@@ -1382,8 +1687,7 @@ source $scpdir/Common_Utilfuncs.sh
 #-----------------------------------------------------------------------
 #% ARGS
 
-while [[ $# > 0 ]]
-    do
+while [[ $# > 0 ]]; do
     key="$1"
 
     case $key in
@@ -1543,6 +1847,8 @@ if [[ $machine == "Jet" ]]; then
     job_runmpexe_str="srun"
     job_runexe_str="srun"
 
+    OBS_DIR="/scratch/ywang/MPAS/mpas_scripts/run_dirs/OBSGEN"
+
     modulename="build_jet_intel18_1.11_smiol"
 
     source /etc/profile.d/modules.sh
@@ -1568,16 +1874,19 @@ elif [[ $machine == "Cheyenne" ]]; then
     job_runmpexe_str="mpiexec_mpt"
     job_runexe_str="mpiexec_mpt"
 
+    OBS_DIR="/scratch/ywang/MPAS/mpas_scripts/run_dirs/OBSGEN"
+
     modulename="defaults"
 else    # Vecna at NSSL
 
     account="${hpcaccount-batch}"
     ncores_filter=96; ncores_fcst=96
-    partition="batch"           ; claim_cpu="--ntasks-per-node=${ncores_fcst} --mem-per-cpu=4G";
-    partition_filter="batch"    ; filter_cpu="--ntasks-per-node=${ncores_filter} --mem-per-cpu=20G"
 
-    npefilter=48   #; nnodes_filter=$(( npefilter/ncores_filter  ))
-    npefcst=48     #; nnodes_fcst=$(( npefcst/ncores_fcst ))
+    npefilter=384   #; nnodes_filter=$(( npefilter/ncores_filter  ))
+    npefcst=96     #; nnodes_fcst=$(( npefcst/ncores_fcst ))
+
+    partition="batch"           ; claim_cpu="--ntasks-per-node=96  --mem-per-cpu=4G";
+    partition_filter="batch"    ; filter_cpu="--ntasks-per-node=96 --mem-per-cpu=4G"
 
     mach="slurm"
     job_exclusive_str=""
@@ -1585,8 +1894,10 @@ else    # Vecna at NSSL
     job_runmpexe_str="srun --mpi=pmi2"
     job_runexe_str="srun"
 
+    OBS_DIR="/scratch/ywang/MPAS/mpas_scripts/run_dirs/OBSGEN"
+
     modulename="env.mpas_smiol"
-    source ${modulename}
+    source ${rootdir}/modules/${modulename}
 fi
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@

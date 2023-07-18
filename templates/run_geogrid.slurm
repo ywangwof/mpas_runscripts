@@ -13,9 +13,13 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-module use ROOTDIR/modules
-module load MODULE
-#source /home/yunheng.wang/.wrfenv
+if [[ "MACHINE" == "Jet" ]]; then
+    module purge
+    module use ROOTDIR/modules
+    module load MODULE
+else
+    source ROOTDIR/modules/MODULE
+fi
 
 ulimit -s unlimited
 
@@ -45,4 +49,3 @@ let sec=diff%60
 echo -n "Job   Ended: $(date). "
 printf 'Job run time:  %02d:%02d:%02d' $hour $min $sec
 echo " "
-

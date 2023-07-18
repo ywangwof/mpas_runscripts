@@ -453,8 +453,8 @@ function run_static {
     config_smooth_surfaces = true
     config_dzmin = 0.3
     config_nsm = 30
-    config_tc_vertical_grid = true
-    config_blend_bdy_terrain = true
+    config_tc_vertical_grid = false
+    config_blend_bdy_terrain = false
     config_specified_zeta_levels = '${FIXDIR}/L60.txt'
 /
 &interpolation_control
@@ -668,7 +668,11 @@ function run_ungrib_hrrr {
     mkwrkdir $wrkdir 0
     cd $wrkdir
 
-    if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
+    if [[ -f done.ungrib ]]; then
+        echo "Found file \"done.ungrib\", skipping run_ungrib_hrrr ...."
+        echo ""
+        return                   # skip
+    elif [[ -f ungrib.running || -f queue.ungrib ]]; then
         return                   # skip
     fi
 
@@ -676,10 +680,10 @@ function run_ungrib_hrrr {
     hstr=$(printf "%02d" ${h#0})
     if [[ -f $hrrr_grib_dir ]]; then
         hrrrfile=$hrrr_grib_dir
-        vtime=$($wgrib2path $hrrrfile -for 1:1 -vt)
-        gribtime=${vtime##*=}
-        hrrrdate=${gribtime:0:8}
-        hrrrtime=${gribtime:8:2}
+        #vtime=$($wgrib2path $hrrrfile -for 1:1 -vt)
+        #gribtime=${vtime##*=}
+        #hrrrdate=${gribtime:0:8}
+        #hrrrtime=${gribtime:8:2}
         #echo $hrrrtime, $hrrrdate, $vtime, $gribtime
     else
         julday=$(date -d "$hrrrdate ${hrrrtime}" +%y%j%H)
@@ -701,6 +705,7 @@ function run_ungrib_hrrr {
     ln -sf $FIXDIR/WRFV4.0/${hrrrvtable} Vtable
 
     hrrrtime_str=$(date -d "$hrrrdate ${hrrrtime}" +%Y-%m-%d_%H:%M:%S)
+    echo "$hrrrdate ${hrrrtime}"
     cat << EOF > namelist.wps
 &share
  wrf_core = 'ARW',
@@ -740,8 +745,8 @@ EOF
 
 ########################################################################
 
-function run_meshplot {
-
+function run_meshplot_ncl {
+    # NCL version
     conditions=()
     while [[ $# > 0 ]]; do
         case $1 in
@@ -799,6 +804,84 @@ EOF
 
 ########################################################################
 
+function run_meshplot_py {
+    # Python version also include code for the radar list within domain
+
+    conditions=()
+    while [[ $# > 0 ]]; do
+        case $1 in
+        /*)
+            conditions+=($1)
+            ;;
+        *)
+            conditions+=($rundir/$1)
+            ;;
+        esac
+        shift
+    done
+
+    if [[ $dorun == true ]]; then
+        for cond in ${conditions[@]}; do
+            echo "$$: Checking: $cond"
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    echo "Waiting for file: $cond"
+                fi
+                sleep 10
+            done
+        done
+    fi
+
+    wrkdir="$rundir/$domname"
+    if [[ ! -f $wrkdir/$domname.grid.nc ]]; then
+        echo "Working file: $wrkdir/$domname.grid.nc not exist."
+        return
+    fi
+    cd $wrkdir
+
+    if [[ -f "radars.${eventdate}.sh" ]]; then
+        echo "Found file \"radars.${eventdate}.sh\", skipping run_run_meshplot_py ...."
+        echo ""
+        return
+    fi
+
+    output_grid="../geo_${domname##*_}/wofs_mpas_output.json"
+
+    #
+    # Activate Python environment
+    #
+    source ~/.python wofs_post
+
+    #
+    # Run job script and submit it
+    #
+    jobscript="${rootdir}/python/mpasgrid_cartopy.py"
+    # Options:
+    #
+    #  -g RADAR_FILE, --radar_file RADAR_FILE
+    #                        Radar file name for locations
+    #  -e EVENT, --event EVENT
+    #                        Event date string
+    #  -name NAME            Name of the WoF grid
+    #  -o OUTFILE, --outfile OUTFILE
+    #                        Name of output image or output directory
+    #  -latlon               Base map latlon or lambert
+    #  -outgrid OUTGRID      Plot an output grid, "True", "False" or a filename.
+    #                        When "True", retrieve grid from command line.
+    #
+    jobcmdstr="$jobscript -o $wrkdir -e ${eventdate} -name ${domname} -outgrid ${output_grid} -g ${FIXDIR}/nexrad_stations.txt ${domname}.grid.nc"
+    echo "Running $jobcmdstr"
+    python $jobcmdstr
+
+    ls -l radars.${eventdate}.sh
+    #echo "Waiting for radars.${eventdate}.sh ...."
+    #while [[ ! -e radars.${eventdate}.sh  ]]; do
+    #    sleep 10
+    #done
+}
+
+########################################################################
+
 function run_clean {
 
     for dirname in $@; do
@@ -845,7 +928,7 @@ function run_clean {
 #@ MAIN
 
 #jobs=(geogrid ungrib_hrrr createWOFS static)
-jobs=(geogrid rotate static)
+jobs=(geogrid ungrib_hrrr rotate meshplot_py static)
 
 WORKDIR="${rootdir}/run_dirs"
 TEMPDIR="${rootdir}/templates"
@@ -1107,7 +1190,8 @@ declare -A jobargs=([geogrid]="${rundir}/geo_${domname##*_}"            \
                     [createWOFS]="geo_${domname##*_}/done.geogrid"      \
                     #[static]="$domname/done.create ungrib/done.ungrib"  \
                     [rotate]="geo_${domname##*_}/done.geogrid"          \
-                    [meshplot]="$domname/done.rotate"                   \
+                    [meshplot_ncl]="$domname/done.rotate"                         \
+                    [meshplot_py]="$domname/done.rotate $domname/$domname.grid.nc" \
                     [static]="$domname/done.rotate ungrib/done.ungrib"  \
                     [ungrib_hrrr]="${hrrrfile}"                         \
                     [clean]="geogrid static createWOFS"                 \

@@ -53,6 +53,27 @@ import matplotlib.patches as patches
 import matplotlib.path as path
 
 ########################################################################
+#
+# Load the dictionary into a Namespace data structure.
+# This step is not necessary, but cuts down the syntax needed to reference each item in the dict.
+#
+# Example: Retrieve the 0 hr forecast Dataset from GFS Dynamics
+#            dict: ds_dict['GFS']['dynf'][0]
+#       Namespace: datasets.GFS.dynf[0]
+
+def make_namespace(d: dict):
+    assert(isinstance(d, dict))
+    ns =  argparse.Namespace()
+    for k, v in d.items():
+        if isinstance(v, dict):
+            leaf_ns = make_namespace(v)
+            ns.__dict__[k] = leaf_ns
+        else:
+            ns.__dict__[k] = v
+
+    return ns
+
+########################################################################
 
 def dumpobj(obj, level=0, maxlevel=10):
     ''' Print object members nicely'''
@@ -311,6 +332,51 @@ def get_var_contours(varname,var2d,cntlevels):
 
     return color_map, normc, cmin, cmax, ticks_list
 
+########################################################################
+
+def setup_hrrr_projection():
+    '''Lambert conformal map projection for the HRRR domain'''
+
+    ctrlat = 38.5
+    ctrlon = -97.5    # -97.5  # 262.5
+    stdlat1 = 38.5
+    stdlat2 = 38.5
+
+    nxhr = 1799
+    nyhr = 1059
+    dxhr = 3000.0
+    dyhr = 3000.0
+
+    xsize=(nxhr-1)*dxhr
+    ysize=(nyhr-1)*dyhr
+
+    x1hr = np.linspace(0.0,xsize,num=nxhr)
+    y1hr = np.linspace(0.0,ysize,num=nyhr)
+
+    #x2hr, y2hr = np.meshgrid(x1hr,y1hr)
+
+    xctr = (nxhr-1)/2*dxhr
+    yctr = (nyhr-1)/2*dyhr
+
+    proj =ccrs.LambertConformal(central_longitude=ctrlon, central_latitude=ctrlat,
+                 false_easting=xctr, false_northing= yctr,
+                 standard_parallels=(stdlat1, stdlat2), globe=None)
+
+    lonlat_sw = carr.transform_point(0.0,0.0,proj)
+
+    grid_hrrr = {'proj'     : proj,
+                 'xsize'    : xsize,
+                 'ysize'    : ysize,
+                 'ctrlat'   : ctrlat,
+                 'ctrlon'   : ctrlon,
+                 'xctr'     : xctr,
+                 'yctr'     : yctr,
+                 'x1d'      : x1hr,
+                 'y1d'      : y1hr,
+                 'lonlat_sw': lonlat_sw }
+
+    return make_namespace(grid_hrrr)
+
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
 # Main function defined to return correct sys.exit() calls
@@ -333,10 +399,14 @@ if __name__ == "__main__":
     parser.add_argument('-l','--vertLevels',help='Vertical levels to be plotted [l1,l2,l3,...]',  type=str, default=None)
     parser.add_argument('-c','--cntLevels', help='Contour levels [cmin,cmax,cinc]',               type=str, default=None)
     parser.add_argument('-o','--outfile',   help='Name of output image or output directory',              type=str, default=None)
+    parser.add_argument('-latlon'        ,  help='Base map latlon or lambert',action='store_true', default=False)
+    parser.add_argument('-range'         ,  help='Map range in degrees [lat1,lat2,lon1,lon2]',type=str, default=None)
 
     args = parser.parse_args()
 
     basmap = "latlon"
+    if args.latlon:
+        basmap = "latlon"
 
     fcstfiles = []
     varnames  = []
@@ -376,6 +446,30 @@ if __name__ == "__main__":
     else:
         print(f"Found too many files. Got \"{fcstfiles}\"")
         sys.exit(0)
+
+    ranges = [-135.0,-60.0,20.0,55.0]
+    if args.range == 'hrrr':
+        if args.latlon:
+            ranges = [-135.0,-60.0,20.0,55.0]
+        else:
+            ranges = [-125.0,-70.0,22.0,52.0]
+    elif args.range is not None:
+        rlist = [float(item) for item in args.range.split(',')]
+        if len(rlist) < 4:
+            print("-range expects 4 or more degrees as [lat1,lon1,lat2,lon2, ...].")
+            sys.exit(0)
+        rlist = [float(item) for item in args.range.split(',')]
+
+        lats=rlist[0::2]
+        lons=rlist[1::2]
+        ranges = [min(lons)-2.0,max(lons)+2.0,min(lats)-2.0,max(lats)+2.0]
+
+        #print(f"Name: {args.name}")
+        #print("Type: custom")
+        #print(f"Point: {args.ctrlon}, {args.ctrlat}")
+        #for lon,lat in ranges:
+        #    print(f"{lat}, {lon}")
+        #print(" ")
 
     #
     # Load variable
@@ -475,7 +569,7 @@ if __name__ == "__main__":
     elif varndim == 2:
         levels=[0]
 
-        if varshapes[0] == nCells and (varshapes[1] == nlevels or varshapes[1] == nslevels):
+        if varshapes[0] == nCells and (varshapes[1] in (nlevels, nslevels,12)):
             varndim = 230           # static file
             need_levels = True
             vertshape = varshapes[1]
@@ -501,6 +595,8 @@ if __name__ == "__main__":
             levels = range(nlevels)
         elif vertshape == nlevels+1:
             levels = range(nlevels+1)
+        elif vertshape == 12:
+            levels = range(vertshape)
         else:
             print(f"The 3rd dimension size ({vertshape}) is not in ({nlevels} or {nslevels}).")
             sys.exit(0)
@@ -565,30 +661,8 @@ if __name__ == "__main__":
     carr= ccrs.PlateCarree()
 
     if basmap == "lambert":
-        ctrlat = 38.5
-        ctrlon = -97.5    # -97.5  # 262.5
-        stdlat1 = 38.5
-        stdlat2 = 38.5
 
-        nxhr = 1799
-        nyhr = 1059
-        dxhr = 3000.0
-        dyhr = 3000.0
-
-        xsize=(nxhr-1)*dxhr
-        ysize=(nyhr-1)*dyhr
-
-        x1hr = np.linspace(0.0,xsize,num=nxhr)
-        y1hr = np.linspace(0.0,ysize,num=nyhr)
-
-        x2hr, y2hr = np.meshgrid(x1hr,y1hr)
-
-        xctr = (nxhr-1)/2*dxhr
-        yctr = (nyhr-1)/2*dyhr
-
-        proj_hrrr=ccrs.LambertConformal(central_longitude=ctrlon, central_latitude=ctrlat,
-                     false_easting=xctr, false_northing= yctr, secant_latitudes=None,
-                     standard_parallels=(stdlat1, stdlat2), globe=None)
+        proj_hrrr = setup_hrrr_projection().proj
 
     else:
         proj_hrrr = None
@@ -651,7 +725,7 @@ if __name__ == "__main__":
             if basmap == "latlon":
                 #carr._threshold = carr._threshold/10.
                 ax = plt.axes(projection=carr)
-                ax.set_extent([-135.0,-60.0,20.0,55.0],crs=carr)
+                ax.set_extent(ranges,crs=carr)
             else:
                 ax = plt.axes(projection=proj_hrrr)
                 ax.set_extent([-125.0,-70.0,22.0,52.0],crs=carr)
@@ -685,14 +759,15 @@ if __name__ == "__main__":
             #ax.add_feature(cfeature.RIVERS)
             ax.add_feature(cfeature.BORDERS)
             ax.add_feature(cfeature.STATES,linewidth=0.1)
-            gl = ax.gridlines(draw_labels=True,linewidth=0.2, color='gray', alpha=0.7, linestyle='--')
-            gl.xlocator = mticker.FixedLocator([-140,-120, -100, -80, -60])
-            gl.ylocator = mticker.FixedLocator([10,20,30,40,50,60])
-            gl.top_labels = False
-            gl.left_labels = True  #default already
-            gl.right_labels = False
-            gl.bottom_labels = True
-            #gl.ylabel_style = {'rotation': 45}
+            if basmap == "latlon":
+                gl = ax.gridlines(draw_labels=True,linewidth=0.2, color='gray', alpha=0.7, linestyle='--')
+                gl.xlocator = mticker.FixedLocator([-140,-120, -100, -80, -60])
+                gl.ylocator = mticker.FixedLocator([10,20,30,40,50,60])
+                gl.top_labels = False
+                gl.left_labels = True  #default already
+                gl.right_labels = False
+                gl.bottom_labels = True
+                #gl.ylabel_style = {'rotation': 45}
 
 
             # Create the title as you see fit

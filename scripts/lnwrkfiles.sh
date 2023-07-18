@@ -50,7 +50,7 @@ function usage {
     echo "              -r              For a run or for fix_files"
     echo "                              Default is for fix_files"
     echo "              -s  DIR         Source directory"
-    echo "              -m  Machine     Machine name to be run, [Jet or Odin]"
+    echo "              -m  Machine     Machine name to be run, [Jet or Vecna]"
     echo "              -cmd copy       Command for linking or copying [copy, link, clean] (default: link)"
     echo " "
     echo "   DEFAULTS:"
@@ -71,7 +71,7 @@ function usage {
 # Handle command line arguments
 #
 #-----------------------------------------------------------------------
-cmds=(mpas MPASSIT UPP WRF)
+cmds=(mpas MPASSIT UPP WRF dart)
 
 verb=0
 machine="Jet"
@@ -258,12 +258,15 @@ for cmd in ${cmds[@]}; do
             cd $exedir
             echo "---  Executables of DART"
             echo "CWD: $exedir"
+            dartprograms=(convertdate  filter  mpas_dart_obs_preprocess  obs_sequence_tool  update_mpas_states advance_time)
             if [[ ${runcmd} == "clean" ]]; then
-                rm -f filter update_mpas_states
+                rm -f ${dartprograms[*]}
             else
-                ${runcmd} $srcdartdir/models/mpas_atm/work/filter .
-                ${runcmd} $srcdartdir/models/mpas_atm/work/update_mpas_states .
+                for prog in ${dartprograms[@]}; do
+                    ${runcmd} $srcdartdir/models/mpas_atm/work/$prog .
+                done
             fi
+        fi
         ;;
     "mpasregion" )
         if [[ $run -ne 1 ]]; then
@@ -275,6 +278,7 @@ for cmd in ${cmds[@]}; do
             else
                 ${runcmd} ${srcmpasregion}/MPAS-Limited-Area .
             fi
+        fi
         ;;
     "mpas" )
 

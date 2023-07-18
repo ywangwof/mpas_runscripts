@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os, sys, math
+import datetime
 import numpy as np
 
 import matplotlib.pyplot as plt
@@ -20,6 +21,15 @@ from netCDF4 import Dataset
 import argparse
 
 #import strmrpt
+
+# Default values
+_station_file         = 'conus2015.tbl'
+_radar_file           = 'nexrad_stations.txt'
+_default_WOFS_size    = 900.   # width of domain in km
+_radar_buf_dis        = 100000.
+
+# CONSTANTS
+__r_earth              = 6367000.0
 
 ########################################################################
 #
@@ -60,23 +70,15 @@ def read_radar_location(radar_filename):
 
 ########################################################################
 
-def find_radars(radar_dict,rad_grd_lats, rad_grd_lons):
-    #
-    # Match radar name and table name
-    #
-    radars_inside = {}
-    radars_outside = []
-    for radar,radar_loc in radar_dict.items():
-        if radar_loc[0]>rad_grd_lats[0] and radar_loc[0]<rad_grd_lats[1] and    \
-           radar_loc[1]>rad_grd_lons[0] and radar_loc[1]<rad_grd_lons[1] :
+def read_sfc_station_file(station_file):
 
-            #radar.distance = (radar.lat-rlat)**2+(radar.lon-rlon)**2
+    sfc_stations_dict = {}
+    with open(station_file, 'r') as f:
+        for line in f:
+            col = line.split()
+            sfc_stations_dict[col[0]] = (0.01*float(col[5]), 0.01*float(col[6]))
 
-            radars_inside[radar] = radar_dict[radar]
-        else:
-            radars_outside.append( radar )
-
-    return radars_inside
+    return sfc_stations_dict
 
 ########################################################################
 
@@ -203,11 +205,11 @@ def setup_out_projection(gridparms):
     lonlat_sw = carr.transform_point(0.0,0.0,proj)
 
     if args.verbose:
-      print("Write component output grid Parameters:")
-      print(f"    cen_lat = {gridparms.ctrlat}, cen_lon = {gridparms.ctrlon}, stdlat1 = {gridparms.stdlats[0]}, stdlat2 = {gridparms.stdlats[1]}")
-      print(f"    nx = {gridparms.nx}, ny = {gridparms.ny}, dx = {gridparms.dx}, dy = {gridparms.dy}")
+        print("Write component output grid Parameters:")
+        print(f"    cen_lat = {gridparms.ctrlat}, cen_lon = {gridparms.ctrlon}, stdlat1 = {gridparms.stdlats[0]}, stdlat2 = {gridparms.stdlats[1]}")
+        print(f"    nx = {gridparms.nx}, ny = {gridparms.ny}, dx = {gridparms.dx}, dy = {gridparms.dy}")
 
-    print(f'Output grid: lat1 = {lonlat_sw[1]}, lon1 = {lonlat_sw[0]}')
+        print(f'Output grid: lat1 = {lonlat_sw[1]}, lon1 = {lonlat_sw[0]}')
 
     grid_out  = {'proj'     : proj,
                  'xsize'    : xsize,
@@ -220,6 +222,36 @@ def setup_out_projection(gridparms):
                  'y1d'      : y1d,
                  'lonlat_sw': lonlat_sw }
 
+    if hasattr(gridparms, "sizeinm"):
+        # Get the domain corners based on the domain width
+
+        lat_cr, lon_cr = np.deg2rad(gridparms.ctrlat), np.deg2rad(gridparms.ctrlon)
+
+        glat = np.zeros(5)
+        glon = np.zeros(5)
+
+        glat[0] = lat_cr - 0.5*(gridparms.sizeinm) / __r_earth
+        glat[1] = lat_cr + 0.5*(gridparms.sizeinm) / __r_earth
+        glat[2] = lat_cr + 0.5*(gridparms.sizeinm) / __r_earth
+        glat[3] = lat_cr - 0.5*(gridparms.sizeinm) / __r_earth
+        glat[4] = lat_cr - 0.5*(gridparms.sizeinm) / __r_earth
+
+        glon[0] = lon_cr - 0.5*(gridparms.sizeinm) / (__r_earth * np.cos(glat[0]))
+        glon[1] = lon_cr - 0.5*(gridparms.sizeinm) / (__r_earth * np.cos(glat[1]))
+        glon[2] = lon_cr + 0.5*(gridparms.sizeinm) / (__r_earth * np.cos(glat[2]))
+        glon[3] = lon_cr + 0.5*(gridparms.sizeinm) / (__r_earth * np.cos(glat[3]))
+        glon[4] = lon_cr - 0.5*(gridparms.sizeinm) / (__r_earth * np.cos(glat[4]))
+
+        glon = np.rad2deg(glon)
+        glat = np.rad2deg(glat)
+
+        xygs = proj.transform_points(carr,glon,glat)
+
+        grid_out['glons_corners'] = glon
+        grid_out['glats_corners'] = glat
+        grid_out['x_corners']     = list(xygs[:,0])
+        grid_out['y_corners']     = list(xygs[:,1])
+
     return make_namespace(grid_out)
 
 ########################################################################
@@ -227,9 +259,12 @@ def setup_out_projection(gridparms):
 def attach_out_grid(grid,axo):
     '''Plot the output grid outlines'''
 
-    axo.add_patch(mpatches.Rectangle(xy=[0, 0], width=grid.xsize, height=grid.ysize,
-                                facecolor='none',edgecolor='green',linewidth=2.0,
-                                transform=grid.proj))
+    #axo.add_patch(mpatches.Rectangle(xy=[0, 0], width=grid.xsize, height=grid.ysize,
+    #                            facecolor='none',edgecolor='green',linewidth=2.0,
+    #                            transform=grid.proj))
+
+    plt.fill(grid.x_corners, grid.y_corners, linewidth=2.0, alpha=1.0,
+             facecolor='none',edgecolor='green',  transform=grid.proj)
 
     plt.text(grid.ctrlon,grid.ctrlat,'o',color='g',horizontalalignment='center',
                                         verticalalignment='center',transform=carr)
@@ -305,26 +340,32 @@ def attach_wofs_grid(plt_wofs,axo, lonlats,skipedges,mpas_grid):
 
 ########################################################################
 
-def attach_radar_rings(grid,axo):
+def search_radars(radars,grid):
+    # search for radars inside the grid
+
+    radar_within_domain = {}
+
+    xmin = min(grid.x_corners)
+    xmax = max(grid.x_corners)
+    ymin = min(grid.y_corners)
+    ymax = max(grid.y_corners)
+    for key in radars:
+        x, y = grid.proj.transform_point(radars[key][1], radars[key][0],carr)
+        if x-_radar_buf_dis <= xmax and x+_radar_buf_dis >= xmin and \
+           y-_radar_buf_dis <= ymax and y+_radar_buf_dis >= ymin:
+            #radcords = radars[key]
+            #radcords.append(x)
+            #radcords.append(y)
+            radar_within_domain[key] = radars[key]
+
+    print(f"\n  Found {len(radar_within_domain)} radars within domain\n")
+
+    return radar_within_domain
+
+########################################################################
+
+def attach_radar_rings(grid,radars,axo):
     '''Plot radar rings as possible'''
-
-    xextradar = 100000.0    # extend range for radar searching 140 km
-    yextradar = 100000.0
-
-    xrad1 = grid.x1d[0]  - xextradar
-    xrad2 = grid.x1d[-1] + xextradar
-    yrad1 = grid.y1d[0]  - yextradar
-    yrad2 = grid.y1d[-1] + yextradar
-
-    (nothing,     rad_grd_lat1) = carr.transform_point(xrad1,yrad1, src_crs=grid.proj)
-    (rad_grd_lon1,rad_grd_lat2) = carr.transform_point(xrad1,yrad2, src_crs=grid.proj)
-    #(rad_grd_lon3,rad_grd_lat3) = carr.transform_point(xrad2,yrad1, src_crs=grid.proj)
-    (rad_grd_lon2,nothing     ) = carr.transform_point(xrad2,yrad2, src_crs=grid.proj)
-
-    print (f'Lat/lon at the SW corner of base grid= {rad_grd_lat1}, {rad_grd_lon1}.' )
-    print (f'Lat/lon at the NE corner of base grid= {rad_grd_lat2}, {rad_grd_lon2}.' )
-
-    radars = find_radars(radar_locations,[rad_grd_lat1, rad_grd_lat2],[rad_grd_lon1,rad_grd_lon2])
 
     for radar, radloc in radars.items():
         circle_points = geodesic.Geodesic().circle(lon=radloc[1], lat=radloc[0], radius=150000,
@@ -334,6 +375,47 @@ def attach_radar_rings(grid,axo):
 
         plt.text(radloc[1],radloc[0],radar,horizontalalignment='center',
                  verticalalignment='center',color='purple', transform=carr)
+
+########################################################################
+
+def write_envfile(outfilename,outradars,grid):
+
+    rad_names = []
+    rad_lats  = []
+    rad_lons  = []
+    rad_alts  = []
+    for key,x in outradars.items():
+        rad_names.append(key)
+        rad_lats.append(str(x[0]))
+        rad_lons.append(str(x[1]))
+        rad_alts.append(str(round(x[2],7)))
+
+    radnames = ' '.join(rad_names)
+    radlats  = ' '.join(rad_lats)
+    radlons  = ' '.join(rad_lons)
+    radalts  = ' '.join(rad_alts)
+
+    # Write out bash file.....
+
+    with open(outfilename, 'w') as outfile:
+        outfile.write("#!/bin/bash\n\n")
+
+        nradars = len(outradars)
+
+        outfile.write(f"export num_rad={nradars}\n"      )
+        outfile.write(f"export rad_lon=( {radlons}  )\n" )
+        outfile.write(f"export rad_lat=( {radlats}  )\n" )
+        outfile.write(f"export rad_alt=( {radalts}  )\n" )
+        outfile.write(f"export rad_name=({radnames} )\n" )
+        outfile.write(f"export cen_lat={grid.ctrlat}\n"  )
+        outfile.write(f"export cen_lon={grid.ctrlon}\n"  )
+
+        outfile.write(f"export lat_ll={grid.glats_corners[0]}\n")
+        outfile.write(f"export lat_ur={grid.glats_corners[1]}\n")
+        outfile.write(f"export lon_ll={grid.glons_corners[0]}\n")
+        outfile.write(f"export lon_ur={grid.glons_corners[2]}\n")
+
+    return
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
@@ -347,22 +429,29 @@ if __name__ == "__main__":
                                             ''')
                                      #formatter_class=CustomFormatter)
 
-    parser.add_argument('pts_file',help='MPAS domain file',nargs='?',default="xxxx")
+    parser.add_argument('pts_file',help='MPAS domain file in ASCII or netCDF',nargs='?',default="xxxx")
 
     parser.add_argument('-v','--verbose', help='Verbose output',                        action="store_true")
-    parser.add_argument('-ca','--ctrlat', help='Lambert Conformal central latitude',    type=float, default=38.5  )
-    parser.add_argument('-co','--ctrlon', help='Lambert Conformal central longitude',   type=float, default=-97.5 )
-    parser.add_argument('-s1','--stdlat1',help='Lambert Conformal standard latitude1',  type=float, default=38.5  )
-    parser.add_argument('-s2','--stdlat2',help='Lambert Conformal standard latitude2',  type=float, default=38.5  )
-    parser.add_argument('-nx',            help='number of grid in X direction',         type=int,   default=1601  )
-    parser.add_argument('-ny'            ,help='number of grid in Y direction',         type=int,   default=961  )
-    parser.add_argument('-dx'            ,help='grid resolution in X direction (meter)',type=float, default=3000.0)
-    parser.add_argument('-dy'            ,help='grid resolution in Y direction (meter)',type=float, default=3000.0)
-    parser.add_argument('-range'         ,help='Map range in degrees [lat1,lat2,lon1,lon2]',type=str, default=None)
-    parser.add_argument('-outgrid'       ,help='Plot an output grid, "True" get grid from arguments, or filename',type=str, default=False)
-    parser.add_argument('-radarfile'     ,help='NEXRAD radar file name',                type=str, default=None)
-    parser.add_argument('-latlon'        ,help='Base map latlon or lambert',action='store_true', default=False)
-    parser.add_argument('-name'          ,help='Name of the WoF grid',type=str, default="WoFS_mpas")
+
+    parser.add_argument('-c','--center',  help='Central latitude/longitude of the WoFS domain',    type=float, default=None,    nargs = 2)
+    parser.add_argument('-l','--stdlats', help='Lambert Conformal standard latitudes',      type=float, default=(30.0,60.0),    nargs = 2)
+    parser.add_argument('-n','--nxy',     help='number of grid in X/Y direction',           type=int,   default=(301,301),      nargs = 2)
+    parser.add_argument('-d','--dxy',     help='grid resolution in X/Y direction (meter)',  type=float, default=(3000.0,3000.0),nargs = 2)
+
+    parser.add_argument('-s','--station',     help='Station name to center the WOFS grid on',         type=str,   default=None              )
+    parser.add_argument('-w','--width',       help='Size of WOFS domain in km',                       type=float, default=_default_WOFS_size)
+    parser.add_argument('-nudge',             help='Nudge the box X/Y km from station point: DX DY',  type=int,   default=(0,0), nargs = 2  )
+    parser.add_argument('-f','--station_file',help='Station file name to read station locations',     type=str,   default=_station_file     )
+    parser.add_argument('-g','--radar_file',  help='Radar file name for locations',                   type=str,   default=_radar_file       )
+
+    parser.add_argument('-e','--event',    help='Event date string',    type=str, default=datetime.datetime.now().strftime('%Y%m%d') )
+    parser.add_argument('-name',           help='Name of the WoF grid', type=str, default="WoFS_mpas"                                )
+    parser.add_argument('-o','--outfile',  help='Name of output image or output directory',           type=str, default=None)
+
+    parser.add_argument('-p','--plot',    help="Boolean flag to interactively plot domain",                    default=False, action="store_true")
+    parser.add_argument('-latlon'        ,help='Base map latlon or lambert',action='store_true',               default=False)
+    parser.add_argument('-range'         ,help='Map range in degrees [lat1,lat2,lon1,lon2]',         type=str, default=None)
+    parser.add_argument('-outgrid'       ,help='Plot an output grid, "True", "False" or a filename. When "True", retrieve grid from command line.',type=str, default="True")
 
     args = parser.parse_args()
 
@@ -376,16 +465,14 @@ if __name__ == "__main__":
     if args.latlon:
         basmap = "latlon"
 
-    figname = f"{args.name}.{basmap}.png"
-
+    #
+    # Get MPAS grid
+    #
+    lats = None; lons = None; fileroot = None
     if os.path.lexists(args.pts_file):
 
         fileroot,filext = os.path.splitext(args.pts_file)
         #print(fileroot, filext)
-        filename = f"{os.path.basename(fileroot)}.png"
-
-        figname = filename.replace("custom",basmap)
-        figname = filename.replace("grid",basmap)
 
         if filext in (".pts",".nc"):
             plt_wofs,lonlats,mpas_edges = load_wofs_grid(args.pts_file,filext)
@@ -396,9 +483,13 @@ if __name__ == "__main__":
         lats = [ l[1] for l in lonlats]
         lons = [ l[0] for l in lonlats]
     else:
-        print("ERROR: need a WoF grid file.")
-        sys.exit(0)
+        plt_wofs = False
+        #print("ERROR: need a WoF grid file.")
+        #sys.exit(0)
 
+    #
+    # Set up basempa range or use HRRR grid
+    #
     plt_hrrr = False
     skipedges = 4
     if args.range == 'hrrr':
@@ -420,31 +511,35 @@ if __name__ == "__main__":
         lons=rlist[1::2]
         ranges = [min(lons)-2.0,max(lons)+2.0,min(lats)-2.0,max(lats)+2.0]
 
-        #print(f"Name: {args.name}")
-        #print("Type: custom")
-        #print(f"Point: {args.ctrlon}, {args.ctrlat}")
-        #for lon,lat in ranges:
-        #    print(f"{lat}, {lon}")
         print(" ")
     else:
-        ranges = [ min(lons)-2.0, max(lons)+2.0, min(lats)-2.0, max(lats)+2.0]
+        if lats is None or lons is None:
+            print("ERROR: Map range is required as \"[lat1,lon1,lat2,lon2]\" or the default 'hrrr' option." )
+            parser.print_help()
+            sys.exit(1)
+        else:
+            ranges = [ min(lons)-2.0, max(lons)+2.0, min(lats)-2.0, max(lats)+2.0]
 
     print(f"ranges = {ranges}")
 
+    #
+    # Decode output grid parameters
+    #
     plt_outgrid = False
+    lat_c = None
+    lon_c = None
     if args.outgrid == "True":
         plt_outgrid = True
         ogrid = {
-                "nx"       : args.nx,
-                "ny"       : args.ny,
-                "dx"       : args.dx,
-                "dy"       : args.dy,
-                "ctrlon"   : args.ctrlon,
-                "ctrlat"   : args.ctrlat,
-                "stdlats"  : [args.stdlat1,args.stdlat2],
+                "nx"       : args.nxy[0],
+                "ny"       : args.nxy[1],
+                "dx"       : args.dxy[0],
+                "dy"       : args.dxy[1],
+                "ctrlon"   : args.center[1],       # to be nudging later with lon_c/lat_c
+                "ctrlat"   : args.center[0],
+                "stdlats"  : args.stdlats,
                 }
-
-    elif not args.outgrid:
+    elif args.outgrid == "False":
         plt_outgrid = False
         ogrid = {}
     elif os.path.lexists(args.outgrid):
@@ -459,29 +554,99 @@ if __name__ == "__main__":
         ogrid = ast.literal_eval(' '.join(data))
 
         plt_outgrid = True
-        #nx1         = ogrid["nx"]
-        #ny1         = ogrid["ny"]
-        #dx1         = ogrid["dx"]
-        #dy1         = ogrid["dy"]
-        #ctrlon1     = ogrid["ctrlon"]
-        #ctrlat1     = ogrid["ctrlat"]
-        #stdlat1_1   = ogrid["stdlat1"]
-        #stdlat1_2   = ogrid["stdlat2"]
         ogrid["stdlats"] = [ogrid["stdlat1"],ogrid["stdlat2"]]
+        lat_c = ogrid['ctrlat']
+        lon_c = ogrid['ctrlon']
     else:
         print("ERROR: need an output grid file or command line arguments.")
         sys.exit(0)
-    out_grid = make_namespace(ogrid)
 
+    #
+    # Decode radar station file
+    #
     plt_radar = False
-    if args.radarfile is not None:
-        if not os.path.lexists(args.radarfile):
-            print(f"Radar file {args.radarfile} not exist.")
+    if args.radar_file is not None:
+        if not os.path.lexists(args.radar_file):
+            print(f"ERROR:Radar station file {args.radar_file} not exist.")
+            #parser.print_help()
+            #sys.exit(1)
         else:
-            radar_locations = read_radar_location(args.radarfile)
+            radar_locations = read_radar_location(args.radar_file)
+            print(f"  Read in radar file {args.radar_file} successfully\n")
 
-        if len(radar_locations) > 0:
-            plt_radar = True
+            if len(radar_locations) > 0:
+                plt_radar = True
+
+    #
+    # Decode surface station file
+    #
+    if lat_c is None or lon_c is None:
+        if args.center is not None:
+            print(f"WOFS grid center location supplied, using central lat/lon: {args.center}.")
+            lat_c,lon_c = args.center
+        elif args.station is not None:
+            station_c = None
+            print(f"WOFS grid center location supplied, using station: {args.station}.")
+            station_c = args.station
+
+            if os.path.lexists(args.station_file):
+                stations = read_sfc_station_file(args.station_file)
+                print(f"  Read in sfc station file {args.station_file} successfully")
+            else:
+                print(f"\nERROR: surface station file: {args.station_file} not exist.\n")
+                parser.print_help()
+                sys.exit(1)
+
+            print(f"  Input station: {args.station} is located at {stations[station_c][0]},  {stations[station_c][1]}\n")
+            lat_c, lon_c = stations[station_c]
+        else:
+            print("ERROR:  Need either the 3-letter identifier for the WOFS grid center location or the central lat/lon on command line \n")
+            parser.print_help()
+            sys.exit(1)
+
+        ogrid['ctrlat']  = lat_c
+        ogrid['ctrlon']  = lon_c
+
+    #
+    # Decode nudging option
+    #
+    x_nudge   = 0.0
+    y_nudge   = 0.0
+    if args.nudge[0] != 0 or args.nudge[1] != 0:
+        x_nudge = 1000.*float(args.nudge[0])
+        y_nudge = 1000.*float(args.nudge[1])
+        print(f"Set WOFS grid nudge from original center {lon_c,lat_c}, moving the grid DX = {x_nudge} meters,  DY = {y_nudge} meters")
+
+    #
+    # WoFS domain size
+    #
+    print(f"Set WOFS grid width {args.width} km.")
+    WOFS_size = 1000. * args.width
+    ogrid['sizeinm'] = WOFS_size
+
+    #
+    # Output file dir / file name
+    #
+    if args.outfile is None:
+        outdir  = './'
+        outfile = None
+    elif os.path.isdir(args.outfile):
+        outdir  = args.outfile
+        outfile = None
+    else:
+        outdir  = os.path.dirname(args.outfile)
+        outfile = os.path.basename(args.outfile)
+
+    if outfile is None:
+        if fileroot is not None:
+            filename = f"{os.path.basename(fileroot)}.png"
+            outfile = filename.replace("custom",basmap)
+            outfile = filename.replace("grid",basmap)
+        else:
+            outfile = f"{args.name}.{args.event}.{basmap}.png"
+
+    figname = os.path.join(outdir,outfile)
+    envfilename=os.path.join(outdir,f'radars.{args.event}.sh')
 
     #-----------------------------------------------------------------------
     #
@@ -496,7 +661,19 @@ if __name__ == "__main__":
     # Lambert Conformal Map projection for the output domain
     #
     if plt_outgrid:
-        grid_out = setup_out_projection(out_grid)
+
+        #print(lon_c,lat_c)
+        #print(x_c,y_c)
+        #print(lon_c,lat_c)
+        if x_nudge != 0 or y_nudge != 0:
+            lon_o = lon_c
+            lat_o = lat_c
+            x_c, y_c    = grid_hrrr.proj.transform_point(lon_o,lat_o,carr)
+            lon_c,lat_c = carr.transform_point(x_c+x_nudge,y_c+y_nudge,grid_hrrr.proj)
+            print(f"  Grid center moved, from ({lat_o},{lon_o}) to ({lat_c},{lon_c}).")
+
+        # Create Lambert conformal map based on width and height of domain and center point
+        grid_out = setup_out_projection(make_namespace(ogrid))
 
     #-----------------------------------------------------------------------
     #
@@ -511,7 +688,7 @@ if __name__ == "__main__":
         ax = plt.axes(projection=carr)
         ax.set_extent(ranges,crs=carr)
     else:
-        if plt_outgrid:
+        if plt_outgrid and args.range != 'hrrr':
             ax = plt.axes(projection=grid_out.proj)
         else:
             ax = plt.axes(projection=grid_hrrr.proj)
@@ -533,13 +710,14 @@ if __name__ == "__main__":
     #ax.add_feature(cfeature.RIVERS,facecolor='skyblue')
     ax.add_feature(cfeature.BORDERS,linewidth=0.1)
     ax.add_feature(cfeature.STATES,linewidth=0.2)
-    gl = ax.gridlines(draw_labels=True,linewidth=0.2, color='brown', alpha=1.0, linestyle='--')
-    gl.xlocator      = mticker.FixedLocator(lonsticks)
-    gl.ylocator      = mticker.FixedLocator(latsticks)
-    gl.top_labels    = False
-    gl.left_labels   = True
-    gl.right_labels  = True
-    gl.bottom_labels = True
+    if args.latlon:
+        gl = ax.gridlines(draw_labels=True,linewidth=0.2, color='brown', alpha=1.0, linestyle='--')
+        gl.xlocator      = mticker.FixedLocator(lonsticks)
+        gl.ylocator      = mticker.FixedLocator(latsticks)
+        gl.top_labels    = False
+        gl.left_labels   = True
+        gl.right_labels  = True
+        gl.bottom_labels = True
 
     plt.title(f"{args.name} Domain")
 
@@ -557,7 +735,8 @@ if __name__ == "__main__":
     #
     #-----------------------------------------------------------------------
 
-    attach_wofs_grid(plt_wofs,ax, lonlats,skipedges,mpas_edges)
+    if plt_wofs != False:
+        attach_wofs_grid(plt_wofs,ax, lonlats,skipedges,mpas_edges)
 
     #-----------------------------------------------------------------------
     #
@@ -567,14 +746,18 @@ if __name__ == "__main__":
 
     if plt_outgrid:
         attach_out_grid(grid_out,ax)
-    #
+
     #-----------------------------------------------------------------------
     #
     # 4. Plot radar rings as possible
     #
     #-----------------------------------------------------------------------
         if plt_radar:
-            attach_radar_rings(grid_out,ax)
+            radars = search_radars(radar_locations,grid_out)
+            attach_radar_rings(grid_out,radars,ax)
+
+            write_envfile(envfilename,radars,grid_out)
+            print(f"\nWrote out environment file for radars: {envfilename}")
     #
     #-------------------------------------------------------------------
     #
@@ -585,4 +768,6 @@ if __name__ == "__main__":
     print(f"Saving figure to {figname} ...")
     figure.savefig(figname, format='png')
 
-    #plt.show()
+
+    if args.plot:
+        plt.show()
