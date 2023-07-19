@@ -10,7 +10,7 @@ desdir=${rootdir}/fix_files
 if [[ "$(hostname)" == "ln"* ]]; then
     srcmpassitdir=${srcroot}/MPASSIT
     srcuppdir=${srcroot}/UPP_KATE_kjet
-    srcmodeldir=${srcroot}/MPAS-Model.smiol
+    srcmodeldir=${srcroot}/MPAS-Model
     srcwpsdir=/oldscratch/ywang/NEWSVAR/news3dvar.2021/WPS
     srcwrfdir=/oldscratch/ywang/NEWSVAR/news3dvar.2021/WRFV3.9_WOFS_2021
 elif [[ "$(hostname)" == "cheyenne"* ]]; then
@@ -25,7 +25,7 @@ elif [[ "$(hostname)" == "cheyenne"* ]]; then
 else
     srcmpassitdir=${srcroot}/MPASSIT
     srcuppdir=${srcroot}/UPP_KATE_kjet
-    srcmodeldir=${srcroot}/MPAS-Model.smiol
+    srcmodeldir=${srcroot}/MPAS-Model
     srcwpsdir=${srcroot}/WPS_SRC
     srcwrfdir=${srcroot}/WRFV4.0
     srcdartdir=${srcroot}/DART
@@ -255,16 +255,25 @@ for cmd in ${cmds[@]}; do
 
     "DART" )
         if [[ $run -ne 1 ]]; then
-            cd $exedir
+            if [[ ! -e $exedir/dart ]]; then
+                mkdir -p $exedir/dart
+            fi
+            cd $exedir/dart
             echo "---  Executables of DART"
             echo "CWD: $exedir"
-            dartprograms=(convertdate  filter  mpas_dart_obs_preprocess  obs_sequence_tool  update_mpas_states advance_time)
+            dartprograms=( filter  mpas_dart_obs_preprocess  obs_sequence_tool  update_mpas_states advance_time)
             if [[ ${runcmd} == "clean" ]]; then
+                echo "    Deleting ${dartprograms[*]}"
                 rm -f ${dartprograms[*]}
             else
+                echo ""
+                echo "  -- Copying DART programs to $(pwd) ...."
                 for prog in ${dartprograms[@]}; do
+                    echo "        $srcdartdir/models/mpas_atm/work/$prog"
                     ${runcmd} $srcdartdir/models/mpas_atm/work/$prog .
                 done
+                echo "        $srcdartdir/models/wrf/work/convertdate"
+                ${runcmd} $srcdartdir/models/wrf/work/convertdate .
             fi
         fi
         ;;
@@ -294,9 +303,11 @@ for cmd in ${cmds[@]}; do
                 RRTMG_LW_DATA.DBL RRTMG_SW_DATA       RRTMG_SW_DATA.DBL SOILPARM.TBL   \
                 VEGPARM.TBL)
 
+        echo ""
+        echo "  -- Linking runtime static files to ${desdir} ...."
         for fn in ${staticfiles[@]}; do
             if [[ $verb -eq 1 ]]; then
-                echo "Linking $fn ....";
+                echo "        $srcmodel/src/core_atmosphere/physics/physics_wrf/files/$fn";
             fi
             if [[ ${runcmd} == "clean" ]]; then
                 rm $fn
@@ -337,13 +348,24 @@ for cmd in ${cmds[@]}; do
             #done
 
             cd $exedir
-            echo "---  Executables"
-            echo "CWD: $exedir"
+            echo ""
+            echo "  -- Executables to $exedir"
             if [[ ${runcmd} == "clean" ]]; then
                 rm init_atmosphere_model atmosphere_model.single
             else
+                echo "        $srcmodel/init_atmosphere_model --> init_atmosphere_model"
                 ${runcmd} $srcmodel/init_atmosphere_model .
+                echo "        $srcmodel/atmosphere_model      --> atmosphere_model.single"
                 ${runcmd} $srcmodel/atmosphere_model atmosphere_model.single
+
+                srcdir=$(dirname $srcmodel)
+                if [[ -e $srcdir/MPAS-Tools/mesh_tools/grid_rotate/grid_rotate  ]]; then
+                    echo "        $srcdir/MPAS-Tools/mesh_tools/grid_rotate/grid_rotate --> grid_rotate"
+                    ${runcmd} $srcdir/MPAS-Tools/mesh_tools/grid_rotate/grid_rotate .
+                else
+                    echo "ERROR: not exist: $srcdir/MPAS-Tools/mesh_tools/grid_rotate/grid_rotate"
+                    exit 0
+                fi
             fi
         else
             thompsonfiles=(MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL \
@@ -370,4 +392,5 @@ for cmd in ${cmds[@]}; do
     esac
 done
 
+echo ""
 exit 0

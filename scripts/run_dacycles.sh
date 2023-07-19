@@ -193,7 +193,7 @@ EOF
         if [[ $verb -eq 1 ]]; then
             echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
         fi
-        srun echo "${g_date} ${g_sec}" | ${obspreprocess} >& $srunout
+        ${runcmp_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >& $srunout
 
         if [[ $? -eq 0 ]]; then
             mv ./obs_seq.new ./obs_seq.cwp
@@ -228,7 +228,7 @@ EOF
         if [[ $verb -eq 1 ]]; then
             echo "    Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
         fi
-        srun echo "$g_date $g_sec" | ${obspreprocess} >& $srunout
+        ${runcmp_str} echo "$g_date $g_sec" | ${obspreprocess} >& $srunout
 
         if [[ $? -eq 0 ]]; then
             mv ./obs_seq.new ./obs_seq.mrms
@@ -275,7 +275,7 @@ EOF
             if [[ $verb -eq 1 ]]; then
                 echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
             fi
-            srun echo "$g_date $g_sec" | ${obspreprocess} >& $srunout
+            ${runcmp_str} echo "$g_date $g_sec" | ${obspreprocess} >& $srunout
 
             if [[ -e ./obs_seq.new ]]; then
                 mv ./obs_seq.new ./obs_seq.vr${j}
@@ -325,7 +325,7 @@ EOF
 
     #COMBINE obs-seq FILES HERE
     if [[ $verb -eq 1 ]]; then echo "Runing ${exedir}/dart/obs_sequence_tool"; fi
-    srun ${exedir}/dart/obs_sequence_tool >& $srunout
+    ${runcmp_str} ${exedir}/dart/obs_sequence_tool >& $srunout
 
     if [[ $? -eq 0 && -e obs_seq.${anlys_date}${anlys_time} ]]; then
         echo "    Observation file ${wrkdir}/OBSDIR/obs_seq.${anlys_date}${anlys_time} created"
@@ -434,7 +434,7 @@ function run_filter {
         echo $input_file >> filter_in.txt
         input_file_list+=($input_file)
 
-        output_file="${domname}_${memstr}.analysis.nc"
+        output_file="${domname}_${memstr}.analysis.$currtime_str.nc"
         echo $output_file >> filter_out.txt
         output_file_list+=($output_file)
     done
@@ -1087,11 +1087,14 @@ function run_update_states {
     fi
 
     update_output_file_list='update_out.txt'
+    rm -rf ${update_output_file_list}
     for fn in ${input_file_list[@]}; do
-        echo "${cpcmd} $fn ."
-        ${cpcmd} $fn .
+        if [[ ! -e $fn ]]; then
+            echo "${cpcmd} $fn ."
+            ${cpcmd} $fn .
+        fi
         fnbase=$(basename $fn)
-        echo "./$fnbase" >> update_out.txt
+        echo "./$fnbase" >> ${update_output_file_list}
     done
     sed -i "/update_output_file_list/s/filter_in.txt/${update_output_file_list}/" input.nml
 
@@ -1836,18 +1839,19 @@ mach="slurm"
 if [[ $machine == "Jet" ]]; then
     ncores_fcst=6;  ncores_filter=6
     partition="ujet,tjet,xjet,vjet,kjet";        claim_cpu="--cpus-per-task=2"
-    partition_filter="ujet,tjet,xjet,vjet,kjet"; filter_cpu="--cpus-per-task=12"
+    partition_filter="ujet,tjet,xjet,vjet,kjet"; filter_cpu=""
 
-    npefcst=48     #; nnodes_fcst=$(( npefcst/ncores_fcst ))
-    npefilter=48   #; nnodes_filter=$(( npefilter/ncores_filter ))
+    npefcst=48      #; nnodes_fcst=$(( npefcst/ncores_fcst ))
+    npefilter=768   #; nnodes_filter=$(( npefilter/ncores_filter ))
 
     mach="slurm"
     job_exclusive_str="#SBATCH --exclusive"
     job_account_str="#SBATCH -A ${hpcaccount-wof}"
     job_runmpexe_str="srun"
     job_runexe_str="srun"
+    runcmp_str="srun -A ${hpcaccount-wof} -p ${partition} -n 1"
 
-    OBS_DIR="/scratch/ywang/MPAS/mpas_scripts/run_dirs/OBSGEN"
+    OBS_DIR="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/OBSGEN"
 
     modulename="build_jet_intel18_1.11_smiol"
 
@@ -1882,8 +1886,8 @@ else    # Vecna at NSSL
     account="${hpcaccount-batch}"
     ncores_filter=96; ncores_fcst=96
 
-    npefilter=384   #; nnodes_filter=$(( npefilter/ncores_filter  ))
-    npefcst=96     #; nnodes_fcst=$(( npefcst/ncores_fcst ))
+    npefilter=768   #; nnodes_filter=$(( npefilter/ncores_filter  ))
+    npefcst=96      #; nnodes_fcst=$(( npefcst/ncores_fcst ))
 
     partition="batch"           ; claim_cpu="--ntasks-per-node=96  --mem-per-cpu=4G";
     partition_filter="batch"    ; filter_cpu="--ntasks-per-node=96 --mem-per-cpu=4G"
@@ -1893,6 +1897,7 @@ else    # Vecna at NSSL
     job_account_str=""
     job_runmpexe_str="srun --mpi=pmi2"
     job_runexe_str="srun"
+    runcmp_str="srun"
 
     OBS_DIR="/scratch/ywang/MPAS/mpas_scripts/run_dirs/OBSGEN"
 

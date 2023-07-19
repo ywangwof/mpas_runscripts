@@ -642,8 +642,8 @@ EOF
 
     sedfile=$(mktemp -t grid_rotate.sed_XXXX)
     cat <<EOF > $sedfile
-s/PARTION/${partition_create}/
-s/CPUSPEC/${create_cpu}/
+s/PARTION/${partition_static}/
+s/CPUSPEC/${static_cpu}/
 s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/JOBNAME/grid_rotate/
