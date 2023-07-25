@@ -193,7 +193,7 @@ EOF
         if [[ $verb -eq 1 ]]; then
             echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
         fi
-        ${runcmp_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >& $srunout
+        ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >& $srunout
 
         if [[ $? -eq 0 ]]; then
             mv ./obs_seq.new ./obs_seq.cwp
@@ -228,7 +228,7 @@ EOF
         if [[ $verb -eq 1 ]]; then
             echo "    Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
         fi
-        ${runcmp_str} echo "$g_date $g_sec" | ${obspreprocess} >& $srunout
+        ${runcmd_str} echo "$g_date $g_sec" | ${obspreprocess} >& $srunout
 
         if [[ $? -eq 0 ]]; then
             mv ./obs_seq.new ./obs_seq.mrms
@@ -275,7 +275,7 @@ EOF
             if [[ $verb -eq 1 ]]; then
                 echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
             fi
-            ${runcmp_str} echo "$g_date $g_sec" | ${obspreprocess} >& $srunout
+            ${runcmd_str} echo "$g_date $g_sec" | ${obspreprocess} >& $srunout
 
             if [[ -e ./obs_seq.new ]]; then
                 mv ./obs_seq.new ./obs_seq.vr${j}
@@ -325,7 +325,7 @@ EOF
 
     #COMBINE obs-seq FILES HERE
     if [[ $verb -eq 1 ]]; then echo "Runing ${exedir}/dart/obs_sequence_tool"; fi
-    ${runcmp_str} ${exedir}/dart/obs_sequence_tool >& $srunout
+    ${runcmd_str} ${exedir}/dart/obs_sequence_tool >& $srunout
 
     if [[ $? -eq 0 && -e obs_seq.${anlys_date}${anlys_time} ]]; then
         echo "    Observation file ${wrkdir}/OBSDIR/obs_seq.${anlys_date}${anlys_time} created"
@@ -400,7 +400,7 @@ function run_filter {
 
     if [[ $dorun == true ]]; then
         for cond in ${conditions[@]}; do
-            echo "$$: Checking: $cond"
+            echo "$$-${FUNCNAME[0]}: Checking: $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
@@ -434,7 +434,8 @@ function run_filter {
         echo $input_file >> filter_in.txt
         input_file_list+=($input_file)
 
-        output_file="${domname}_${memstr}.analysis.$currtime_str.nc"
+        #output_file="${domname}_${memstr}.analysis.$currtime_str.nc"
+        output_file="${domname}_${memstr}.analysis"
         echo $output_file >> filter_out.txt
         output_file_list+=($output_file)
     done
@@ -570,7 +571,7 @@ function run_filter {
 
 &assim_tools_nml
    filter_kind                       = 1
-   cutoff                            = 0.10
+   cutoff                            = 0.00015
    distribute_mean                   = .false.
    convert_all_obs_verticals_first   = .true.
    convert_all_state_verticals_first = .false.
@@ -1052,9 +1053,10 @@ EOF
 ########################################################################
 
 function run_update_states {
-    # $1
-    # wrkdir
+    # $1        $2
+    # wrkdir    iseconds
     local wrkdir=$1
+    local iseconds=$2
 
     #
     # GLOBAL: ENS_SIZE, rundir, update_in_place
@@ -1066,6 +1068,7 @@ function run_update_states {
     #
     cd $wrkdir
 
+    timestr_cur=$(date -d @$iseconds    +%Y%m%d%H%M)
     #
     # Return if is running or is done
     #
@@ -1083,17 +1086,20 @@ function run_update_states {
     if [[ $update_in_place == true ]]; then
         cpcmd="ln -sf"
     else
-        cpcmd="cp"
+        #cpcmd="cp"
+        cpcmd="rsync -a"
     fi
 
     update_output_file_list='update_out.txt'
     rm -rf ${update_output_file_list}
     for fn in ${input_file_list[@]}; do
-        if [[ ! -e $fn ]]; then
-            echo "${cpcmd} $fn ."
-            ${cpcmd} $fn .
-        fi
         fnbase=$(basename $fn)
+        if [[ ! -e $fnbase ]]; then
+            echo "    ${cpcmd} $fn ."
+            ${cpcmd} $fn .
+        else
+            echo "    $fnbase exists"
+        fi
         echo "./$fnbase" >> ${update_output_file_list}
     done
     sed -i "/update_output_file_list/s/filter_in.txt/${update_output_file_list}/" input.nml
@@ -1105,7 +1111,7 @@ function run_update_states {
 
     if [[ $dorun == true ]]; then
         for cond in ${conditions[@]}; do
-            echo "$$: Checking: $cond"
+            echo "$$-${FUNCNAME[0]}: Checking: $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
@@ -1114,6 +1120,20 @@ function run_update_states {
             done
         done
     fi
+
+    #------------------------------------------------------
+    # Run obs_seq_to_netcdf
+    #------------------------------------------------------
+
+    if [[ $verb -eq 1 ]]; then
+        srunout="1"
+    else
+        srunout="obs_seq_to_netcdf.log"
+    fi
+
+    echo "    Running ${exedir}/dart/obs_seq_to_netcdf"
+    ${runcmd_str} ${exedir}/dart/obs_seq_to_netcdf >& $srunout
+    mv obs_epoch_001.nc obs_seq.${timestr_cur}.nc
 
     #------------------------------------------------------
     # Run update_mpas_states for all ensemble members
@@ -1128,7 +1148,7 @@ function run_update_states {
 s/PARTION/${partition}/
 s/NOPART/1/
 s/JOBNAME/update_${eventtime}/
-s/CPUSPEC/${claim_cpu}/g
+s/CPUSPEC/${update_cpu}/g
 s/MODULE/${modulename}/g
 s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
@@ -1156,7 +1176,7 @@ function run_mpas {
 
     #
     # GLOBAL: ENS_SIZE, rundir, intvl_sec, npefcst
-    # RETURN: mpas_jobscript
+    #
 
     #
     # Build working directory
@@ -1171,7 +1191,7 @@ function run_mpas {
 
     if [[ $dorun == true ]]; then
         for cond in ${conditions[@]}; do
-            echo "$$: Checking: $cond"
+            echo "$$-${FUNCNAME[0]}: Checking: $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
@@ -1217,6 +1237,16 @@ function run_mpas {
     jobarrays=()
     for iens in $(seq 1 $ENS_SIZE); do
         memstr=$(printf "%02d" $iens)
+        basen=$(( (iens-1)%6 ))
+        if [[ $basen -lt 2 ]]; then     # map to 0,1,2
+            idx=0
+        elif [[ $basen -lt 4 ]]; then
+            idx=1
+        else
+            idx=2
+        fi
+        pblscheme=${pbl_schemes[$idx]}
+        sfcscheme=${sfclayer_schemes[$idx]}
 
         memwrkdir=$wrkdir/fcst_$memstr
         mkwrkdir $memwrkdir 1
@@ -1359,6 +1389,9 @@ function run_mpas {
     config_lsm_scheme                = '${MPASLSM}'
     num_soil_layers                  = ${MPASNFLS}
     config_physics_suite             = 'convection_permitting'
+    config_frac_seaice               = false
+    config_pbl_scheme                = '${pblscheme}'
+    config_sfclayer_scheme           = '${sfcscheme}'
 EOF
     #config_microp_re                 = true
 
@@ -1452,7 +1485,7 @@ EOF
     #
     cd $wrkdir
 
-    mpas_jobscript="run_mpas.${mach}"
+    #mpas_jobscript="run_mpas.${mach}"
     jobarraystr="--array=$(join_by_comma ${jobarrays[@]})"
 
     sedfile=$(mktemp -t mpas_${eventtime}.sed_XXXX)
@@ -1538,6 +1571,20 @@ function da_cycle_driver() {
 
         echo "- Cycle $icyc at ${timestr_curr}"
 
+        if [[ $icyc -gt 0 && $dorun == true ]]; then
+
+            timesec_pre=$((isec-intvl_sec))
+            event_pre=$(date -d @$timesec_pre  +%H%M)
+            wrkdir_pre=${wrkdir}/${event_pre}
+            #------------------------------------------------------
+            # 0. Check forecast status of the early cycle as needed
+            #------------------------------------------------------
+            if [[ ! -e ${wrkdir_pre}/done.fcst ]]; then
+                #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+                check_and_resubmit "fcst" $wrkdir_pre $ENS_SIZE run_mpas.${mach} 0
+            fi
+        fi
+
         if [[ " ${jobs[*]} " =~ " filter " ]]; then
             #------------------------------------------------------
             # 1. Run filter
@@ -1554,7 +1601,7 @@ function da_cycle_driver() {
                 touch $dawrkdir/done.update_states
             else
                 if [[ $verb -eq 1 ]]; then echo ""; echo "    Run update_mpas_state at $eventtime"; fi
-                run_update_states $dawrkdir
+                run_update_states $dawrkdir $isec
             fi
         fi
 
@@ -1565,7 +1612,7 @@ function da_cycle_driver() {
             # Run forecast for ensemble members until the next analysis time
             if [[ $verb -eq 1 ]]; then echo ""; echo "    Run advance model at $eventtime"; fi
 
-            mpas_jobscript="to_be_set_in_run_mpas"
+            mpas_jobscript="run_mpas.${mach}"
             run_mpas $dawrkdir $icyc $isec
 
             if [[ $dorun == true ]]; then
@@ -1591,7 +1638,7 @@ function run_clean {
     wrkdir=$rundir/dacycles
 
     for isec in $(seq $start_sec $intvl_sec $end_sec ); do
-        #timestr_curr=$(date -d @$isec +%Y%m%d%H%M)
+        timestr_curr=$(date -d @$isec +%Y%m%d%H%M)
         eventtime=$(date    -d @$isec +%H%M)
 
         dawrkdir=$wrkdir/$eventtime
@@ -1613,7 +1660,8 @@ function run_clean {
                     ;;
                 filter )
                     if [[ -e done.filter ]]; then
-                        rm -f filter_*.log error.filter
+                        rm -f filter_*.log error.filter dart_log.nml dart_log.out
+                        find OBSDIR -type f -or -type l -not -name "obs_seq.${timestr_curr}" -print0 | xargs -0  -I {} rm -f {}
                     fi
                     ;;
                 update_states )
@@ -1651,6 +1699,10 @@ domname="wofs_mpas"
 mpscheme="mp_nssl2m"
 MPASLSM='ruc'
 MPASNFLS=9
+                    #suite,sf_monin_obukhov,sf_mynn,off (default: suite)
+sfclayer_schemes=('sf_monin_obukhov_rev' 'sf_monin_obukhov' 'sf_mynn')
+                    # (suite,bl_ysu,bl_mynn,off )    # (default: suite)
+pbl_schemes=('bl_ysu' 'bl_myj' 'bl_mynn')    # (default: suite)
 
 EXTINVL=3600
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
@@ -1839,17 +1891,18 @@ mach="slurm"
 if [[ $machine == "Jet" ]]; then
     ncores_fcst=6;  ncores_filter=6
     partition="ujet,tjet,xjet,vjet,kjet";        claim_cpu="--cpus-per-task=2"
-    partition_filter="ujet,tjet,xjet,vjet,kjet"; filter_cpu=""
+    partition_filter="ujet,tjet,xjet,vjet,kjet"; filter_cpu="--cpus-per-task=2"
+                                                 update_cpu="--cpus-per-task=4 --mem-per-cpu=8G"
 
-    npefcst=48      #; nnodes_fcst=$(( npefcst/ncores_fcst ))
-    npefilter=768   #; nnodes_filter=$(( npefilter/ncores_filter ))
+    npefcst=48       #; nnodes_fcst=$(( npefcst/ncores_fcst ))
+    npefilter=1536   #; nnodes_filter=$(( npefilter/ncores_filter ))
 
     mach="slurm"
     job_exclusive_str="#SBATCH --exclusive"
     job_account_str="#SBATCH -A ${hpcaccount-wof}"
     job_runmpexe_str="srun"
     job_runexe_str="srun"
-    runcmp_str="srun -A ${hpcaccount-wof} -p ${partition} -n 1"
+    runcmd_str="srun -A ${hpcaccount-wof} -p ${partition} -n 1"
 
     OBS_DIR="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/OBSGEN"
 
@@ -1886,22 +1939,24 @@ else    # Vecna at NSSL
     account="${hpcaccount-batch}"
     ncores_filter=96; ncores_fcst=96
 
-    npefilter=768   #; nnodes_filter=$(( npefilter/ncores_filter  ))
-    npefcst=96      #; nnodes_fcst=$(( npefcst/ncores_fcst ))
+    npefilter=768    #; nnodes_filter=$(( npefilter/ncores_filter  ))
+    npefcst=96       #; nnodes_fcst=$(( npefcst/ncores_fcst ))
 
     partition="batch"           ; claim_cpu="--ntasks-per-node=96  --mem-per-cpu=4G";
     partition_filter="batch"    ; filter_cpu="--ntasks-per-node=96 --mem-per-cpu=4G"
+                                  update_cpu="--ntasks-per-node=24 --mem-per-cpu=8G"
 
     mach="slurm"
-    job_exclusive_str=""
+    job_exclusive_str="#SBATCH --exclude=cn11"
     job_account_str=""
     job_runmpexe_str="srun --mpi=pmi2"
     job_runexe_str="srun"
-    runcmp_str="srun"
+    runcmd_str="srun"
 
     OBS_DIR="/scratch/ywang/MPAS/mpas_scripts/run_dirs/OBSGEN"
 
     modulename="env.mpas_smiol"
+    source /usr/share/Modules/init/bash
     source ${rootdir}/modules/${modulename}
 fi
 

@@ -776,9 +776,16 @@ if __name__ == "__main__":
 
             #
             if defaultoutfile:
-                outfile = f"{varname}{diffstr}.{fcstfname}{outlvl}.png"
+                outpng = f"{varname}{diffstr}.{fcstfname}{outlvl}.png"
+            else:
+                root,ext=os.path.splitext(outfile)
+                if ext != ".png":
+                    outpng = f"{outfile}{outlvl}.png"
+                else:
+                    outpng = outfile
 
-            figname = os.path.join(outdir,outfile)
+
+            figname = os.path.join(outdir,outpng)
             print(f"Saving figure to {figname} ...")
             figure.savefig(figname, format='png', dpi=100)
             patch_collection.remove()

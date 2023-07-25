@@ -254,6 +254,8 @@ for cmd in ${cmds[@]}; do
         ;;
 
     "DART" )
+        srcdart=${srcdir-$srcdartdir}
+
         if [[ $run -ne 1 ]]; then
             if [[ ! -e $exedir/dart ]]; then
                 mkdir -p $exedir/dart
@@ -261,7 +263,7 @@ for cmd in ${cmds[@]}; do
             cd $exedir/dart
             echo "---  Executables of DART"
             echo "CWD: $exedir"
-            dartprograms=( filter  mpas_dart_obs_preprocess  obs_sequence_tool  update_mpas_states advance_time)
+            dartprograms=( filter  mpas_dart_obs_preprocess  obs_sequence_tool  update_mpas_states advance_time obs_seq_to_netcdf)
             if [[ ${runcmd} == "clean" ]]; then
                 echo "    Deleting ${dartprograms[*]}"
                 rm -f ${dartprograms[*]}
@@ -269,11 +271,11 @@ for cmd in ${cmds[@]}; do
                 echo ""
                 echo "  -- Copying DART programs to $(pwd) ...."
                 for prog in ${dartprograms[@]}; do
-                    echo "        $srcdartdir/models/mpas_atm/work/$prog"
-                    ${runcmd} $srcdartdir/models/mpas_atm/work/$prog .
+                    echo "        $srcdart/models/mpas_atm/work/$prog"
+                    ${runcmd} $srcdart/models/mpas_atm/work/$prog .
                 done
-                echo "        $srcdartdir/models/wrf/work/convertdate"
-                ${runcmd} $srcdartdir/models/wrf/work/convertdate .
+                echo "        $srcdart/models/wrf/work/convertdate"
+                ${runcmd} $srcdart/models/wrf/work/convertdate .
             fi
         fi
         ;;

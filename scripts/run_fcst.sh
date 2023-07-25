@@ -163,7 +163,7 @@ function run_mpas {
 
     if [[ $dorun == true ]]; then
         for cond in ${conditions[@]}; do
-            echo "$$: Checking: $cond"
+            echo "$$-${FUNCNAME[0]}: Checking: $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
@@ -205,6 +205,16 @@ function run_mpas {
     jobarrays=()
     for iens in $(seq 1 $ENS_SIZE); do
         memstr=$(printf "%02d" $iens)
+        basen=$(( (iens-1)%6 ))
+        if [[ $basen -lt 2 ]]; then     # map to 0,1,2
+            idx=0
+        elif [[ $basen -lt 4 ]]; then
+            idx=1
+        else
+            idx=2
+        fi
+        pblscheme=${pbl_schemes[$idx]}
+        sfcscheme=${sfclayer_schemes[$idx]}
 
         memwrkdir=$wrkdir/fcst_$memstr
         mkwrkdir $memwrkdir 1
@@ -331,6 +341,9 @@ function run_mpas {
     config_lsm_scheme                = '${MPASLSM}'
     num_soil_layers                  = ${MPASNFLS}
     config_physics_suite             = 'convection_permitting'
+    config_frac_seaice               = false
+    config_pbl_scheme                = '${pblscheme}'
+    config_sfclayer_scheme           = '${sfcscheme}'
 EOF
     #config_microp_re                 = true
 
@@ -424,7 +437,7 @@ EOF
     #
     cd $wrkdir
 
-    mpas_jobscript="run_mpas.${mach}"
+    #mpas_jobscript="run_mpas.${mach}"
     jobarraystr="--array=$(join_by_comma ${jobarrays[@]})"
 
     sedfile=$(mktemp -t mpas_${eventtime}.sed_XXXX)
@@ -515,7 +528,7 @@ function run_mpassit {
 
             if [[ $dorun == true ]]; then
                 for fn in $histfile $diagfile; do
-                    echo "$$: Checking: $fn ..."
+                    echo "$$-${FUNCNAME[0]}: Checking: $fn ..."
                     while [[ ! -f $fn ]]; do
                         if [[ $jobwait -eq 0 ]]; then    # do not wait for it
                             continue 3                   # go ahead to process next hour
@@ -653,7 +666,7 @@ function run_upp {
         donefile="$mpassitdir/mpassit/done.mpassit$minstr"
 
         if [[ $dorun == true ]]; then
-            echo "$$: Checking: $donefile ...."
+            echo "$$-${FUNCNAME[0]}: Checking: $donefile ...."
             while [[ ! -f $donefile ]]; do
                 if [[ $jobwait -eq 0 ]]; then     # do not wait
                     continue 2                    # go ahread to process next forecast hour
@@ -788,7 +801,7 @@ function fcst_driver() {
         timestr_curr=$(date -d @$isec +%Y%m%d%H%M)
         eventtime=$(date    -d @$isec +%H%M)
 
-        fcstwrkdir=$wrkdir/$timestr_curr
+        fcstwrkdir=$wrkdir/${eventtime}
         mkwrkdir $fcstwrkdir 0        # keep original directory
         cd $fcstwrkdir
 
@@ -798,7 +811,7 @@ function fcst_driver() {
             #------------------------------------------------------
             if [[ $verb -eq 1 ]]; then echo "    Run model forecast at $eventtime"; fi
 
-            mpas_jobscript="to_be_set"
+            mpas_jobscript="run_mpas.${mach}"
             run_mpas $fcstwrkdir $isec
 
             if [[ $dorun == true && $jobwait -eq 1 ]]; then
@@ -977,6 +990,10 @@ domname="wofs_mpas"
 mpscheme="mp_nssl2m"
 MPASLSM='ruc'
 MPASNFLS=9
+                   # suite, sf_monin_obukhov, sf_mynn, off (default: suite)
+sfclayer_schemes=('sf_monin_obukhov_rev' 'sf_monin_obukhov' 'sf_mynn')
+                    # (suite, bl_ysu, bl_mynn, off )    # (default: suite)
+pbl_schemes=('bl_ysu' 'bl_myj' 'bl_mynn')    # (default: suite)
 
 EXTINVL=3600
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
@@ -1207,8 +1224,8 @@ else    # Vecna at NSSL
     partition="batch"           ; claim_cpu="--ntasks-per-node=${ncores_fcst} --mem-per-cpu=4G";
     partition_post="batch"      ; post_cpu="--ntasks-per-node=${ncores_post} --mem-per-cpu=20G"
 
-    npepost=48   #; nnodes_post=$(( npepost/ncores_post  ))
-    npefcst=48     #; nnodes_fcst=$(( npefcst/ncores_fcst ))
+    npepost=48      #; nnodes_post=$(( npepost/ncores_post  ))
+    npefcst=96      #; nnodes_fcst=$(( npefcst/ncores_fcst ))
 
     mach="slurm"
     job_exclusive_str=""
