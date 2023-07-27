@@ -436,7 +436,7 @@ function run_static {
     config_geog_data_path = '${WPSGEOG_PATH}'
     config_met_prefix = '${EXTHEAD}'
     config_sfc_prefix = 'SST'
-    config_fg_interval = $((EXTINVL*3600))
+    config_fg_interval = ${EXTINVL}
     config_landuse_data = 'MODIFIED_IGBP_MODIS_NOAH_15s'
     config_soilcat_data = 'BNU'
     config_topo_data = 'GMTED2010'
@@ -481,14 +481,14 @@ EOF
 <streams>
 <immutable_stream name="input"
                   type="input"
-                  io_type="netcdf"
+                  io_type="${STATICIOTYPE}"
                   filename_template="${domname}.grid.nc"
                   input_interval="initial_only" />
 
 <immutable_stream name="output"
                   type="output"
                   filename_template="${domname}.static.nc"
-                  io_type="netcdf"
+                  io_type="${STATICIOTYPE}"
                   packages="initial_conds"
                   clobber_mode="replace_files"
                   output_interval="initial_only" />
@@ -705,21 +705,21 @@ function run_ungrib_hrrr {
     ln -sf $FIXDIR/WRFV4.0/${hrrrvtable} Vtable
 
     hrrrtime_str=$(date -d "$hrrrdate ${hrrrtime}" +%Y-%m-%d_%H:%M:%S)
-    echo "$hrrrdate ${hrrrtime}"
+    #echo "$hrrrdate ${hrrrtime}"
     cat << EOF > namelist.wps
 &share
- wrf_core = 'ARW',
- max_dom = 1,
- start_date = '${hrrrtime_str}',
- end_date = '${hrrrtime_str}',
- interval_seconds = $((EXTINVL*3600))
- io_form_geogrid = 2,
+  wrf_core = 'ARW',
+  max_dom = 1,
+  start_date = '${hrrrtime_str}',
+  end_date = '${hrrrtime_str}',
+  interval_seconds = ${EXTINVL}
+  io_form_geogrid = 2,
 /
 &geogrid
 /
 &ungrib
- out_format = 'WPS',
- prefix = '${EXTHEAD}',
+  out_format = 'WPS',
+  prefix = '${EXTHEAD}',
 /
 &metgrid
 /
@@ -920,6 +920,89 @@ function run_clean {
     done
 }
 
+########################################################################
+
+function write_runtimeconfig {
+    if [[ $# -ne 1 ]]; then
+        echo "ERROR: No enough argument to function \"write_runtimeconfig\"."
+        exit 1
+    fi
+    local configname=$1
+
+    if [[ -e $configname ]]; then
+        echo -n "Case configuration file: $configname exist. Overwrite, [yes,no,skip]? "
+        read doit
+        if [[ ${doit^^} == "YES" ]]; then
+            echo -e "\nWARNING: $configname will be replaced."
+        elif [[ ${doit^^} == "SKIP" ]]; then
+            echo -e "\nWARNING: $configname will be kept."
+            return
+        else
+            echo -e "\nGot \"${doit^^}\", exiting ...."
+            exit 1
+        fi
+    fi
+
+    cat <<EOF > $configname
+#!/bin/bash
+#
+# This file contains settings specifically for case $eventdate
+# It does NOT contain anything that is configurable from the command line
+# for each task. Use optin "-h" to check command line options
+#
+
+[COMMON]
+    nensics=36
+    nenslbc=18
+
+    MPASLSM='ruc'
+    MPASNFLS=9
+    # suite,sf_monin_obukhov,sf_mynn,off (default: suite)
+    sfclayer_schemes=('sf_monin_obukhov_rev' 'sf_monin_obukhov' 'sf_mynn')
+    # suite,bl_ysu,bl_mynn,off           (default: suite)
+    pbl_schemes=('bl_ysu' 'bl_myj' 'bl_mynn')   # comment?
+
+    WPSGEOG_PATH="${WPSGEOG_PATH}"
+
+[init]
+    ICSIOTYPE="pnetcdf,cdf5"
+    EXTINVL=10800
+    EXTNFGL=51
+    EXTNFLS=9
+    EXTHEAD="HRRRE"
+    hrrrvtable="Vtable.HRRRE.2018"
+    hrrr_dir="${hrrr_dir}"
+    hrrr_time="1400"
+
+[lbc]
+    LBCIOTYPE="pnetcdf,cdf5"
+    EXTINVL=3600
+    EXTNFGL=51
+    EXTNFLS=9
+    EXTHEAD="HRRRE"
+    hrrrvtable="Vtable.HRRRE.2018"
+    hrrr_dir="${hrrr_dir}"
+    hrrr_time="1200"
+
+[dacycles]
+    ENS_SIZE=36
+    time_step=25
+    intvl_sec=900
+    ADAPTIVE_INF=true
+    update_in_place=false           # update MPAS states in-place or making a copy of the restart files
+    OUTIOTYPE="netcdf4"
+    OBS_DIR="${OBS_DIR}"
+
+[fcst]
+    ENS_SIZE=18
+    time_step=25
+    fcst_seconds=21600              # 6*3600
+    OUTINVL=900
+    OUTIOTYPE="netcdf4"
+EOF
+
+}
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #
 # Default values
@@ -933,19 +1016,15 @@ jobs=(geogrid ungrib_hrrr rotate meshplot_py static)
 WORKDIR="${rootdir}/run_dirs"
 TEMPDIR="${rootdir}/templates"
 FIXDIR="${rootdir}/fix_files"
+
 eventdate="$eventdateDF"
 eventtime="1500"
 domname="wofs_mpas"
-EXTHEAD="HRRRE"
-
-#hrrrvtable="Vtable.raphrrr"
-hrrrvtable="Vtable.HRRRE.2018"
 
 runcmd="sbatch"
 dorun=true
 verb=0
 overwrite=0
-jobwait=0
 machine="Jet"
 
 if [[ "$(hostname)" == ln? ]]; then
@@ -984,9 +1063,6 @@ while [[ $# > 0 ]]
                 echo "ERROR: option for '-k' can only be [0-2], but got \"$2\"."
                 usage 1
             fi
-            ;;
-        -w)
-            jobwait=1
             ;;
         -t)
             if [[ -d $2 ]]; then
@@ -1098,10 +1174,9 @@ if [[ $machine == "Jet" ]]; then
     nckspath="/apps/nco/4.9.3/gnu/9.2.0/bin/ncks"
     gpmetis="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/bin/gpmetis"
 
-    hrrrdir="/public/data/grids/hrrr/conus/wrfnat/grib2"
-    hrrrfile="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MODEL_DATA/HRRRE/${eventdate}/1400/mem01/wrfnat_hrrre_newse_mem0001_01.grib2"
-    hrrrdate="${eventdate}"
-    hrrrtime="${eventtime}"
+    OBS_DIR="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/OBSGEN"
+
+    hrrr_dir="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MODEL_DATA/HRRRE"
 
 elif [[ $machine == "Cheyenne" ]]; then
 
@@ -1120,6 +1195,8 @@ elif [[ $machine == "Cheyenne" ]]; then
     job_account_str="#PBS -A ${hpcaccount-NMMM0013}"
     job_runmpexe_str="mpiexec_mpt"
     job_runexe_str="mpiexec_mpt"
+
+    OBS_DIR="/scratch/ywang/MPAS/mpas_scripts/run_dirs/OBSGEN"
 
     modulename="defaults"
     WPSGEOG_PATH="/glade/work/ywang/WPS_GEOG/"
@@ -1149,14 +1226,10 @@ else    # Vecna at NSSL
     export LD_LIBRARY_PATH=/scratch/ywang/MPAS/tools/lib
     nclpath="/scratch/software/miniconda3/bin/ncl"
 
-    hrrrdir="/scratch/wofuser/MODEL_DATA/HRRRE"
-    hrrrfile="/scratch/wofuser/MODEL_DATA/HRRRE/${eventdate}/1400/mem01/wrfnat_hrrre_newse_mem0001_01.grib2"
-    hrrrdate="${eventdate}"
-    hrrrtime="${eventtime}"
-fi
+    OBS_DIR="/scratch/ywang/MPAS/mpas_scripts/run_dirs/OBSGEN"
 
-EXTINVL=3
-EXTINVL_STR="${EXTINVL}:00:00"
+    hrrr_dir="/scratch/wofuser/MODEL_DATA/HRRRE"
+fi
 
 source $scpdir/Common_Utilfuncs.sh
 
@@ -1185,7 +1258,32 @@ fi
 jobname="${eventdate:4:4}"
 
 exedir="$rootdir/exec"
+#
+# write runtime configuration file
+#
+caseconfig="$WORKDIR/config.${eventdate}"
+write_runtimeconfig $caseconfig
 
+#
+# read configurations that is not set from command line
+#
+#readconf $caseconfig COMMON static
+
+#[static]
+STATICIOTYPE="pnetcdf,cdf5"
+EXTINVL=10800
+EXTHEAD="HRRRE"
+#hrrrvtable="Vtable.raphrrr"
+hrrrvtable="Vtable.HRRRE.2018"
+hrrrfile="${hrrr_dir}/${eventdate}/1400/mem01/wrfnat_hrrre_newse_mem0001_01.grib2"
+hrrrdate="${eventdate}"
+hrrrtime="${eventtime}"
+
+EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
+
+#
+# Start the forecast driver
+#
 declare -A jobargs=([geogrid]="${rundir}/geo_${domname##*_}"            \
                     [createWOFS]="geo_${domname##*_}/done.geogrid"      \
                     #[static]="$domname/done.create ungrib/done.ungrib"  \

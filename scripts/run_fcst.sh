@@ -103,7 +103,9 @@ function usage {
     echo " "
     echo "    PURPOSE: Run MPAS free forecast based on analysis from the WoFS workflow."
     echo " "
-    echo "    DATETIME - Case date and time in YYYYmmddHHMM, Default for today"
+    echo "    DATETIME - Case date and time in YYYYmmddHHMM/YYYYmmdd, Default eventdate is ${eventdateDF}"
+    echo "               YYYYmmdd:     run all cycles from $eventtime to 0300. Or use options \"-s\" & \"-e\" to specify cycles."
+    echo "               YYYYmmddHHMM: run this forecast cycle only."
     echo "    WORKDIR  - Run Directory"
     echo "    JOBS     - One or more jobs from [mpas,mpassit,upp]"
     echo "               Default all jobs in sequence"
@@ -121,8 +123,10 @@ function usage {
     echo "              -a  wof         Account name for job submission."
     echo "              -d  wofs_mpas   Domain name to be used"
     echo "              -i  YYYYmmddHHMM    Initial time, default: same as start time from the command line argument"
-    echo "              -e  YYYYmmddHHMM    End date & time of the DA cycles"
-    echo "                  HHMM            End time of the DA cycles"
+    echo "              -s  YYYYmmddHHMM    Start date & time of the forecast cycles"
+    echo "                  HHMM            Start time of the forecast cycles"
+    echo "              -e  YYYYmmddHHMM    End date & time of the forecast cycles"
+    echo "                  HHMM            End time of the forecast cycles"
     echo "              -p  nssl        MP scheme, [nssl, thompson], default: nssl"
     echo " "
     echo "   DEFAULTS:"
@@ -272,7 +276,7 @@ function run_mpas {
         cat << EOF > namelist.atmosphere
 &nhyd_model
     config_time_integration_order   = 2
-    config_dt                       = 25
+    config_dt                       = ${time_step}
     config_start_time               = '${currtime_str}'
     config_run_duration             = '${fcsthr_str}'
     config_split_dynamics_transport = true
@@ -485,7 +489,7 @@ function run_mpassit {
     fi
 
     # Loop over forecast outputs
-    for ((i=0;i<=fcst_seconds;i+=OUTINVL)); do
+    for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
         minstr=$(printf "%03d" $((i/60)))
 
         if [[ -f done.mpassit$minstr || -f running.mpassit$minstr || -f queue.mpassit$minstr || -f error.mpassit$minstr ]]; then
@@ -640,9 +644,18 @@ function run_upp {
     fixdirs[SpcCoeff]="$FIXDIR/UPP/crtm2_fix/SpcCoeff/Big_Endian"
     fixdirs[TauCoeff]="$FIXDIR/UPP/crtm2_fix/TauCoeff/ODPS/Big_Endian"
 
-    for ((i=0;i<=fcst_seconds;i+=OUTINVL)); do
+    eventtimestr=$(date -d @$iseconds +%Y%m%d%H%M)
+
+    for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
         imin=$((i/60))
         minstr=$(printf "%03d" $imin)
+        ihour=$((imin/60))
+        iminute=$((imin%60))
+        if [[ $iminute -eq 0 ]]; then
+            upptimestr=$(printf "%02d" $ihour)
+        else
+            upptimestr=$(printf "%02d.%02d" $ihour $iminute)
+        fi
 
         if [[  -f $wrkdir/done.upp$minstr || -f $wrkdir/queue.upp$minstr ]]; then
             continue      # already done, or is in queue, skip this hour
@@ -754,6 +767,8 @@ s/NOPART/$npepost/
 s/CPUSPEC/${post_cpu}/
 s/JOBNAME/upp${minstr}_${eventtime}/
 s/HHMINSTR/$minstr/g
+s/UPPDATE/$upptimestr/g
+s/EVENTDATE/$eventtimestr/g
 s/MODULE/${modulename}/g
 s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
@@ -828,30 +843,40 @@ function fcst_driver() {
 
             run_mpassit $fcstwrkdir $isec
 
-            #if [[ $dorun == true && $jobwait -eq 1 ]]; then
-            #    for ((i=0;i<=fcst_seconds;i+=OUTINVL)); do
-            #        minstr=$(printf "%03d" $((i/60)))
-            #        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-            #        check_and_resubmit "mpassit$minstr" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit_$minstr.slurm 2
-            #    done
-            #fi
+            if [[ $dorun == true && $jobwait -eq 1 ]]; then
+                for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
+                    minstr=$(printf "%03d" $((i/60)))
+                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+                    check_and_resubmit "mpassit$minstr mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit_$minstr.slurm 2
+                done
+            fi
         fi
 
        if [[ " ${jobs[*]} " =~ " upp " ]]; then
             #------------------------------------------------------
             # 3. Post-processing the data on the WRF grid
             #------------------------------------------------------
+            if [[ $dorun == true ]]; then
+                for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
+                    minstr=$(printf "%03d" $((i/60)))
+                    if [[ ! -e $fcstwrkdir/mpassit/done.mpassit$minstr ]]; then
+                        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+                        check_and_resubmit "mpassit$minstr mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit_$minstr.slurm 0
+                    fi
+                done
+            fi
+
             if [[ $verb -eq 1 ]]; then echo "    Run UPP at $eventtime"; fi
 
             run_upp $fcstwrkdir $isec
 
-            #if [[ $dorun == true && $jobwait -eq 1 ]]; then
-            #    for ((i=0;i<=fcst_seconds;i+=OUTINVL)); do
-            #        minstr=$(printf "%03d" $((i/60)))
-            #        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-            #        check_and_resubmit "upp$minstr" $fcstwrkdir/upp $ENS_SIZE run_upp_$minstr.slurm  2
-            #    done
-            #fi
+            if [[ $dorun == true && $jobwait -eq 1 ]]; then
+                for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
+                    minstr=$(printf "%03d" $((i/60)))
+                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+                    check_and_resubmit "upp$minstr mem" $fcstwrkdir/upp $ENS_SIZE run_upp_$minstr.slurm  2
+                done
+            fi
         fi
 
     done
@@ -868,10 +893,10 @@ function run_clean {
     wrkdir=$rundir/fcst
 
     for isec in $(seq $start_sec 3600 $end_sec ); do
-        timestr_curr=$(date -d @$isec +%Y%m%d%H%M)
+        #timestr_curr=$(date -d @$isec +%Y%m%d%H%M)
         eventtime=$(date    -d @$isec +%H%M)
 
-        fcstwrkdir=$wrkdir/$timestr_curr
+        fcstwrkdir=$wrkdir/$eventtime
         if [[ -d $fcstwrkdir ]]; then
             cd $fcstwrkdir
 
@@ -980,31 +1005,11 @@ FIXDIR="${rootdir}/fix_files"
 eventdate="$eventdateDF"
 eventtime="1700"
 initdatetime=""
+eventdatetime=""
 enddatetime=""
-fcst_seconds=21600    # 6*3600
-
-ENS_SIZE=18
-nenslbc=9
 
 domname="wofs_mpas"
 mpscheme="mp_nssl2m"
-MPASLSM='ruc'
-MPASNFLS=9
-                   # suite, sf_monin_obukhov, sf_mynn, off (default: suite)
-sfclayer_schemes=('sf_monin_obukhov_rev' 'sf_monin_obukhov' 'sf_mynn')
-                    # (suite, bl_ysu, bl_mynn, off )    # (default: suite)
-pbl_schemes=('bl_ysu' 'bl_myj' 'bl_mynn')    # (default: suite)
-
-EXTINVL=3600
-EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
-
-OUTINVL=900
-OUTINVL_STR=$(printf "00:%02d:00" $((OUTINVL/60)) )
-
-RSTINVL_STR="10:00:00"
-
-OUTIOTYPE="netcdf4"
-ICSIOTYPE="pnetcdf,cdf5"
 
 verb=0
 overwrite=0
@@ -1096,6 +1101,23 @@ while [[ $# > 0 ]]
             fi
             shift
             ;;
+        -s )
+            if [[ $2 =~ ^[0-9]{12}$ ]]; then
+                eventtime=${key:8:4}
+                eventhour=${key:8:2}
+                if [[ 10#$eventhour -lt 12 ]]; then
+                    eventdate=$(date -d "${key:0:8} 1 day ago" +%Y%m%d)
+                else
+                    eventdate=${key:0:8}
+                fi
+            elif [[ $2 =~ ^[0-9]{4}$ ]]; then
+                eventtime=${key}
+            else
+                echo "ERROR: Start time should be in YYYYmmddHHMM or HHMM, got \"$2\"."
+                usage 1
+            fi
+            shift
+            ;;
         -e )
             if [[ $2 =~ ^[0-9]{12}$ ]]; then
                 enddatetime=$2
@@ -1133,6 +1155,7 @@ while [[ $# > 0 ]]
             ;;
         *)
             if [[ $key =~ ^[0-9]{12}$ ]]; then
+                enddatetime=${key}
                 eventtime=${key:8:4}
                 eventhour=${key:8:2}
                 if [[ 10#$eventhour -lt 12 ]]; then
@@ -1140,6 +1163,8 @@ while [[ $# > 0 ]]
                 else
                     eventdate=${key:0:8}
                 fi
+            elif [[ $key =~ ^[0-9]{8}$ ]]; then
+                eventdate=${key}
             elif [[ $key =~ ^[0-9]{4}$ ]]; then
                 eventtime=${key}
             elif [[ -d $key ]]; then
@@ -1220,11 +1245,11 @@ elif [[ $machine == "Cheyenne" ]]; then
 else    # Vecna at NSSL
 
     account="${hpcaccount-batch}"
-    ncores_post=96; ncores_fcst=96
+    ncores_post=24; ncores_fcst=96
     partition="batch"           ; claim_cpu="--ntasks-per-node=${ncores_fcst} --mem-per-cpu=4G";
-    partition_post="batch"      ; post_cpu="--ntasks-per-node=${ncores_post} --mem-per-cpu=20G"
+    partition_post="batch"      ; post_cpu="--ntasks-per-node=${ncores_post}"
 
-    npepost=48      #; nnodes_post=$(( npepost/ncores_post  ))
+    npepost=24      #; nnodes_post=$(( npepost/ncores_post  ))
     npefcst=96      #; nnodes_fcst=$(( npefcst/ncores_fcst ))
 
     mach="slurm"
@@ -1267,7 +1292,7 @@ if [[ "$enddatetime" == "" ]]; then
 fi
 
 inittime_sec=$(date -d "${initdatetime:0:8} ${initdatetime:8:4}" +%s)
-starttime_sec=$(date -d "$eventdate ${eventtime} $startday"      +%s)
+starttime_sec=$(date -d "${eventdate} ${eventtime} $startday"      +%s)
 stoptime_sec=$(date -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
 
 rundir="$WORKDIR/${eventdate}"
@@ -1277,6 +1302,19 @@ fi
 
 exedir="$rootdir/exec"
 
+#
+# read configurations that is not set from command line
+#
+readconf $WORKDIR/config.${eventdate} COMMON fcst
+# get ENS_SIZE, time_step, EXTINVL, OUTINVL, OUTIOTYPE
+
+EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
+OUTINVL_STR=$(printf "00:%02d:00" $((OUTINVL/60)) )
+RSTINVL_STR="10:00:00"         # turn off restart file output
+
+#
+# Start the forecast driver
+#
 if [[ " ${jobs[*]} " =~ " mpas " || " ${jobs[*]} " =~ " mpassit " || " ${jobs[*]} " =~ " upp " ]]; then
     # $1    $2    $3
     # init start  end

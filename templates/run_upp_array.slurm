@@ -26,7 +26,7 @@ if [[ "MACHINE" == "Jet" ]]; then
     module load wgrib2/2.0.8
 else
     # shellcheck source=/dev/null # to ignore source path error
-    source /scratch/ywang/MPAS/mpas_runscripts/MODULE
+    source ROOTDIR/modules/MODULE
 fi
 module list
 
@@ -47,26 +47,8 @@ rm -rf fort.* core.*
 RUNMPCMD EXEDIR/unipost.exe
 
 if [[ $? -eq 0 ]]; then
-    dtstr=(${wrkdir//\// })
 
-    grid_specs_hrrr="lambert:-97.5:38.5 -122.719528:1799:3000.0 21.138123:1059:3000.0"
-
-    infile=WRFPRS.GrbFHHMINSTR
-    tmpfile=tmpGrbFHHMINSTR.grib2
-    outfile=../MPAS_${memstr}_${dtstr[-3]}fHHMINSTR.grib2
-
-    wgrib2 ${infile} -set_bitmap 1 -set_grib_type c3 -new_grid_winds grid \
-           -new_grid_vectors "UGRD:VGRD:USTM:VSTM:VUCSH:VVCSH" \
-           -new_grid_interpolation neighbor \
-           -new_grid ${grid_specs_hrrr} ${tmpfile}
-
-    # Merge vector field records
-    wgrib2 ${tmpfile} -new_grid_vectors "UGRD:VGRD:USTM:VSTM:VUCSH:VVCSH" -submsg_uv ${outfile}
-
-    # Remove temporary file
-    rm ${tmpfile} ${infile}
-
-    #mv WRFPRS.GrbFHHMINSTR ../MPAS-A_${dtstr[-3]}fHHMINSTR.grib2
+    mv WRFPRS.GrbFUPPDATE ../MPAS-A_EVENTDATEfHHMINSTR.grib2
 
     touch ../done.uppHHMINSTR_${memstr}
 else

@@ -101,11 +101,19 @@ function submit_a_jobscript {
 ########################################################################
 
 function check_and_resubmit {
-    local jobname=$1
+    #local jobnames=$1
     local mywrkdir=$2
     local donenum=$3                    # total number of jobs
     local myjobscript=${4-}             # empty no resubmissions
     local numtries=${5-0}               # number of resubmissions
+
+    read -r -a jobnames <<< "$1"
+    local jobname=${jobnames[0]}
+    if [[ ${#jobnames[@]} -eq 2 ]]; then
+        local memname=${jobnames[1]}
+    else
+        local memname="${jobname}_"
+    fi
 
     # global variables:
     # $runcmd, $verb
@@ -123,7 +131,7 @@ function check_and_resubmit {
         jobarrays=()
         for mem in ${runjobs}; do
             memstr=$(printf "%02d" $mem)
-            memdir="$mywrkdir/${jobname}_$memstr"
+            memdir="$mywrkdir/${memname}$memstr"
             donefile="$memdir/done.${jobname}_$memstr"
             errorfile="$memdir/error.${jobname}_$memstr"
 
@@ -167,6 +175,62 @@ function check_and_resubmit {
 function join_by_comma {
     local IFS=","
     echo "$*"
+}
+
+########################################################################
+
+function join_by {
+    local IFS="$1"
+    echo "${*:2}"
+}
+
+########################################################################
+
+#verb=false
+#readconf config.ini COMMON SECTION1
+
+function readconf {
+    if [[ $# -lt 2 ]]; then
+        echo "ERROR: No enough argument to function \"readconf\"."
+        exit 1
+    fi
+    local configfile=$1
+    local sections=$(join_by \| ${*:2})
+
+    if [[ ! -e $configfile ]]; then
+        echo "ERROR: Case configuration file: $configfile not exist. Have you run setup_mpas-wofs_grid.sh?"
+        exit 1
+    fi
+
+    local readmode line
+
+    readmode=false
+    while read line; do
+        #echo -n "<$line>"
+        if [[ "$line" =~ \[$sections\] ]]; then
+            if [[ $verb -eq 1 ]]; then echo "Found $sections: $line"; fi
+            readmode=true
+            continue
+        elif [[ "$line" == \[*\] ]]; then
+            if [[ $verb -eq 1 ]]; then echo "Another section: $line"; fi
+            readmode=false
+            continue
+        elif [[ "$line" =~ ^# ]]; then
+            if [[ $verb -eq 1 ]]; then echo "comment: $line"; fi
+            continue
+        fi
+
+        if $readmode; then
+            if [[ "$line" =~ "=" ]]; then
+                if [[ $verb -eq 1 ]]; then echo -n "source: $line"; fi
+                eval "export $line"
+            else
+                if [[ $verb -eq 1 ]]; then echo "skip: $line"; fi
+            fi
+            if [[ $verb -eq 1 ]]; then echo; fi
+        fi
+
+    done < $configfile
 }
 
 ########################################################################

@@ -119,22 +119,22 @@ function run_ungrib {
             cd $mywrkdir
 
             ln -sf $gribfile GRIBFILE.AAA
-            ln -sf $FIXDIR/WRFV4.0/Vtable.HRRRE.2018 Vtable
+            ln -sf $FIXDIR/WRFV4.0/${hrrrvtable} Vtable
 
             cat << EOF > namelist.wps
 &share
- wrf_core = 'ARW',
- max_dom = 1,
- start_date = '${starttime_str}',
- end_date = '${starttime_str}',
- interval_seconds = $((EXTINVL*3600))
- io_form_geogrid = 2,
+  wrf_core = 'ARW',
+  max_dom = 1,
+  start_date = '${starttime_str}',
+  end_date = '${starttime_str}',
+  interval_seconds = ${EXTINVL}
+  io_form_geogrid = 2,
 /
 &geogrid
 /
 &ungrib
- out_format = 'WPS',
- prefix = '${EXTHEAD}${memstr}',
+  out_format = 'WPS',
+  prefix = '${EXTHEAD}${memstr}',
 /
 &metgrid
 /
@@ -274,7 +274,7 @@ function run_init {
     config_geog_data_path = '${WPSGEOG_PATH}'
     config_met_prefix = '${EXTHEAD}${memstr}'
     config_sfc_prefix = 'SST'
-    config_fg_interval = $((EXTINVL*3600))
+    config_fg_interval = ${EXTINVL}
     config_landuse_data = 'MODIFIED_IGBP_MODIS_NOAH_15s'
     config_topo_data = 'GMTED2010'
     config_vegfrac_data = 'MODIS'
@@ -425,12 +425,9 @@ TEMPDIR="${rootdir}/templates"
 FIXDIR="${rootdir}/fix_files"
 eventdate="$eventdateDF"
 eventtime="1500"
-nensics=36
-EXTHEAD="HRRRE"
-EXTNFGL=51
-EXTNFLS=9
 
 domname="wofs_mpas"
+
 npeics=24
 init_dir=false
 runcmd="sbatch"
@@ -590,7 +587,6 @@ if [[ $machine == "Jet" ]]; then
     job_runexe_str="srun"
 
     modulename="build_jet_intel18_1.11_smiol"
-    WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
 
     source /etc/profile.d/modules.sh
     module purge
@@ -599,9 +595,6 @@ if [[ $machine == "Jet" ]]; then
     module load wgrib2/2.0.8
     wgrib2path="/apps/wgrib2/2.0.8/intel/18.0.5.274/bin/wgrib2"
     gpmetis="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/bin/gpmetis"
-
-    hrrr_dir="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MODEL_DATA/HRRRE"
-    hrrr_time="1400"
 
 elif [[ $machine == "Cheyenne" ]]; then
 
@@ -618,7 +611,6 @@ elif [[ $machine == "Cheyenne" ]]; then
     job_runexe_str="mpiexec_mpt"
 
     modulename="defaults"
-    WPSGEOG_PATH="/glade/work/ywang/WPS_GEOG/"
     wgrib2path="wgrib2_not_found"
 
 else    # Vecna at NSSL
@@ -636,21 +628,9 @@ else    # Vecna at NSSL
 
     modulename="env.mpas_smiol"
     source ${modulename}
-    WPSGEOG_PATH="/scratch/ywang/MPAS/WPS_GEOG/"
     wgrib2path="/scratch/ywang/tools/hpc-stack/intel-2021.8.0/wgrib2/2.0.8/bin/wgrib2"
     gpmetis="/scratch/ywang/tools/bin/gpmetis"
-
-    hrrr_dir="/scratch/wofuser/MODEL_DATA/HRRRE"
-    hrrr_time="1400"
 fi
-
-MPASLSM='ruc'
-MPASNFLS=9
-
-EXTINVL=3
-EXTINVL_STR="${EXTINVL}:00:00"
-
-ICSIOTYPE="pnetcdf,cdf5"
 
 source $scpdir/Common_Utilfuncs.sh
 
@@ -681,6 +661,17 @@ jobname="${eventdate:4:4}"
 
 exedir="$rootdir/exec"
 
+#
+# read configurations that is not set from command line
+#
+readconf $WORKDIR/config.${eventdate} COMMON init
+# get ENS_SIZE, time_step, EXTINVL, OUTINVL, OUTIOTYPE
+
+EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
+
+#
+# Start to execute each procedue
+#
 declare -A jobargs=([ungrib]="$hrrr_dir $hrrr_time"                     \
                     [init]="init/ungrib/done.ungrib $domname/done.static" \
                     [clean]="ungrib init"                               \
