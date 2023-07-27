@@ -363,6 +363,17 @@ function run_static {
     cp $FIXDIR/$domname.graph.info      .
     cp $FIXDIR/$domname.grid.nc         .
 
+    if [[ ! -f $domname.graph.info.part.${npepost} ]]; then
+        if [[ $verb -eq 1 ]]; then
+            echo "Generating ${domname}.graph.info.part.${npepost} in $wrkdir using ${gpmetis}"
+        fi
+        ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npepost} > gpmetis.out$npepost
+        if [[ $? -ne 0 ]]; then
+            echo "$?: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npepost}"
+            exit $?
+        fi
+    fi
+
     inittime_str=$(date -d "$eventdate ${eventtime}:00" +%Y-%m-%d_%H)
     initfile="../$runname/ungrib/${EXTHEAD}:$inittime_str"
     if [[ ! -f $initfile ]]; then
@@ -393,10 +404,12 @@ function run_static {
     config_sfc_prefix = 'SST'
     config_fg_interval = $((EXTINVL*3600))
     config_landuse_data = 'MODIFIED_IGBP_MODIS_NOAH_15s'
-    config_topo_data = 'GMTED2010'
+    config_soilcat_data = 'BNU'
+    config_topo_data    = 'GMTED2010'
     config_vegfrac_data = 'MODIS'
-    config_albedo_data = 'MODIS'
+    config_albedo_data  = 'MODIS'
     config_maxsnowalbedo_data = 'MODIS'
+    config_lai_data           = 'MODIS'
     config_supersample_factor = 1
     config_use_spechumd = false
 /
@@ -406,8 +419,8 @@ function run_static {
     config_smooth_surfaces = true
     config_dzmin = 0.3
     config_nsm = 30
-    config_tc_vertical_grid = true
-    config_blend_bdy_terrain = true
+    config_tc_vertical_grid = false
+    config_blend_bdy_terrain = false
     config_specified_zeta_levels = '${FIXDIR}/L60.txt'
 /
 &interpolation_control
@@ -434,6 +447,7 @@ EOF
 <streams>
 <immutable_stream name="input"
                   type="input"
+                  io_type="netcdf"
                   filename_template="${domname}.grid.nc"
                   input_interval="initial_only" />
 
@@ -470,6 +484,7 @@ EOF
     sedfile=$(mktemp -t static_${jobname}.sed_XXXX)
     cat <<EOF > $sedfile
 s/PARTION/${partition_static}/
+s/NOPART/$npepost/
 s/JOBNAME/static_${jobname}/
 s/CPUSPEC/${static_cpu}/
 s/MODULE/${modulename}/
@@ -1592,6 +1607,7 @@ function run_mpas {
     config_lsm_scheme                = '${MPASLSM}'
     num_soil_layers                  = ${MPASNFLS}
     config_physics_suite             = 'convection_permitting'
+    config_microp_re                 = true
 EOF
 
         if [[ ${mpscheme} == "mp_nssl2m" ]]; then
@@ -2293,7 +2309,7 @@ if [[ $machine == "Jet" ]]; then
     #ncores_ics=5; ncores_fcst=6; ncores_post=6
     partition="ujet,tjet,xjet,vjet,kjet"; claim_cpu="--cpus-per-task=2"
                                           claim_cpu_ics="--cpus-per-task=2"
-    partition_static="bigmem"           ; static_cpu="--cpus-per-task=12"
+    partition_static="${partition}"     ; static_cpu="--cpus-per-task=12"
     partition_upp="kjet,xjet,vjet"
 
     npeics=768   #; nnodes_ics=$((  npeics/ncores_ics   ))
@@ -2315,6 +2331,7 @@ if [[ $machine == "Jet" ]]; then
     module load $modulename
     module load wgrib2/2.0.8
     wgrib2path="/apps/wgrib2/2.0.8/intel/18.0.5.274/bin/wgrib2"
+    gpmetis="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/bin/gpmetis"
 
 elif [[ $machine == "Cheyenne" ]]; then
 
@@ -2363,6 +2380,7 @@ else    # Vecna at NSSL
     source ${modulename}
     WPSGEOG_PATH="/scratch/ywang/MPAS/WPS_GEOG/"
     wgrib2path="/scratch/ywang/tools/hpc-stack/intel-2021.8.0/wgrib2/2.0.8/bin/wgrib2"
+    gpmetis="/scratch/ywang/tools/bin/gpmetis"
 fi
 
 MPASLSM='ruc'

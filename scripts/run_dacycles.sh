@@ -1392,12 +1392,12 @@ function run_mpas {
     config_bucket_update             = 'none'
     config_lsm_scheme                = '${MPASLSM}'
     num_soil_layers                  = ${MPASNFLS}
+    config_microp_re                 = true
     config_physics_suite             = 'convection_permitting'
     config_frac_seaice               = false
     config_pbl_scheme                = '${pblscheme}'
     config_sfclayer_scheme           = '${sfcscheme}'
 EOF
-    #config_microp_re                 = true
 
         if [[ ${mpscheme} == "mp_nssl2m" ]]; then
 
