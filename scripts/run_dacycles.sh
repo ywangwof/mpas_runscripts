@@ -142,13 +142,13 @@ function run_obsmerge {
     anlys_date=$(date -d @$iseconds  +%Y%m%d)
     anlys_time=$(date -d @$iseconds  +%H%M)
 
-    if $verb; then
+    if [[ $verb -eq 1 ]]; then
         srunout="1"
     else
         srunout="output.srun"
     fi
 
-    if $verb; then echo "Runing ${exedir}/dart/convertdate"; fi
+    if [[ $verb -eq 1 ]]; then echo "Runing ${exedir}/dart/convertdate"; fi
     g_datestr=($(${exedir}/dart/convertdate << EOF
 1
 ${anlys_date:0:4} ${anlys_date:4:2} ${anlys_date:6:2} ${anlys_time:0:2} ${anlys_time:2:2} 00
@@ -194,7 +194,7 @@ EOF
 
         cp ${CWP_DIR}/obs_seq_cwp.G16_V04.${anlys_date}${anlys_time} ./obs_seq.old
 
-        if $verb; then
+        if [[ $verb -eq 1 ]]; then
             echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
         fi
         ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >& $srunout
@@ -229,7 +229,7 @@ EOF
 
         cp ${DBZ_DIR}/${eventdate}/obs_seq_RF_${anlys_date}_${anlys_time}.out ./obs_seq.old
 
-        if $verb; then
+        if [[ $verb -eq 1 ]]; then
             echo "    Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
         fi
         ${runcmd_str} echo "$g_date $g_sec" | ${obspreprocess} >& $srunout
@@ -276,7 +276,7 @@ EOF
 
             cp ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out ./obs_seq.old
 
-            if $verb; then
+            if [[ $verb -eq 1 ]]; then
                 echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
             fi
             ${runcmd_str} echo "$g_date $g_sec" | ${obspreprocess} >& $srunout
@@ -310,7 +310,7 @@ EOF
 
     #=================================================
 
-    if $verb; then echo "Runing ${exedir}/dart/advance_time"; fi
+    if [[ $verb -eq 1 ]]; then echo "Runing ${exedir}/dart/advance_time"; fi
     gobef=($(echo ${anlys_date}${anlys_time} -5m-29s -g | ${exedir}/dart/advance_time))
     goaft=($(echo ${anlys_date}${anlys_time} +2m+30s -g |  ${exedir}/dart/advance_time))
 
@@ -328,7 +328,7 @@ EOF
     #=================================================
 
     #COMBINE obs-seq FILES HERE
-    if $verb; then echo "Runing ${exedir}/dart/obs_sequence_tool"; fi
+    if [[ $verb -eq 1 ]]; then echo "Runing ${exedir}/dart/obs_sequence_tool"; fi
     ${runcmd_str} ${exedir}/dart/obs_sequence_tool >& $srunout
 
     if [[ $? -eq 0 && -e obs_seq.${anlys_date}${anlys_time} ]]; then
@@ -402,11 +402,11 @@ function run_filter {
         conditions=($parentdir/${event_pre}/done.fcst)
     fi
 
-    if $dorun; then
+    if [[ $dorun == true ]]; then
         for cond in ${conditions[@]}; do
             echo "$$-${FUNCNAME[0]}: Checking: $cond"
             while [[ ! -e $cond ]]; do
-                if $verb; then
+                if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
                 fi
                 sleep 10
@@ -1012,7 +1012,7 @@ EOF
     #------------------------------------------------------
 
     if [[ ! -e OBSDIR/obs_seq.${timestr_cur} ]]; then
-        if $verb; then echo "run_obsmerge $wrkdir $iseconds"; fi
+        if [[ $verb -eq 1 ]]; then echo "run_obsmerge $wrkdir $iseconds"; fi
         run_obsmerge $wrkdir $iseconds
 
         if [[ -e OBSDIR/obs_seq.${timestr_cur} ]]; then
@@ -1113,11 +1113,11 @@ function run_update_states {
     #
     conditions=(done.filter)
 
-    if $dorun; then
+    if [[ $dorun == true ]]; then
         for cond in ${conditions[@]}; do
             echo "$$-${FUNCNAME[0]}: Checking: $cond"
             while [[ ! -e $cond ]]; do
-                if $verb; then
+                if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
                 fi
                 sleep 10
@@ -1129,7 +1129,7 @@ function run_update_states {
     # Run obs_seq_to_netcdf
     #------------------------------------------------------
 
-    if $verb; then
+    if [[ $verb -eq 1 ]]; then
         srunout="1"
     else
         srunout="obs_seq_to_netcdf.log"
@@ -1193,11 +1193,11 @@ function run_mpas {
     #
     conditions=($rundir/lbc/done.lbc $wrkdir/done.update_states)
 
-    if $dorun; then
+    if [[ $dorun == true ]]; then
         for cond in ${conditions[@]}; do
             echo "$$-${FUNCNAME[0]}: Checking: $cond"
             while [[ ! -e $cond ]]; do
-                if $verb; then
+                if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
                 fi
                 sleep 10
@@ -1217,7 +1217,7 @@ function run_mpas {
     #
     if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npefcst} ]]; then
         cd $rundir/$domname
-        if $verb; then
+        if [[ $verb -eq 1 ]]; then
             echo "Generating ${domname}.graph.info.part.${npefcst} in $rundir/$domname using $exedir/gpmetis"
         fi
         $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst} > $rundir/$domname/gpmetis.out$npefcst
@@ -1261,12 +1261,15 @@ function run_mpas {
         #
         if [[ $icycle -eq 0 ]]; then
             #ln -sf ../${domname}_${memstr}.init.nc .
-            initfile=$(sed -n "$iens{p;q}" ../filter_in.txt)
+            initfile=$(sed -n "$iens{p;q}" ../filter_in.txt)            # print $iens line only
+            if [[ $verb -eq 1 ]]; then echo "Member: $iens use init file: $initfile"; fi
             ln -sf $initfile .
             do_restart="false"
             do_dacyle="false"
         else
-            ln -sf ../${domname}_${memstr}.restart.${currtime_fil}.nc .
+            restartfile="../${domname}_${memstr}.restart.${currtime_fil}.nc"
+            if [[ $verb -eq 1 ]]; then echo "Member: $iens use restart file: ${restartfile}"; fi
+            ln -sf  $restartfile .
             do_restart="true"
             do_dacyle="true"
         fi
@@ -1290,6 +1293,11 @@ function run_mpas {
         isec_elbc=$((iseconds+EXTINVL))
         mpastime_str1=$(date -d @$iseconds  +%Y-%m-%d_%H.%M.%S)
         mpastime_str2=$(date -d @$isec_elbc +%Y-%m-%d_%H.%M.%S)
+        if [[ $verb -eq 1 ]]; then
+            echo "Member: $iens use lbc files from $rundir/lbc:"
+            echo "       ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc";
+            echo "       ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc";
+        fi
         ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc ${domname}_${memstr}.lbc.${mpastime_str1}.nc
         ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc ${domname}_${memstr}.lbc.${mpastime_str2}.nc
 
@@ -1562,7 +1570,6 @@ function da_cycle_driver() {
     n_cycles=$(( (end_sec-start_sec)/intvl_sec ))
 
     echo "Total of ${n_cycles} cycles from $date_beg to $date_end will be run every $intvl_min minutes."
-    echo ""
 
     local icyc=$(( (start_sec-init_sec)/intvl_sec ))
     for isec in $(seq $start_sec $intvl_sec $end_sec ); do
@@ -1573,6 +1580,7 @@ function da_cycle_driver() {
         mkwrkdir $dawrkdir 0    # keep original directory
         cd $dawrkdir
 
+        echo ""
         echo "- Cycle $icyc at ${timestr_curr}"
 
         if [[ $icyc -gt 0 && $dorun == true ]]; then
@@ -1593,7 +1601,7 @@ function da_cycle_driver() {
             #------------------------------------------------------
             # 1. Run filter
             #------------------------------------------------------
-            if $verb; then echo ""; echo "    Run filter at $eventtime"; fi
+            if [[ $verb -eq 1 ]]; then echo ""; echo "    Run filter at $eventtime"; fi
             run_filter $dawrkdir $icyc $isec
         fi
 
@@ -1604,7 +1612,7 @@ function da_cycle_driver() {
             if [[ $icyc -eq 0 ]]; then
                 touch $dawrkdir/done.update_states
             else
-                if $verb; then echo ""; echo "    Run update_mpas_state at $eventtime"; fi
+                if [[ $verb -eq 1 ]]; then echo ""; echo "    Run update_mpas_state at $eventtime"; fi
                 run_update_states $dawrkdir $isec
             fi
         fi
@@ -1614,12 +1622,12 @@ function da_cycle_driver() {
             # 3. Advance model for each member
             #------------------------------------------------------
             # Run forecast for ensemble members until the next analysis time
-            if $verb; then echo ""; echo "    Run advance model at $eventtime"; fi
+            if [[ $verb -eq 1 ]]; then echo ""; echo "    Run advance model at $eventtime"; fi
 
             mpas_jobscript="run_mpas.${mach}"
             run_mpas $dawrkdir $icyc $isec
 
-            if $dorun; then
+            if [[ $dorun == true ]]; then
                 if [[ ! -e done.fcst ]]; then
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
                     check_and_resubmit "fcst" $dawrkdir $ENS_SIZE $mpas_jobscript 2
@@ -1649,7 +1657,7 @@ function run_clean {
         if [[ -d $dawrkdir ]]; then
             cd $dawrkdir
 
-            if $verb; then echo "    Cleaning working directory $dawrkdir"; fi
+            if [[ $verb -eq 1 ]]; then echo "    Cleaning working directory $dawrkdir"; fi
 
             for dirname in mpas filter update_states; do
 
@@ -1698,7 +1706,7 @@ enddatetime=""
 domname="wofs_mpas"
 mpscheme="mp_nssl2m"
 
-verb=false
+verb=0
 overwrite=0
 runcmd="sbatch"
 dorun=true
@@ -1733,7 +1741,7 @@ while [[ $# > 0 ]]; do
             dorun=false
             ;;
         -v)
-            verb=true
+            verb=1
             ;;
         -k)
             if [[ $2 =~ [012] ]]; then
@@ -1785,15 +1793,15 @@ while [[ $# > 0 ]]; do
             ;;
         -s )
             if [[ $2 =~ ^[0-9]{12}$ ]]; then
-                eventtime=${key:8:4}
-                eventhour=${key:8:2}
+                eventtime=${2:8:4}
+                eventhour=${2:8:2}
                 if [[ 10#$eventhour -lt 12 ]]; then
-                    eventdate=$(date -d "${key:0:8} 1 day ago" +%Y%m%d)
+                    eventdate=$(date -d "${2:0:8} 1 day ago" +%Y%m%d)
                 else
-                    eventdate=${key:0:8}
+                    eventdate=${2:0:8}
                 fi
             elif [[ $2 =~ ^[0-9]{4}$ ]]; then
-                eventtime=${key}
+                eventtime="${2}"
             else
                 echo "ERROR: Start time should be in YYYYmmddHHMM or HHMM, got \"$2\"."
                 usage 1
@@ -1909,8 +1917,9 @@ if [[ $machine == "Jet" ]]; then
 
 elif [[ $machine == "Cheyenne" ]]; then
 
-    if $dorun; then runcmd="qsub"; fi
-
+    if [[ $dorun == true ]]; then
+        runcmd="qsub"
+    fi
     ncores_filter=32; ncores_fcst=32
     partition="regular"        ; claim_cpu="ncpus=${ncores_fcst}"
     partition_filter="regular" ; filter_cpu="ncpus=${ncores_post}"
@@ -1938,7 +1947,7 @@ else    # Vecna at NSSL
                                   update_cpu="--ntasks-per-node=24 --mem-per-cpu=8G"
 
     mach="slurm"
-    job_exclusive_str="#SBATCH --exclude=cn11"
+    job_exclusive_str="#SBATCH --exclude=cn11,cn14"
     job_account_str=""
     job_runmpexe_str="srun --mpi=pmi2"
     job_runexe_str="srun"

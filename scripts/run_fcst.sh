@@ -192,7 +192,7 @@ function run_mpas {
         if [[ $verb -eq 1 ]]; then
             echo "Generating ${domname}.graph.info.part.${npefcst} in $rundir/$domname using $exedir/gpmetis"
         fi
-        $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst} > $exedir/gpmetis.out$npefcst
+        $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst} > gpmetis.out$npefcst
         if [[ $? -ne 0 ]]; then
             echo "$?: $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst}"
             exit $?
@@ -557,6 +557,7 @@ function run_mpassit {
     hist_file_input_grid = "$histfile"
     diag_file_input_grid = "$diagfile"
     file_target_grid     = "$rundir/${domname/*_/geo_}/geo_em.d01.nc"
+    target_grid_type     = "file"
     output_file          = "$memdir/MPASSIT_${memstr}.${fcst_time_str}.nc"
     interp_diag          = .true.
     interp_hist          = .true.
@@ -812,9 +813,14 @@ function fcst_driver() {
 
     echo "Forecasting cycles from $date_beg to $date_end ...."
 
-    for isec in $(seq $start_sec 3600 $end_sec ); do
+    for isec in $(seq $start_sec ${fcst_launch_intvl} $end_sec ); do
         timestr_curr=$(date -d @$isec +%Y%m%d%H%M)
         eventtime=$(date    -d @$isec +%H%M)
+
+        eventMM=$(date    -d @$isec +%M)
+        fcstindex=1
+        if [[ "${eventMM}" == "00" ]]; then fcstindex=0; fi
+        fcst_seconds=${fcst_length_seconds[$fcstindex]}
 
         fcstwrkdir=$wrkdir/${eventtime}
         mkwrkdir $fcstwrkdir 0        # keep original directory
@@ -892,9 +898,14 @@ function run_clean {
 
     wrkdir=$rundir/fcst
 
-    for isec in $(seq $start_sec 3600 $end_sec ); do
+    for isec in $(seq ${start_sec} ${fcst_launch_intvl} ${end_sec} ); do
         #timestr_curr=$(date -d @$isec +%Y%m%d%H%M)
         eventtime=$(date    -d @$isec +%H%M)
+
+        eventMM=$(date    -d @$isec +%M)
+        fcstindex=1
+        if [[ "${eventMM}" == "00" ]]; then fcstindex=0; fi
+        fcst_seconds=${fcst_length_seconds[$fcstindex]}
 
         fcstwrkdir=$wrkdir/$eventtime
         if [[ -d $fcstwrkdir ]]; then
@@ -1024,7 +1035,7 @@ elif [[ "$(hostname)" == cheyenne* ]]; then
     machine="Cheyenne"
 fi
 
-jobs=(mpas mpassit upp clean)
+jobs=(mpas mpassit clean)
 
 source $scpdir/Common_Utilfuncs.sh
 
@@ -1103,15 +1114,15 @@ while [[ $# > 0 ]]
             ;;
         -s )
             if [[ $2 =~ ^[0-9]{12}$ ]]; then
-                eventtime=${key:8:4}
-                eventhour=${key:8:2}
+                eventtime=${2:8:4}
+                eventhour=${2:8:2}
                 if [[ 10#$eventhour -lt 12 ]]; then
-                    eventdate=$(date -d "${key:0:8} 1 day ago" +%Y%m%d)
+                    eventdate=$(date -d "${2:0:8} 1 day ago" +%Y%m%d)
                 else
-                    eventdate=${key:0:8}
+                    eventdate=${2:0:8}
                 fi
             elif [[ $2 =~ ^[0-9]{4}$ ]]; then
-                eventtime=${key}
+                eventtime=${2}
             else
                 echo "ERROR: Start time should be in YYYYmmddHHMM or HHMM, got \"$2\"."
                 usage 1
@@ -1246,14 +1257,14 @@ else    # Vecna at NSSL
 
     account="${hpcaccount-batch}"
     ncores_post=24; ncores_fcst=96
-    partition="batch"           ; claim_cpu="--ntasks-per-node=${ncores_fcst} --mem-per-cpu=4G";
-    partition_post="batch"      ; post_cpu="--ntasks-per-node=${ncores_post}"
+    partition="batch"           ; claim_cpu="";
+    partition_post="batch"      ; post_cpu=""
 
     npepost=24      #; nnodes_post=$(( npepost/ncores_post  ))
     npefcst=96      #; nnodes_fcst=$(( npefcst/ncores_fcst ))
 
     mach="slurm"
-    job_exclusive_str=""
+    job_exclusive_str="#SBATCH --exclude=cn11,cn14"
     job_account_str=""
     job_runmpexe_str="srun --mpi=pmi2"
     job_runexe_str="srun"

@@ -132,7 +132,7 @@ function run_geogrid {
     fi
 
     if ! [[ $cen_lat && $cen_lon ]]; then
-        echo "ERROR: Domain center is required for option \"-c\" as \"lat,lon\"."
+        echo "ERROR: Domain center is required as command line option \"-c lat,lon\"."
         exit 0
     fi
 
@@ -954,6 +954,7 @@ function write_runtimeconfig {
 [COMMON]
     nensics=36
     nenslbc=18
+    EXTINVL=3600
 
     MPASLSM='ruc'
     MPASNFLS=9
@@ -966,7 +967,6 @@ function write_runtimeconfig {
 
 [init]
     ICSIOTYPE="pnetcdf,cdf5"
-    EXTINVL=10800
     EXTNFGL=51
     EXTNFLS=9
     EXTHEAD="HRRRE"
@@ -976,7 +976,6 @@ function write_runtimeconfig {
 
 [lbc]
     LBCIOTYPE="pnetcdf,cdf5"
-    EXTINVL=3600
     EXTNFGL=51
     EXTNFLS=9
     EXTHEAD="HRRRE"
@@ -989,14 +988,16 @@ function write_runtimeconfig {
     time_step=25
     intvl_sec=900
     ADAPTIVE_INF=true
-    update_in_place=false           # update MPAS states in-place or making a copy of the restart files
+    update_in_place=false               # update MPAS states in-place or
+                                        # making a copy of the restart files
     OUTIOTYPE="netcdf4"
     OBS_DIR="${OBS_DIR}"
 
 [fcst]
     ENS_SIZE=18
     time_step=25
-    fcst_seconds=21600              # 6*3600
+    fcst_launch_intvl=3600
+    fcst_length_seconds=(21600 10800)   # 6 hours at :00 and 3 hours at :30
     OUTINVL=900
     OUTIOTYPE="netcdf4"
 EOF
@@ -1011,7 +1012,7 @@ EOF
 #@ MAIN
 
 #jobs=(geogrid ungrib_hrrr createWOFS static)
-jobs=(geogrid ungrib_hrrr rotate meshplot_py static)
+jobs=(setup geogrid ungrib_hrrr rotate meshplot_py static)
 
 WORKDIR="${rootdir}/run_dirs"
 TEMPDIR="${rootdir}/templates"
@@ -1110,7 +1111,7 @@ while [[ $# > 0 ]]
             echo "Unknown option: $key"
             usage 2
             ;;
-        static* | geogrid* | createWOFS | meshplot | clean* )
+        static* | geogrid* | createWOFS | meshplot | clean* | setup )
             jobs=(${key//,/ })
             ;;
         *)
@@ -1264,6 +1265,7 @@ exedir="$rootdir/exec"
 caseconfig="$WORKDIR/config.${eventdate}"
 write_runtimeconfig $caseconfig
 
+if [[ " ${jobs[*]} " == " setup " ]]; then exit 0; fi
 #
 # read configurations that is not set from command line
 #

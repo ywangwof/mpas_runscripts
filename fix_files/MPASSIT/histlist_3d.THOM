@@ -13,3 +13,4 @@ ni                              QNICE
 nr                              QNRAIN
 pressure			P_HYD
 rho				MUB
+vorticity                       REL_VORT
