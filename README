@@ -1,5 +1,13 @@
   Version History
 
+08/24/2023 Version 3.3
+
+    1. Added support for the RRFS-A North American datasets by converting
+       the rotated lat/lon grid to the HRRR grid using wgrib2
+
+       A new option "-i rrfsna" is added and it will depend the download
+       RRFS-A NA data files from /lfs4/NAGAPE/wof/grib_files/RRFS-A.
+
 06/20/2023 Version 3.2
 
     1. Added option config_microp_re following Ted's suggestion
