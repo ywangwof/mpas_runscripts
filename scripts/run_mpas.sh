@@ -2226,7 +2226,7 @@ function run_clean {
                 if [[ -d $rundir/$dirsn && -e $donelbc ]]; then
                     cd $rundir/$dirsn
                     rm -rf GFS:* HRRR:* RRFS:* PFILE:* RRFSGFS:* HRRRGFS:*
-                    rm -rf RRFS_CONUS.* HRRR_rrfs.*
+                    rm -rf RRFS_CONUS.*
                 fi
             done
             ;;
