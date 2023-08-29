@@ -1,0 +1,74 @@
+
+## Observation pre-processing
+
+1. Radar observations
+
+   1.1 REF from realtime MRMS
+
+   2.2 VEL
+
+      o Download level II data,
+        - /work/christopher.kerr/Radar/getobs.csh on wof-epyc1
+
+      o Generate MRMS data for quality control,
+        - /home/christopher.kerr/WDSS/scripts/RUN_WDSS.csh on wof-post1
+
+   - Create radar files for 3-km domain for both REF & VEL
+        - run create_radar_obs.csh in /scratch/wofs_1km/wofs-obs-radar-parent
+        - use configuration in app.local.cfg
+
+2. CWP a converter to sequence file
+
+    The CWP and ABI netcdf to obs_seq converters are here (on wof-post):
+
+    /home/Thomas.Jones/SAT_OBSPROC/python/cwpobs2dart.py
+    /home/Thomas.Jones/SAT_OBSPROC/python/abiobs2dart_tb.py
+
+    - run_cwpobs.sh
+        o cwpobs2dart.py
+    - run_radiance.sh
+        o abiobs2dart_tb.py
+
+3. PrepBufr converter
+
+    The updated DART observation processing code to convert RAP-BUFR files to obs_seq format are located here:
+    /home/Thomas.Jones/WOFS_DART/DART_2023/observations/obs_converters/NCEP
+
+    Running the code is a two-step process. First, there is "prepbufr.x"
+    which converts the bufr files into a text format. Then, there is
+    "create_real_obs" that converts the text file into obs_seq format.
+    The current binaries have all the debug code on, but that can be turned off.
+    The only known issue is a problem with some roab data and prepbufr.x.
+    Since roab data is never available within our assimilation time window,
+    I have that observation type turned off for now.
+
+    The other thing to keep in mind is the assimilation time window.
+    DART uses one time window for all observation types. To assimilate
+    the bufr observations, this window will have to be increased, or
+    a 15 minute offset added to the time when the obs-seq files are created.
+
+    Run script:
+    /home/Thomas.Jones/WOFS_DART/obs_scripts/prepbufr_wofs.csh
+
+    Template input.nml file:
+    /home/Thomas.Jones/WOFS_DART/templates/input.nml.bufrobs.template
+
+    Thomas 08/24/2023
+
+
+    - prepbufr_wofs.sh
+        o input.nml.bufrobs.template
+
+4. Mesonet converter
+
+    The OK mesonet script is here:
+    /home/Thomas.Jones/WOFS_DART/obs_scripts/Process_rto_OKMeso_15min.csh
+
+    - okmeso_15min.sh
+        o geoinfo.csv
+        o input.nml.mesonet
+
+## Add Noise
+
+code:  ../DART_2023/models/wrf/WRF_DART_utilities/add_pert_where_high_refl.f90
+                                              and grid_refl_obs.f90

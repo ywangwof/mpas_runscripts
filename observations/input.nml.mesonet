@@ -1,0 +1,583 @@
+&filter_nml
+   async                    =  2,
+   adv_ens_command          = "no_model_advance"
+   ens_size                 =  36,
+   distributed_state        = .true.,
+   obs_sequence_in_name     = "obs_seq.out",
+   obs_sequence_out_name    = "obs_seq.final",
+   input_state_file_list    = "restarts_in_d01.txt"
+   output_state_file_list   = "restarts_out_d01.txt"
+   init_time_days           = -1,
+   init_time_seconds        = -1,
+   first_obs_days           = -1,
+   first_obs_seconds        = -1,
+   last_obs_days            = -1,
+   last_obs_seconds         = -1,
+   num_output_state_members = 0,
+   num_output_obs_members   = 0,
+   output_interval          = 1,
+   num_groups               = 1,
+   output_forward_op_errors = .false.,
+   trace_execution          = .true.,
+   output_timestamps        = .true.,
+   stages_to_write          = 'preassim', 'output'
+   output_members           = .true.
+   output_mean              = .true.
+   output_sd                = .true.
+   write_all_stages_at_end  = .true.  
+   inf_flavor                  = 2,                      0,
+   inf_initial_from_restart    = .false.,                 .false.,
+   inf_sd_initial_from_restart = .false.,                 .false.,
+   inf_deterministic           = .true.,                 .true.,
+   inf_initial                 = 1.00,                   1.00,
+   inf_sd_initial              = 0.60,                   0.50,
+   inf_damping                 = 0.90,                   1.00,
+   inf_lower_bound             = 1.0,                     1.0,
+   inf_upper_bound             = 100.0,               10000.0,
+   inf_sd_lower_bound          = 0.60,                   0.10,
+/
+
+&quality_control_nml
+  input_qc_threshold = 4,
+  outlier_threshold = 3,
+  enable_special_outlier_code = .false.
+/
+
+&state_vector_io_nml
+   single_precision_output    = .false.,
+/
+
+&ensemble_manager_nml
+   layout = 2,
+   tasks_per_node = 32
+/
+
+&smoother_nml
+   num_lags              = 0 
+   start_from_restart    = .false.
+   output_restart        = .false.
+   restart_in_file_name  = 'smoother_ics'
+   restart_out_file_name = 'smoother_restart' /
+
+&assim_tools_nml
+   filter_kind                     = 1,
+   cutoff                          = 0.036,
+   sort_obs_inc                    = .false.,
+   spread_restoration              = .false.,
+   sampling_error_correction       = .false.,         
+   print_every_nth_obs             = 1000,
+   adaptive_localization_threshold = -1,
+   distribute_mean                 = .false.,
+   special_localization_obs_types  = 'METAR_ALTIMETER',
+				     'METAR_U_10_METER_WIND',
+                                     'METAR_V_10_METER_WIND',
+                                     'METAR_TEMPERATURE_2_METER',
+                                     'METAR_DEWPOINT_2_METER',
+                                     'LAND_SFC_U_WIND_COMPONENT',
+                                     'LAND_SFC_V_WIND_COMPONENT',
+                                     'LAND_SFC_TEMPERATURE',
+                                     'LAND_SFC_DEWPOINT',
+                                     'LAND_SFC_ALTIMETER',
+                                     'RADAR_REFLECTIVITY',
+                                     'RADAR_CLEARAIR_REFLECTIVITY',
+                                     'DOPPLER_RADIAL_VELOCITY',
+                                     'GOES_CWP_PATH',
+                                     'GOES_LWP_PATH',
+                                     'GOES_IWP_PATH',
+                                     'GOES_CWP_ZERO',
+   special_localization_cutoffs    = 0.0094247,
+ 				     0.0094247,	                                    
+ 				     0.0094247,	                                    
+ 				     0.0094247,	                                    
+ 				     0.0094247,	                                    
+                                     0.0047123,
+                                     0.0047123,
+                                     0.0047123,
+                                     0.0047123,
+                                     0.0047123,
+                                     0.0014137,
+                                     0.0014137,
+                                     0.0014137,
+                                     0.00315,
+                                     0.00315,
+                                     0.00315,
+                                     0.0035   /
+              
+&perfect_model_obs_nml
+   start_from_restart    = .true.,
+   output_restart        = .true.,
+   async                 = 2,
+   init_time_days        = 151512,
+   init_time_seconds     = 64800,
+   first_obs_days        = -1,
+   first_obs_seconds     = -1,
+   last_obs_days         = -1,
+   last_obs_seconds      = -1,
+   output_interval       = 1,
+   restart_in_file_name  = "perfect_ics",
+   restart_out_file_name = "perfect_restart",
+   obs_seq_in_file_name  = "obs_seq.in",
+   obs_seq_out_file_name = "obs_seq.out",
+   adv_ens_command       = "../shell_scripts/advance_model.csh",
+   output_timestamps     = .false.,
+   trace_execution       = .true.,
+   output_forward_op_errors = .false.,
+   print_every_nth_obs   = -1,
+   silence               = .false.,
+   direct_netcdf_read = .true.
+   direct_netcdf_write = .true.
+   /
+
+&xyz_location_nml
+  /
+
+&cov_cutoff_nml
+   select_localization = 1  
+/
+
+&closest_member_tool_nml 
+   input_file_name        = 'filter_ic_new',
+   output_file_name       = 'closest_restart',
+   ens_size               = 50,
+   single_restart_file_in = .false.,
+   difference_method      = 4,
+ /
+
+&location_nml
+   horiz_dist_only = .false.,
+   vert_normalization_pressure = 700000.0,
+   vert_normalization_height = 111111.1,
+   vert_normalization_level = 2666.7,
+   approximate_distance = .false.,
+   output_box_info = .false.,
+   nlon = 283,
+   nlat = 144,  
+   special_vert_normalization_obs_types =  'METAR_ALTIMETER',
+					   'METAR_U_10_METER_WIND',
+					   'METAR_V_10_METER_WIND',
+					   'METAR_TEMPERATURE_2_METER',
+					   'METAR_DEWPOINT_2_METER',
+                                           'LAND_SFC_U_WIND_COMPONENT',
+                                           'LAND_SFC_V_WIND_COMPONENT',
+                                           'LAND_SFC_TEMPERATURE',
+                                           'LAND_SFC_DEWPOINT',
+                                           'LAND_SFC_ALTIMETER',
+                                           'RADAR_REFLECTIVITY',
+                                           'RADAR_CLEARAIR_REFLECTIVITY',
+                                           'DOPPLER_RADIAL_VELOCITY',
+                                           'GOES_CWP_PATH',
+                                           'GOES_LWP_PATH',
+                                           'GOES_IWP_PATH',
+                                           'GOES_CWP_ZERO',
+   special_vert_normalization_pressures =  100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,      
+                                           100000.0,      
+                                           100000.0,      
+                                           100000.0,      
+                                           100000.0,      
+                                           100000.0,      
+   special_vert_normalization_heights  =   424416.6,
+                                           424416.6,
+                                           424416.6,
+                                           424416.6,
+                                           424416.6,
+                                           848842.3,
+                                           848842.3,
+                                           848842.3,
+                                           848842.3,
+                                           848842.3,
+                                           2122090.9,
+                                           2122090.9,
+                                           2122090.9,
+                                           1000000.1,
+                                           952381.0,
+                                           1269841.3,
+                                           1000000.0, 
+   special_vert_normalization_levels    =  20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+   special_vert_normalization_scale_heights = 5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0   /
+
+
+&model_nml
+   init_template_filename       = 'init.nc'
+   assimilation_period_days     = 0
+   assimilation_period_seconds  = 900
+   model_perturbation_amplitude = 0.0001
+   vert_localization_coord      = 3
+   calendar                     = 'Gregorian'
+   highest_obs_pressure_mb      = 1.0
+   sfc_elev_max_diff            = 100.
+   log_p_vert_interp            = .false.
+   debug                        = 0
+   use_u_for_wind               = .false.
+   use_rbf_option               = 2
+   update_u_from_reconstruct    = .true.
+   use_increments_for_u_update  = .true.
+/
+
+
+&mpas_vars_nml
+   mpas_state_variables = 'theta',                 'QTY_POTENTIAL_TEMPERATURE',
+                          'rho',                   'QTY_DENSITY',
+                          'uReconstructZonal',     'QTY_U_WIND_COMPONENT',
+                          'uReconstructMeridional','QTY_V_WIND_COMPONENT',
+                          'w',                     'QTY_VERTICAL_VELOCITY',
+                          'qv',                    'QTY_VAPOR_MIXING_RATIO',
+                          'surface_pressure',      'QTY_SURFACE_PRESSURE',
+                          'qc',                    'QTY_CLOUDWATER_MIXING_RATIO',
+                          'qr',                    'QTY_RAINWATER_MIXING_RATIO',
+                          'qi',                    'QTY_ICE_MIXING_RATIO',
+                          'qs',                    'QTY_SNOW_MIXING_RATIO',
+                          'qg',                    'QTY_GRAUPEL_MIXING_RATIO',
+                          'qh',                    'QTY_HAIL_MIXING_RATIO',
+                          'volg',                  'QTY_GRAUPEL_VOLUME',
+                          'volh',                  'QTY_HAIL_VOLUME',
+                          'nc',                    'QTY_DROPLET_NUMBER_CONCENTR',
+                          'nr',                    'QTY_RAIN_NUMBER_CONCENTR',
+                          'ni',                    'QTY_ICE_NUMBER_CONCENTRATION',
+                          'ns',                    'QTY_SNOW_NUMBER_CONCENTR',
+                          'ng',                    'QTY_GRAUPEL_NUMBER_CONCENTR',
+                          'nh',                    'QTY_HAIL_NUMBER_CONCENTR',
+                          'refl10cm',              'QTY_RADAR_REFLECTIVITY',
+   mpas_state_bounds    = 'qv','0.0','NULL','CLAMP',
+                          'qc','0.0','NULL','CLAMP',
+                          'qr','0.0','NULL','CLAMP',
+                          'qi','0.0','NULL','CLAMP',
+                          'qs','0.0','NULL','CLAMP',
+                          'qg','0.0','NULL','CLAMP',
+                          'qh','0.0','NULL','CLAMP',
+                          'volg','0.0','NULL','CLAMP',
+                          'volh','0.0','NULL','CLAMP',
+                          'nc','0.0','NULL','CLAMP',
+                          'nr','0.0','NULL','CLAMP',
+                          'ni','0.0','NULL','CLAMP',
+                          'ns','0.0','NULL','CLAMP',
+                          'ng','0.0','NULL','CLAMP',
+                          'ng','0.0','NULL','CLAMP',
+/
+
+&utilities_nml
+   TERMLEVEL = 1,
+   logfilename = 'dart_log.out',
+   module_details = .false.  /
+
+&mpi_utilities_nml
+/
+
+&reg_factor_nml
+   select_regression = 1,
+   input_reg_file = "time_mean_reg",
+   save_reg_diagnostics = .false.,
+   reg_diagnostics_file = 'reg_diagnostics'  /
+
+&obs_sequence_nml
+   write_binary_obs_sequence = .false.  /
+
+# '../../../obs_def/obs_def_TES_nadir_mod.f90',
+
+&preprocess_nml
+    input_obs_kind_mod_file = '../../../obs_kind/DEFAULT_obs_kind_mod.F90',
+   output_obs_kind_mod_file = '../../../obs_kind/obs_kind_mod.f90',
+     input_obs_def_mod_file = '../../../obs_def/DEFAULT_obs_def_mod.F90',
+    output_obs_def_mod_file = '../../../obs_def/obs_def_mod.f90',
+input_files = '../../../obs_def/obs_def_AIRS_mod.f90',
+      '../../../obs_def/obs_def_AOD_mod.f90',
+      '../../../obs_def/obs_def_AURA_mod.f90',
+      '../../../obs_def/obs_def_COSMOS_mod.f90',
+      '../../../obs_def/obs_def_CO_Nadir_mod.f90',
+      '../../../obs_def/obs_def_GWD_mod.f90',
+      '../../../obs_def/obs_def_QuikSCAT_mod.f90',
+      '../../../obs_def/obs_def_SABER_mod.f90',
+      '../../../obs_def/obs_def_altimeter_mod.f90',
+      '../../../obs_def/obs_def_cloud_mod.f90',
+      '../../../obs_def/obs_def_cwp_mod.f90', 
+      '../../../obs_def/obs_def_dew_point_mod.f90',
+      '../../../obs_def/obs_def_dwl_mod.f90',
+      '../../../obs_def/obs_def_eval_mod.f90',
+      '../../../obs_def/obs_def_gps_mod.f90',
+      '../../../obs_def/obs_def_gts_mod.f90',
+      '../../../obs_def/obs_def_metar_mod.f90',
+      '../../../obs_def/obs_def_ocean_mod.f90',
+      '../../../obs_def/obs_def_pe2lyr_mod.f90',
+      '../../../obs_def/obs_def_radar_mod.f90',
+      '../../../obs_def/obs_def_reanalysis_bufr_mod.f90',
+      '../../../obs_def/obs_def_rel_humidity_mod.f90',
+      '../../../obs_def/obs_def_sqg_mod.f90',
+      '../../../obs_def/obs_def_tower_mod.f90',
+      '../../../obs_def/obs_def_tpw_mod.f90',
+      '../../../obs_def/obs_def_upper_atm_mod.f90',
+      '../../../obs_def/obs_def_vortex_mod.f90',
+      '../../../obs_def/obs_def_wind_speed_mod.f90'
+   /
+
+&obs_kind_nml
+assimilate_these_obs_types = 
+'METAR_ALTIMETER',
+'METAR_U_10_METER_WIND',
+'METAR_V_10_METER_WIND',
+'METAR_TEMPERATURE_2_METER',
+'METAR_DEWPOINT_2_METER',
+'LAND_SFC_ALTIMETER',
+'LAND_SFC_DEWPOINT',
+'LAND_SFC_TEMPERATURE',
+'LAND_SFC_U_WIND_COMPONENT',
+'LAND_SFC_V_WIND_COMPONENT',
+'RADAR_REFLECTIVITY',
+'RADAR_CLEARAIR_REFLECTIVITY',
+'DOPPLER_RADIAL_VELOCITY',
+'GOES_LWP_PATH',
+'GOES_IWP_PATH',
+'GOES_CWP_ZERO'  /
+
+&obs_diag_nml
+   obs_sequence_name = 'obs_seq.out',
+   obs_sequence_list = '',
+   first_bin_center =  2011, 2, 3, 6, 0, 0 ,
+   last_bin_center  =  2011, 2, 3, 12, 0, 0 ,
+   bin_separation   =     0, 0, 0, 6, 0, 0 ,
+   bin_width        =     0, 0, 0, 6, 0, 0 ,
+   time_to_skip     =     0, 0, 0, 0, 0, 0 ,
+   max_num_bins  = 1000,
+   Nregions   = 1,
+   rat_cri    = 5000.0,
+   lonlim1    =   0.0,   0.0,   0.0, 330.1,
+   lonlim2    = 360.0, 360.0, 360.0, 334.6,
+   latlim1    = 10.0,  30.0, -89.9,  21.3,
+   latlim2    = 65.0,  89.9,  89.9,  23.4,
+   reg_names  = 'Full Domain',
+   print_mismatched_locs = .false.,
+   print_obs_locations = .true.,
+   verbose = .true.  /
+
+&ncepobs_nml
+   year = 2010,
+   month = 06,
+   day = 00,
+   tot_days = 1,
+   max_num = 1000000,
+   ObsBase = 'temp_obs.',
+   select_obs  = 0,
+   ADPUPA = .false.,
+   AIRCAR = .false.,
+   AIRCFT = .false.,
+   SATEMP = .false.,
+   SFCSHP = .false.,
+   ADPSFC = .false.,
+   SATWND = .true.,
+   obs_U  = .false.,
+   obs_V  = .false.,
+   obs_T  = .false.,
+   obs_PS = .false.,
+   obs_QV = .false.,
+   daily_file = .true.,
+   obs_time = .false.,
+   lat1 = 10.00,
+   lat2 = 60.00,
+   lon1 = 210.0,
+   lon2 = 300.0 /
+
+&prep_bufr_nml
+   obs_window_upa = 1.0,
+   obs_window_air = 1.0,
+   obs_window_cw = 1.0,
+   otype_use      = 242.0, 243.0, 245.0, 246.0, 251.0, 252.0, 253.0, 257.0, 259.0
+   qctype_use     = 0, 1, 2, 3, 4, 9, 15  /
+
+&obs_def_gps_nml
+/
+
+&obs_def_radar_mod_nml
+   apply_ref_limit_to_obs     =  .true. ,
+   reflectivity_limit_obs     =     0.0 ,
+   lowest_reflectivity_obs    =     0.0 ,
+   apply_ref_limit_to_fwd_op  =  .true. ,
+   reflectivity_limit_fwd_op  =     0.0 ,
+   lowest_reflectivity_fwd_op =     0.0 ,
+   dielectric_factor          =   0.224 ,
+   n0_rain                    =   8.0e6 ,
+   n0_graupel                 =   4.0e6 ,
+   n0_snow                    =   3.0e6 ,
+   rho_rain                   =  1000.0 ,
+   rho_graupel                =   400.0 ,
+   rho_snow                   =   100.0 ,
+   allow_wet_graupel          = .false. ,
+   microphysics_type          =       5 ,
+   allow_dbztowt_conv         = .true.  /
+
+&obs_def_tpw_nml
+/
+
+&obs_def_cwp_nml
+   pressure_top               = 15000.0,
+   physics                    = 8 /
+
+&obs_seq_coverage_nml
+   obs_sequences     = ''
+   obs_sequence_list = 'obs_coverage_list.txt'
+   obs_of_interest   = 'METAR_U_10_METER_WIND'
+   textfile_out      = 'METAR_U_10_METER_WIND_obsdef_mask.txt'
+   netcdf_out        = 'METAR_U_10_METER_WIND_obsdef_mask.nc'
+   first_analysis    =  2003, 1, 1, 0, 0, 0
+   last_analysis     =  2003, 1, 2, 0, 0, 0
+   forecast_length_days          = 1
+   forecast_length_seconds       = 0
+   verification_interval_seconds = 21600
+   temporal_coverage_percent     = 100.0
+   lonlim1    =    0.0
+   lonlim2    =  360.0
+   latlim1    =  -90.0
+   latlim2    =   90.0
+   verbose    = .true.
+   /
+
+&convert_cosmic_gps_nml
+   gpsro_netcdf_file     = '',
+   gpsro_netcdf_filelist = 'flist',
+   gpsro_out_file        = 'obs_seq.gpsro',
+   local_operator        = .true.,
+   obs_levels            = 0.22, 0.55, 1.1, 1.8, 2.7, 3.7, 4.9,
+                           6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0,
+   ray_ds                = 5000.0,
+   ray_htop              = 13000.1,
+/
+
+&obs_sequence_tool_nml
+   filename_seq         = 'obs_seq.out',
+   filename_seq_list    = '',
+   filename_out         = 'obs_seq.final',
+   gregorian_cal        = .true.,
+   print_only           = .true.,
+/
+
+&obs_seq_verify_nml
+   obs_sequences     = ''
+   obs_sequence_list = 'obs_verify_list.txt'
+   input_template    = 'obsdef_mask.nc'
+   netcdf_out        = 'forecast.nc'
+   obtype_string     = 'METAR_U_10_METER_WIND'
+   print_every       = 10000
+   verbose           = .true.
+   debug             = .false.
+   /
+
+&restart_file_tool_nml
+   input_file_name              = "restart_file_input",
+   output_file_name             = "restart_file_output",
+   ens_size                     = 1,
+   single_restart_file_in       = .true.,
+   single_restart_file_out      = .true.,
+   write_binary_restart_files   = .true.,
+   overwrite_data_time          = .false.,
+   new_data_days                = -1,
+   new_data_secs                = -1,
+   input_is_model_advance_file  = .false.,
+   output_is_model_advance_file = .true.,
+   overwrite_advance_time       = .true.,
+   new_advance_days             = _RESTART_DAYS_,
+   new_advance_secs             = _RESTART_SECONDS_
+/
+
+&schedule_nml
+   calendar        = 'Gregorian',
+   first_bin_start =  _FBS_YY_, _FBS_MM_, _FBS_DD_, _FBS_HH_, 0, 0,
+   first_bin_end   =  _FBE_YY_, _FBE_MM_, _FBE_DD_, _FBE_HH_, 0, 0,
+   last_bin_end    =  _LBE_YY_, _LBE_MM_, _LBE_DD_, _LBE_HH_, 0, 0,
+   bin_interval_days    = 0,
+   bin_interval_seconds = 21600,
+   max_num_bins         = 1000,
+   print_table          = .true.
+   /
+
+&obs_seq_to_netcdf_nml
+   obs_sequence_name = 'obs_seq.final'
+   obs_sequence_list     = '',
+   lonlim1 = 160.
+   lonlim2 = 40.
+   latlim1 = 10.
+   latlim2 = 65.
+/
+
+&model_mod_check_nml
+   verbose               = .FALSE.
+   test1thru             = 5
+   loc_of_interest       = 320.0, 18.0, 5.0
+   x_ind                 = 100
+   kind_of_interest      = 'QTY_U_WIND_COMPONENT'
+   interp_test_lonrange  = 180.0, 359.0
+   interp_test_dlon      = 1.0
+   interp_test_latrange  = -40.0, 89.0
+   interp_test_dlat      = 1.0
+   interp_test_vertrange = 0.0,  1000.0
+   interp_test_dvert     = 100.0
+   interp_test_vertcoord = 'VERTISHEIGHT'
+  /
+&mpas_dart_obs_preprocess_nml
+   file_name_input          = 'obs_seq.old'
+   file_name_output         = 'obs_seq.new'
+   include_sig_data         = .true.
+   superob_aircraft         = .false.
+   superob_sat_winds        = .false.
+   sfc_elevation_check      = .false.
+   overwrite_ncep_sfc_qc    = .false.
+   overwrite_ncep_satwnd_qc = .false.
+   aircraft_pres_int        = 2500.0
+   sat_wind_pres_int        = 2500.0
+   sfc_elevation_tol        = 300.0
+   obs_pressure_top         = 1.0
+   obs_height_top           = 2.0e10
+   max_num_obs              = 1000000
+   sonde_extra              = 'obs_seq.rawin'
+   metar_extra              = 'obs_seq.metar'
+   acars_extra              = 'obs_seq.acars'
+   land_sfc_extra           = 'obs_seq.land_sfc'
+   marine_sfc_extra         = 'obs_seq.marine'
+   sat_wind_extra           = 'obs_seq.satwnd'
+   profiler_extra           = 'obs_seq.profiler'
+   trop_cyclone_extra       = 'obs_seq.tc'
+   gpsro_extra              = 'obs_seq.gpsro'
+   tc_sonde_radii           = -1.0
+   overwrite_obs_time       = .false.
+   windowing_obs_time       = .true.
+   windowing_int_hour       = 0.20
+/

@@ -1,0 +1,140 @@
+
+&ncepobs_nml
+   year       = YEAR,
+   month      = MON,
+   day        = DAY,
+   hour       = HOUR,
+   tot_days   = 1,
+   max_num    = 800000,
+   select_obs = 0,
+   ObsBase = 'temp_obs',
+   include_specific_humidity = .false.,
+   include_relative_humidity = .false.,
+   include_dewpoint = .true.,
+   include_surface_pressure = .true.,
+   ADPUPA = .true., 
+   AIRCAR = .true., 
+   AIRCFT = .true., 
+   SATEMP = .true., 
+   SFCSHP = .true., 
+   ADPSFC = .true., 
+   SATWND = .false.,
+   obs_U  = .true., 
+   obs_V  = .true., 
+   obs_T  = .true.,
+   obs_PS = .true.,
+   obs_QV = .true.,
+   daily_file = .true.,
+   lon1   =   0.0,
+   lon2   = 360.0,
+   lat1   =  10.0,
+   lat2   =  70.0
+  /
+
+&prep_bufr_nml 
+ obs_window     = 24.0,
+ otype_use      = 130.0, 131.0, 132.0, 133.0, 153.0, 180.0,
+                  181.0, 182.0, 183.0, 187.0, 188.0, 230.0, 231.0,
+                  232.0, 233.0, 242.0, 243.0, 245.0, 246.0,
+                  252.0, 253.0, 255.0, 280.0, 281.0, 282.0, 287.0, 289.0,
+ qctype_use = 0,1,2,3,4,5,6,10,14,15
+ /
+
+&prepbufr_to_obs_nml
+   startyear     = YEAR,
+   startmonth    = MON,
+   startday      = DAY,
+   starthour     = HOUR,
+   endyear       = ENDYR,
+   endmonth      = ENDMON,
+   endday        = ENDDAY,
+   endhour       = ENDHOUR,
+   windowdays    = 0,
+   windowhours   = 1,
+   windowseconds = 0,
+   midnight_24   = .true.,
+   input_filename_base     = 'temp_obs',
+   input_filename_pattern  = '(A,I4.4,3(I2.2))',
+   output_filename_base    = 'obs_seq.',
+   output_filename_pattern = '(A,I4.4,3(I2.2))',
+   max_num_obs = 10000000,
+   select_obs = .false.,
+   ADPUPA = .true.,
+   AIRCAR = .true.,
+   AIRCFT = .true.,
+   SATEMP = .true.,
+   SFCSHP = .true.,
+   ADPSFC = .true.,
+   SATWND = .false.,
+   obs_U  = .true.,
+   obs_V  = .true.,
+   obs_T  = .true.,
+   obs_PS = .true.,
+   obs_QV = .true.,
+   include_specific_humidity = .false.,
+   include_relative_humidity = .false.,
+   include_dewpoint = .true.,
+   include_surface_pressure = .true. 
+/
+
+&obs_sequence_nml
+   write_binary_obs_sequence = .false.
+  /
+
+&assim_model_nml
+  /
+
+&utilities_nml
+   TERMLEVEL = 1,
+   logfilename = 'dart_log.out'
+  /
+
+&model_nml
+  /
+
+&location_nml
+  /
+
+&obs_kind_nml
+  /
+
+&obs_def_gps_nml
+   max_gpsro_obs = 100000,
+  / 
+
+&wrf_obs_preproc_nml
+   obs_boundary             = 5.0,
+   increase_bdy_error       = .true.,
+   maxobsfac                = 2.5,
+   obsdistbdy               = 15.0,
+   sfc_elevation_check      = .false.,
+   sfc_elevation_tol        = 300.0,
+   obs_pressure_top         = 10000.0,
+   obs_height_top           = 20000.0,
+   include_sig_data         = .false.,
+   tc_sonde_radii           = -1.0,
+   superob_aircraft         = .true.,
+   aircraft_horiz_int       = 60.0,
+   aircraft_pres_int        = 2500.0,
+   superob_sat_winds        = .false.,
+   sat_wind_horiz_int       = 90.0,
+   sat_wind_pres_int        = 2500.0,
+   overwrite_obs_time       = .false.
+/  
+
+
+&preprocess_nml
+   overwrite_output        = .true.
+   input_obs_qty_mod_file  = '../../../../../assimilation_code/modules/observations/DEFAULT_obs_kind_mod.F90'
+   output_obs_qty_mod_file = '../../../../../assimilation_code/modules/observations/obs_kind_mod.f90'
+   input_obs_def_mod_file  = '../../../../../observations/forward_operators/DEFAULT_obs_def_mod.F90'
+   output_obs_def_mod_file = '../../../../../observations/forward_operators/obs_def_mod.f90'
+   quantity_files          = '../../../../../assimilation_code/modules/observations/atmosphere_quantities_mod.f90',
+                             '../../../../../assimilation_code/modules/observations/oned_quantities_mod.f90'
+   obs_type_files          = '../../../../../observations/forward_operators/obs_def_reanalysis_bufr_mod.f90',
+                             '../../../../../observations/forward_operators/obs_def_altimeter_mod.f90',
+                             '../../../../../observations/forward_operators/obs_def_gps_mod.f90',
+                             '../../../../../observations/forward_operators/obs_def_dew_point_mod.f90',
+                             '../../../../../observations/forward_operators/obs_def_rel_humidity_mod.f90'
+  /
+
