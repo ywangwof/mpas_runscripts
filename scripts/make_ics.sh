@@ -438,6 +438,8 @@ jobwait=0
 machine="Jet"
 if [[ "$(hostname)" == ln? ]]; then
     machine="Vecna"
+elif [[ "$(hostname)" == hercules* ]]; then
+    machine="Hercules"
 elif [[ "$(hostname)" == cheyenne* ]]; then
     machine="Cheyenne"
 fi
@@ -490,6 +492,8 @@ while [[ $# > 0 ]]
                 machine=Jet
             elif [[ ${2^^} == "VECNA" ]]; then
                 machine=Vecna
+            elif [[ ${2^^} == "HERCULES" ]]; then
+                machine=Hercules
             elif [[ ${2^^} == "CHEYENNE" ]]; then
                 machine=Cheyenne
             else
@@ -595,6 +599,25 @@ if [[ $machine == "Jet" ]]; then
     module load wgrib2/2.0.8
     wgrib2path="/apps/wgrib2/2.0.8/intel/18.0.5.274/bin/wgrib2"
     gpmetis="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/bin/gpmetis"
+
+elif [[ $machine == "Hercules" ]]; then
+    partition="batch"
+    claim_cpu_ics="--cpus-per-task=2"
+
+    mach="slurm"
+    job_exclusive_str="#SBATCH --exclusive"
+    job_account_str="#SBATCH -A ${hpcaccount-wof}"
+    job_runmpexe_str="srun"
+    job_runexe_str="srun"
+
+    modulename="build_hercules_intel"
+
+    module purge
+    module use ${rootdir}/modules
+    module load $modulename
+
+    wgrib2path="/work2/noaa/wof/ywang/tools/hpc-stack/intel-oneapi-compilers-2022.2.1/wgrib2/2.0.8/bin/wgrib2"
+    gpmetis="/home/yhwang/local/bin/gpmetis"
 
 elif [[ $machine == "Cheyenne" ]]; then
 
