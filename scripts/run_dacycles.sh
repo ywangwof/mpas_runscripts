@@ -1714,6 +1714,8 @@ dorun=true
 machine="Jet"
 if [[ "$(hostname)" == ln? ]]; then
     machine="Vecna"
+elif [[ "$(hostname)" == hercules* ]]; then
+    machine="Hercules"
 elif [[ "$(hostname)" == cheyenne* ]]; then
     machine="Cheyenne"
 fi
@@ -1766,6 +1768,8 @@ while [[ $# > 0 ]]; do
                 machine=Jet
             elif [[ ${2^^} == "VECNA" ]]; then
                 machine=Vecna
+            elif [[ ${2^^} == "HERCULES" ]]; then
+                machine=Hercules
             elif [[ ${2^^} == "CHEYENNE" ]]; then
                 machine=Cheyenne
             else
@@ -1911,6 +1915,28 @@ if [[ $machine == "Jet" ]]; then
     modulename="build_jet_intel18_1.11_smiol"
 
     source /etc/profile.d/modules.sh
+    module purge
+    module use ${rootdir}/modules
+    module load $modulename
+
+elif [[ $machine == "Hercules" ]]; then
+    ncores_fcst=40;  ncores_filter=40
+    partition="batch";        claim_cpu="--cpus-per-task=2"
+    partition_filter="batch"; filter_cpu="--cpus-per-task=2"
+                              update_cpu="--cpus-per-task=4 --mem-per-cpu=8G"
+
+    npefcst=40       #; nnodes_fcst=$(( npefcst/ncores_fcst ))
+    npefilter=160    #; nnodes_filter=$(( npefilter/ncores_filter ))
+
+    mach="slurm"
+    job_exclusive_str="#SBATCH --exclusive"
+    job_account_str="#SBATCH -A ${hpcaccount-wof}"
+    job_runmpexe_str="srun"
+    job_runexe_str="srun"
+    runcmd_str="srun -A ${hpcaccount-wof} -p ${partition} -n 1"
+
+    modulename="build_hercules_intel"
+
     module purge
     module use ${rootdir}/modules
     module load $modulename

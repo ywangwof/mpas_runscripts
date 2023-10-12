@@ -1030,6 +1030,8 @@ machine="Jet"
 
 if [[ "$(hostname)" == ln? ]]; then
     machine="Vecna"
+elif [[ "$(hostname)" == hercules* ]]; then
+    machine="Hercules"
 elif [[ "$(hostname)" == cheyenne* ]]; then
     machine="Cheyenne"
 fi
@@ -1097,6 +1099,8 @@ while [[ $# > 0 ]]
                 machine=Vecna
             elif [[ ${2^^} == "CHEYENNE" ]]; then
                 machine=Cheyenne
+            elif [[ ${2^^} == "HERCULES" ]]; then
+                machine=Hercules
             else
                 echo "ERROR: Unsupported machine name, got \"$2\"."
                 usage 1
@@ -1178,6 +1182,34 @@ if [[ $machine == "Jet" ]]; then
     OBS_DIR="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/OBSGEN"
 
     hrrr_dir="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MODEL_DATA/HRRRE"
+
+elif [[ $machine == "Hercules" ]]; then
+    partition="batch"         ; claim_cpu="--cpus-per-task=2"
+    partition_static="batch"  ; static_cpu="--cpus-per-task=12"
+    partition_create="batch"  ; create_cpu="--mem-per-cpu=128G"
+
+    npepost=20 
+
+    mach="slurm"
+    job_exclusive_str="#SBATCH --exclusive"
+    job_account_str="#SBATCH -A ${hpcaccount-wof}"
+    job_runmpexe_str="srun"
+    job_runexe_str="srun"
+
+    modulename="build_hercules_intel"
+    WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
+
+    module purge
+    module use ${rootdir}/modules
+    module load $modulename
+
+    wgrib2path="/work2/noaa/wof/ywang/tools/hpc-stack/intel-oneapi-compilers-2022.2.1/wgrib2/2.0.8/bin/wgrib2"
+    nckspath="/work2/noaa/wof/ywang/tools/hpc-stack/intel-oneapi-compilers-2022.2.1/nco/5.0.6/bin/ncks"
+    gpmetis="/home/yhwang/local/bin/gpmetis"
+
+    OBS_DIR="/work2/noaa/wof/ywang/MPAS/OBSGEN"
+
+    hrrr_dir="/work2/noaa/wof/ywang/MPAS/MODEL_DATA/HRRRE"
 
 elif [[ $machine == "Cheyenne" ]]; then
 
