@@ -104,7 +104,6 @@ function usage {
     echo "              -w                  Hold script to wait for all job conditions are satified and submitted (for mpassit & upp)."
     echo "                                  By default, the script will exit after submitting all possible jobs."
     echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
-    echo "              -a  wof             Account name for job submission."
     echo "              -d  wofs_mpas       Domain name to be used"
     echo "              -i  YYYYmmddHHMM    Initial time, default: same as start time from the command line argument"
     echo "              -s  YYYYmmddHHMM    Start date & time of the DA cycles"
@@ -130,7 +129,7 @@ function usage {
 function run_obsmerge {
     # $1        $2          $3
     # wrkdir    iseconds    seqfilename
-    local wrkdir=$1
+    local wrkdir=$1               # DA directory for this cycle
     local iseconds=$2
     local outfilename=$3
 
@@ -162,7 +161,7 @@ EOF
                                   # 1: Remove existing same name directory
     cd $wrkdir/OBSDIR
 
-    rm -fr obsflist.hfmetar obsflist.meso obsflist.sat obsflist.rad obsflist obs_seq.*
+    rm -fr obsflist.bufr obsflist.meso obsflist.sat obsflist.mrms obsflist.rad obsflist obs_seq.*
 
     obspreprocess=${exedir}/dart/mpas_dart_obs_preprocess
 
@@ -172,6 +171,19 @@ EOF
     ln -sf $template_inputfile init.nc
 
     obsflists=()
+
+    #=================================================
+    # PREPROCESS NCEP PrepBufr DATA
+    #=================================================
+
+    if [[ -e ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2} ]]; then
+        echo "    Using PrepBufr observations in ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}"
+        echo ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2} > obsflist.bufr
+        obsflists+=(obsflist.bufr)
+    else
+        echo "    PrepBufr data not found: ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}"
+    fi
+
     #=================================================
     # PREPROCESS OK MESONET DATA
     #=================================================
@@ -215,12 +227,52 @@ EOF
     fi
 
     #=================================================
+    # PREPROCESS GOES SATELLITE Radiance DATA
+    #=================================================
+
+    RAD_DIR=${OBS_DIR}/Radiance
+
+    channels=("8.4" "10.3")
+    for abifile in ${RAD_DIR}/obs_seq_abi.G16_C*.${anlys_date}${anlys_time}; do
+        if [[ -e ${abifile} ]]; then
+
+            chan=${a##Radiance/obs_seq_abi.G16_C}
+            chan=${chan%%.${anlys_date}${anlys_time}}
+            if [[ " ${channels[*]} " =~ " $chan " ]]; then
+                echo "    Using Radiance data in ${abifile}"
+                cp ${abifile} ./obs_seq.old
+
+                if [[ $verb -eq 1 ]]; then
+                    echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
+                fi
+                ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >& $srunout
+
+                if [[ $? -eq 0 ]]; then
+                    mv ./obs_seq.new ./obs_seq.abiC$chan
+                    rm ./obs_seq.old
+                    echo $wrkdir/OBSDIR/obs_seq.abiC$chan >> obsflist.abi
+                else
+                    echo "Error with command ${obspreprocess} for Radiance data"
+                fi
+            else
+                echo " Radiance file ${abifile} is on Channel $chan, ignoring currently."
+            fi
+        else
+            echo "    Radiance not found: ${abifile}"
+        fi
+    done
+
+    if [[ -e obsflist.abi ]]; then
+        obsflists+=(obsflist.abi)
+    fi
+
+    #=================================================
     # PREPROCESS RADAR DATA
     #=================================================
 
-    ############
-    ### MRMS ###
-    ############
+    ########################
+    ### MRMS             ###
+    ########################
 
     DBZ_DIR=${OBS_DIR}/REF
     if [[ -e ${DBZ_DIR}/${eventdate}/obs_seq_RF_${anlys_date}_${anlys_time}.out ]]; then
@@ -250,9 +302,9 @@ EOF
     fi
     echo "    "
 
-    #############
-    ### Radial Velocity
-    #############
+    ########################
+    ### Radial Velocity  ###
+    ########################
 
     #
     # Source environment for radars
@@ -299,7 +351,7 @@ EOF
         echo "    No valid radial velocity data is processed"
     fi
 
-    #=================================================
+    #===================================================================
 
     if [[ ${#obsflists[@]} -gt 0 ]]; then
         cat ${obsflists[*]} > obsflist
@@ -308,7 +360,7 @@ EOF
         exit 0
     fi
 
-    #=================================================
+    #===================================================================
 
     if [[ $verb -eq 1 ]]; then echo "Runing ${exedir}/dart/advance_time"; fi
     gobef=($(echo ${anlys_date}${anlys_time} -5m-29s -g | ${exedir}/dart/advance_time))
@@ -325,9 +377,15 @@ EOF
 
     sed -f $sedfile -i input.nml
 
-    #=================================================
+    #===================================================================
 
     #COMBINE obs-seq FILES HERE
+    # namelist file input.nml contains:
+    # &obs_sequence_tool_nml
+    #    filename_seq_list = 'obsflist'
+    #    filename_out      = 'obs_seq.${timestr_cur}'
+    # /
+    #
     if [[ $verb -eq 1 ]]; then echo "Runing ${exedir}/dart/obs_sequence_tool"; fi
     ${runcmd_str} ${exedir}/dart/obs_sequence_tool >& $srunout
 
@@ -701,7 +759,6 @@ function run_filter {
 
 &mpas_vars_nml
    mpas_state_variables = 'theta',                 'QTY_POTENTIAL_TEMPERATURE',
-                          'rho',                   'QTY_DENSITY',
                           'uReconstructZonal',     'QTY_U_WIND_COMPONENT',
                           'uReconstructMeridional','QTY_V_WIND_COMPONENT',
                           'w',                     'QTY_VERTICAL_VELOCITY',
@@ -746,7 +803,7 @@ function run_filter {
   /
 
 &update_bc_nml
-  update_analysis_file_list           = 'filter_in.txt'
+  update_analysis_file_list           = 'filter_out.txt'
   update_boundary_file_list           = 'boundary_inout.txt'
   lbc_update_from_reconstructed_winds = .false.
   lbc_update_winds_from_increments    = .false.
@@ -1037,7 +1094,7 @@ EOF
 s/PARTION/${partition_filter}/
 s/NOPART/$npefilter/
 s/JOBNAME/filter_${eventtime}/
-s/CPUSPEC/${filter_cpu}/g
+s/CPUSPEC/${claim_cpu_filter}/g
 s/MODULE/${modulename}/g
 s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
@@ -1149,10 +1206,10 @@ function run_update_states {
     jobscript="run_update_states.${mach}"
     sedfile=$(mktemp -t update_${eventtime}.sed_XXXX)
     cat <<EOF > $sedfile
-s/PARTION/${partition}/
+s/PARTION/${partition_filter}/
 s/NOPART/1/
 s/JOBNAME/update_${eventtime}/
-s/CPUSPEC/${update_cpu}/g
+s/CPUSPEC/${claim_cpu_update}/g
 s/MODULE/${modulename}/g
 s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
@@ -1167,6 +1224,100 @@ EOF
     fi
 
     submit_a_jobscript $wrkdir "update_states" $sedfile $TEMPDIR/$jobscript $jobscript ""
+}
+
+########################################################################
+
+function run_update_bc {
+    # $1
+    # wrkdir
+    local wrkdir=$1
+
+    # use lbc0_files & lbc_myfiles from the caller
+
+    cd $wrkdir
+
+    #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/update_bc.running || -f $wrkdir/done.update_bc || -f $wrkdir/queue.update_bc ]]; then
+        return
+    fi
+
+    if [[ $run_updatebc == true ]]; then
+        #cpcmd="cp"
+        cpcmd="rsync -a"
+    else
+        cpcmd="ln -sf"
+    fi
+
+    #------------------------------------------------------
+    # Prepare update_mpas_states by copying/linking the background files
+    #------------------------------------------------------
+
+    update_output_file_list='boundary_inout.txt'
+    rm -rf ${update_output_file_list}
+
+    for i in ${!lbc_myfiles[@]}; do
+        lbcfn=${lbc0_files[$i]}
+        mylfn=${lbc_myfiles[$i]}
+        if [[ -e $mylfn ]]; then
+            echo "    $mylfn exists, deleting ..."
+            rm -rf $mylfn
+        fi
+        ${cpcmd} $lbcfn $mylfn
+        echo "$mylfn" >> ${update_output_file_list}
+    done
+    sed -i "/update_boundary_file_list/s/boundary_inout.txt/${update_output_file_list}/" input.nml
+
+    if [[ ${run_updatebc} == true ]]; then
+
+        #
+        # Waiting for job conditions
+        #
+        conditions=(done.filter)
+
+        if [[ $dorun == true ]]; then
+            for cond in ${conditions[@]}; do
+                echo "$$-${FUNCNAME[0]}: Checking: $cond"
+                while [[ ! -e $cond ]]; do
+                    if [[ $verb -eq 1 ]]; then
+                        echo "Waiting for file: $cond"
+                    fi
+                    sleep 10
+                done
+            done
+        fi
+
+        #------------------------------------------------------
+        # Run update_bc for all ensemble members
+        #------------------------------------------------------
+
+        #
+        # Create job script and submit it
+        #
+        jobscript="run_update_bc.${mach}"
+        sedfile=$(mktemp -t update_${eventtime}.sed_XXXX)
+        cat <<EOF > $sedfile
+s/PARTION/${partition_filter}/
+s/NOPART/1/
+s/JOBNAME/update_${eventtime}/
+s/CPUSPEC/${claim_cpu_update}/g
+s/MODULE/${modulename}/g
+s#ROOTDIR#$rootdir#g
+s#WRKDIR#$wrkdir#g
+s#EXEDIR#${exedir}/dart#
+s/MACHINE/${machine}/g
+s/ACCTSTR/${job_account_str}/
+s/EXCLSTR/${job_exclusive_str}/
+s/RUNMPCMD/${job_runexe_str}/
+EOF
+        if [[ "${mach}" == "pbs" ]]; then
+            echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
+        fi
+
+        submit_a_jobscript $wrkdir "update_bc" $sedfile $TEMPDIR/$jobscript $jobscript ""
+    fi
 }
 
 ########################################################################
@@ -1239,6 +1390,8 @@ function run_mpas {
     # Preparation for each member
     #
     jobarrays=()
+    lbc0_files=()
+    lbc_myfiles=()
     for iens in $(seq 1 $ENS_SIZE); do
         memstr=$(printf "%02d" $iens)
         basen=$(( (iens-1)%6 ))
@@ -1298,7 +1451,9 @@ function run_mpas {
             echo "       ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc";
             echo "       ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc";
         fi
-        ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc ${domname}_${memstr}.lbc.${mpastime_str1}.nc
+        #ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc ${domname}_${memstr}.lbc.${mpastime_str1}.nc
+        lbc0_files+=($rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc)
+        lbc_myfiles+=(${memwrkdir}/${domname}_${memstr}.lbc.${mpastime_str1}.nc)
         ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc ${domname}_${memstr}.lbc.${mpastime_str2}.nc
 
         ln -sf $rundir/$domname/$domname.graph.info.part.${npefcst} .
@@ -1497,15 +1652,33 @@ EOF
     #
     cd $wrkdir
 
+    # will use lbc0_files & lbc_myfiles
+    run_update_bc $wrkdir
+    #
+    # Waiting for update_bc
+    #
+    conditions=($wrkdir/done.update_bc)
+    if [[ $dorun == true ]]; then
+        for cond in ${conditions[@]}; do
+            echo "$$-${FUNCNAME[0]}: Checking: $cond"
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    echo "Waiting for file: $cond"
+                fi
+                sleep 10
+            done
+        done
+    fi
+
     #mpas_jobscript="run_mpas.${mach}"
     jobarraystr="--array=$(join_by_comma ${jobarrays[@]})"
 
     sedfile=$(mktemp -t mpas_${eventtime}.sed_XXXX)
     cat <<EOF > $sedfile
-s/PARTION/${partition}/
+s/PARTION/${partition_fcst}/
 s/NOPART/$npefcst/
 s/JOBNAME/mpas_${eventtime}/
-s/CPUSPEC/${claim_cpu}/g
+s/CPUSPEC/${claim_cpu_fcst}/g
 s#MODULE#${modulename}#g
 s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
@@ -1668,12 +1841,12 @@ function run_clean {
                     rm -f error.fcst_* log.????.abort
                     #rm -f log.atmosphere.????.out log.atmosphere.????.err fcst_*_*.log
                     #echo "clean mpas in $dawrkdir"
-                    clean_mem_runfiles "fcst" $dawrkdir $ENS_SIZE
+                    #clean_mem_runfiles "fcst" $dawrkdir $ENS_SIZE
                     ;;
                 filter )
                     if [[ -e done.filter ]]; then
-                        rm -f filter_*.log error.filter dart_log.nml dart_log.out
-                        find OBSDIR -type f -or -type l -not -name "obs_seq.${timestr_curr}" -print0 | xargs -0  -I {} rm -f {}
+                        rm -f filter_*.log error.filter dart_log.nml dart_log.out obs_seq_to_netcdf.log
+                        find OBSDIR -type f -not -name "obs_seq.${timestr_curr}" -exec rm -f {} \;
                     fi
                     ;;
                 update_states )
@@ -1776,10 +1949,6 @@ while [[ $# > 0 ]]; do
                 echo "ERROR: Unsupported machine name, got \"$2\"."
                 usage 1
             fi
-            shift
-            ;;
-        -a)
-            hpcaccount=$2
             shift
             ;;
         -d)
@@ -1894,91 +2063,26 @@ done
 #-----------------------------------------------------------------------
 #% PLATFORM
 
-mach="slurm"
-
 if [[ $machine == "Jet" ]]; then
-    ncores_fcst=6;  ncores_filter=6
-    partition="ujet,tjet,xjet,vjet,kjet";        claim_cpu="--cpus-per-task=2"
-    partition_filter="ujet,tjet,xjet,vjet,kjet"; filter_cpu="--cpus-per-task=2"
-                                                 update_cpu="--cpus-per-task=4 --mem-per-cpu=8G"
-
-    npefcst=48       #; nnodes_fcst=$(( npefcst/ncores_fcst ))
-    npefilter=1536   #; nnodes_filter=$(( npefilter/ncores_filter ))
-
-    mach="slurm"
-    job_exclusive_str="#SBATCH --exclusive"
-    job_account_str="#SBATCH -A ${hpcaccount-wof}"
-    job_runmpexe_str="srun"
-    job_runexe_str="srun"
-    runcmd_str="srun -A ${hpcaccount-wof} -p ${partition} -n 1"
-
     modulename="build_jet_intel18_1.11_smiol"
 
     source /etc/profile.d/modules.sh
     module purge
     module use ${rootdir}/modules
     module load $modulename
-
 elif [[ $machine == "Hercules" ]]; then
-    ncores_fcst=40;  ncores_filter=40
-    partition="batch";        claim_cpu="--cpus-per-task=2"
-    partition_filter="batch"; filter_cpu="--cpus-per-task=2"
-                              update_cpu="--cpus-per-task=4 --mem-per-cpu=8G"
-
-    npefcst=40       #; nnodes_fcst=$(( npefcst/ncores_fcst ))
-    npefilter=160    #; nnodes_filter=$(( npefilter/ncores_filter ))
-
-    mach="slurm"
-    job_exclusive_str="#SBATCH --exclusive"
-    job_account_str="#SBATCH -A ${hpcaccount-wof}"
-    job_runmpexe_str="srun"
-    job_runexe_str="srun"
-    runcmd_str="srun -A ${hpcaccount-wof} -p ${partition} -n 1"
-
     modulename="build_hercules_intel"
 
     module purge
     module use ${rootdir}/modules
     module load $modulename
-
 elif [[ $machine == "Cheyenne" ]]; then
-
     if [[ $dorun == true ]]; then
         runcmd="qsub"
     fi
-    ncores_filter=32; ncores_fcst=32
-    partition="regular"        ; claim_cpu="ncpus=${ncores_fcst}"
-    partition_filter="regular" ; filter_cpu="ncpus=${ncores_post}"
-
-    npefilter=48   ; nnodes_filter=$((  npefilter/ncores_filter   ))
-    npefcst=48     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
-
-    mach="pbs"
-    job_exclusive_str=""
-    job_account_str="#PBS -A ${hpcaccount-NMMM0013}"
-    job_runmpexe_str="mpiexec_mpt"
-    job_runexe_str="mpiexec_mpt"
 
     modulename="defaults"
 else    # Vecna at NSSL
-
-    account="${hpcaccount-batch}"
-    ncores_filter=96; ncores_fcst=96
-
-    npefilter=768    #; nnodes_filter=$(( npefilter/ncores_filter  ))
-    npefcst=96       #; nnodes_fcst=$(( npefcst/ncores_fcst ))
-
-    partition="batch"           ; claim_cpu="--ntasks-per-node=96  --mem-per-cpu=4G";
-    partition_filter="batch"    ; filter_cpu="--ntasks-per-node=96 --mem-per-cpu=4G"
-                                  update_cpu="--ntasks-per-node=24 --mem-per-cpu=8G"
-
-    mach="slurm"
-    job_exclusive_str="#SBATCH --exclude=cn11,cn14"
-    job_account_str=""
-    job_runmpexe_str="srun --mpi=pmi2"
-    job_runexe_str="srun"
-    runcmd_str="srun"
-
     modulename="env.mpas_smiol"
     source /usr/share/Modules/init/bash
     source ${rootdir}/modules/${modulename}

@@ -107,7 +107,7 @@ function usage {
     echo "               YYYYmmdd:     run all cycles from $eventtime to 0300. Or use options \"-s\" & \"-e\" to specify cycles."
     echo "               YYYYmmddHHMM: run this forecast cycle only."
     echo "    WORKDIR  - Run Directory"
-    echo "    JOBS     - One or more jobs from [mpas,mpassit,upp]"
+    echo "    JOBS     - One or more jobs from [mpas,mpassit,upp] or [clean_fcst,clean_mpassit, clean_upp]"
     echo "               Default all jobs in sequence"
     echo " "
     echo "    OPTIONS:"
@@ -120,7 +120,6 @@ function usage {
     echo "              -w              Hold script to wait for all job conditions are satified and submitted (for mpassit & upp)."
     echo "                              By default, the script will exit after submitting all possible jobs."
     echo "              -m  Machine     Machine name to run on, [Jet, Cheyenne, Vecna]."
-    echo "              -a  wof         Account name for job submission."
     echo "              -d  wofs_mpas   Domain name to be used"
     echo "              -i  YYYYmmddHHMM    Initial time, default: same as start time from the command line argument"
     echo "              -s  YYYYmmddHHMM    Start date & time of the forecast cycles"
@@ -237,7 +236,16 @@ function run_mpas {
         jens=$(( (iens-1)%nenslbc+1 ))
         mlbcstr=$(printf "%02d" $jens)
 
-        for ((i=0;i<=fcst_seconds;i+=EXTINVL)); do
+        mpastime_str=$(date -d @$iseconds +%Y-%m-%d_%H.%M.%S)
+        lbc_dafile=${dawrkdir}/fcst_${memstr}/${domname}_${memstr}.lbc.${mpastime_str}.nc
+        lbc_myfile=${domname}_${memstr}.lbc.${mpastime_str}.nc
+        if [[ ! -e ${lbc_dafile} ]]; then
+            echo "File: ${lbc_dafile} not exist."
+            exit 1
+        fi
+        ln -sf ${lbc_dafile} ${lbc_myfile}
+
+        for ((i=EXTINVL;i<=fcst_seconds;i+=EXTINVL)); do
             isec=$(( iseconds+i ))           # MPAS expects time string
             jsec=$(( iseconds/3600*3600+i )) # External GRIB file provided around to whole hour
             lbctime_str=$(date  -d @$jsec +%Y-%m-%d_%H.%M.%S)
@@ -301,7 +309,7 @@ function run_mpas {
     config_scalar_advection         = true
     config_positive_definite        = false
     config_monotonic                = true
-    config_coef_3rd_order           = 0.25
+    config_coef_3rd_order           = 1.0
     config_epssm                    = 0.1
     config_smdiv                    = 0.1
 /
@@ -446,10 +454,10 @@ EOF
 
     sedfile=$(mktemp -t mpas_${eventtime}.sed_XXXX)
     cat <<EOF > $sedfile
-s/PARTION/${partition}/
+s/PARTION/${partition_fcst}/
 s/NOPART/$npefcst/
 s/JOBNAME/mpas_${eventtime}/
-s/CPUSPEC/${claim_cpu}/g
+s/CPUSPEC/${claim_cpu_fcst}/g
 s/MODULE/${modulename}/g
 s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
@@ -577,11 +585,11 @@ EOF
 
             sedfile=$(mktemp -t mpassit_${eventtime}_$minstr.sed_XXXX)
             cat <<EOF > $sedfile
-s/PARTION/${partition}/
+s/PARTION/${partition_post}/
 s/NOPART/$npepost/
 s/JOBNAME/mpassit${minstr}_${eventtime}/
 s/HHMINSTR/$minstr/g
-s/CPUSPEC/${claim_cpu}/
+s/CPUSPEC/${claim_cpu_post}/
 s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
 s#EXEDIR#${exedir}#
@@ -765,7 +773,7 @@ EOF
             cat <<EOF > $sedfile
 s/PARTION/${partition_post}/
 s/NOPART/$npepost/
-s/CPUSPEC/${post_cpu}/
+s/CPUSPEC/${claim_cpu_post}/
 s/JOBNAME/upp${minstr}_${eventtime}/
 s/HHMINSTR/$minstr/g
 s/UPPDATE/$upptimestr/g
@@ -891,10 +899,11 @@ function fcst_driver() {
 ########################################################################
 
 function run_clean {
-    # $1    $2    $3
-    # start  end
+    # $1     $2    $3
+    # start  end   what
     local start_sec=$1
     local end_sec=$2
+    local what=$3
 
     wrkdir=$rundir/fcst
 
@@ -928,15 +937,22 @@ function run_clean {
                         memstr=$(printf "%02d" $mem)
                         memdir="$fcstwrkdir/fcst_$memstr"
 
-                        donefile="$memdir/done.fcst_$memstr"
-                        if [[ -e $donefile ]]; then
+                        if [[ "$what" == "clean_fcst" ]]; then
+                            rm -rf $memdir
                             rm -f fcst_${mem}_*.log
-                            #rm $donefile
                             let done+=1
+                        else
+                            donefile="$memdir/done.fcst_$memstr"
+                            if [[ -e $donefile ]]; then
+                                rm -f fcst_${mem}_*.log
+                                #rm $donefile
+                                let done+=1
+                            fi
                         fi
                     done
                     if [[ $done -eq $ENS_SIZE ]]; then
                         rm -f queue.fcst
+                        rm -f fcst_*/done.fcst_*
                         touch done.fcst
                     fi
                     ;;
@@ -952,16 +968,23 @@ function run_clean {
                                 memstr=$(printf "%02d" $mem)
                                 memdir="$mywrkdir/mem$memstr"
 
-                                donefile="$memdir/done.mpassit${minstr}_$memstr"
-                                if [[ -e $donefile ]]; then
+                                if [[ "$what" == "clean_mpassit" ]]; then
+                                    rm -rf $memdir
                                     rm -f $mywrkdir/mpassit${minstr}_${mem}_*.log
-                                    rm $donefile
                                     let done+=1
+                                else
+                                    donefile="$memdir/done.mpassit${minstr}_$memstr"
+                                    if [[ -e $donefile ]]; then
+                                        rm -f $mywrkdir/mpassit${minstr}_${mem}_*.log
+                                        #rm $donefile
+                                        let done+=1
+                                    fi
                                 fi
                             done
 
                             if [[ $done -eq $ENS_SIZE ]]; then
                                 rm -f queue.mpassit${minstr} running.mpassit$minstr
+                                rm -f mem*/done.mpassit${minstr}_*
                                 touch done.mpassit${minstr}
                             fi
                         done
@@ -981,16 +1004,23 @@ function run_clean {
 
                                 postdir="$memdir/post_${minstr}"
 
-                                donefile="$memdir/done.upp${minstr}_$memstr"
-                                if [[ -e $donefile ]]; then
+                                if [[ "$what" == "clean_mpassit" ]]; then
+                                    rm -rf $memdir
                                     rm -f $mywrkdir/upp${minstr}_${mem}_*.log
-                                    rm -rf $postdir
                                     let done+=1
+                                else
+                                    donefile="$memdir/done.upp${minstr}_$memstr"
+                                    if [[ -e $donefile ]]; then
+                                        rm -f $mywrkdir/upp${minstr}_${mem}_*.log
+                                        rm -rf $postdir
+                                        let done+=1
+                                    fi
                                 fi
                             done
 
                             if [[ $done -eq $ENS_SIZE ]]; then
                                 rm -f queue.upp${minstr} running.upp$minstr
+                                rm -f mem*/done.upp${minstr}_*
                                 touch done.upp${minstr}
                             fi
                         done
@@ -1097,10 +1127,6 @@ while [[ $# > 0 ]]
                 echo "ERROR: Unsupported machine name, got \"$2\"."
                 usage 1
             fi
-            shift
-            ;;
-        -a)
-            hpcaccount=$2
             shift
             ;;
         -d)
@@ -1215,85 +1241,25 @@ done
 #-----------------------------------------------------------------------
 #% PLATFORM
 
-mach="slurm"
-
 if [[ $machine == "Jet" ]]; then
-    ncores_fcst=6;  ncores_post=6
-    partition="ujet,tjet,xjet,vjet,kjet";        claim_cpu="--cpus-per-task=2"
-    partition_post="ujet,tjet,xjet,vjet,kjet";   post_cpu="--cpus-per-task=12"
-
-    npefcst=48     #; nnodes_fcst=$(( npefcst/ncores_fcst ))
-    npepost=48     #; nnodes_post=$(( npepost/ncores_post ))
-
-    mach="slurm"
-    job_exclusive_str="#SBATCH --exclusive"
-    job_account_str="#SBATCH -A ${hpcaccount-wof}"
-    job_runmpexe_str="srun"
-    job_runexe_str="srun"
-
     modulename="build_jet_intel18_1.11_smiol"
 
     source /etc/profile.d/modules.sh
     module purge
     module use ${rootdir}/modules
     module load $modulename
-
 elif [[ $machine == "Hercules" ]]; then
-    ncores_fcst=40;  ncores_post=20
-    partition="batch";        claim_cpu="--cpus-per-task=2"
-    partition_filter="batch"; post_cpu="--cpus-per-task=2"
-
-    npefcst=40       #; nnodes_fcst=$(( npefcst/ncores_fcst ))
-    npepost=40       #; nnodes_filter=$(( npefilter/ncores_filter ))
-
-    mach="slurm"
-    job_exclusive_str="#SBATCH --exclusive"
-    job_account_str="#SBATCH -A ${hpcaccount-wof}"
-    job_runmpexe_str="srun"
-    job_runexe_str="srun"
-    runcmd_str="srun -A ${hpcaccount-wof} -p ${partition} -n 1"
-
     modulename="build_hercules_intel"
 
     module purge
     module use ${rootdir}/modules
     module load $modulename
-
 elif [[ $machine == "Cheyenne" ]]; then
-
     if [[ $dorun == true ]]; then
         runcmd="qsub"
     fi
-    ncores_post=32; ncores_fcst=32
-    partition="regular"        ; claim_cpu="ncpus=${ncores_fcst}"
-    partition_post="regular"   ; post_cpu="ncpus=${ncores_post}"
-
-    npepost=48     ; nnodes_post=$((  npepostr/ncores_post   ))
-    npefcst=48     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
-
-    mach="pbs"
-    job_exclusive_str=""
-    job_account_str="#PBS -A ${hpcaccount-NMMM0013}"
-    job_runmpexe_str="mpiexec_mpt"
-    job_runexe_str="mpiexec_mpt"
-
     modulename="defaults"
 else    # Vecna at NSSL
-
-    account="${hpcaccount-batch}"
-    ncores_post=24; ncores_fcst=96
-    partition="batch"           ; claim_cpu="";
-    partition_post="batch"      ; post_cpu=""
-
-    npepost=24      #; nnodes_post=$(( npepost/ncores_post  ))
-    npefcst=96      #; nnodes_fcst=$(( npefcst/ncores_fcst ))
-
-    mach="slurm"
-    job_exclusive_str="#SBATCH --exclude=cn11,cn14"
-    job_account_str=""
-    job_runmpexe_str="srun --mpi=pmi2"
-    job_runexe_str="srun"
-
     modulename="env.mpas_smiol"
     source ${modulename}
 fi
@@ -1328,7 +1294,7 @@ if [[ "$enddatetime" == "" ]]; then
 fi
 
 inittime_sec=$(date -d "${initdatetime:0:8} ${initdatetime:8:4}" +%s)
-starttime_sec=$(date -d "${eventdate} ${eventtime} $startday"      +%s)
+starttime_sec=$(date -d "${eventdate} ${eventtime} $startday"    +%s)
 stoptime_sec=$(date -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
 
 rundir="$WORKDIR/${eventdate}"
@@ -1357,6 +1323,24 @@ if [[ " ${jobs[*]} " =~ " mpas " || " ${jobs[*]} " =~ " mpassit " || " ${jobs[*]
     fcst_driver $inittime_sec $starttime_sec $stoptime_sec
 elif [[ " ${jobs[*]} " =~ " clean " ]]; then
     run_clean $starttime_sec $stoptime_sec
+elif [[ "${jobs[*]}" == @(clean_fcst|clean_mpassit|clean_upp) ]]; then
+    declare -A cleanmsg=(
+        [clean_fcst]="all MPAS forecast files"
+        [clean_mpassit]="all MPASSIT converted files on WRF grid"
+        [clean_upp]="all UPP converted grib2 files"
+    )
+    cleanjob="${jobs[*]}"
+
+    echo -e "\nWARNING: Clean ${cleanmsg[$cleanjob]} from $(date -d @${starttime_sec} +%Y%m%d_%H:%M:%S) to $(date -d @${stoptime_sec} +%Y%m%d_%H:%M:%S)"
+    echo -e   "         in ${WORKDIR}/${eventdate}/fcst?\n"
+    echo -n "[YES,NO]? "
+    read doit
+    if [[ ${doit^^} == "YES" ]]; then
+        echo -e "\nWARNING: ${cleanmsg[$cleanjob]} will be cleaned."
+        run_clean $starttime_sec $stoptime_sec ${cleanjob}
+    else
+        echo -e "\nGot \"${doit^^}\", do nothing."
+    fi
 fi
 
 

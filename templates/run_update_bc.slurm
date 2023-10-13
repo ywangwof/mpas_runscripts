@@ -3,9 +3,10 @@
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
 #SBATCH -t 00:30:00
-#SBATCH --output=WRKDIR/init_%a_%j.log
+#SBATCH --output=WRKDIR/update_bc_%j.log
 ACCTSTR
 EXCLSTR
+
 
 #set -eux
 
@@ -13,7 +14,7 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
+if [[ "MACHINE" == "Jet" ]]; then
     source /etc/profile.d/modules.sh
     module purge
     module use ROOTDIR/modules
@@ -24,24 +25,20 @@ fi
 
 ulimit -s unlimited
 
-mem=${SLURM_ARRAY_TASK_ID}
-memstr=$(printf "%02d" $mem)
+cd WRKDIR
 
-cd WRKDIR/init_$memstr
+touch update_bc.running
+rm -rf error.update_bc queue.update_bc
 
-touch init.running_$memstr
-rm -rf error.init_$memstr queue.init_$memstr 
-
-RUNMPCMD -n NOPART EXEDIR/init_atmosphere_model
+RUNMPCMD -n NOPART EXEDIR/update_bc
 
 if [[ $? -eq 0 ]]; then
-    mv PREFIX_${memstr}.init.nc ..
-    touch done.init_$memstr
+    touch done.update_bc
 else
-    touch error.init_$memstr
+    touch error.update_bc
 fi
 
-rm -rf init.running_$memstr
+rm -rf update_bc.running
 
 time2=$(date '+%s')
 

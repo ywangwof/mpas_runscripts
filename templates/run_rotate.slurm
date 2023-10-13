@@ -13,7 +13,14 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-source $HOME/.python
+#source $HOME/.python
+if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
+    module purge
+    module use ROOTDIR/modules
+    module load MODULE
+else
+    source ROOTDIR/modules/MODULE
+fi
 
 cd WRKDIR
 

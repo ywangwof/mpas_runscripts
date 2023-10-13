@@ -12,6 +12,7 @@ README.md
 
             Common_Utilfuncs.sh
     Step 1: setup_mpas-wofs_grid.sh
+            edit file `$WORKDIR/config.${eventdate}` for runtime configurations as needed
     Step 2: make_ics.sh
     Step 3: make_lbc.sh
     Step 4: run_dacycles.sh
@@ -22,6 +23,10 @@ README.md
     lnwrkfiles.sh    # Link necessary programs, runtime files and fixed files
 
     cleanmpas        # Clean run-time output from a MPAS run
-    lnmpasrun        # Link MPS run-time time for users to run the program by themselves
+    lnmpasrun        # Link MPAS run-time time for users to run the program by themselves
+    lnmpasfcst       # Link MPASSIT processed MPAS forecasts to a directory that simulates
+                     # the WRF-WoFS forecasts, the purpose is to use WoFS-post directly
+                     # without further changes
     tarmpas          # tar a MPAS CONUS run directory for seeking support from NCAR,
                      # not ncessary now since we got an account on Cheyenne.
+

@@ -82,7 +82,8 @@ function usage {
     echo " "
     echo "    DATETIME - Case date and time in YYYYmmddHHMM, Default for today"
     echo "    WORKDIR  - Run Directory"
-    echo "    JOBS     - One or more jobs from [geogrid,init,lbc,mpas,mpassit,upp]"
+    echo "    JOBS     - One or more jobs from [geogrid,init,lbc,mpas,mpassit,upp] or \"setup\" "
+    echo "               setup - just write set up configuration file"
     echo "               Default all jobs in sequence"
     echo " "
     echo "    OPTIONS:"
@@ -205,8 +206,8 @@ EOF
 
     sedfile=$(mktemp -t ${geoname}.sed_XXXX)
     cat <<EOF > $sedfile
-s/PARTION/${partition}/
-s/NOPART/$npepost/
+s/PARTION/${partition_wps}/
+s/NOPART/$npestatic/
 s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/JOBNAME/${geoname}/
@@ -349,7 +350,7 @@ EOF
     sedfile=$(mktemp -t createWOFS.sed_XXXX)
     cat <<EOF > $sedfile
 s/PARTION/${partition_create}/
-s/CPUSPEC/${create_cpu}/
+s/CPUSPEC/${claim_cpu_create}/
 s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/JOBNAME/createWOFS/
@@ -393,13 +394,13 @@ function run_static {
     mkwrkdir $wrkdir $overwrite
     cd $wrkdir
 
-    if [[ ! -f $domname.graph.info.part.${npepost} ]]; then
+    if [[ ! -f $domname.graph.info.part.${npestatic} ]]; then
         if [[ $verb -eq 1 ]]; then
-            echo "Generating ${domname}.graph.info.part.${npepost} in $wrkdir using ${gpmetis}"
+            echo "Generating ${domname}.graph.info.part.${npestatic} in $wrkdir using ${gpmetis}"
         fi
-        ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npepost} > gpmetis.out$npepost
+        ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npestatic} > gpmetis.out$npestatic
         if [[ $? -ne 0 ]]; then
-            echo "$?: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npepost}"
+            echo "$?: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npestatic}"
             exit $?
         fi
     fi
@@ -518,9 +519,9 @@ EOF
     sedfile=$(mktemp -t static_${jobname}.sed_XXXX)
     cat <<EOF > $sedfile
 s/PARTION/${partition_static}/
-s/NOPART/$npepost/
+s/NOPART/$npestatic/
 s/JOBNAME/static_${jobname}/
-s/CPUSPEC/${static_cpu}/
+s/CPUSPEC/${claim_cpu_static}/
 s/MODULE/${modulename}/
 s/MACHINE/${machine}/g
 s#ROOTDIR#$rootdir#g
@@ -643,11 +644,13 @@ EOF
     sedfile=$(mktemp -t grid_rotate.sed_XXXX)
     cat <<EOF > $sedfile
 s/PARTION/${partition_static}/
-s/CPUSPEC/${static_cpu}/
+s/CPUSPEC/${claim_cpu_static}/
 s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/JOBNAME/grid_rotate/
 s/DOMNAME/${domname}/
+s/MODULE/${modulename}/g
+s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
 s#EXEDIR#${exedir}#
 s/RUNCMD/${job_runexe_str}/
@@ -732,7 +735,7 @@ EOF
 
     sedfile=$(mktemp -t ungrib_hrrr_${jobname}.sed_XXXX)
     cat <<EOF > $sedfile
-s/PARTION/${partition}/
+s/PARTION/${partition_wps}/
 s/JOBNAME/ungrb_hrrr_${jobname}/
 s#WRKDIR#$wrkdir#g
 s#EXEDIR#${exedir}#
@@ -930,18 +933,155 @@ function write_runtimeconfig {
     local configname=$1
 
     if [[ -e $configname ]]; then
-        echo -n "Case configuration file: $configname exist. Overwrite, [yes,no,skip]? "
+        echo -n "Case configuration file: $configname exist. Overwrite, [yes,no,skip,bak]? "
         read doit
         if [[ ${doit^^} == "YES" ]]; then
             echo -e "\nWARNING: $configname will be replaced."
         elif [[ ${doit^^} == "SKIP" ]]; then
-            echo -e "\nWARNING: $configname will be kept."
+            echo -e "\nWARNING: $configname will be kept. Skip setup."
             return
+        elif [[ ${doit^^} == "BAK" ]]; then
+            datestr=$(date +%Y%m%d_%H%M%S)
+            echo -e "\nWARNING: Orignal \"$configname\" is backuped as \"${configname}.bak${datestr}\"."
+            mv ${configname} ${configname}.bak${datestr}
         else
-            echo -e "\nGot \"${doit^^}\", exiting ...."
+            echo -e "\nGot \"${doit^^}\", exit the program."
             exit 1
         fi
     fi
+
+    #-------------------------------------------------------------------
+    # Machine specific setting for init, lbc, dacycles & fcst
+    #-------------------------------------------------------------------
+
+    case $machine in
+    "Jet" )
+        # ICs
+        ncores_ics="2"
+        partition_ics="ujet,tjet,xjet,vjet,kjet"
+        claim_cpu_ics="--cpus-per-task=2"
+        claim_cpu_ungrib="--cpus-per-task=12 --mem-per-cpu=10G"
+
+        # LBCs
+        partition_lbc="ujet,tjet,xjet,vjet,kjet"
+        claim_cpu_lbc="--cpus-per-task=2"
+
+        # DA cycles
+        ncores_dafcst=6;  ncores_filter=6
+        partition_dafcst="ujet,tjet,xjet,vjet,kjet"; claim_cpu_dafcst="--cpus-per-task=2"
+        partition_filter="ujet,tjet,xjet,vjet,kjet"; claim_cpu_filter="--cpus-per-task=2"
+                                                     claim_cpu_update="--cpus-per-task=1 --mem-per-cpu=8G"
+        npedafcst=48       #; nnodes_fcst=$(( npefcst/ncores_fcst ))
+        npefilter=1536      #; nnodes_filter=$(( npefilter/ncores_filter ))
+        nnodes_filter="0"
+        nnodes_dafcst="0"
+
+        # FCST cycles
+        ncores_fcst=6;  ncores_post=6
+        partition_fcst="ujet,tjet,xjet,vjet,kjet";   claim_cpu_fcst="--cpus-per-task=2"
+        partition_post="ujet,tjet,xjet,vjet,kjet";   claim_cpu_post="--cpus-per-task=12"
+
+        npefcst=48     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
+        npepost=48     ; nnodes_post=$(( npepost/ncores_post ))
+        ;;
+
+    "Hercules" )
+        # ICs
+        ncores_ics="2"
+        partition_ics="batch"
+        claim_cpu_ics="--cpus-per-task=2"
+        claim_cpu_ungrib="--cpus-per-task=12 --mem-per-cpu=10G"
+
+        # LBCs
+        partition_lbc="batch"
+        claim_cpu_lbc="--cpus-per-task=2"
+
+        # DA cycles
+        ncores_dafcst=40;  ncores_filter=40
+        partition_dafcst="batch"; claim_cpu_dafcst="--cpus-per-task=2"
+        partition_filter="batch"; claim_cpu_filter="--cpus-per-task=2"
+                                  claim_cpu_update="--cpus-per-task=1 --mem-per-cpu=8G"
+        npedafcst=40       #; nnodes_fcst=$(( npefcst/ncores_fcst ))
+        npefilter=160      #; nnodes_filter=$(( npefilter/ncores_filter ))
+        nnodes_filter="0"
+        nnodes_dafcst="0"
+
+        # FCST cycles
+        ncores_fcst=40;  ncores_post=40
+        partition_fcst="batch";   claim_cpu_fcst="--cpus-per-task=2"
+        partition_post="batch";   claim_cpu_post="--cpus-per-task=12"
+
+        npefcst=40     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
+        npepost=40     ; nnodes_post=$(( npepost/ncores_post ))
+        ;;
+
+    "Cheyenne" )
+
+        # ICs
+        ncores_ics=32
+        partition_ics="regular"
+        claim_cpu_ics="ncpus=${ncores_ics}"
+        claim_cpu_ungrib=""
+
+        # LBCs
+        ncores_lbc=32
+        partition_lbc="regular"
+        claim_cpu_lbc="ncpus=${ncores_lbc}"
+
+        # DA cycles
+        ncores_filter=32; ncores_dafcst=32
+        partition_dafcst="regular" ; claim_cpu_dafcst="ncpus=${ncores_dafcst}"
+        partition_filter="regular" ; claim_cpu_filter="ncpus=${ncores_filter}"
+        claim_cpu_update="ncpus=${ncores_filter}"
+
+        npefilter=48    ; nnodes_filter=$((  npefilter/ncores_filter   ))
+        npedafcst=48   ; nnodes_dafcst=$(( npefcst/ncores_dafcst ))
+
+        # FCST cycles
+        ncores_post=32; ncores_fcst=32
+        partition_fcst="regular"   ; claim_cpu_fcst="ncpus=${ncores_fcst}"
+        partition_post="regular"   ; claim_cpu_post="ncpus=${ncores_post}"
+
+        npepost=48     ; nnodes_post=$((  npepostr/ncores_post   ))
+        npefcst=48     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
+        ;;
+
+    * )    # Vecna at NSSL
+
+        # ICs
+        ncores_ics=96
+        partition_ics="batch"
+        claim_cpu_ics="--ntasks-per-node=${ncores_ics} --mem-per-cpu=4G"
+        claim_cpu_ungrib=""
+
+        # LBCs
+        ncores_lbc=96
+        partition_lbc="batch"
+        claim_cpu_lbc="--ntasks-per-node=${ncores_lbc} --mem-per-cpu=4G"
+
+        # DA cycles
+        ncores_filter=96; ncores_dafcst=96
+
+        npefilter=768            ; nnodes_filter=$(( npefilter/ncores_filter  ))
+        npedafcst=96            ; nnodes_dafcst=$(( npefcst/ncores_dafcst ))
+
+        partition_dafcst="batch"  ; claim_cpu_dafcst="--ntasks-per-node=96 --mem-per-cpu=4G";
+        partition_filter="batch"  ; claim_cpu_filter="--ntasks-per-node=96 --mem-per-cpu=4G"
+                                    claim_cpu_update="--ntasks-per-node=1  --mem-per-cpu=8G"
+
+        # FCST cycles
+        ncores_post=24; ncores_fcst=96
+        partition_fcst="batch"      ; claim_cpu_fcst="";
+        partition_post="batch"      ; claim_cpu_post=""
+
+        npepost=24      ; nnodes_post=$(( npepost/ncores_post  ))
+        npefcst=96      ; nnodes_fcst=$(( npefcst/ncores_fcst ))
+        ;;
+    esac
+
+    #-------------------------------------------------------------------
+    # Write out default configuration file
+    #-------------------------------------------------------------------
 
     cat <<EOF > $configname
 #!/bin/bash
@@ -965,6 +1105,15 @@ function write_runtimeconfig {
 
     WPSGEOG_PATH="${WPSGEOG_PATH}"
 
+    wgrib2path="${wgrib2path}"
+    gpmetis="${gpmetis}"
+
+    mach="${mach}"
+    job_exclusive_str="${job_exclusive_str}"
+    job_account_str="${job_account_str}"
+    job_runmpexe_str="${job_runmpexe_str}"
+    job_runexe_str="${job_runexe_str}"
+
 [init]
     ICSIOTYPE="pnetcdf,cdf5"
     EXTNFGL=51
@@ -973,6 +1122,11 @@ function write_runtimeconfig {
     hrrrvtable="Vtable.HRRRE.2018"
     hrrr_dir="${hrrr_dir}"
     hrrr_time="1400"
+
+    partition_ics="${partition_ics}"
+    claim_cpu_ics="${claim_cpu_ics}"
+    ncores_ics="${ncores_ics}"          # on Cheyenne only
+    claim_cpu_ungrib="${claim_cpu_ungrib}"
 
 [lbc]
     LBCIOTYPE="pnetcdf,cdf5"
@@ -983,6 +1137,10 @@ function write_runtimeconfig {
     hrrr_dir="${hrrr_dir}"
     hrrr_time="1200"
 
+    ncores_lbc="${ncores_lbc}"
+    partition_lbc="${partition_lbc}"
+    claim_cpu_lbc="${claim_cpu_lbc}"
+
 [dacycles]
     ENS_SIZE=36
     time_step=25
@@ -990,16 +1148,42 @@ function write_runtimeconfig {
     ADAPTIVE_INF=true
     update_in_place=false               # update MPAS states in-place or
                                         # making a copy of the restart files
+    run_updatebc=true
+
     OUTIOTYPE="netcdf4"
     OBS_DIR="${OBS_DIR}"
+
+    #ncores_fcst="${ncores_dafcst}"
+    ncores_filter="${ncores_filter}"
+    partition_fcst="${partition_dafcst}";
+    partition_filter="${partition_filter}"
+    claim_cpu_fcst="${claim_cpu_dafcst}"
+    claim_cpu_filter="${claim_cpu_filter}"
+    claim_cpu_update="${claim_cpu_update}"
+    npefcst="${npedafcst}"
+    npefilter="${npefilter}"
+    nnodes_filter="${nnodes_filter}"    # on Cheyenne only
+    nnodes_fcst="${nnodes_dafcst}"      # on Cheyenne only
 
 [fcst]
     ENS_SIZE=18
     time_step=25
     fcst_launch_intvl=3600
     fcst_length_seconds=(21600 10800)   # 6 hours at :00 and 3 hours at :30
-    OUTINVL=900
+    OUTINVL=300
     OUTIOTYPE="netcdf4"
+
+    ncores_fcst="${ncores_fcst}"
+    ncores_post="${ncores_post}"
+    partition_fcst="${partition_fcst}"
+    partition_post="${partition_post}"
+    claim_cpu_fcst="${claim_cpu_fcst}"
+    claim_cpu_post="${claim_cpu_post}"
+
+    npefcst="${npefcst}"
+    npepost="${npepost}"
+    nnodes_fcst="${nnodes_fcst}"        # on Cheyenne only
+    nnodes_post="${nnodes_post}"        # on Cheyenne only
 EOF
 
 }
@@ -1012,7 +1196,7 @@ EOF
 #@ MAIN
 
 #jobs=(geogrid ungrib_hrrr createWOFS static)
-jobs=(setup geogrid ungrib_hrrr rotate meshplot_py static)
+jobs=(geogrid ungrib_hrrr rotate meshplot_py static)
 
 WORKDIR="${rootdir}/run_dirs"
 TEMPDIR="${rootdir}/templates"
@@ -1150,15 +1334,12 @@ done
 #-----------------------------------------------------------------------
 #% PLATFORM
 
-mach="slurm"
-
 if [[ $machine == "Jet" ]]; then
-    #ncores_ics=5; ncores_static=6; ncores_post=6
-    partition="ujet,tjet,xjet,vjet,kjet"         ; claim_cpu="--cpus-per-task=2"
-    partition_static="ujet,tjet,xjet,vjet,kjet"  ; static_cpu="--cpus-per-task=12"
-    partition_create="bigmem"                    ; create_cpu="--mem-per-cpu=128G"
+    partition_wps="ujet,tjet,xjet,vjet,kjet"
+    partition_static="ujet,tjet,xjet,vjet,kjet"  ; claim_cpu_static="--cpus-per-task=12"
+    partition_create="bigmem"                    ; claim_cpu_create="--mem-per-cpu=128G"
 
-    npepost=24   #; nnodes_post=$(( npepost/ncores_post ))
+    npestatic=24
 
     mach="slurm"
     job_exclusive_str="#SBATCH --exclusive"
@@ -1184,11 +1365,11 @@ if [[ $machine == "Jet" ]]; then
     hrrr_dir="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MODEL_DATA/HRRRE"
 
 elif [[ $machine == "Hercules" ]]; then
-    partition="batch"         ; claim_cpu="--cpus-per-task=2"
-    partition_static="batch"  ; static_cpu="--cpus-per-task=12"
-    partition_create="batch"  ; create_cpu="--mem-per-cpu=128G"
+    partition_wps="batch"
+    partition_static="batch"  ; static_cpu_static="--cpus-per-task=12"
+    partition_create="batch"  ; create_cpu_create="--mem-per-cpu=128G"
 
-    npepost=20 
+    npepost=40
 
     mach="slurm"
     job_exclusive_str="#SBATCH --exclusive"
@@ -1216,12 +1397,12 @@ elif [[ $machine == "Cheyenne" ]]; then
     if [[ $dorun == true ]]; then
         runcmd="qsub"
     fi
-    ncores_static=32; ncores_post=32
-    partition="regular"        ; claim_cpu="ncpus=${ncores_static}"
-    partition_static="regular" ; static_cpu="ncpus=${ncores_static}"
-    partition_create="regular" ; create_cpu="ncpus=${ncores_post}"
+    ncores_static=32
+    partition_wps="regular"
+    partition_static="regular" ; claim_cpu_static="ncpus=${ncores_static}"
+    partition_create="regular" ; claim_cpu_create="ncpus=${ncores_static}"
 
-    npepost=72   ; nnodes_post=$(( npepost/ncores_post ))
+    npestatic=72
 
     mach="pbs"
     job_exclusive_str=""
@@ -1237,17 +1418,18 @@ elif [[ $machine == "Cheyenne" ]]; then
 else    # Vecna at NSSL
 
     account="${hpcaccount-batch}"
-    ncores_static=96; ncores_post=96
-    partition="batch"           ; claim_cpu="--ntasks-per-node=${ncores_static} --mem-per-cpu=4G";
-    partition_static="batch"    ; static_cpu="--mem-per-cpu=8G"
-    partition_create="batch"    ; create_cpu="--mem-per-cpu=128G"
+    ncores_static=96
+    partition_wps="batch"
+    partition_static="batch"    ; claim_cpu_static=""
+    partition_create="batch"    ; claim_cpu_create="--mem-per-cpu=128G"
 
-    npepost=24
+    npestatic=24
 
     mach="slurm"
-    job_exclusive_str=""
+    #job_exclusive_str="#SBATCH --exclude=cn11,cn14"
+    job_exclusive_str="#SBATCH --exclusive"
     job_account_str=""
-    job_runmpexe_str="srun --mpi=pmi2"
+    job_runmpexe_str="srun"
     job_runexe_str="srun"
 
     modulename="env.mpas_smiol"

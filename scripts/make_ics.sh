@@ -67,7 +67,6 @@ function usage {
     echo "              -w              Hold script to wait for all job conditions are satified and submitted (for mpassit & upp)."
     echo "                              By default, the script will exit after submitting all possible jobs."
     echo "              -m  Machine     Machine name to run on, [Jet, Cheyenne, Vecna]."
-    echo "              -a  wof         Account name for job submission."
     echo "              -d  wofs_mpas   Domain name, default: wofs_mpas"
     echo "              -s  init_dir    Directory name from which init & lbc subdirectories are used to initialize this run"
     echo "                              which avoids runing duplicated preprocessing jobs (ungrib, init/lbc) again. default: false"
@@ -153,8 +152,9 @@ EOF
 
             sedfile=$(mktemp -t ungrib_${jobname}.sed_XXXX)
             cat <<EOF > $sedfile
-s/PARTION/${partition}/
+s/PARTION/${partition_ics}/
 s/JOBNAME/ungrb_${jobname}/
+s/CPUSPEC/${claim_cpu_ungrib}/
 s#WRKDIR#$wrkdir#g
 s#EXEDIR#${exedir}#
 s#PREFIX#${EXTHEAD}#g
@@ -356,7 +356,7 @@ EOF
 
         sedfile=$(mktemp -t init_${jobname}.sed_XXXX)
         cat <<EOF > $sedfile
-s/PARTION/${partition}/
+s/PARTION/${partition_ics}/
 s/MACHINE/${machine}/g
 s/NOPART/$npeics/
 s/CPUSPEC/${claim_cpu_ics}/
@@ -502,10 +502,6 @@ while [[ $# > 0 ]]
             fi
             shift
             ;;
-        -a)
-            hpcaccount=$2
-            shift
-            ;;
         -d)
             domname=$2
             shift
@@ -578,18 +574,7 @@ fi
 #-----------------------------------------------------------------------
 #% PLATFORM
 
-mach="slurm"
-
 if [[ $machine == "Jet" ]]; then
-    partition="ujet,tjet,xjet,vjet,kjet"
-    claim_cpu_ics="--cpus-per-task=2"
-
-    mach="slurm"
-    job_exclusive_str="#SBATCH --exclusive"
-    job_account_str="#SBATCH -A ${hpcaccount-wof}"
-    job_runmpexe_str="srun"
-    job_runexe_str="srun"
-
     modulename="build_jet_intel18_1.11_smiol"
 
     source /etc/profile.d/modules.sh
@@ -597,62 +582,20 @@ if [[ $machine == "Jet" ]]; then
     module use ${rootdir}/modules
     module load $modulename
     module load wgrib2/2.0.8
-    wgrib2path="/apps/wgrib2/2.0.8/intel/18.0.5.274/bin/wgrib2"
-    gpmetis="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/bin/gpmetis"
-
 elif [[ $machine == "Hercules" ]]; then
-    partition="batch"
-    claim_cpu_ics="--cpus-per-task=2"
-
-    mach="slurm"
-    job_exclusive_str="#SBATCH --exclusive"
-    job_account_str="#SBATCH -A ${hpcaccount-wof}"
-    job_runmpexe_str="srun"
-    job_runexe_str="srun"
-
     modulename="build_hercules_intel"
 
     module purge
     module use ${rootdir}/modules
     module load $modulename
-
-    wgrib2path="/work2/noaa/wof/ywang/tools/hpc-stack/intel-oneapi-compilers-2022.2.1/wgrib2/2.0.8/bin/wgrib2"
-    gpmetis="/home/yhwang/local/bin/gpmetis"
-
 elif [[ $machine == "Cheyenne" ]]; then
-
     if [[ $dorun == true ]]; then
         runcmd="qsub"
     fi
-    ncores_ics=32; ncores_fcst=32; ncores_post=32
-    partition="regular"        ; claim_cpu_ics="ncpus=${ncores_ics}"
-
-    mach="pbs"
-    job_exclusive_str=""
-    job_account_str="#PBS -A ${hpcaccount-NMMM0013}"
-    job_runmpexe_str="mpiexec_mpt"
-    job_runexe_str="mpiexec_mpt"
-
     modulename="defaults"
-    wgrib2path="wgrib2_not_found"
-
 else    # Vecna at NSSL
-
-    account="${hpcaccount-batch}"
-    ncores_ics=96; ncores_fcst=96; ncores_post=24
-    partition="batch"
-    claim_cpu_ics="--ntasks-per-node=${ncores_ics} --mem-per-cpu=4G"
-
-    mach="slurm"
-    job_exclusive_str=""
-    job_account_str=""
-    job_runmpexe_str="srun --mpi=pmi2"
-    job_runexe_str="srun"
-
     modulename="env.mpas_smiol"
     source ${modulename}
-    wgrib2path="/scratch/ywang/tools/hpc-stack/intel-2021.8.0/wgrib2/2.0.8/bin/wgrib2"
-    gpmetis="/scratch/ywang/tools/bin/gpmetis"
 fi
 
 source $scpdir/Common_Utilfuncs.sh
