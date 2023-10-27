@@ -13,7 +13,7 @@
       o Generate MRMS data for quality control,
         - /home/christopher.kerr/WDSS/scripts/RUN_WDSS.csh on wof-post1
 
-   - Create radar files for 3-km domain for both REF & VEL
+   - Create radar files for 3-km domain for both REF & VEL on wofs-post2
         - run create_radar_obs.csh in /scratch/wofs_1km/wofs-obs-radar-parent
         - use configuration in app.local.cfg
 

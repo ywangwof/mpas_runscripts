@@ -18,8 +18,12 @@ unset __conda_setup
 conda activate wofs_post
 
 cd /scratch/ywang/MPAS/mpas_scripts/observations
-python cwpobs2dart.py -i /work/rt_obs/Satellite/CWP/2023/CONUS     \
+#python cwpobs2dart.py -i /work/rt_obs/Satellite/CWP/2023/CONUS     \
+#                -o /scratch/ywang/MPAS/mpas_scripts/run_dirs/OBS_SEQ/CWP \
+#                -d ${1-20230401}
+
+python cwpobs2dart.py -i /scratch/ywang/MPAS/mpas_scripts/run_dirs/OBS_SEQ/CWP.nc     \
                 -o /scratch/ywang/MPAS/mpas_scripts/run_dirs/OBS_SEQ/CWP \
-                -d ${1-20230401}
+                -d ${1-20230512}
 
 exit 0

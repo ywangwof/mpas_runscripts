@@ -20,7 +20,7 @@ if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
     module use ROOTDIR/modules
     module load MODULE
 else
-    source ROOTDIR/modules/MODULE
+    source ROOTDIR/modules/MODULE_impi
 fi
 
 ulimit -s unlimited

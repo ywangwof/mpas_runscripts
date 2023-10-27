@@ -161,7 +161,7 @@ EOF
                                   # 1: Remove existing same name directory
     cd $wrkdir/OBSDIR
 
-    rm -fr obsflist.bufr obsflist.meso obsflist.sat obsflist.mrms obsflist.rad obsflist obs_seq.*
+    rm -fr obsflist.bufr obsflist.meso obsflist.sat obsflist.mrms obsflist.radvr obsflist obs_seq.*
 
     obspreprocess=${exedir}/dart/mpas_dart_obs_preprocess
 
@@ -171,17 +171,17 @@ EOF
     ln -sf $template_inputfile init.nc
 
     obsflists=()
-
+    k=1
     #=================================================
     # PREPROCESS NCEP PrepBufr DATA
     #=================================================
 
-    if [[ -e ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2} ]]; then
-        echo "    Using PrepBufr observations in ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}"
-        echo ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2} > obsflist.bufr
+    if [[ -e ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2} && "${anlys_time:2:2}" == "15" ]]; then
+        echo "    $((k++)): Using PrepBufr observations in ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}"
+        echo "${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}" > obsflist.bufr
         obsflists+=(obsflist.bufr)
-    else
-        echo "    PrepBufr data not found: ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}"
+    #else
+    #    echo "    PrepBufr data not found: ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}"
     fi
 
     #=================================================
@@ -189,8 +189,8 @@ EOF
     #=================================================
 
     if [[ -e ${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time} ]]; then
-        echo "    Using Mesonet observations in ${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time}"
-        echo ${OBSDIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time} > obsflist.meso
+        echo "    $((k++)): Using Mesonet observations in ${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time}"
+        echo "${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time}" > obsflist.meso
         obsflists+=(obsflist.meso)
     else
         echo "    Mesonet not found: ${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time}"
@@ -202,14 +202,14 @@ EOF
 
     CWP_DIR=${OBS_DIR}/CWP
     if [[ -e ${CWP_DIR}/obs_seq_cwp.G16_V04.${anlys_date}${anlys_time} ]]; then
-        echo "    Using CWP data in ${CWP_DIR}/obs_seq_cwp.G16_V04.${anlys_date}${anlys_time}"
+        echo "    $((k++)): Using CWP data in ${CWP_DIR}/obs_seq_cwp.G16_V04.${anlys_date}${anlys_time}"
 
         cp ${CWP_DIR}/obs_seq_cwp.G16_V04.${anlys_date}${anlys_time} ./obs_seq.old
 
         if [[ $verb -eq 1 ]]; then
             echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
         fi
-        ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >& $srunout
+        ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >& ${srunout}_CWP
 
         if [[ $? -eq 0 ]]; then
             mv ./obs_seq.new ./obs_seq.cwp
@@ -233,19 +233,25 @@ EOF
     RAD_DIR=${OBS_DIR}/Radiance
 
     channels=("8.4" "10.3")
+
+    cp ${FIXDIR}/rttov_sensor_db.csv .
+
+    i=0
     for abifile in ${RAD_DIR}/obs_seq_abi.G16_C*.${anlys_date}${anlys_time}; do
         if [[ -e ${abifile} ]]; then
+            i=$((i+1))
 
-            chan=${a##Radiance/obs_seq_abi.G16_C}
+            a=$(basename $abifile)
+            chan=${a##obs_seq_abi.G16_C}
             chan=${chan%%.${anlys_date}${anlys_time}}
             if [[ " ${channels[*]} " =~ " $chan " ]]; then
-                echo "    Using Radiance data in ${abifile}"
+                echo "    $k-$i: Using Radiance data in ${abifile}"
                 cp ${abifile} ./obs_seq.old
 
                 if [[ $verb -eq 1 ]]; then
                     echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
                 fi
-                ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >& $srunout
+                ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >& ${srunout}_RAD
 
                 if [[ $? -eq 0 ]]; then
                     mv ./obs_seq.new ./obs_seq.abiC$chan
@@ -253,6 +259,7 @@ EOF
                     echo $wrkdir/OBSDIR/obs_seq.abiC$chan >> obsflist.abi
                 else
                     echo "Error with command ${obspreprocess} for Radiance data"
+                    exit 1
                 fi
             else
                 echo " Radiance file ${abifile} is on Channel $chan, ignoring currently."
@@ -261,6 +268,8 @@ EOF
             echo "    Radiance not found: ${abifile}"
         fi
     done
+
+    if [[ $i -ge 1 ]]; then k=$((k+1)); fi
 
     if [[ -e obsflist.abi ]]; then
         obsflists+=(obsflist.abi)
@@ -277,14 +286,14 @@ EOF
     DBZ_DIR=${OBS_DIR}/REF
     if [[ -e ${DBZ_DIR}/${eventdate}/obs_seq_RF_${anlys_date}_${anlys_time}.out ]]; then
 
-        echo "    Using REF data in ${DBZ_DIR}/${eventdate}/obs_seq_RF_${anlys_date}_${anlys_time}.out"
+        echo "    $((k++)): Using REF data in ${DBZ_DIR}/${eventdate}/obs_seq_RF_${anlys_date}_${anlys_time}.out"
 
         cp ${DBZ_DIR}/${eventdate}/obs_seq_RF_${anlys_date}_${anlys_time}.out ./obs_seq.old
 
         if [[ $verb -eq 1 ]]; then
             echo "    Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
         fi
-        ${runcmd_str} echo "$g_date $g_sec" | ${obspreprocess} >& $srunout
+        ${runcmd_str} echo "$g_date $g_sec" | ${obspreprocess} >& ${srunout}_REF
 
         if [[ $? -eq 0 ]]; then
             mv ./obs_seq.new ./obs_seq.mrms
@@ -319,24 +328,27 @@ EOF
 
     VR_DIR=${OBS_DIR}/VEL
 
-    j=0; n=0
+    j=0; n=1
     while [[ ${j} -lt ${num_rad} ]]; do
 
         if [[ -e ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out ]]; then
 
-            echo "    Using VEL data in ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out"
+            if [[ $verb -eq 1 ]]; then
+                echo "         Checking VEL data in ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out"
+            fi
 
             cp ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out ./obs_seq.old
 
             if [[ $verb -eq 1 ]]; then
                 echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
             fi
-            ${runcmd_str} echo "$g_date $g_sec" | ${obspreprocess} >& $srunout
+            ${runcmd_str} echo "$g_date $g_sec" | ${obspreprocess} >& ${srunout}_VR_${rad_name[$j]}
 
             if [[ -e ./obs_seq.new ]]; then
+                echo "    $k-$n: Using VEL data in ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out"
                 mv ./obs_seq.new ./obs_seq.vr${j}
                 rm ./obs_seq.old
-                echo $wrkdir/OBSDIR/obs_seq.vr${j} >> obsflist.rad
+                echo $wrkdir/OBSDIR/obs_seq.vr${j} >> obsflist.radvr
                 let n++
             fi
 
@@ -346,7 +358,7 @@ EOF
     done
 
     if [[ $n -gt 0 ]]; then
-        obsflists+=(obsflist.rad)
+        obsflists+=(obsflist.radvr)
     else
         echo "    No valid radial velocity data is processed"
     fi
@@ -387,7 +399,7 @@ EOF
     # /
     #
     if [[ $verb -eq 1 ]]; then echo "Runing ${exedir}/dart/obs_sequence_tool"; fi
-    ${runcmd_str} ${exedir}/dart/obs_sequence_tool >& $srunout
+    ${runcmd_str} ${exedir}/dart/obs_sequence_tool >& ${srunout}_SEQ
 
     if [[ $? -eq 0 && -e obs_seq.${anlys_date}${anlys_time} ]]; then
         echo "    Observation file ${wrkdir}/OBSDIR/obs_seq.${anlys_date}${anlys_time} created"
@@ -677,25 +689,43 @@ function run_filter {
    write_binary_obs_sequence = .false.
   /
 
+!   assimilate_these_obs_types = 'RADIOSONDE_TEMPERATURE',
+!                                'RADIOSONDE_U_WIND_COMPONENT',
+!                                'RADIOSONDE_V_WIND_COMPONENT',
+!                                'RADIOSONDE_SPECIFIC_HUMIDITY',
+!                                'GPSRO_REFRACTIVITY',
+!                                'LAND_SFC_ALTIMETER',
+!                                'MARINE_SFC_DEWPOINT',
+!                                'AIRCRAFT_U_WIND_COMPONENT',
+!                                'AIRCRAFT_V_WIND_COMPONENT',
+!                                'AIRCRAFT_TEMPERATURE',
+!                                'ACARS_U_WIND_COMPONENT',
+!                                'ACARS_V_WIND_COMPONENT',
+!                                'ACARS_TEMPERATURE',
+!                                'SAT_U_WIND_COMPONENT',
+!                                'SAT_V_WIND_COMPONENT',
+!                                'RADAR_REFLECTIVITY',
+!                                'RADAR_CLEARAIR_REFLECTIVITY',
+!                                'DOPPLER_RADIAL_VELOCITY'
+
 &obs_kind_nml
-   assimilate_these_obs_types = 'RADIOSONDE_TEMPERATURE',
-                                'RADIOSONDE_U_WIND_COMPONENT',
-                                'RADIOSONDE_V_WIND_COMPONENT',
-                                'RADIOSONDE_SPECIFIC_HUMIDITY',
-                                'GPSRO_REFRACTIVITY',
+   assimilate_these_obs_types = 'METAR_ALTIMETER',
+                                'METAR_U_10_METER_WIND',
+                                'METAR_V_10_METER_WIND',
+                                'METAR_TEMPERATURE_2_METER',
+                                'METAR_DEWPOINT_2_METER',
                                 'LAND_SFC_ALTIMETER',
-                                'MARINE_SFC_DEWPOINT',
-                                'AIRCRAFT_U_WIND_COMPONENT',
-                                'AIRCRAFT_V_WIND_COMPONENT',
-                                'AIRCRAFT_TEMPERATURE',
-                                'ACARS_U_WIND_COMPONENT',
-                                'ACARS_V_WIND_COMPONENT',
-                                'ACARS_TEMPERATURE',
-                                'SAT_U_WIND_COMPONENT',
-                                'SAT_V_WIND_COMPONENT',
+                                'LAND_SFC_DEWPOINT',
+                                'LAND_SFC_TEMPERATURE',
+                                'LAND_SFC_U_WIND_COMPONENT',
+                                'LAND_SFC_V_WIND_COMPONENT',
                                 'RADAR_REFLECTIVITY',
                                 'RADAR_CLEARAIR_REFLECTIVITY',
-                                'DOPPLER_RADIAL_VELOCITY'
+                                'DOPPLER_RADIAL_VELOCITY',
+                                'GOES_LWP_PATH',
+                                'GOES_IWP_PATH',
+                                'GOES_CWP_ZERO',
+                                'GOES_16_ABI_TB',
 
    evaluate_these_obs_types = ''
   /
@@ -759,8 +789,10 @@ function run_filter {
 
 &mpas_vars_nml
    mpas_state_variables = 'theta',                 'QTY_POTENTIAL_TEMPERATURE',
+                          'rho',                   'QTY_DENSITY',
                           'uReconstructZonal',     'QTY_U_WIND_COMPONENT',
                           'uReconstructMeridional','QTY_V_WIND_COMPONENT',
+                          'u',                     'QTY_EDGE_NORMAL_SPEED',
                           'w',                     'QTY_VERTICAL_VELOCITY',
                           'qv',                    'QTY_VAPOR_MIXING_RATIO',
                           'surface_pressure',      'QTY_SURFACE_PRESSURE',
@@ -805,7 +837,7 @@ function run_filter {
 &update_bc_nml
   update_analysis_file_list           = 'filter_out.txt'
   update_boundary_file_list           = 'boundary_inout.txt'
-  lbc_update_from_reconstructed_winds = .false.
+  lbc_update_from_reconstructed_winds = .true.
   lbc_update_winds_from_increments    = .false.
   debug = 0
 /
@@ -834,7 +866,8 @@ function run_filter {
                              '../../../observations/forward_operators/obs_def_dew_point_mod.f90',
                              '../../../observations/forward_operators/obs_def_radar_mod.f90',
                              '../../../observations/forward_operators/obs_def_cwp_mod.f90'
-   quantity_files          = '../../../assimilation_code/modules/observations/atmosphere_quantities_mod.f90'
+   quantity_files          = '../../../assimilation_code/modules/observations/default_quantities_mod.f90',
+                             '../../../assimilation_code/modules/observations/atmosphere_quantities_mod.f90',
   /
 
 &obs_sequence_tool_nml
@@ -986,6 +1019,78 @@ function run_filter {
    pointcount            = 100000
   /
 
+&obs_def_rttov_nml
+   rttov_sensor_db_file   = 'rttov_sensor_db.csv'
+   first_lvl_is_sfc       = .true.
+   mw_clear_sky_only      = .false.
+   interp_mode            = 1
+   do_checkinput          = .true.
+   apply_reg_limits       = .true.
+   verbose                = .true.
+   fix_hgpl               = .false.
+   do_lambertian          = .false.
+   lambertian_fixed_angle = .true.
+   rad_down_lin_tau       = .true.
+   use_q2m                = .true.
+   use_uv10m              = .true.
+   use_wfetch             = .false.
+   use_water_type         = .false.
+   addrefrac              = .false.
+   plane_parallel         = .false.
+   use_salinity           = .false.
+   cfrac_data             = .true.
+   clw_data               = .true.
+   rain_data              = .true.
+   ciw_data               = .true.
+   snow_data              = .true.
+   graupel_data           = .true.
+   hail_data              = .false.
+   w_data                 = .true.
+   clw_scheme             = 1
+   clw_cloud_top          = 322.
+   fastem_version         = 6
+   supply_foam_fraction   = .false.
+   use_totalice           = .true.
+   use_zeeman             = .false.
+   cc_threshold           = 0.05
+   ozone_data             = .false.
+   co2_data               = .false.
+   n2o_data               = .false.
+   co_data                = .false.
+   ch4_data               = .false.
+   so2_data               = .false.
+   addsolar               = .false.
+   rayleigh_single_scatt  = .true.
+   do_nlte_correction     = .false.
+   solar_sea_brdf_model   = 2
+   ir_sea_emis_model      = 2
+   use_sfc_snow_frac      = .false.
+   add_aerosl             = .false.
+   aerosl_type            = 1
+   add_clouds             = .true.
+   ice_scheme             = 1
+   use_icede              = .false.
+   idg_scheme             = 2
+   user_aer_opt_param     = .false.
+   user_cld_opt_param     = .false.
+   grid_box_avg_cloud     = .true.
+   cldcol_threshold       = -1.0
+   cloud_overlap          = 1
+   cc_low_cloud_top       = 750.0
+   ir_scatt_model         = 2
+   vis_scatt_model        = 1
+   dom_nstreams           = 8
+   dom_accuracy           = 0.0
+   dom_opdep_threshold    = 0.0
+   addpc                  = .false.
+   npcscores              = -1
+   addradrec              = .false.
+   ipcreg                 = 1
+   use_htfrtc             = .false.
+   htfrtc_n_pc            = -1
+   htfrtc_simple_cloud    = .false.
+   htfrtc_overcast        = .false.
+ /
 &obs_seq_coverage_nml
    obs_sequences     = ''
    obs_sequence_list = 'obs_coverage_list.txt'
@@ -1068,7 +1173,10 @@ EOF
     # 4. Prepare Obs sequence for this analysis cycle
     #------------------------------------------------------
 
-    if [[ ! -e OBSDIR/obs_seq.${timestr_cur} ]]; then
+    if [[ -e OBSDIR/obs_seq.${timestr_cur} ]]; then
+        echo "    Using observation file: OBSDIR/obs_seq.${timestr_cur} as obs_seq.in"
+        ln -sf OBSDIR/obs_seq.${timestr_cur} obs_seq.in
+    else
         if [[ $verb -eq 1 ]]; then echo "run_obsmerge $wrkdir $iseconds"; fi
         run_obsmerge $wrkdir $iseconds
 
@@ -1245,14 +1353,14 @@ function run_update_bc {
     fi
 
     if [[ $run_updatebc == true ]]; then
-        #cpcmd="cp"
-        cpcmd="rsync -a"
+        cpcmd="cp"
+        #cpcmd="rsync -a"
     else
         cpcmd="ln -sf"
     fi
 
     #------------------------------------------------------
-    # Prepare update_mpas_states by copying/linking the background files
+    # Prepare update_bc by copying/linking the background files
     #------------------------------------------------------
 
     update_output_file_list='boundary_inout.txt'
@@ -1268,9 +1376,9 @@ function run_update_bc {
         ${cpcmd} $lbcfn $mylfn
         echo "$mylfn" >> ${update_output_file_list}
     done
-    sed -i "/update_boundary_file_list/s/boundary_inout.txt/${update_output_file_list}/" input.nml
 
     if [[ ${run_updatebc} == true ]]; then
+        sed -i "/update_boundary_file_list/s/boundary_inout.txt/${update_output_file_list}/" input.nml
 
         #
         # Waiting for job conditions
@@ -1653,11 +1761,27 @@ EOF
     cd $wrkdir
 
     # will use lbc0_files & lbc_myfiles
-    run_update_bc $wrkdir
+    if [[ $icycle -gt 0 && $run_updatebc ]]; then
+        run_update_bc $wrkdir $dorun_updatebc
+        conditions=($wrkdir/done.update_bc)
+    else             # do not need to run update_bc, just link the files
+        for i in ${!lbc_myfiles[@]}; do
+            lbcfn=${lbc0_files[$i]}
+            mylfn=${lbc_myfiles[$i]}
+            if [[ -e $mylfn ]]; then
+                echo "    $mylfn exists, deleting ..."
+                rm -rf $mylfn
+            fi
+            ln -sf $lbcfn $mylfn
+            #cp $lbcfn $mylfn
+        done
+        conditions=()
+    fi
+
     #
     # Waiting for update_bc
     #
-    conditions=($wrkdir/done.update_bc)
+
     if [[ $dorun == true ]]; then
         for cond in ${conditions[@]}; do
             echo "$$-${FUNCNAME[0]}: Checking: $cond"
@@ -1767,6 +1891,14 @@ function da_cycle_driver() {
             if [[ ! -e ${wrkdir_pre}/done.fcst ]]; then
                 #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
                 check_and_resubmit "fcst" $wrkdir_pre $ENS_SIZE run_mpas.${mach} 0
+            fi
+        elif [[ $icyc -eq 0 && $dorun == true ]]; then
+            #------------------------------------------------------
+            # 0. Check boundary status at inital time
+            #------------------------------------------------------
+            if [[ ! -e $rundir/lbc/done.lbc ]]; then
+                #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+                check_and_resubmit "lbc" $rundir/lbc $nenslbc run_lbc.${mach} 0
             fi
         fi
 

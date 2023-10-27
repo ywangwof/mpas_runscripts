@@ -20,10 +20,14 @@ conda activate wofs_post
 cd /scratch/ywang/MPAS/mpas_scripts/observations
 
 for channel in 5 7; do
-    python abiobs2dart_tb.py -i /work/rt_obs/Satellite/RADIANCE/2022     \
+    #python abiobs2dart_tb.py -i /work/rt_obs/Satellite/RADIANCE/2022     \
+    #            -o /scratch/ywang/MPAS/mpas_scripts/run_dirs/OBS_SEQ/Radiance \
+    #            -c $channel                                                   \
+    #            -d ${1-20220527}
+    python abiobs2dart_tb.py -i /scratch/ywang/MPAS/mpas_scripts/run_dirs/OBS_SEQ/Radiance.nc   \
                 -o /scratch/ywang/MPAS/mpas_scripts/run_dirs/OBS_SEQ/Radiance \
                 -c $channel                                                   \
-                -d ${1-20220527}
+                -d ${1-20230512}
 done
 
 exit 0

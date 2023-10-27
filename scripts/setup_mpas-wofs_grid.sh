@@ -1058,6 +1058,7 @@ function write_runtimeconfig {
         ncores_lbc=96
         partition_lbc="batch"
         claim_cpu_lbc="--ntasks-per-node=${ncores_lbc} --mem-per-cpu=4G"
+        claim_cpu_ungrib=""
 
         # DA cycles
         ncores_filter=96; ncores_dafcst=96
@@ -1067,7 +1068,7 @@ function write_runtimeconfig {
 
         partition_dafcst="batch"  ; claim_cpu_dafcst="--ntasks-per-node=96 --mem-per-cpu=4G";
         partition_filter="batch"  ; claim_cpu_filter="--ntasks-per-node=96 --mem-per-cpu=4G"
-                                    claim_cpu_update="--ntasks-per-node=1  --mem-per-cpu=8G"
+                                    claim_cpu_update="--ntasks-per-node=1"
 
         # FCST cycles
         ncores_post=24; ncores_fcst=96

@@ -32,7 +32,7 @@ cd ${WORK_dir}/work
 cp ${MESOINFO_FILE} .
 cp ${TEMPLATE_FILE} ./input.nml
 
-source /scratch/ywang/MPAS/mpas_scripts/modules/env.mpas_smiol
+source /scratch/ywang/MPAS/mpas_scripts/modules/env.mpas_smiol_impi
 
 ########################################################################
 #######   PROCESS OKMESO DATA ##########################################
@@ -51,19 +51,30 @@ for((i=timebeg_s;i<=timeend_s;i+=900)); do
     hh=${timestr:8:2}
     anl_min=${timestr:10:2}
 
+    if [[ $hh -lt 15 ]]; then
+        evtdate=$(date -d "$yyyy$mm$dd 1 day ago" +%Y%m%d)
+        evty=${evtdate:0:4}
+        evtm=${evtdate:4:2}
+        evtd=${evtdate:6:2}
+    else
+        evty=$yyyy
+        evtm=$mm
+        evtd=$dd
+    fi
+
     #j=$((i-900))
     #timepre=$(date -d@j +%Y%m%d%H%M%S)
-    timepre="${yyyy}${mm}${dd}1500"
-    pyyyy=${timepre:0:4}
-    pmm=${timepre:4:2}
-    pdd=${timepre:6:2}
-    phh=${timepre:8:2}
-    pmin=${timepre:10:2}
+    #%timepre="${yyyy}${mm}${dd}1500"
+    #pyyyy=${timepre:0:4}
+    #pmm=${timepre:4:2}
+    #pdd=${timepre:6:2}
+    phh="15"  #${timepre:8:2}
+    pmin="00" #${timepre:10:2}
 
     #mpas_timestr="${yyyy}-${mm}-${dd}_${hh}.${anl_min}.00"
-    mpas_timestr="${yyyy}-${mm}-${dd}_15.15.00"
+    mpas_timestr="${evty}-${evtm}-${evtd}_15.15.00"
 
-    MPAS_INITFILE=${MPASWoFS_DIR}/${pyyyy}${pmm}${pdd}/dacycles/${phh}${pmin}/wofs_mpas_01.restart.${mpas_timestr}.nc
+    MPAS_INITFILE=${MPASWoFS_DIR}/${evty}${evtm}${evtd}/dacycles/${phh}${pmin}/wofs_mpas_01.restart.${mpas_timestr}.nc
     if [[ ! -e ${MPAS_INITFILE} ]]; then
         echo "MPAS restart file: ${MPAS_INITFILE} not exist"
         exit 0
@@ -76,6 +87,7 @@ for((i=timebeg_s;i<=timeend_s;i+=900)); do
     cp ${mesonet_obs_file} okmeso_mdf.in
 
     # run convert_okmeso
+    echo "=== Processing ${mesonet_obs_file}"
     echo "Running srun -n 1 ${convert_okmeso} ..."
     srun ${convert_okmeso}
 
@@ -96,6 +108,7 @@ EOF
     num_obs_kind=$(head -3 obs_seq.new | tail -1)
 
     if [[ ${num_obs_kind} -gt 0 ]]; then
+        echo "Saving ${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min}"
         mv obs_seq.new ${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min}
     else
         rm obs_seq.new
@@ -103,6 +116,7 @@ EOF
 
     # clear old intermediate (text) files
     rm obs_seq.old okmeso_mdf.in dart_log.out dart_log.nml
+    echo ""
 done
 
 exit 0

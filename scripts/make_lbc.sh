@@ -167,6 +167,7 @@ EOF
         cat <<EOF > $sedfile
 s/PARTION/${partition_lbc}/
 s/JOBNAME/ungrb_${jobname}/
+s/CPUSPEC/${claim_cpu_ungrib}/
 s#WRKDIR#$wrkdir#g
 s#EXEDIR#${exedir}#
 s#PREFIX#${EXTHEAD}#g

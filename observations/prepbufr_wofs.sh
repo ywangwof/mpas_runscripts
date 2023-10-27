@@ -36,7 +36,7 @@
 #
 #--------------------------------------------------------------
 
-source /scratch/ywang/MPAS/mpas_scripts/modules/env.mpas_smiol
+source /scratch/ywang/MPAS/mpas_scripts/modules/env.mpas_smiol_impi
 
 daily=no
 
@@ -95,6 +95,7 @@ s/ENDDAY/${endday}/
 s/ENDHOUR/${endhour}/g
 EOF
     sed -f $sedfile ${NML_TEMPLATE} > ./input.nml
+    rm -f $sedfile
 
     mm=$inmonth
     dd=$inday

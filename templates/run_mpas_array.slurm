@@ -23,7 +23,7 @@ if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
     #nnode=$(( NOPART/$SLURM_CPUS_ON_NODE ))
     #nnode=$SLURM_JOB_NUM_NODES
 else
-    source ROOTDIR/modules/MODULE
+    source ROOTDIR/modules/MODULE_impi
     #ncores=NCORES
 fi
 #nnode=$(( NOPART/ncores ))
