@@ -136,7 +136,7 @@ function usage {
     echo " "
     echo "    PURPOSE: Run MPAS CONUS workflow."
     echo " "
-    echo "    DATETIME - Case date and time in YYYYMMDD, Default for today"
+    echo "    DATETIME - Case date and time in YYYYMMDD[HH], Default for today at 00 UTC"
     echo "    WORKDIR  - Run Directory"
     echo "    JOBS     - One or more jobs from [ungrib,init,lbc,mpas,mpassit,upp] or [static,geogrid]"
     echo "               Default all jobs in sequence"
@@ -749,6 +749,210 @@ EOF
         touch $wrkdir/done.ungrib_ics
         touch $wrkdir/done.ungrib_lbc
     fi
+}
+
+########################################################################
+
+function run_ungrib_rrfsna {
+    if [[ $# -ne 1 ]]; then
+        echo "ERROR: run_ungrib require 1 arguments."
+        exit 2
+    fi
+    rrfs_grib_dir=$1
+
+    wrkdir=$rundir/ungrib
+    mkwrkdir $wrkdir 0
+    cd $wrkdir
+
+    julday=$(date -d "$eventdate ${eventtime}:00" +%y%j%H)
+
+    if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
+        :                   # skip
+    else
+        currdate=$(date -d "$eventdate ${eventtime}:00" +%Y%m%d)
+        currtime=$(date -d "$eventdate ${eventtime}:00" +%H)
+        if [[ "$rrfs_grib_dir" =~ "https://noaa-rrfs-pds.s3.amazonaws.com" ]]; then
+            rrfs_url="$rrfs_grib_dir/rrfs_a/rrfs_a.${currdate}/${currtime}/control"
+            download_aws=1
+        else
+            rrfs_grib_dir="$rrfs_grib_dir/${currdate}${currtime}"
+            download_aws=0
+        fi
+
+        rrfsfiles=(); myrrfsfiles=(); jobarrays=()
+        for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
+            hstr=$(printf "%03d" $h)
+            if [[ $download_aws -eq 1 ]]; then
+                rrfsfile="rrfs.t${currtime}z.natlev.f${hstr}.grib2"
+                basefn=$(basename $rrfsfile)
+                basefn="HRRR_$basefn"
+
+                if [[ ! -f $rrfsfile && ! -f $basefn ]]; then
+                    if [[ $verb -eq 1 ]]; then echo "Downloading $rrfsfile ..."; fi
+                    rrfsfidx="${rrfsfile}.idx"
+                    wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfidx
+                    while [[ $? -ne 0 ]]; do
+                        sleep 10
+                        echo "wget -c $rrfs_url/$rrfsfidx"
+                        wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfidx
+                    done
+                    rm -f ${rrfsfidx}
+
+                    wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfile
+                    while [[ $? -ne 0 ]]; do
+                        sleep 10
+                        echo "wget -c $rrfs_url/$rrfsfile"
+                        wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfile
+                    done
+                fi
+            else
+                rrfsfile=$rrfs_grib_dir/rrfs.t${currtime}z.natlev.f${hstr}.grib2
+                basefn=$(basename $rrfsfile)
+                basefn="HRRR_$basefn"
+                while [[ ! -f $rrfsfile && ! -f $basefn ]]; do
+                    if [[ $verb -eq 1 ]]; then
+                        echo "Waiting for $rrfsfile ..."
+                    fi
+                    sleep 10
+                done
+
+                # Wait for done file to ensure all files are downloaded
+                donefile="$rrfs_grib_dir/done.rrfs.${currdate}${currtime}"
+                while [[ ! -f $donefile ]]; do
+                    if [[ $verb -eq 1 ]]; then
+                        echo "Waiting for $rrfsfile ..."
+                    fi
+                    sleep 10
+                done
+            fi
+            rrfsfiles+=(${rrfsfile})
+            if [[ ! -f $basefn ]]; then
+                #rm -f $basefn
+                jobarrays+=($h)
+            fi
+            myrrfsfiles+=($basefn)
+        done
+
+       if [[ ${#jobarrays[@]} -gt 0 ]]; then
+            jobarraystr="--array=$(join_by_comma ${jobarrays[@]})"
+            jobscript="run_wgrib2_rrfsna.${mach}"
+
+            sedfile=$(mktemp -t wgrib2_${jobname}.sed_XXXX)
+            cat <<EOF > $sedfile
+s/PARTION/${partition}/
+s/JOBNAME/wgrib2_${jobname}/
+s#ROOTDIR#$rootdir#g
+s#WRKDIR#$wrkdir#g
+s#MODULE#${modulename}#g
+s#MACHINE#${machine}#g
+s#GRIBFILE#$rrfs_grib_dir/rrfs.t${currtime}z.natlev.f0#
+s#TARGETFILE#HRRR_rrfs.t${currtime}z.natlev.f0#
+s#VERBOSE#$verb#g
+s/ACCTSTR/${job_account_str}/
+s/EXCLSTR/${job_exclusive_str}/
+s/RUNCMD/${job_runexe_str}/
+EOF
+            submit_a_jobscript $wrkdir "wgrib2" $sedfile $TEMPDIR/$jobscript $jobscript ${jobarraystr}
+        fi
+
+        if [[ $dorun == true ]]; then
+            for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
+                hstr=$(printf "%02d" $h)
+                donefile="done.wgrib2_$hstr"
+                while [[ ! -e $donefile ]]; do
+                    if [[ $verb -eq 1 ]]; then
+                        echo "Waiting for $donefile ......"
+                    fi
+                    sleep 10
+                done
+            done
+        fi
+
+        #link_grib ${myrrfsfiles[@]}
+
+        i=0; jobarrays=()
+        for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
+            hstr=$(printf "%02d" $h)
+
+            mywrkdir="$wrkdir/ungrib_$hstr"
+            donefile="done.ungrib_$hstr"
+            if [[ ! -f $donefile ]]; then
+                mkdir -p $mywrkdir
+                cd $mywrkdir
+
+                ln -sf ../${myrrfsfiles[$i]} GRIBFILE.AAA
+                ln -sf $FIXDIR/WRFV4.0/Vtable.RRFS Vtable
+
+                jobarrays+=($h)
+                cd $wrkdir
+            fi
+            let i=i+1
+        done
+
+        #
+        # Create job script and submit it
+        #
+        if [[ ${#jobarrays[@]} -gt 0 ]]; then
+            jobscript="run_ungrib.${mach}"
+            jobarraystr="--array=$(join_by_comma ${jobarrays[@]})"
+            sed    "s/PARTION/${partition}/;s/JOBNAME/ungrb_rrfs_${jobname}/" $TEMPDIR/run_ungrib_parallel.${mach} > $jobscript
+            sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
+            sed -i "s#PREFIX#${EXTHEAD}#g;s#EVENTDATE#${eventdate}#g;s#EVENTTIME#${eventtime}#g;s#EXTINVL#$EXTINVL#g" $jobscript
+            sed -i "s/ACCTSTR/${job_account_str}/;s/EXCLSTR/${job_exclusive_str}/;s/RUNCMD/${job_runexe_str}/" $jobscript
+            if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
+            $runcmd $jobarraystr $jobscript
+            if [[ $dorun == true && $? -eq 0 ]]; then touch queue.ungrib; fi
+        fi
+    fi
+
+    done=0
+    if [[ $dorun == true ]]; then
+        hstr="00"
+        donefile="done.ungrib_$hstr"
+        echo "$$: Checking: $wrkdir/$donefile"
+        while [[ ! -e $wrkdir/$donefile ]]; do
+            if [[ $verb -eq 1 ]]; then
+                echo "Waiting for $wrkdir/$donefile"
+            fi
+            sleep 10
+        done
+        if [[ -f $donefile ]]; then
+            if [[ $verb -ne 1 ]]; then
+                rm -rf $wrkdir/ungrib_$hstr
+            fi
+            rm -f queue.ungrib
+            let done=done+1
+        fi
+    fi
+
+    touch $wrkdir/done.ungrib_ics
+
+    if [[ $dorun == true ]]; then
+        for ((h=EXTINVL;h<=fcst_hours;h+=EXTINVL)); do
+            hstr=$(printf "%02d" $h)
+            donefile="done.ungrib_$hstr"
+            echo "$$: Checking: $wrkdir/$donefile"
+            while [[ ! -e $wrkdir/$donefile ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    echo "Waiting for $wrkdir/$donefile"
+                fi
+                sleep 10
+            done
+            if [[ -f $donefile ]]; then
+                if [[ $verb -ne 1 ]]; then
+                    rm -rf $wrkdir/ungrib_$hstr
+                fi
+                rm -f queue.ungrib
+                let done=done+1
+            fi
+        done
+
+    fi
+
+    if [[ $done -eq $((fcst_hours/EXTINVL+1)) ]]; then
+        touch $wrkdir/done.ungrib
+    fi
+    touch $wrkdir/done.ungrib_lbc
 }
 
 ########################################################################
@@ -2184,7 +2388,7 @@ while [[ $# > 0 ]]
             ;;
         -i)
             case ${2,,} in
-            hrrr | gfs | rrfs | rrfsp )
+            hrrr | gfs | rrfs | rrfsp | rrfsna)
                 extdm=${2,,}
                 ;;
             * )
@@ -2423,7 +2627,7 @@ case $extdm in
         initname="RP"
         fcst_hours=60
         ;;
-    rrfs)
+    rrfs | rrfsna )
         EXTHEAD="RRFS"
         EXTNFGL=66
         EXTNFLS=9
@@ -2456,19 +2660,19 @@ jobname="${eventdate:4:4}"
 
 exedir="$rootdir/exec"
 
-declare -A jobargs=([static]=$WORKDIR/$domname                          \
-                    [geogrid]=$WORKDIR/${domname/*_/geo_}               \
+declare -A jobargs=([static]=$WORKDIR/$domname                                 \
+                    [geogrid]=$WORKDIR/${domname/*_/geo_}                      \
                     [ungrib_hrrr]="/public/data/grids/hrrr/conus/wrfnat/grib2" \
-                    [ungrib_rrfs]="https://noaa-rrfs-pds.s3.amazonaws.com"  \
-                    [ungrib_rrfsp]="https://noaa-rrfs-pds.s3.amazonaws.com" \
+                    [ungrib_rrfs]="https://noaa-rrfs-pds.s3.amazonaws.com"     \
+                    [ungrib_rrfsna]="/lfs4/NAGAPE/wof/grib_files/RRFS-A"       \
+                    [ungrib_rrfsp]="https://noaa-rrfs-pds.s3.amazonaws.com"    \
                     [ungrib_gfs]="/public/data/grids/gfs/0p25deg/grib2"           \
                     [init]="ungrib/done.ungrib_ics $WORKDIR/$domname/done.static" \
                     [lbc]="init/done.ics ungrib/done.ungrib_lbc"                  \
                     [mpas]="lbc/done.lbc"                               \
                     [upp]=""                                            \
                     [pcp]=""                                            \
-                    [clean]="post ungrib"                               \
-                   )
+                    [clean]="post ungrib" )
 
 #[ungrib_rrfs]="/mnt/lfs4/BMC/rtwbl/mhu/wcoss/emc/rrfs /public/data/grids/gfs/0p25deg/grib2  rrfs_a" \
 #[ungrib_rrfsp]="/mnt/lfs4/BMC/rtwbl/mhu/wcoss/emc/rrfs /public/data/grids/gfs/0p25deg/grib2 rrfs_a" \

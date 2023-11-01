@@ -1,0 +1,27 @@
+#!/bin/sh -l
+#SBATCH --partition=batch
+#SBATCH -J build_tables
+#SBATCH --ntasks=1 --cpus-per-task=12
+#SBATCH -t 00:30:00
+#SBATCH --output=buildtable_%j.log
+
+#set -eux
+
+time1=$(date '+%s')
+echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
+echo " "
+
+
+srun -n 1 /scratch/ywang/MPAS/MPAS-Model/build_tables
+
+time2=$(date '+%s')
+
+let diff=time2-time1
+let hour=diff/3600
+let diff=diff%3600
+let min=diff/60
+let sec=diff%60
+
+echo -n "Job   Ended: $(date). "
+printf 'Job run time:  %02d:%02d:%02d' $hour $min $sec
+echo " "

@@ -11,10 +11,25 @@
     b. Separated subdirectories templates from fix_files
     c. Started to use scripts/Common_Utilfuncs.sh
 
+11/01/2023 Version 3.4
+
+    1. Incorporated fixes for diagnostic outputs when convection_scheme is turned off
+       from the latest MPAS package within branch atmosphere/nssl_v7.3_smiol_lcc.
+    2. Fixed a divide-by-zero float problem when computing 1-km hourly max reflectivity.
+    3. Trimmed the docstring in scripts/run_mpas.sh.
+
+08/24/2023 Version 3.3
+
+    1. Added support for the RRFS-A North American datasets by converting
+       the rotated lat/lon grid to the HRRR grid using wgrib2
+
+       A new option "-i rrfsna" is added and it will depend the download
+       RRFS-A NA data files from /lfs4/NAGAPE/wof/grib_files/RRFS-A.
+
 06/20/2023 Version 3.2
 
     1. Added option config_microp_re following Ted's suggestion
-    2. Updated static processing with new BNU soil type and parallel 
+    2. Updated static processing with new BNU soil type and parallel
        processing capability
     3. Separated subdirectory fix_files from templates.
 
@@ -48,7 +63,7 @@
     3. Process wgrib2 & ungrib in parallel mode for speedup;
     4. RRFS-initialized MPAS runs up to 60 hours
 
-    new executables: 
+    new executables:
        atmosphere_model.single
        init_atmosphere_model
        ungrib.exe
