@@ -115,23 +115,25 @@ function grid_defn {
     exit 0
 }
 
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
 cd WRKDIR
 
+touch wgrib2_${hstr}.running
+rm -rf error.wgrib2_${hstr} queue.wgrib2
+
 wgrib2path="wgrib2"
-rrfsbase=GRIBFILE
-targetbase=TARGETFILE
 verb=VERBOSE
 
 fhr=${SLURM_ARRAY_TASK_ID}
 hstr=$(printf "%02d" $fhr)
 
-rrfsfile="$rrfsbase$hstr.grib2"
-basefn="$targetbase$hstr.grib2"
+rrfsfile="GRIBFILE$hstr.grib2"
+basefn="TARGETFILE$hstr.grib2"
 
-touch wgrib2_${hstr}.running
-rm -rf error.wgrib2_${hstr} queue.wgrib2
-
-# drop un-wanted records
+#
+# Trim out un-wanted records
+#
 if [[ $fhr -eq 0 ]]; then
     valtime="anl"
 else
@@ -199,7 +201,7 @@ eval $grib2cmdstr >& /dev/null
 #${wgrib2path} tmp_${basefn} -set_grib_type same -new_grid_winds earth -new_grid $(grid_defn tmp_${basefn}) ${basefn}
 
 #
-# Put the records to a HRRR grid with lambert map projection
+# Interpolate the records to the HRRR grid with lambert map projection
 #
 if [[ $? -eq 0 ]]; then
     grid_specs_hrrr="lambert:-97.5:38.5 -122.719528:1799:3000.0 21.138123:1059:3000.0"
@@ -209,13 +211,12 @@ if [[ $? -eq 0 ]]; then
     outfile=${basefn}
 
     wgrib2 ${infile} -set_bitmap 1 -set_grib_type c3 -new_grid_winds grid \
-           -new_grid_vectors "UGRD:VGRD:USTM:VSTM:VUCSH:VVCSH" \
-           -new_grid_interpolation neighbor \
+           -new_grid_vectors "UGRD:VGRD:USTM:VSTM:VUCSH:VVCSH"            \
+           -new_grid_interpolation neighbor                               \
            -new_grid ${grid_specs_hrrr} ${tmpfile}
 
     # Merge vector field records
     wgrib2 ${tmpfile} -new_grid_vectors "UGRD:VGRD:USTM:VSTM:VUCSH:VVCSH" -submsg_uv ${outfile}
-
 fi
 
 #
@@ -227,6 +228,8 @@ else
     touch error.wgrib2_${hstr}
 fi
 
+rm -rf wgrib2_${hstr}.running
+
 #
 # Clean working files
 #
@@ -235,8 +238,6 @@ if [[ $verb -ne 1 ]]; then
     rm -rf keep_$hstr.txt
     rm -rf ${tmpfile}
 fi
-
-rm -rf wgrib2_${hstr}.running
 
 
 time2=$(date '+%s')

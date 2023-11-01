@@ -133,7 +133,7 @@ function usage {
     echo " "
     echo "    PURPOSE: Run MPAS CONUS workflow."
     echo " "
-    echo "    DATETIME - Case date and time in YYYYMMDD, Default for today"
+    echo "    DATETIME - Case date and time in YYYYMMDD[HH], Default for today at 00 UTC"
     echo "    WORKDIR  - Run Directory"
     echo "    JOBS     - One or more jobs from [ungrib,init,lbc,mpas,mpassit,upp] or [static,geogrid]"
     echo "               Default all jobs in sequence"
@@ -2657,12 +2657,12 @@ jobname="${eventdate:4:4}"
 
 exedir="$rootdir/exec"
 
-declare -A jobargs=([static]=$WORKDIR/$domname                          \
-                    [geogrid]=$WORKDIR/${domname/*_/geo_}               \
+declare -A jobargs=([static]=$WORKDIR/$domname                                 \
+                    [geogrid]=$WORKDIR/${domname/*_/geo_}                      \
                     [ungrib_hrrr]="/public/data/grids/hrrr/conus/wrfnat/grib2" \
-                    [ungrib_rrfs]="https://noaa-rrfs-pds.s3.amazonaws.com"    \
-                    [ungrib_rrfsna]="/lfs4/NAGAPE/wof/grib_files/RRFS-A"  \
-                    [ungrib_rrfsp]="https://noaa-rrfs-pds.s3.amazonaws.com"   \
+                    [ungrib_rrfs]="https://noaa-rrfs-pds.s3.amazonaws.com"     \
+                    [ungrib_rrfsna]="/lfs4/NAGAPE/wof/grib_files/RRFS-A"       \
+                    [ungrib_rrfsp]="https://noaa-rrfs-pds.s3.amazonaws.com"    \
                     [ungrib_gfs]="/public/data/grids/gfs/0p25deg/grib2"           \
                     [init]="ungrib/done.ungrib_ics $WORKDIR/$domname/done.static" \
                     [lbc]="init/done.ics ungrib/done.ungrib_lbc"                  \
