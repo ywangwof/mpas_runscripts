@@ -46,6 +46,8 @@ from pyproj import Transformer
 #from scipy.spatial import KDTree
 from scipy.interpolate import griddata
 
+import time as timeit
+
 ########################################################################
 #
 # Load the dictionary into a Namespace data structure.
@@ -261,20 +263,18 @@ def parse_args():
                                      #formatter_class=CustomFormatter)
 
     parser.add_argument('obsfiles',help='DART obs_seq.fial in netCDF format')
-    parser.add_argument('varname', help='A number from CopyMeta (see list) or an operation of two numbers',
-                                   type=str, nargs='?',default=None)
+    parser.add_argument('type',    help='Number to denote observation type or "list"', type=str,default=None)
 
     parser.add_argument('-v','--verbose',   help='Verbose output',                              action="store_true", default=False)
+    parser.add_argument('-p','--parms',     help='Specify observations copy and quality, [copy,qc_flag]',  type=str, default=None)
     parser.add_argument('-l','--vertLevels',help='Vertical levels to be plotted [level,value,tolerance]',  type=str, default=None)
-    parser.add_argument('-t','--types',     help='Specify observations [obs_type,qc_flag]',                type=str, default=None)
     parser.add_argument('-c','--cntLevels', help='Contour levels [cmin,cmax,cinc]',                        type=str, default=None)
-    parser.add_argument('-o','--outfile' ,  help='Name of output image or output directory',               type=str, default=None)
-    parser.add_argument('-k','--kdtree'  ,  help='Interplation method, using KDTree nearest neighbors instead of tricontourf', action='store_true',default=False)
     parser.add_argument('--scatter'      ,  help='Scatter plot of assimilated observations',               type=str, default=None)
     parser.add_argument('--fill'         ,  help='Value to fill masked values, apply to the scatter plot only',  type=float, default=None)
     parser.add_argument('-latlon'        ,  help='Base map latlon or lambert',                   action='store_true',default=False)
     parser.add_argument('-range'         ,  help='Map range in degrees [lat1,lon1,lat2,lon2]',             type=str, default=None)
-    parser.add_argument('--grid'         ,  help='Model file that provide grids',                type=str, default=None)
+    #parser.add_argument('--grid'         ,  help='Model file that provide grids',                type=str, default=None)
+    parser.add_argument('-o','--outfile' ,  help='Name of output image or output directory',               type=str, default=None)
 
     args = parser.parse_args()
 
@@ -291,27 +291,26 @@ def parse_args():
     else:
         parsed_args['t_level'] = 'ALL'
 
-    parsed_args['t_type'] = 'ALL'
+    parsed_args['t_copy'] = None
     parsed_args['t_qc']   = 'ALL'
-    if args.types is not None:
-        rlist = [int(item) for item in args.types.split(',')]
-        parsed_args['t_type'] = str(rlist[0])
+    if args.parms is not None:
+        rlist = [int(item) for item in args.parms.split(',')]
+        parsed_args['t_copy'] = str(rlist[0])
         if len(rlist) > 1:
             parsed_args['t_qc']   = str(rlist[1])
 
     obsfiles  = []
-    varnames  = []
+    types     = []
     obsfile = args.obsfiles
     if  os.path.lexists(obsfile):
         obsfiles.append(obsfile)
     else:
-        varnames.append(obsfile)
+        types.append(obsfile)
 
-    if args.varname is not None:
-        if os.path.lexists(args.varname):  # if the two arguments are out-of-order
-            obsfiles.append(args.varname)
-        else:
-            varnames.append(args.varname)
+    if os.path.lexists(args.type):  # if the two arguments are out-of-order
+        obsfiles.append(args.type)
+    else:
+        types.append(args.type)
 
     if len(obsfiles) == 1:
         parsed_args['obsfile'] = obsfiles[0]
@@ -319,25 +318,13 @@ def parse_args():
         print(f"file name can only be one. Got \"{obsfiles}\"")
         sys.exit(0)
 
-    operator = None
-    varname  = None
-    if len(varnames) == 1:
-        varname = varnames[0]
-
-        opmatch = re.match(r'([\w_]+)([+\-\*\/])([\w_]+)',varname)
-        if opmatch:
-            varnames=[opmatch.group(1),opmatch.group(3)]
-            operator=opmatch.group(2)
-        else:
-            varnames=[varname]
-    elif args.scatter is not None:
-        varnames = ['Null']
+    if len(types) == 1:
+        type = types[0]
     else:
-        print(f"variable name can only be one. Got \"{varnames}\"")
+        print(f"Variable type can only be one. Got \"{types}\"")
         sys.exit(0)
 
-    parsed_args['varnames'] = varnames
-    parsed_args['operator'] = operator
+    parsed_args['type']  = type
 
     parsed_args['ranges'] = None     #[-135.0,-60.0,20.0,55.0]
     if args.range == 'hrrr':
@@ -356,12 +343,13 @@ def parse_args():
         lons=rlist[1::2]
         parsed_args['ranges'] = [min(lons)-2.0,max(lons)+2.0,min(lats)-2.0,max(lats)+2.0]
 
-        #print(f"Name: {args.name}")
-        #print("Type: custom")
-        #print(f"Point: {args.ctrlon}, {args.ctrlat}")
-        #for lon,lat in ranges:
-        #    print(f"{lat}, {lon}")
-        #print(" ")
+
+    # Require t_copy parameter for slice plotting
+
+    if args.scatter is None and parsed_args['type'] != "list":
+        if parsed_args['t_copy'] is None:
+            print('ERROR: need option "-p" to know which observation copy to be plotted.')
+            sys.exit(1)
 
     #if args.scatter is None and parsed_args['varnames'][0] != "list":
     #    if args.grid is None:
@@ -451,7 +439,7 @@ def load_variables(args):
             QCMeta    = fh.variables['QCMetaData'][:,:]
 
             ncopy     = fh.dimensions['copy'].size
-            CopyMeta  = fh.variables['CopyMetaData'][:,:]
+            CopyMetaData = fh.variables['CopyMetaData'][:,:]
 
             vartime   = fh.variables['time'][:]
 
@@ -468,30 +456,25 @@ def load_variables(args):
         for j in range(0,nqc_copy):
             validqc[f"{qccopy[j]}"] = QCMeta[j,:].tobytes().decode('utf-8')
 
-        for i in range(0,nobs):
-            type             = obstype[i]
+        validtypevals = np.unique(obstype)
+        for type in validtypevals:
             validtypes[f'{type}'] = TypesMeta[type-1,:].tobytes().decode('utf-8')
 
-        for i in range(0,nobs):
-            for j in range(0,nqc_copy):
-                if varqc[i,j] not in validqcval:
-                    validqcval.append(varqc[i,j])
+        validqcval = np.unique(varqc)
 
-        for i in range(0,nobs):
-            if varvert[i] not in validverts:
-                validverts.append(varvert[i])
+        validverts = np.unique(varvert)
 
-        for i in range(0,nobs):
-            if  varvert[i] == 2:    # ISPRESSURE
-                if varloc[i,2] not in validpres:
-                    validpres.append(varloc[i,2])
-            elif  varvert[i] == 3:  # ISHEIGHT
-                if varloc[i,2] not in validhgts:
-                    validhgts.append(varloc[i,2])
+        obs_pres = np.where(varvert == 2)[0]     # ISPRESSURE
+        obs_hgts = np.where(varvert == 3)[0]     # ISHEIGHT
+        if len(obs_pres) > 0:
+            validpres = varloc[obs_pres,2]
+
+        if len(obs_hgts) > 0:
+            validhgts = varloc[obs_hgts,2]
 
         copyMeta = {}
         for k in range(0,ncopy):
-            copyMeta[k+1] = CopyMeta[k,:].tobytes().decode('utf-8')
+            copyMeta[str(k+1)] = CopyMetaData[k,:].tobytes().decode('utf-8')
 
         varlabels={
                 '1' : 'ObsValue',
@@ -556,7 +539,7 @@ QCValMeta = { '0' : 'assimilated successfully',
               '6' : 'incoming qc value was larger than threshold',
               '7' : 'Outlier threshold test failed',
               '8' : 'vertical location conversion failed'
-    }
+            }
 
 def print_meta(varobj):
     ''' Output variable information in the file
@@ -564,14 +547,40 @@ def print_meta(varobj):
 
     global QCValMeta
 
-    print("Valid QCMetaData:")
+    #-------------------------------------------------------------------
+    # Retrieve QC numbers for each type
+
+    validtypeqccount = {}
+    for key in varobj.validtypes.keys():
+
+        typeqcvals = {}
+        #
+        # Select obs_index by type
+        #
+        obs_index0 = np.where(varobj.obstype == int(key))[0]
+
+        #
+        # Select obs_index by qc flag
+        #
+        typeqcs = np.unique(varobj.varqc[obs_index0,1])
+        for qval in typeqcs:
+            obs_index1 = np.where(varobj.varqc[obs_index0,1] == qval)[0]
+
+            typeqcvals[str(qval)] = len(obs_index1)
+
+        validtypeqccount[key] = typeqcvals
+
+    #-------------------------------------------------------------------
+    # Print output messages
+
+    print("\nValid QC_copy MetaData:")
     for j in varobj.validqc.keys():
         print(f"    {j}: {varobj.validqc[j]}")
     print("")
 
     print("Valid Observation Types:")
     for key in sorted(varobj.validtypes.keys(), key=int):
-        print(f"    {key}: {varobj.validtypes[key]}")
+        print(f"    {key:>3}: {varobj.validtypes[key]} {validtypeqccount[key]}")
     print("")
 
     print(f"Valid QC values: {sorted(varobj.validqcval)} and meanings")
@@ -615,43 +624,27 @@ def retrieve_plotvar(varargs,varobj):
     #
     # Select obs_index by type
     #
-    obs_index0 = []
-    for n in range(0,varobj.nobs):
-        if varargs.t_type == 'ALL':
-            obs_index0.append(n)
-        else:
-            if varobj.obstype[n] == int(varargs.t_type):
-                obs_index0.append(n)
-
-    if varargs.t_type == 'ALL':
-        plot_meta['type_label'] = 'ALLType'
-    else:
-        plot_meta['type_label'] = varobj.validtypes[varargs.t_type].strip()
+    obs_index0 = np.where( varobj.obstype == int(varargs.type) )[0]
+    plot_meta['type_label'] = varobj.validtypes[varargs.type].strip()
 
     #
     # Select obs_index by qc flag
     #
-    obs_index1 = []
-    for n in obs_index0:
-        if varargs.t_qc == 'ALL':
-            obs_index1.append(n)
-        else:
-            if varobj.varqc[n,1] == int(varargs.t_qc):
-                obs_index1.append(n)
-
     if varargs.t_qc == 'ALL':
+        obs_index1 = obs_index0
         plot_meta['qc_label'] = 'ALLQC'
     else:
+        obs_index1 = np.where( varobj.varqc[:,1] == int(varargs.t_qc) )[0]
         plot_meta['qc_label'] = varobj.qclabels[varargs.t_qc]
 
     #
     # Select obs_index by vertical levels
     #
-    if varargs.t_level != 'ALL':
-        t_level_min = varargs.t_level - varargs.t_level_tolr
-        t_level_max = varargs.t_level + varargs.t_level_tolr
+    if varargs.t_level == 'ALL':
         plot_meta['level_label'] = 'ALLlevels'
     else:
+        t_level_min = varargs.t_level - varargs.t_level_tolr
+        t_level_max = varargs.t_level + varargs.t_level_tolr
         plot_meta['level_label'] = str(varargs.t_level)
 
     obs_index = []
@@ -677,24 +670,24 @@ def retrieve_plotvar(varargs,varobj):
         obslats.append(obslat)
 
     obsdta  = []
-    if varargs.varnames[0] == "0":
+    if varargs.t_copy == "0":
         plot_meta['varlabel'] = "QC"
         vardat  = varobj.varqc[obs_index,1]
+        validqcs = np.unique(vardat)
+        plot_meta['validqcs'] = validqcs
     else:
-        ivar = int(varargs.varnames[0])
+        ivar = int(varargs.t_copy)
         plot_meta['varlabel'] = varobj.varlabels[str(ivar)]
-        if varargs.operator is not None:
-            ivar1 = int(varargs.varnames[1])
-            plot_meta['varlabel'] = f"{varobj.varlabels[str(ivar)]}{varargs.operator}{varobj.varlabels[str(ivar1)]}"
-
 
         for i in obs_index:
             vardata = varobj.varobs[i,ivar-1]
-            if varargs.operator is not None:
-                vardata = eval(f"x {varargs.operator} y",{"x":vardata,"y":varobj.varobs[i,ivar1-1]})
             obsdta.append(vardata)
 
         vardat = np.array(obsdta)
+
+    otime = varobj.vartime[obs_index]
+    obstime = datetime.strptime('1601-01-01','%Y-%m-%d')+timedelta(days=otime[0])
+    plot_meta['time']  = obstime.strftime('%Y%m%d_%H%M%S')
 
     glons = np.array(obslons)
     glats = np.array(obslats)
@@ -709,20 +702,17 @@ def retrieve_scattervar(cmdargs,varargs,varobj):
     global QCValMeta
 
     plot_meta = {}
+
     #
     # Select obs_index by type
     #
-    obs_index = []
-    for n in range(0,varobj.nobs):
-        if varobj.obstype[n] == int(varargs.t_type):
-            obs_index.append(n)
+    obs_index = np.where( varobj.obstype == int(varargs.type) )[0]
 
-    plot_meta['type_label'] = varobj.validtypes[varargs.t_type].strip()
+    plot_meta['type_label'] = varobj.validtypes[varargs.type].strip()
 
     #
     # Get plotting arrays
     #
-
     qcdta    = varobj.varqc[obs_index,1]
     if cmdargs.scatter == "mean":
         obsdta   = varobj.varobs[obs_index,0]
@@ -754,7 +744,7 @@ def retrieve_scattervar(cmdargs,varargs,varobj):
 
         otime = timedta[qindex]
         obstime = datetime.strptime('1601-01-01','%Y-%m-%d')+timedelta(days=otime[0])
-        sdata[qcstr]['time']  = obstime.strftime('%Y%m%d %H:%M:%S')
+        sdata[qcstr]['time']  = obstime.strftime('%Y%m%d_%H:%M:%S')
 
         plot_meta['qc_label'][qcstr] = QCValMeta[qcstr]
 
@@ -920,10 +910,10 @@ def make_plot(cargs,wargs,wobj):
     else:
         ranges = wargs.ranges
 
-    if wargs.t_type == '120':
+    if wargs.type == '120':
         varname = 'refl'
     else:
-        varname = plot_meta['varlabel']
+        varname = plot_meta.varlabel
 
     color_map, normc,cmin, cmax, ticks_list = get_var_contours(varname,vardat,wargs.cntlevel)
     cntlevels = list(np.linspace(cmin,cmax,9))
@@ -974,22 +964,24 @@ def make_plot(cargs,wargs,wobj):
     # post_spread=  REFORM(outdata[4,*])
     # obsvar=       REFORM(outdata[5,*])
 
-    if wargs.varnames[0] == "0":
+    if wargs.t_copy == "0":
         mks = ['o', 'x', '+', '*', 's', 'D', '^', '1']
         cls = ['r', 'g', 'm', 'c', 'k', 'y', 'b', 'k']
-        i = 0
-        for lon,lat in zip(glons,glats):
-            j = vardat[i]
-            ax.plot(lon,lat,marker=mks[j], color=cls[j], markersize=0.2,  alpha=0.1, transform=ccrs.Geodetic())
-            i += 1
+        j = 0
+        for qc in plot_meta.validqcs:
+            lons = glons[vardat == qc]
+            lats = glats[vardat == qc]
+            ax.scatter(lons,lats,marker=mks[j], color=cls[j], s=0.4,  alpha=0.6, transform=ccrs.Geodetic(),label=QCValMeta[str(qc)])
+            j += 1
 
-        for j,mk in enumerate(mks):
-            y = 0.7-j*0.02
-            plt.plot(0.15,  y, marker=mk, color=cls[j], markersize=8,transform=plt.gcf().transFigure)
-            plt.text(0.16,  y-0.006, f": {QCValMeta[str(j)]}", color=cls[j], fontsize=14,transform=plt.gcf().transFigure)
+        plt.legend(loc="upper left")
+
+        #for j,mk in enumerate(mks):
+        #    y = 0.9-j*0.02
+        #    plt.plot(0.10,  y, marker=mk, color=cls[j], markersize=8,transform=plt.gcf().transFigure)
+        #    plt.text(0.11,  y-0.006, f": {QCValMeta[str(j)]}", color=cls[j], fontsize=14,transform=plt.gcf().transFigure)
 
     else:
-
         cntr = ax.scatter(glons,glats,marker='.', c=vardat, alpha=1.0, s=4, cmap=color_map, norm=normc, transform=carr)
 
         #mod_obj = read_modgrid(cargs.grid)
@@ -1033,12 +1025,9 @@ def make_plot(cargs,wargs,wobj):
     plt.style.use(style) # Set the style that we choose above
 
     #
-    diffstr = ""
-    if wargs.operator is not None:
-        diffstr = "_diff"
 
     if wargs.defaultoutfile:
-        outpng = f"{plot_meta.varlabel}{diffstr}.{plot_meta.type_label}_{plot_meta.level_label}_{plot_meta.qc_label}.png"
+        outpng = f"{plot_meta.varlabel}.{plot_meta.type_label}_{plot_meta.level_label}_{plot_meta.qc_label}_{plot_meta.time}.png"
     else:
         root,ext=os.path.splitext(wargs.outfile)
         if ext != ".png":
@@ -1107,7 +1096,7 @@ def make_scatter(cargs,wargs,wobj):
         plt.scatter(dats[xobs_ax], dats['post'], c=colors[i], marker=markers[i], alpha=0.1, label=qclable)
         i += 1
 
-    if wargs.t_type == '119' and cargs.scatter == "mean":
+    if wargs.type == '119' and cargs.scatter == "mean":
         plt.ylim(-60, 60)
 
     plt.legend(loc='upper left')
@@ -1119,7 +1108,7 @@ def make_scatter(cargs,wargs,wobj):
     # Save figure to a file
     #
     if wargs.defaultoutfile:
-        outpng = f"obs_{plot_meta.type_label}_{cargs.scatter}.png"
+        outpng = f"Obs{cargs.scatter.capitalize()}_{plot_meta.type_label}_{dta_s[qc]['time']}.png"
     else:
         root,ext=os.path.splitext(wargs.outfile)
         if ext != ".png":
@@ -1142,23 +1131,36 @@ def make_scatter(cargs,wargs,wobj):
 
 if __name__ == "__main__":
 
+    time0 = timeit.time()
+
     cmd_args, args = parse_args()
+
+    if cmd_args.verbose: print("\n Elapsed time of parse_args is:  %f seconds" % (timeit.time() - time0))
 
     #
     # Load variable
     #
+    time1 = timeit.time()
+
     obs_obj = load_variables(args)
 
-    if args.varnames[0] == "list":
+    if cmd_args.verbose: print("\n Elapsed time of load_variables is:  %f seconds" % (timeit.time() - time1))
+
+    if args.type == "list":
+        time2 = timeit.time()
+
         print_meta(obs_obj)
+
+        if cmd_args.verbose: print("\n Elapsed time of print_meta is:  %f seconds" % (timeit.time() - time2))
+
         sys.exit(0)
     else:
+        time3 = timeit.time()
+
         if cmd_args.scatter is not None:
-            if args.t_type == 'ALL':
-                print("ERROR: Need to specify the observation type with parameter \"-p\".")
-                sys.exit(1)
-            else:
-                make_scatter(cmd_args,args,obs_obj)
+            make_scatter(cmd_args,args,obs_obj)
         else:
             make_plot(cmd_args, args,obs_obj)
+
+        if cmd_args.verbose: print("\n Elapsed time of make_plot is:  %f seconds" % (timeit.time() - time3))
 

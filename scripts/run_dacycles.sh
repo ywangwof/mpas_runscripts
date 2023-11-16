@@ -176,7 +176,7 @@ EOF
     # PREPROCESS NCEP PrepBufr DATA
     #=================================================
 
-    if [[ -e ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2} && "${anlys_time:2:2}" == "15" ]]; then
+    if [[ -e ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2} && "${anlys_time:2:2}" == "00" ]]; then
         echo "    $((k++)): Using PrepBufr observations in ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}"
         echo "${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}" > obsflist.bufr
         obsflists+=(obsflist.bufr)
@@ -727,9 +727,16 @@ function run_filter {
                                 'METAR_V_10_METER_WIND',
                                 'METAR_TEMPERATURE_2_METER',
                                 'METAR_DEWPOINT_2_METER',
+                                'MARINE_SFC_U_WIND_COMPONENT',
+                                'MARINE_SFC_V_WIND_COMPONENT',
+                                'MARINE_SFC_TEMPERATURE',
+                                'MARINE_SFC_PRESSURE',
+                                'LAND_SFC_PRESSURE',
                                 'LAND_SFC_ALTIMETER',
                                 'LAND_SFC_DEWPOINT',
                                 'LAND_SFC_TEMPERATURE',
+                                'LAND_SFC_SPECIFIC_HUMIDITY',
+                                'LAND_SFC_RELATIVE_HUMIDITY',
                                 'LAND_SFC_U_WIND_COMPONENT',
                                 'LAND_SFC_V_WIND_COMPONENT',
                                 'RADAR_REFLECTIVITY',

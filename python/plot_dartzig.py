@@ -40,6 +40,9 @@ import cartopy.feature as cfeature
 
 from netCDF4 import Dataset
 from datetime import datetime, timedelta
+from matplotlib.ticker import IndexLocator
+
+import time as timeit
 
 ########################################################################
 #
@@ -81,7 +84,8 @@ def parse_args():
     parser.add_argument('obstype', help='A number denotes the observation type',type=str, default=None)
 
     parser.add_argument('-v','--verbose',   help='Verbose output',                              action="store_true", default=False)
-    parser.add_argument('-r','--rundir',    help='MPAS-WoFS run directory',                     type=str,            default=os.getcwd())
+    parser.add_argument('-r','--rundir',    help='MPAS-WoFS run directory (no date)',           type=str,            default=os.getcwd())
+    parser.add_argument('-t','--time',      help='4-digit time string for listing the file content', type=str,       default='1700')
     parser.add_argument('-o','--outfile',   help='Name of output image or output directory',    type=str,            default=None)
 
     args = parser.parse_args()
@@ -176,7 +180,7 @@ def load_variables(cargs,wargs, begtime, endtime):
 
         timestr   = run_dt.strftime("%H%M")
         timedtstr = run_dt.strftime("%Y%m%d%H%M")
-        obsfile = os.path.join(wargs.run_dir,wargs.eventdate,'dacycles',timestr,f'obs_seq.{timedtstr}.nc')
+        obsfile = os.path.join(wargs.run_dir,wargs.eventdate,'dacycles',timestr,f'obs_seq.final.{timedtstr}.nc')
 
         if os.path.lexists(obsfile):
 
@@ -211,7 +215,7 @@ def load_variables(cargs,wargs, begtime, endtime):
                 obstype = fh.variables['obs_type'][:]
                 typesMeta = fh.variables['ObsTypesMetaData'][:,:]
 
-            nobs  = varobs.shape[0]
+            nobs      = varobs.shape[0]
             typeLabel = typesMeta[int(wargs.obstype)-1,:].tobytes().decode('utf-8').strip()
         else:
             print(f"ERROR: file {obsfile} not found")
@@ -219,29 +223,27 @@ def load_variables(cargs,wargs, begtime, endtime):
 
         # select by observation type
         #
-        obs_index    = []
-        for n in range(0,nobs):
-            if obstype[n] == int(wargs.obstype):
-                obs_index.append(n)
+        obs_index = np.where( obstype == int(wargs.obstype) )[0]
 
         nobs_type = len(obs_index)
-        obs  = varobs[obs_index,0]
-        prio = varobs[obs_index,1]
-        post = varobs[obs_index,2]
+        if nobs_type > 0:
+            obs  = varobs[obs_index,0]
+            prio = varobs[obs_index,1]
+            post = varobs[obs_index,2]
 
-        if cargs.verbose:
-            print(f"time = {timestr}, number of obs = {nobs_type} for {typeLabel}")
+            if cargs.verbose:
+                print(f"time = {timestr}, number of obs = {nobs_type} for {typeLabel}")
 
-        n1 = prio.count()
-        rms_prior = np.sqrt(np.sum((prio-obs)**2)/n1)
-        n2 = post.count()
-        rms_post = np.sqrt(np.sum((post-obs)**2)/n2)
-        if cargs.verbose:
-            print(f"       prior = {n1} - {rms_prior}; post = {n2} - {rms_post}")
+            n1 = prio.count()
+            rms_prior = np.sqrt(np.sum((prio-obs)**2)/n1)
+            n2 = post.count()
+            rms_post = np.sqrt(np.sum((post-obs)**2)/n2)
+            if cargs.verbose:
+                print(f"       prior = {n1} - {rms_prior}; post = {n2} - {rms_post}")
 
-        var_obj['rms_prior'].append(rms_prior)
-        var_obj['rms_post'].append(rms_post)
-        var_obj['times'].append(timestr)
+            var_obj['rms_prior'].append(rms_prior)
+            var_obj['rms_post'].append(rms_post)
+            var_obj['times'].append(timestr)
 
     var_obj['type_label'] = typeLabel
 
@@ -249,14 +251,25 @@ def load_variables(cargs,wargs, begtime, endtime):
 
 ########################################################################
 
-QCValMeta = { '0' : 'assim',
-              '1' : 'eval only',
-              '2' : 'assim, post forward fail',
-              '3' : 'eval, post forward fail',
-              '4' : 'prior forward fail',
-              '5' : 'N/A',
-              '6' : 'prior QC rejected',
-              '7' : 'outlier rejected' }
+#QCValMeta = { '0' : 'assim',
+#              '1' : 'eval only',
+#              '2' : 'assim, post forward fail',
+#              '3' : 'eval, post forward fail',
+#              '4' : 'prior forward fail',
+#              '5' : 'N/A',
+#              '6' : 'prior QC rejected',
+#              '7' : 'outlier rejected' }
+
+QCValMeta = { '0' : 'assimilated successfully',
+              '1' : 'evaluated only, not used in the assimilation',
+              '2' : 'posterior forward failed',
+              '3' : 'evaluated only, posterior forward failed',
+              '4' : 'prior forward failed, not used',
+              '5' : 'not used because not selected in namelist',
+              '6' : 'incoming qc value was larger than threshold',
+              '7' : 'Outlier threshold test failed',
+              '8' : 'vertical location conversion failed'
+            }
 
 def print_meta(wargs,time4str):
     ''' Output variable information in the file
@@ -270,7 +283,7 @@ def print_meta(wargs,time4str):
 
     obs_timestr = obs_dt.strftime("%Y%m%d%H%M")
 
-    obsfile = os.path.join(wargs.run_dir,wargs.eventdate,'dacycles',time4str,f'obs_seq.{obs_timestr}.nc')
+    obsfile = os.path.join(wargs.run_dir,wargs.eventdate,'dacycles',time4str,f'obs_seq.final.{obs_timestr}.nc')
 
     if os.path.lexists(obsfile):
 
@@ -312,52 +325,46 @@ def print_meta(wargs,time4str):
             QCMeta    = fh.variables['QCMetaData'][:,:]
 
             ncopy     = fh.dimensions['copy'].size
-            CopyMeta  = fh.variables['CopyMetaData'][:,:]
+            CopyMetaData  = fh.variables['CopyMetaData'][:,:]
 
-        nobs           = varqc.shape[0]
-        validqc        = {}
-        validtypes     = {}
-        validqcval     = []
-
-        validverts      = []
-        validpres       = []
-        validhgts       = []
+        #nobs           = varqc.shape[0]
 
         # go through each observations
+        validqcstr     = {}
         for j in range(0,nqc_copy):
-            validqc[f"{qccopy[j]}"] = QCMeta[j,:].tobytes().decode('utf-8')
+            validqcstr[f"{qccopy[j]}"] = QCMeta[j,:].tobytes().decode('utf-8')
 
-        for i in range(0,nobs):
-            type             = obstype[i]
+        validtypes     = {}
+        validtypevals = np.unique(obstype)
+        for type in validtypevals:
             validtypes[f'{type}'] = TypesMeta[type-1,:].tobytes().decode('utf-8')
 
-        for i in range(0,nobs):
-            for j in range(0,nqc_copy):
-                if varqc[i,j] not in validqcval:
-                    validqcval.append(varqc[i,j])
+        validqcval = np.unique(varqc)
 
-        for i in range(0,nobs):
-            if varvert[i] not in validverts:
-                validverts.append(varvert[i])
+        validverts = np.unique(varvert)
 
-        for i in range(0,nobs):
-            if  varvert[i] == 2:    # ISPRESSURE
-                if varloc[i,2] not in validpres:
-                    validpres.append(varloc[i,2])
-            elif  varvert[i] == 3:  # ISHEIGHT
-                if varloc[i,2] not in validhgts:
-                    validhgts.append(varloc[i,2])
+        obs_pres = np.where(varvert == 2)[0]     # ISPRESSURE
+        obs_hgts = np.where(varvert == 3)[0]     # ISHEIGHT
+        if len(obs_pres) > 0:
+            validpres = varloc[obs_pres,2]
+        else:
+            validpres = None
+
+        if len(obs_hgts) > 0:
+            validhgts = varloc[obs_hgts,2]
+        else:
+            validhgts = None
 
         copyMeta = {}
         for k in range(0,ncopy):
-            copyMeta[k+1] = CopyMeta[k,:].tobytes().decode('utf-8')
+            copyMeta[str(k+1)] = CopyMetaData[k,:].tobytes().decode('utf-8')
 
     else:
         print(f"ERROR: file {obsfile} not found")
         sys.exit(1)
 
     var_obj = {}
-    var_obj['validqc']    = validqc      # QCMetaData
+    var_obj['validqcstr'] = validqcstr   # QCMetaData
     var_obj['validtypes'] = validtypes   # ObsTypesMetaData
     var_obj['validqcval'] = validqcval   # qc, distinguis values
     var_obj['validverts'] = validverts   # which_vert, distinguis values
@@ -367,14 +374,42 @@ def print_meta(wargs,time4str):
 
     varobj = make_namespace(var_obj,level=1)
 
-    print("Valid QCMetaData:")
-    for j in varobj.validqc.keys():
-        print(f"    {j}: {varobj.validqc[j]}")
+    #-------------------------------------------------------------------
+    # Retrieve QC numbers for each type
+
+    validtypeqccount = {}
+    for key in varobj.validtypes.keys():
+
+        typeqcvals = {}
+        #
+        # Select obs_index by type
+        #
+        obs_index0 = np.where(obstype == int(key))[0]
+
+        #
+        # Select obs_index by qc flag
+        #
+        typeqcs = np.unique(varqc[obs_index0,1])
+        for qval in typeqcs:
+            obs_index1 = np.where(varqc[obs_index0,1] == qval)[0]
+
+            typeqcvals[str(qval)] = len(obs_index1)
+
+        validtypeqccount[key] = typeqcvals
+
+    #-------------------------------------------------------------------
+    # Print output messages
+
+    print(f"\nobs_seq.final file: {obsfile}\n")
+
+    print("Valid qc_copy MetaData:")
+    for j in varobj.validqcstr.keys():
+        print(f"    {j}: {varobj.validqcstr[j]}")
     print("")
 
-    print("Valid Observation Types:")
+    print("Valid Observation Types {qc: number, [qc: number]}:")
     for key in sorted(varobj.validtypes.keys(), key=int):
-        print(f"    {key}: {varobj.validtypes[key]}")
+        print(f"    {key:>3}: {varobj.validtypes[key]} {validtypeqccount[key]}")
     print("")
 
     print(f"Valid QC values: {sorted(varobj.validqcval)} and meanings")
@@ -434,12 +469,18 @@ def make_plot(cargs,wargs,wobj):
         y.extend([y1,y2])
         i += 1
 
-    ax.plot(x,y,color='r',marker='*')
-    #plt.scatter(x,y,color=c, linewidth=2)
-    ax.set_title(f'RMS of {wobj.type_label}')
-    ax.set_xticks(x[2::4])
-    ax.set_xticklabels(wobj.times[1::2], rotation = 50)
+    ax.plot(x,y,color='r')
+    ax.scatter(x[::2],y[::2],color='b', marker='*',label="prior")
+    ax.scatter(x[1::2],y[1::2],color='g', marker='+',label="posterior")
+    ax.set_title(f'RMS of {wobj.type_label} for {wargs.eventdate} ')
+    ax.set_xticks(x[0::2])
+    ax.set_xticklabels(wobj.times, rotation = 50)
+    ax.xaxis.set_minor_locator(IndexLocator(1,0))
+    ax.xaxis.set_major_locator(IndexLocator(2,1))
     ax.set_ylabel(wobj.type_label)
+    ax.set_xlabel("Data Assimilation Cycles")
+    ax.legend(loc="upper right")
+    ax.xaxis.grid(True)
 
 
     # Color      Description
@@ -463,7 +504,7 @@ def make_plot(cargs,wargs,wobj):
     # '|'        Vline             # '_'        Hline
 
     if wargs.defaultoutfile:
-        outpng = f"zig_{wobj.type_label}.png"
+        outpng = f"zig_{wobj.type_label}_{wargs.eventdate}.png"
     else:
         root,ext=os.path.splitext(wargs.outfile)
         if ext != ".png":
@@ -486,15 +527,32 @@ def make_plot(cargs,wargs,wobj):
 
 if __name__ == "__main__":
 
+    time0 = timeit.time()
+
     cargs, wargs = parse_args()
 
+    if cargs.verbose: print("\n Elapsed time of parse_args is:  %f seconds" % (timeit.time() - time0))
+
     if wargs.obstype == "list":
-        print_meta(wargs,'1530')
+        time1 = timeit.time()
+
+        print_meta(wargs,cargs.time)
+
+        if cargs.verbose: print("\n Elapsed time of print_meta is:  %f seconds" % (timeit.time() - time1))
+
         sys.exit(0)
     else:
         #
         # Load variable
         #
+        time2 = timeit.time()
+
         obs_obj = load_variables(cargs,wargs, '1515','0300')
 
+        if cargs.verbose: print("\n Elapsed time of load_variables is:  %f seconds" % (timeit.time() - time2))
+
+        time3 = timeit.time()
+
         make_plot(cargs, wargs,obs_obj)
+
+        if cargs.verbose: print("\n Elapsed time of make_plot is:  %f seconds" % (timeit.time() - time3))
