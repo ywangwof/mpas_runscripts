@@ -223,7 +223,7 @@ EOF
             echo "Error with command ${obspreprocess} for CWP data"
         fi
     else
-        echo "    CWP not found: ${CWP_DIR}/obs_seq_cwp.GOES-16_V04.${anlys_date}${anlys_time}"
+        echo "    CWP not found: ${CWP_DIR}/obs_seq_cwp.G16_V04.${anlys_date}${anlys_time}"
     fi
 
     #=================================================
@@ -618,7 +618,7 @@ function run_filter {
   /
 
 &quality_control_nml
-   input_qc_threshold = 3,
+   input_qc_threshold = 5,
    outlier_threshold  = 3,
    enable_special_outlier_code = .false.
   /
@@ -645,7 +645,7 @@ function run_filter {
 
 &assim_tools_nml
    filter_kind                       = 1
-   cutoff                            = 0.00015
+   cutoff                            = 0.0015
    distribute_mean                   = .false.
    convert_all_obs_verticals_first   = .true.
    convert_all_state_verticals_first = .false.
@@ -709,7 +709,20 @@ function run_filter {
 !                                'DOPPLER_RADIAL_VELOCITY'
 
 &obs_kind_nml
-   assimilate_these_obs_types = 'METAR_ALTIMETER',
+   assimilate_these_obs_types = 'RADIOSONDE_TEMPERATURE',
+                                'RADIOSONDE_U_WIND_COMPONENT',
+                                'RADIOSONDE_V_WIND_COMPONENT',
+                                'RADIOSONDE_SPECIFIC_HUMIDITY',
+                                'GPSRO_REFRACTIVITY',
+                                'LAND_SFC_ALTIMETER',
+                                'MARINE_SFC_DEWPOINT',
+                                'AIRCRAFT_U_WIND_COMPONENT',
+                                'AIRCRAFT_V_WIND_COMPONENT',
+                                'AIRCRAFT_TEMPERATURE',
+                                'ACARS_U_WIND_COMPONENT',
+                                'ACARS_V_WIND_COMPONENT',
+                                'ACARS_TEMPERATURE',
+                                'METAR_ALTIMETER',
                                 'METAR_U_10_METER_WIND',
                                 'METAR_V_10_METER_WIND',
                                 'METAR_TEMPERATURE_2_METER',
@@ -1302,7 +1315,7 @@ function run_update_states {
 
     echo "    Running ${exedir}/dart/obs_seq_to_netcdf"
     ${runcmd_str} ${exedir}/dart/obs_seq_to_netcdf >& $srunout
-    mv obs_epoch_001.nc obs_seq.${timestr_cur}.nc
+    mv obs_epoch_001.nc obs_seq.final.${timestr_cur}.nc
 
     #------------------------------------------------------
     # Run update_mpas_states for all ensemble members
@@ -1353,8 +1366,8 @@ function run_update_bc {
     fi
 
     if [[ $run_updatebc == true ]]; then
-        cpcmd="cp"
-        #cpcmd="rsync -a"
+        #cpcmd="cp"
+        cpcmd="rsync -a"
     else
         cpcmd="ln -sf"
     fi

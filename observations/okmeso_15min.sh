@@ -17,6 +17,7 @@ timeend=${2-2023033115}
 
 MESO_DIR=/work/rt_obs/Mesonet
 WORK_dir=/scratch/ywang/MPAS/mpas_scripts/run_dirs/OBS_SEQ/Mesonet
+
 TEMPLATE_FILE=/scratch/ywang/MPAS/mpas_scripts/observations/input.nml.mesonet
 MESOINFO_FILE=/scratch/ywang/MPAS/mpas_scripts/observations/geoinfo.csv
 MPASWoFS_DIR=/scratch/ywang/MPAS/mpas_scripts/run_dirs
@@ -79,7 +80,7 @@ for((i=timebeg_s;i<=timeend_s;i+=900)); do
         echo "MPAS restart file: ${MPAS_INITFILE} not exist"
         exit 0
     fi
-    echo ${MPAS_INITFILE}
+    echo "Using ${MPAS_INITFILE} as init.nc ...."
     ln -sf ${MPAS_INITFILE} init.nc
 
     mesonet_obs_file="${MESO_DIR}/${yyyy}/${mm}/${dd}/mesonet.realtime.${yyyy}${mm}${dd}${hh}${anl_min}.mdf"
@@ -111,6 +112,7 @@ EOF
         echo "Saving ${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min}"
         mv obs_seq.new ${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min}
     else
+        echo "O observations in ${WORK_dir}"
         rm obs_seq.new
     fi
 
