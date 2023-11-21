@@ -2,7 +2,7 @@
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
-#SBATCH -t 01:30:00
+#SBATCH -t CLAIMTIME
 #SBATCH --output=WRKDIR/fcst_%a_%j.log
 ACCTSTR
 EXCLSTR
@@ -57,7 +57,10 @@ RUNMPCMD -n NOPART EXEDIR/atmosphere_model.single
 if [[ $? -eq 0 ]]; then
     touch done.fcst_$memstr
     for fn in SAVETAG; do
-       mv ${fn} ..
+       if [[ -e $fn ]]; then
+          echo "Saving file: $fn to .."
+          mv ${fn} ..
+       fi
     done
 else
     touch error.fcst_$memstr

@@ -458,6 +458,7 @@ s/PARTION/${partition_fcst}/
 s/NOPART/$npefcst/
 s/JOBNAME/mpas_${eventtime}/
 s/CPUSPEC/${claim_cpu_fcst}/g
+s/CLAIMTIME/${claim_time_fcst}/
 s/MODULE/${modulename}/g
 s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
@@ -834,6 +835,15 @@ function fcst_driver() {
         mkwrkdir $fcstwrkdir 0        # keep original directory
         cd $fcstwrkdir
 
+        if [[ $dorun == true && $jobwait -eq 1 ]]; then
+            num_resubmit=2               # resubmit failed jobs
+        else
+            num_resubmit=-1              # Just check job status
+        fi
+
+        echo ""
+        echo "- FCST Cycle at ${eventtime}"
+
         if [[ " ${jobs[*]} " =~ " mpas " ]]; then
             #------------------------------------------------------
             # 1. Model forecast for all members
@@ -843,10 +853,8 @@ function fcst_driver() {
             mpas_jobscript="run_mpas.${mach}"
             run_mpas $fcstwrkdir $isec
 
-            if [[ $dorun == true && $jobwait -eq 1 ]]; then
-                #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                check_and_resubmit "fcst" $fcstwrkdir $ENS_SIZE $mpas_jobscript 2
-            fi
+            #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+            check_and_resubmit "fcst" $fcstwrkdir $ENS_SIZE $mpas_jobscript ${num_resubmit}
         fi
 
        if [[ " ${jobs[*]} " =~ " mpassit " ]]; then
@@ -857,13 +865,11 @@ function fcst_driver() {
 
             run_mpassit $fcstwrkdir $isec
 
-            if [[ $dorun == true && $jobwait -eq 1 ]]; then
-                for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
-                    minstr=$(printf "%03d" $((i/60)))
-                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                    check_and_resubmit "mpassit$minstr mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit_$minstr.slurm 2
-                done
-            fi
+            for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
+                minstr=$(printf "%03d" $((i/60)))
+                #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+                check_and_resubmit "mpassit$minstr mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit_$minstr.slurm ${num_resubmit}
+            done
         fi
 
        if [[ " ${jobs[*]} " =~ " upp " ]]; then

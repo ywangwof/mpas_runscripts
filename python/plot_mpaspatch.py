@@ -204,7 +204,7 @@ def get_mpas_patches(meshfile, pickle_fname=None):
 
 def load_mpas_patches(pickle_fname):
 
-    print(f"Using pickle file: {pickle_fname}")
+    print(f"Using pickle file: \"{pickle_fname}\"")
 
     if(os.path.isfile(pickle_fname)):
         pickled_patches = open(pickle_fname,'rb')
@@ -390,7 +390,7 @@ if __name__ == "__main__":
                                             ''')
                                      #formatter_class=CustomFormatter)
 
-    parser.add_argument('fcstfiles', nargs='+',help='MPAS forecast file')
+    parser.add_argument('fcstfiles', nargs='+',help='MPAS forecast files, two files to computer the difference')
     parser.add_argument('varname', help='Name of variable to be plotted',type=str, default=None)
 
     parser.add_argument('-v','--verbose',   help='Verbose output',                             action="store_true", default=False)

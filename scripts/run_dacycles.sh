@@ -742,7 +742,6 @@ function run_filter {
                                 'RADAR_REFLECTIVITY',
                                 'RADAR_CLEARAIR_REFLECTIVITY',
                                 'DOPPLER_RADIAL_VELOCITY',
-                                'GOES_LWP_PATH',
                                 'GOES_IWP_PATH',
                                 'GOES_CWP_ZERO',
                                 'GOES_16_ABI_TB',
@@ -1823,6 +1822,7 @@ s/PARTION/${partition_fcst}/
 s/NOPART/$npefcst/
 s/JOBNAME/mpas_${eventtime}/
 s/CPUSPEC/${claim_cpu_fcst}/g
+s/CLAIMTIME/${claim_time_fcst}/
 s#MODULE#${modulename}#g
 s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g

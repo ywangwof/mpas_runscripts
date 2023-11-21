@@ -106,6 +106,8 @@ function check_and_resubmit {
     local donenum=$3                    # total number of jobs
     local myjobscript=${4-}             # empty no resubmissions
     local numtries=${5-0}               # number of resubmissions
+                                        # >= 0 check and wait for job done or failed to exit the whole program
+                                        # <  0 check number of done files only
 
     read -r -a jobnames <<< "$1"
     local jobname=${jobnames[0]}
@@ -123,50 +125,79 @@ function check_and_resubmit {
 
     cd $mywrkdir
 
-    numtry=0; done=0
+    checkonly=false
+    if [[ $numtries -lt 0 ]]; then
+        numtries=0
+        checkonly=true
+    fi
 
-    runjobs=$(seq 1 $donenum)
-    #echo ${runjobs[@]}
-    while [[ $done -lt $donenum && ($numtry -lt $numtries || $numtries -eq 0 ) ]]; do
-        jobarrays=()
-        for mem in ${runjobs}; do
-            memstr=$(printf "%02d" $mem)
-            memdir="$mywrkdir/${memname}$memstr"
-            donefile="$memdir/done.${jobname}_$memstr"
-            errorfile="$memdir/error.${jobname}_$memstr"
+    numtry=0; done=0; running=0
 
-            echo "$$: Checking: $donefile"
-            while [[ ! -e $donefile ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for $donefile"
-                fi
+    if [[ -e $mywrkdir/done.${jobname} ]]; then    # do nothing
+        done=$donenum
+    else                                           # check each member's status
+        runjobs=$(seq 1 $donenum)
+        #echo ${runjobs[@]}
+        while [[ $done -lt $donenum && $numtry -le $numtries ]]; do
+            jobarrays=()
+            for mem in ${runjobs}; do
+                memstr=$(printf "%02d" $mem)
+                memdir="$mywrkdir/${memname}$memstr"
+                donefile="$memdir/done.${jobname}_$memstr"
+                errorfile="$memdir/error.${jobname}_$memstr"
 
-                if [[ -e $errorfile ]]; then
-                    jobarrays+=($mem)
-                    let done-=-1
-                    break
-                fi
-                sleep 10
+                if [[ $verb -eq 1 ]]; then echo "$$: Checking: $donefile"; fi
+                while [[ ! -e $donefile ]]; do
+                    if [[ -e $errorfile ]]; then
+                        jobarrays+=($mem)
+                        let done-=-1
+                        break
+                    elif $checkonly; then
+                        let running+=1
+                        continue 2
+                    fi
+
+                    if [[ $verb -eq 1 ]]; then
+                        echo "Waiting for $donefile"
+                    fi
+                    sleep 10
+                done
+                #if [[ $verb -eq 1 ]]; then echo $donefile; fi
+                let done+=1
             done
-            #if [[ $verb -eq 1 ]]; then echo $donefile; fi
-            let done+=1
+
+            if [[ $done -eq $donenum ]]; then
+                touch $mywrkdir/done.${jobname}
+                rm -f $mywrkdir/queue.${jobname}
+                break
+            elif [[ $myjobscript && ${#jobarrays[@]} -gt 0 && $numtry -lt $numtries ]]; then
+                runjobs=( "${jobarrays[@]} ")
+                echo "Try these failed jobs again: ${runjobs[@]}"
+                $runcmd "--array=$(join_by_comma ${runjobs[@]})" $myjobscript
+            fi
+            let numtry+=1
         done
+    fi
 
-        if [[ $done -eq $donenum ]]; then
-            touch $mywrkdir/done.${jobname}
-            rm -f $mywrkdir/queue.${jobname}
-            break
-        elif [[ $myjobscript && ${#jobarrays[@]} -gt 0 && $numtry -lt $numtries ]]; then
-            runjobs=( "${jobarrays[@]} ")
-            echo "Try these failed jobs again: ${runjobs[@]}"
-            $runcmd "--array=$(join_by_comma ${runjobs[@]})" $myjobscript
+    #
+    # Output a message and then return or exit
+    #
+    outmessage="Status of $jobname: done: $done"
+    if [[ $running -gt 0 ]]; then
+        outmessage="$outmessage; queued/running: $running"
+    fi
+
+    if [[ ${#jobarrays[@]} -gt 0 ]]; then
+        outmessage="$outmessage; failed: ${#jobarrays[@]} - [${jobarrays[@]}]"
+    fi
+
+    echo "$$-check_and_resubmit: $outmessage"
+    if [[ $done -lt $donenum ]]; then
+        if $checkonly; then
+            return
+        else
+            exit 9
         fi
-        let numtry+=1
-    done
-
-    if [[ $done -lt $donenum && ($numtry -ge $numtries || $numtries -ne 0 ) ]]; then
-        echo "There are failed members of $jobname: ${jobarrays[@]}"
-        exit 9
     fi
 }
 

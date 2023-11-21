@@ -1165,6 +1165,7 @@ function write_runtimeconfig {
     npefilter="${npefilter}"
     nnodes_filter="${nnodes_filter}"    # on Cheyenne only
     nnodes_fcst="${nnodes_dafcst}"      # on Cheyenne only
+    claim_time_fcst="00:20:00"
 
 [fcst]
     ENS_SIZE=18
@@ -1185,6 +1186,8 @@ function write_runtimeconfig {
     npepost="${npepost}"
     nnodes_fcst="${nnodes_fcst}"        # on Cheyenne only
     nnodes_post="${nnodes_post}"        # on Cheyenne only
+    claim_time_fcst="01:20:00"
+
 EOF
 
 }
