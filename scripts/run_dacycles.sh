@@ -91,7 +91,7 @@ function usage {
     echo "               YYYYmmdd:     run all cycles from $eventtime to 0300. Or use options \"-s\" & \"-e\" to specify cycles."
     echo "               YYYYmmddHHMM: run this DA cycle only."
     echo "    WORKDIR  - Run Directory"
-    echo "    JOBS     - One or more jobs from [filter,update_states,mpas]"
+    echo "    JOBS     - One or more jobs from [filter,update_states,mpas,clean,obs_diag,obs_final2nc]"
     echo "               Default all jobs in a DA cyle"
     echo " "
     echo "    OPTIONS:"
@@ -474,7 +474,7 @@ function run_filter {
 
     if [[ $dorun == true ]]; then
         for cond in ${conditions[@]}; do
-            echo "$$-${FUNCNAME[0]}: Checking: $cond"
+            echo "$$-${FUNCNAME[0]}: Checking $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
@@ -959,20 +959,21 @@ function run_filter {
    verbose           = .true.
   /
 
-
 &obs_diag_nml
    obs_sequence_name  = 'obs_seq.final'
-   first_bin_center = 2010,10,23,12,00,00
-   last_bin_center  = 2010,10,23,12,00,00
-   bin_width        =    0, 0, 1,00,00,00
-   time_to_skip     =    0, 0, 0,00,00,00
-   trusted_obs      = 'null'
+   obs_sequence_list  = ''
+   first_bin_center   = 2010,10,23,12,00,00
+   last_bin_center    = 2010,10,23,12,00,00
+   bin_width          =    0, 0, 0,00,15,00
+   bin_separation     =    0, 0, 0,00,15,00
+   time_to_skip       =    0, 0, 0,00,00,00
+   trusted_obs        = 'null'
    nregions  = 1
    lonlim1   =   0.0
    lonlim2   = 360.0
    latlim1   = -90.0
    latlim2   =  90.0
-   reg_names = 'global'
+   reg_names = 'WOFS'
    create_rank_histogram = .true.
    outliers_in_histogram = .true.
    use_zero_error_obs    = .false.
@@ -1299,7 +1300,7 @@ function run_update_states {
 
     if [[ $dorun == true ]]; then
         for cond in ${conditions[@]}; do
-            echo "$$-${FUNCNAME[0]}: Checking: $cond"
+            echo "$$-${FUNCNAME[0]}: Checking $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
@@ -1308,20 +1309,6 @@ function run_update_states {
             done
         done
     fi
-
-    #------------------------------------------------------
-    # Run obs_seq_to_netcdf
-    #------------------------------------------------------
-
-    if [[ $verb -eq 1 ]]; then
-        srunout="1"
-    else
-        srunout="obs_seq_to_netcdf.log"
-    fi
-
-    echo "    Running ${exedir}/dart/obs_seq_to_netcdf"
-    ${runcmd_str} ${exedir}/dart/obs_seq_to_netcdf >& $srunout
-    mv obs_epoch_001.nc obs_seq.final.${timestr_cur}.nc
 
     #------------------------------------------------------
     # Run update_mpas_states for all ensemble members
@@ -1406,7 +1393,7 @@ function run_update_bc {
 
         if [[ $dorun == true ]]; then
             for cond in ${conditions[@]}; do
-                echo "$$-${FUNCNAME[0]}: Checking: $cond"
+                echo "$$-${FUNCNAME[0]}: Checking $cond"
                 while [[ ! -e $cond ]]; do
                     if [[ $verb -eq 1 ]]; then
                         echo "Waiting for file: $cond"
@@ -1473,7 +1460,7 @@ function run_mpas {
 
     if [[ $dorun == true ]]; then
         for cond in ${conditions[@]}; do
-            echo "$$-${FUNCNAME[0]}: Checking: $cond"
+            echo "$$-${FUNCNAME[0]}: Checking $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
@@ -1803,7 +1790,7 @@ EOF
 
     if [[ $dorun == true ]]; then
         for cond in ${conditions[@]}; do
-            echo "$$-${FUNCNAME[0]}: Checking: $cond"
+            echo "$$-${FUNCNAME[0]}: Checking $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
@@ -1966,6 +1953,198 @@ function da_cycle_driver() {
 
 ########################################################################
 
+function run_obs_diag {
+    # $1     $2
+    # start  end
+    local start_sec=$1
+    local end_sec=$2
+
+    #
+    # Build working directory
+    #
+    dawrkdir=$rundir/dacycles
+    if [[ ! -d $dawrkdir ]]; then
+        echo "ERROR: $dawrkdir not exsit."
+        exit 1
+    fi
+    wrkdir=$dawrkdir/obs_diag
+    mkwrkdir $wrkdir $overwrite
+    cd $wrkdir
+
+    #------------------------------------------
+    # Time Cylces start here
+    #------------------------------------------
+    local date_beg_str_4obsdiag date_end_str_4obsdiag intvl_min n_cycles
+    date_beg_str_4obsdiag=$(date -d @$start_sec +%Y,%m,%d,%H,%M,%S)
+    date_end_str_4obsdiag=$(date -d @$end_sec +%Y,%m,%d,%H,%M,%S)
+    intvl_min=$((intvl_sec/60))
+    date_intvl_str_4obsdiag="0, 0, 0,00,${intvl_min},00"
+
+    n_cycles=$(( (end_sec-start_sec)/intvl_sec+1 ))
+
+    timestr_end=$(date -d @$end_sec    +%H%M)
+    #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/obs_diag.running || -f $wrkdir/done.obs_diag || -f $wrkdir/queue.obs_diag ]]; then
+        return
+    fi
+
+    #------------------------------------------------------
+    # Prepare obs_diag
+    #------------------------------------------------------
+    obs_final_files1=$(ls -1 $dawrkdir/[12]???/obs_seq.final | sort)
+    obs_final_files2=$(ls -1 $dawrkdir/0???/obs_seq.final | sort)
+    obs_final_files=(${obs_final_files1[@]} ${obs_final_files2[@]})
+
+    printf "%s\n" "${obs_final_files[@]}" > obs_seq.final.list
+
+    #
+    # Waiting for job conditions
+    #
+
+    if [[ ${#obs_final_files[@]} -ne ${n_cycles} ]]; then
+        echo "ERROR: found  ${#obs_final_files[@]} \"obs_seq.final\" files, expected ${n_cycles}."
+        exit 1
+    fi
+
+    cp $dawrkdir/${timestr_end}/input.nml .
+
+    sedfile=$(mktemp -t obsdiag_nml.sed_XXXX)
+
+    cat <<EOF > $sedfile
+/obs_sequence_list/c   obs_sequence_list  = 'obs_seq.final.list'
+/obs_sequence_name/c   obs_sequence_name  = ''
+/first_bin_center/c    first_bin_center   = ${date_beg_str_4obsdiag}
+/last_bin_center/c     last_bin_center    = ${date_end_str_4obsdiag}
+/bin_width/c           bin_width          = ${date_intvl_str_4obsdiag}
+/bin_separation/c      bin_separation     = ${date_intvl_str_4obsdiag}
+EOF
+    sed -f $sedfile -i input.nml
+
+    #------------------------------------------------------
+    # Run obs_diag for all analysis
+    #------------------------------------------------------
+
+    #
+    # Create job script and submit it
+    #
+    jobscript="run_obs_diag.${mach}"
+    sedfile=$(mktemp -t obsdiag_${timestr_end}.sed_XXXX)
+    cat <<EOF > $sedfile
+s/PARTION/${partition_filter}/
+s/NOPART/1/
+s/JOBNAME/obsdiag_${eventdate:4:4}/
+s/CPUSPEC/${claim_cpu_update}/g
+s/MODULE/${modulename}/g
+s#ROOTDIR#$rootdir#g
+s#WRKDIR#$wrkdir#g
+s#EXEDIR#${exedir}/dart#
+s/MACHINE/${machine}/g
+s/ACCTSTR/${job_account_str}/
+s/EXCLSTR/${job_exclusive_str}/
+s/RUNMPCMD/${job_runexe_str}/
+s/EXENAME/obs_diag/
+s/PRONAME/obs_diag/g
+
+EOF
+    if [[ "${mach}" == "pbs" ]]; then
+        echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
+    fi
+
+    submit_a_jobscript $wrkdir "obs_diag" $sedfile $TEMPDIR/$jobscript $jobscript ""
+}
+
+########################################################################
+
+function run_obs_final2nc {
+    # $1     $2
+    # start  end
+    local start_sec=$1
+    local end_sec=$2
+
+    #
+    # Build working directory
+    #
+    dawrkdir=$rundir/dacycles
+    if [[ ! -d $dawrkdir ]]; then
+        echo "ERROR: $dawrkdir not exsit."
+        exit 1
+    fi
+    wrkdir=$dawrkdir/obs_diag
+    mkwrkdir $wrkdir $overwrite
+    cd $wrkdir
+
+    #------------------------------------------
+    # Time Cylces start here
+    #------------------------------------------
+
+    n_cycles=$(( (end_sec-start_sec)/intvl_sec ))
+
+    timestr_end=$(date -d @$end_sec    +%H%M)
+    #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/obs_final2nc.running || -f $wrkdir/done.obs_final2nc || -f $wrkdir/queue.obs_final2nc ]]; then
+        return
+    fi
+
+    #------------------------------------------------------
+    # Prepare obs_diag
+    #------------------------------------------------------
+    obs_final_files1=$(ls -1 $dawrkdir/[12]???/obs_seq.final | sort)
+    obs_final_files2=$(ls -1 $dawrkdir/0???/obs_seq.final | sort)
+    obs_final_files=(${obs_final_files1[@]} ${obs_final_files2[@]})
+
+    #
+    # Waiting for job conditions
+    #
+
+    if [[ ${#obs_final_files[@]} -lt ${n_cycles} ]]; then
+        echo "ERROR: found  ${#obs_final_files[@]} \"obs_seq.final\" files, expected ${n_cycles}."
+        exit 1
+    fi
+
+    cp $dawrkdir/${timestr_end}/input.nml .
+
+    #------------------------------------------------------
+    # Run obs_diag for all analysis
+    #------------------------------------------------------
+    #    echo "    Running ${exedir}/dart/obs_seq_to_netcdf"
+    #    ${runcmd_str} ${exedir}/dart/obs_seq_to_netcdf >& $srunout
+    #    mv obs_epoch_001.nc obs_seq.final.${timestr_cur}.nc
+    #
+    # Create job script and submit it
+    #
+    jobscript="run_obs_final2nc.${mach}"
+    sedfile=$(mktemp -t obs_final2nc.sed_XXXX)
+    cat <<EOF > $sedfile
+s/PARTION/${partition_filter}/
+s/NOPART/1/
+s/JOBNAME/obsdiag_${eventdate:4:4}/
+s/CPUSPEC/${claim_cpu_update}/g
+s/MODULE/${modulename}/g
+s#ROOTDIR#$rootdir#g
+s#WRKDIR#$wrkdir#g
+s#EXEDIR#${exedir}/dart#
+s/MACHINE/${machine}/g
+s/ACCTSTR/${job_account_str}/
+s/EXCLSTR/${job_exclusive_str}/
+s/RUNMPCMD/${job_runexe_str}/
+s/START_S/${start_sec}/g
+s/END_S/${end_sec}/g
+s/INTVL_S/${intvl_sec}/g
+s#DACYCLEDIR#${dawrkdir}#
+EOF
+    if [[ "${mach}" == "pbs" ]]; then
+        echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
+    fi
+
+    submit_a_jobscript $wrkdir "obs_final2nc" $sedfile $TEMPDIR/$jobscript $jobscript ""
+}
+
+########################################################################
+
 function run_clean {
     # $1    $2    $3
     # start  end
@@ -1984,26 +2163,31 @@ function run_clean {
 
             if [[ $verb -eq 1 ]]; then echo "    Cleaning working directory $dawrkdir"; fi
 
-            for dirname in mpas filter update_states; do
+            for dirname in mpas filter update_states update_bc; do
 
                 cd $dawrkdir
 
                 case $dirname in
                 mpas )
                     rm -f error.fcst_* log.????.abort
-                    #rm -f log.atmosphere.????.out log.atmosphere.????.err fcst_*_*.log
-                    #echo "clean mpas in $dawrkdir"
-                    #clean_mem_runfiles "fcst" $dawrkdir $ENS_SIZE
+                    rm -f log.atmosphere.????.out log.atmosphere.????.err #fcst_*_*.log
+                    if [[ $verb -eq 1 ]]; then echo "    clean mpas in $dawrkdir"; fi
+                    clean_mem_runfiles "fcst" $dawrkdir $ENS_SIZE
                     ;;
                 filter )
                     if [[ -e done.filter ]]; then
-                        rm -f filter_*.log error.filter dart_log.nml dart_log.out obs_seq_to_netcdf.log
+                        rm -f error.filter dart_log.nml dart_log.out obs_seq_to_netcdf.log #filter_*.log
                         find OBSDIR -type f -not -name "obs_seq.${timestr_curr}" -exec rm -f {} \;
                     fi
                     ;;
                 update_states )
                     if [[ -e done.update_states ]]; then
-                        rm -f update_states_*.log error.update_states
+                        rm -f error.update_states #update_states_*.log
+                    fi
+                    ;;
+                update_bc )
+                    if [[ -e done.update_bc ]]; then
+                        rm -f error.update_bc #update_bc_*.log
                     fi
                     ;;
                 esac
@@ -2165,7 +2349,7 @@ while [[ $# > 0 ]]; do
             echo "Unknown option: $key"
             usage 2
             ;;
-        filter* | mpas* | update_states* | clean* )
+        filter* | mpas* | update_states* | clean* | obs_diag* | obs_final2nc )
             jobs=(${key//,/ })
             ;;
         *)
@@ -2300,6 +2484,10 @@ if [[ " ${jobs[*]} " =~ " filter " || " ${jobs[*]} " =~ " mpas " || " ${jobs[*]}
     da_cycle_driver $inittime_sec $starttime_sec $stoptime_sec
 elif [[ " ${jobs[*]} " =~ " clean " ]]; then
     run_clean $starttime_sec $stoptime_sec
+elif [[ " ${jobs[*]} " =~ " obs_diag " ]]; then
+    run_obs_diag $((starttime_sec+intvl_sec)) $stoptime_sec
+elif [[ " ${jobs[*]} " =~ " obs_final2nc " ]]; then
+    run_obs_final2nc $((starttime_sec+intvl_sec)) $stoptime_sec
 fi
 
 echo " "

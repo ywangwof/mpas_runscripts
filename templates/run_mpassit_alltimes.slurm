@@ -3,7 +3,7 @@
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
 #SBATCH -t CLAIMTIME
-#SBATCH --output=WRKDIR/mpassitHHMINSTR_%a_%j.log
+#SBATCH --output=WRKDIR/mpassit_HHHSTR_%j.log
 ACCTSTR
 EXCLSTR
 
@@ -23,14 +23,11 @@ fi
 
 ulimit -s unlimited
 
-mem=${SLURM_ARRAY_TASK_ID}
-memstr=$(printf "%02d" $mem)
+cd WRKDIR
 
-cd WRKDIR/mem${memstr}
+rm -rf error.mpassitHHHSTR queue.mpassitHHHSTR
 
-rm -rf error.mpassitHHMINSTR_${memstr} queue.mpassitHHMINSTR_${memstr}
-
-touch running.mpassitHHMINSTR_${memstr}
+touch running.mpassitHHHSTR
 
 for ((i=FCST_START;i<=FCST_END;i+=FCST_INTVL)); do
     minstr=$(printf "%03d" $((i/60)))
@@ -38,12 +35,12 @@ for ((i=FCST_START;i<=FCST_END;i+=FCST_INTVL)); do
 done
 
 if [[ $? -eq 0 ]]; then
-    touch done.mpassitHHMINSTR_${memstr}
+    touch done.mpassitHHHSTR
 else
-    touch error.mpassitHHMINSTR_${memstr}
+    touch error.mpassitHHHSTR
 fi
 
-rm -rf running.mpassitHHMINSTR_${memstr}
+rm -rf running.mpassitHHHSTR
 
 time2=$(date '+%s')
 

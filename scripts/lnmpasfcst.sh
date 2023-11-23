@@ -11,6 +11,12 @@ fcstintvl=300
 fcstmems=18
 
 for evtime in ${eventimes[@]}; do
+    if [[ $evtime -lt 1200 ]]; then
+        nextday="1 day"
+    else
+        nextday=""
+    fi
+
     evttime_dir="${fcst_root}/${eventdate}/fcst/${evtime}/mpassit"
     for mem in $(seq 1 $fcstmems); do
         memstr=$(printf "%02d" $mem)
@@ -23,8 +29,8 @@ for evtime in ${eventimes[@]}; do
         cd $desdir
 
         for ((i=$fcstintvl;i<=$fcstlength;i+=$fcstintvl)); do
-            fcsttimestr=$(date -d "${eventdate} ${evtime} $i seconds" +%Y-%m-%d_%H.%M.%S)
-            wrftimestr=$(date -d "${eventdate} ${evtime} $i seconds" +%Y-%m-%d_%H:%M:%S)
+            fcsttimestr=$(date -d "${eventdate} ${evtime} $nextday $i seconds" +%Y-%m-%d_%H.%M.%S)
+            wrftimestr=$(date -d "${eventdate} ${evtime} $nextday $i seconds" +%Y-%m-%d_%H:%M:%S)
             memfile="MPASSIT_${memstr}.${fcsttimestr}.nc"
             desfile="wrfwof_d01_${wrftimestr}"
             if [[ ! -e ${memdir}/${memfile} ]]; then
@@ -34,9 +40,11 @@ for evtime in ${eventimes[@]}; do
             ln -sf ${memdir}/${memfile} ${desfile}
         done
 
-        wrftimestr0=$(date -d "${eventdate} ${evtime}" +%Y-%m-%d_%H:%M:%S)
-        wrftimestr1=$(date -d "${eventdate} ${evtime} ${fcstintvl} seconds" +%Y-%m-%d_%H:%M:%S)
+        wrftimestr0=$(date -d "${eventdate} ${evtime} $nextday" +%Y-%m-%d_%H:%M:%S)
+        wrftimestr1=$(date -d "${eventdate} ${evtime} $nextday ${fcstintvl} seconds" +%Y-%m-%d_%H:%M:%S)
         ln -sf wrfwof_d01_${wrftimestr1} wrfwof_d01_${wrftimestr0}
     done
-    touch ${dest_root}/${eventdate}/fcst_${eventdate}${evtime}_start
+
+    evttime_str=$(date -d "${eventdate} ${evtime} ${nextday}" +%Y%m%d%H%M)
+    touch ${dest_root}/${eventdate}/fcst_${evttime_str}_start
 done

@@ -1187,6 +1187,8 @@ function write_runtimeconfig {
     nnodes_fcst="${nnodes_fcst}"        # on Cheyenne only
     nnodes_post="${nnodes_post}"        # on Cheyenne only
     claim_time_fcst="01:20:00"
+    claim_time_mpassit_alltimes="03:30:00"
+    claim_time_mpassit_onetime="00:30:00"
 
 EOF
 
@@ -1452,7 +1454,7 @@ fi
 
 source $scpdir/Common_Utilfuncs.sh
 
-
+#
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
 # Perform each task

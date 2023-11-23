@@ -101,7 +101,7 @@ function submit_a_jobscript {
 ########################################################################
 
 function check_and_resubmit {
-    #local jobnames=$1
+    #local jobnames=$1                  # Comment out, read $1 as an array below
     local mywrkdir=$2
     local donenum=$3                    # total number of jobs
     local myjobscript=${4-}             # empty no resubmissions
@@ -111,7 +111,7 @@ function check_and_resubmit {
 
     read -r -a jobnames <<< "$1"
     local jobname=${jobnames[0]}
-    if [[ ${#jobnames[@]} -eq 2 ]]; then
+    if [[ ${#jobnames[@]} -eq 2 ]]; then     # if it is an array, the 2nd element denotes the member dirname
         local memname=${jobnames[1]}
     else
         local memname="${jobname}_"
@@ -146,7 +146,7 @@ function check_and_resubmit {
                 donefile="$memdir/done.${jobname}_$memstr"
                 errorfile="$memdir/error.${jobname}_$memstr"
 
-                if [[ $verb -eq 1 ]]; then echo "$$: Checking: $donefile"; fi
+                if [[ $verb -eq 1 ]]; then echo "$$-${FUNCNAME[0]}: Checking $donefile"; fi
                 while [[ ! -e $donefile ]]; do
                     if [[ -e $errorfile ]]; then
                         jobarrays+=($mem)
@@ -157,9 +157,9 @@ function check_and_resubmit {
                         continue 2
                     fi
 
-                    if [[ $verb -eq 1 ]]; then
-                        echo "Waiting for $donefile"
-                    fi
+                    #if [[ $verb -eq 1 ]]; then
+                    #    echo "Waiting for $donefile"
+                    #fi
                     sleep 10
                 done
                 #if [[ $verb -eq 1 ]]; then echo $donefile; fi
@@ -191,7 +191,7 @@ function check_and_resubmit {
         outmessage="$outmessage; failed: ${#jobarrays[@]} - [${jobarrays[@]}]"
     fi
 
-    echo "$$-check_and_resubmit: $outmessage"
+    echo "$$-${FUNCNAME[0]}: $outmessage"
     if [[ $done -lt $donenum ]]; then
         if $checkonly; then
             return
@@ -227,6 +227,7 @@ function readconf {
     fi
     local configfile=$1
     local sections=$(join_by \| ${*:2})
+    local debug=0
 
     if [[ ! -e $configfile ]]; then
         echo "ERROR: Case configuration file: $configfile not exist. Have you run setup_mpas-wofs_grid.sh?"
@@ -239,26 +240,26 @@ function readconf {
     while read line; do
         #echo -n "<$line>"
         if [[ "$line" =~ \[$sections\] ]]; then
-            if [[ $verb -eq 1 ]]; then echo "Found $sections: $line"; fi
+            if [[ $debug -eq 1 ]]; then echo "Found $sections: $line"; fi
             readmode=true
             continue
         elif [[ "$line" == \[*\] ]]; then
-            if [[ $verb -eq 1 ]]; then echo "Another section: $line"; fi
+            if [[ $debug -eq 1 ]]; then echo "Another section: $line"; fi
             readmode=false
             continue
         elif [[ "$line" =~ ^# ]]; then
-            if [[ $verb -eq 1 ]]; then echo "comment: $line"; fi
+            if [[ $debug -eq 1 ]]; then echo "comment: $line"; fi
             continue
         fi
 
         if $readmode; then
             if [[ "$line" =~ "=" ]]; then
-                if [[ $verb -eq 1 ]]; then echo -n "source: $line"; fi
+                if [[ $debug -eq 1 ]]; then echo -n "source: $line"; fi
                 eval "export $line"
             else
-                if [[ $verb -eq 1 ]]; then echo "skip: $line"; fi
+                if [[ $debug -eq 1 ]]; then echo "skip: $line"; fi
             fi
-            if [[ $verb -eq 1 ]]; then echo; fi
+            if [[ $debug -eq 1 ]]; then echo; fi
         fi
 
     done < $configfile

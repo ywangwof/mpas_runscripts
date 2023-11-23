@@ -263,7 +263,7 @@ for cmd in ${cmds[@]}; do
             cd $exedir/dart
             echo "---  Executables of DART"
             echo "CWD: $exedir"
-            dartprograms=( filter  mpas_dart_obs_preprocess  obs_sequence_tool  update_mpas_states advance_time obs_seq_to_netcdf)
+            dartprograms=( filter  mpas_dart_obs_preprocess  obs_sequence_tool  update_mpas_states advance_time obs_seq_to_netcdf obs_diag)
             if [[ ${runcmd} == "clean" ]]; then
                 echo "    Deleting ${dartprograms[*]}"
                 rm -f ${dartprograms[*]}
