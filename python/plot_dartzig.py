@@ -20,29 +20,17 @@ import numpy as np
 #program to crash if the display can't open. The two commands below makes it so
 #matplotlib doesn't try to open a window
 #'''
-import matplotlib
-matplotlib.use('Agg')
+#import matplotlib
+#matplotlib.use('Agg')
 
 import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
-# '''
-# cm = Color Map. Within the matplotlib.cm module will contain access to a number
-# of colormaps for a plot. A reference to colormaps can be found at:
-#
-#     - https://matplotlib.org/examples/color/colormaps_reference.html
-# '''
-import matplotlib.cm as cm
-import matplotlib.colors as mcolors
-from metpy.plots import ctables
-
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
 
 from netCDF4 import Dataset
 from datetime import datetime, timedelta
-from matplotlib.ticker import IndexLocator
+from matplotlib.ticker import IndexLocator, AutoLocator, MultipleLocator # AutoMinorLocator, LinearLocator
 
 import time as timeit
+import copy
 
 ########################################################################
 #
@@ -80,14 +68,14 @@ def parse_args():
                                             ''')
                                      #formatter_class=CustomFormatter)
 
-    parser.add_argument('date',    help='MPAS-WoFS event date')
-    parser.add_argument('obstype', help='A number denotes the observation type',type=str, default=None)
+    parser.add_argument('date',    help='MPAS-WoFS event date',type=str, nargs='?',default=None)
+    parser.add_argument('obstype', help='A number denotes the observation type',type=str, nargs='?',default=None)
 
     parser.add_argument('-v','--verbose',   help='Verbose output',                              action="store_true", default=False)
-    parser.add_argument('-r','--rundir',    help='MPAS-WoFS run directory (no date)',                type=str,       efault=os.getcwd())
-    parser.add_argument('-t','--time',      help='4-digit time string for listing the file content', type=str,       default='1700')
+    parser.add_argument('-r','--rundir',    help='Directory contains obs_seq.final files in netCDF format', type=str,default=os.getcwd())
+    parser.add_argument('-f','--filename',  help='File name (obs_seq.final) to list its content',    type=str,       default=None)
     parser.add_argument('-p','--parms',     help='Parameter to limit selections, [dataqc,dartqc]',   type=str,       default='10,0')
-    parser.add_argument('-d','--threshold', help='Threshold for reflectivity',                       type=float,     default=None)
+    parser.add_argument('-t','--threshold', help='Threshold for reflectivity',                       type=float,     default=None)
     parser.add_argument('-s','--spreadtype', help='1: ensemble standard deviation, 2: ensemble standard deviation + ob error ("total spread")',
                                                                                                      type=int,       default=2)
     parser.add_argument('-o','--outfile',   help='Name of output image or output directory',         type=str,       default=None)
@@ -101,16 +89,21 @@ def parse_args():
 
     eventdates  = []
     obstypes    = []
-    if  date_re.match(args.date):
+    if args.date is None:
+        pass
+    elif  date_re.match(args.date):
         eventdates.append(args.date)
-    elif type_re.match(args.date) or args.obstype == "list":
+    elif type_re.match(args.date):
+        obstypes.append(args.date)
+    elif args.date == "list":
         obstypes.append(args.date)
     else:
         print(f"ERROR: Command line argument \"{args.date}\" is not support")
         sys.exit(1)
 
-
-    if type_re.match(args.obstype) or args.obstype == "list":  # if the two arguments are out-of-order
+    if args.obstype is None:
+        pass
+    elif type_re.match(args.obstype) or args.obstype == "list":  # if the two arguments are out-of-order
         obstypes.append(args.obstype)
     elif date_re.match(args.obstype):
         eventdates.append(args.obstype)
@@ -120,12 +113,18 @@ def parse_args():
 
     if len(eventdates) == 1:
         parsed_args['eventdate'] = eventdates[0]
-    else:
-        print(f"ERROR: Can handle one event at a time. Got \"{eventdates}\"")
-        sys.exit(0)
+    elif len(eventdates) == 0:
+        mobj = date_re.search(args.rundir)
+        if mobj:
+            parsed_args['eventdate'] = mobj.group(0)
+        else:
+            print(f"ERROR: Need one event date string as parameter. Got \"{eventdates}\"")
+            sys.exit(0)
 
     if len(obstypes) == 1:
         parsed_args['obstype'] = obstypes[0]
+    elif len(obstypes) == 0:
+        parsed_args['obstype'] = None
     else:
         print(f"ERROR: Can only handle one observation type at at time. Got \"{obstypes}\"")
         sys.exit(0)
@@ -177,37 +176,46 @@ def daterange(start_date, end_date, minutes=15):
 
 ########################################################################
 
-def load_variables(cargs,wargs, begtime, endtime):
+def load_variables(cargs,wargs, filelist):
     ''' Load obs_seq.final sequence files'''
+
+    #begtime = timestrlist[0]
+    #endtime = timestrlist[-1]
+
+    #intvlmin = int(timestrlist[1])-int(begtime)
 
     unitLabels = {'DOPPLER_RADIAL_VELOCITY': 'm/s',
                   'RADAR_REFLECTIVITY': 'dBZ',
                   }
-    var_obj = {'times':      [],
-               'rms_prior':  [],
-               'rms_post':   [],
-               'sprd_prior':  [],
-               'sprd_post':   [],
-               'bias_prior':  [],
-               'bias_post':   [],
-               'ratio':       [],
-               'obs_std':     [],
-               'qc_numbers':  {},
-               'type_label': None,
-               'unit_label': None
-            }
 
-    beg_dt = datetime.strptime(f"{wargs.eventdate} {begtime}",'%Y%m%d %H%M')
-    end_dt = datetime.strptime(f"{wargs.eventdate} {endtime}",'%Y%m%d %H%M')
-    if int(endtime) < 1200:
-        end_dt = end_dt + timedelta(days=1)
+    #beg_dt = datetime.strptime(f"{wargs.eventdate} {begtime}",'%Y%m%d %H%M')
+    #end_dt = datetime.strptime(f"{wargs.eventdate} {endtime}",'%Y%m%d %H%M')
+    #if int(endtime) < 1200:
+    #    end_dt = end_dt + timedelta(days=1)
 
-    numf = 0
-    for run_dt in daterange(beg_dt,end_dt,minutes=15):
+    var_objtmp = { 'times':      [],
+                'rms_prior':  [],
+                'rms_post':   [],
+                'sprd_prior':  [],
+                'sprd_post':   [],
+                'bias_prior':  [],
+                'bias_post':   [],
+                'ratio':       [],
+                'obs_std':     [],
+                'qc_numbers':  {},
+                'type_label': None,
+                'unit_label': None,
+                'numfile':    0
+    }
 
-        timestr   = run_dt.strftime("%H%M")
-        timedtstr = run_dt.strftime("%Y%m%d%H%M")
-        obsfile = os.path.join(wargs.run_dir,f'obs_seq.final.{timedtstr}.nc')
+    var_objs = {}
+    for obsfile in filelist:
+
+        #timestr   = run_dt.strftime("%H%M")
+        #timedtstr = run_dt.strftime("%Y%m%d%H%M")
+        #obsfile = os.path.join(wargs.run_dir,f'obs_seq.final.{timedtstr}.nc')
+        rematch = re.search('[12][0-9][0-9][0-9][01][0-9][0-3][0-9]([0-2][0-9])([0-5][05])',obsfile)
+        timestr   = f"{rematch.group(1)}:{rematch.group(2)}"
 
         if os.path.lexists(obsfile):
 
@@ -226,136 +234,166 @@ def load_variables(cargs,wargs, begtime, endtime):
                 varobs  = fh.variables['observations'][:,:]   # (ObsIndex, copy)
                 varqc   = fh.variables['qc'][:,:]             # (ObsIndex, qc_copy)
 
-                obstype = fh.variables['obs_type'][:]
-                typesMeta = fh.variables['ObsTypesMetaData'][:,:]
+                varobstypes = fh.variables['obs_type'][:]
+                vartypesMeta = fh.variables['ObsTypesMetaData'][:,:]
 
-            nobs      = varobs.shape[0]
-            typeLabel = typesMeta[int(wargs.obstype)-1,:].tobytes().decode('utf-8').strip()
-            unitLabel = unitLabels.get(typeLabel,'Undefined')
+            #nobs      = varobs.shape[0]
         else:
             print(f"ERROR: file {obsfile} not found")
             sys.exit(1)
 
-        #
-        # Select by observation type
-        #
-        obs_index = np.where( obstype == int(wargs.obstype) )[0]
+        if wargs.obstype is None:
+            obstypes = np.unique(varobstypes)
+        else:
+            obstypes = [int(wargs.obstype)]
 
-        if cargs.verbose:
-            print(f"Obs length after type selection: {len(obs_index)}")
+        for otype in obstypes:
 
-        #
-        # Select by threshold for reflectivity
-        #
-        if typeLabel == "RADAR_REFLECTIVITY" and wargs.threshold is not None:
-            newindex=[]
-            for index in obs_index:
-                if varobs[index,0] >= wargs.threshold:
-                    newindex.append(index)
-            obs_index = newindex.copy()
-
-            if cargs.verbose:
-                print(f"Obs length after threshold >= {wargs.threshold} selection: {len(obs_index)}")
-
-        nobs_type = len(obs_index)
-        if nobs_type > 0:
             #
-            # Check observation numbers based on qc flags, which excludes the dataqc & dartqc narrowers
+            # Select by observation type and skip unused observation types
             #
-            typeqcs = np.unique(varqc[obs_index,1])
-            uniqqcs = []
-            for qval in typeqcs:
-                obs_index1 = np.where(varqc[obs_index,1] == qval)[0]
-                qckey = str(qval)
-                if qckey in var_obj["qc_numbers"].keys():
-                    var_obj["qc_numbers"][qckey].append(len(obs_index1))
-                else:
-                    var_obj["qc_numbers"][qckey] = [0]*numf+[len(obs_index1)]
-                uniqqcs.append(qckey)
-
-            # if some qc value not appear in this cycle
-            for qckey in var_obj["qc_numbers"].keys()-uniqqcs:
-               var_obj["qc_numbers"][qckey].append(0)
-
-            numf += 1
-
-        #
-        # Select by dataqc & dartqc
-        #
-        if wargs.dataqc is not None:
-            newindex=[]
-            for index in obs_index:
-                if varqc[index,0] < wargs.dataqc:
-                    newindex.append(index)
-            obs_index = newindex.copy()
+            obs_index = np.where( varobstypes == otype )[0]
 
             if cargs.verbose:
-                print(f"Obs length after dataqc < {wargs.dataqc} selection: {len(obs_index)}")
+                print(f"Obs length after type selection: {len(obs_index)}")
 
-        if wargs.dartqc is not None:
-            newindex=[]
-            for index in obs_index:
-                if varqc[index,1] == wargs.dartqc:
-                    newindex.append(index)
-            obs_index = newindex.copy()
+            i=0
+            for ind in obs_index:
+                if varqc[ind,1] == 0:  i+=1        # This observation is used
 
-            if cargs.verbose:
-                print(f"Obs length after dartqc == {wargs.dartqc} selection: {len(obs_index)}")
+            #print(f"{otype}, {i}")
+            if i == 0: continue
 
-        #
-        # Now, fill the ploting arrays
-        #
-        nobs_type = len(obs_index)
-        if nobs_type > 0:
-            obs  = varobs[obs_index,0]
-            prio = varobs[obs_index,1]
-            post = varobs[obs_index,2]
-            sprd_pri = varobs[obs_index,3]
-            sprd_pst = varobs[obs_index,4]
-            variance = varobs[obs_index,11]
+            #
+            # Initialize return object for this type of osbervation
+            #
+            if str(otype) in var_objs.keys():
+                #print(f"reading {obsfile}, {otype} {var_objs.keys()} retrieve old obj")
+                var_obj = var_objs[str(otype)]
+            else:
+                #print(f"reading {obsfile}, {otype} {var_objs.keys()} initialize obj")
+                var_objs[str(otype)] = copy.deepcopy(var_objtmp)
+                var_obj = var_objs[str(otype)]
 
-            if cargs.verbose:
-                print(f"time = {timestr}, number of obs = {nobs_type} for {typeLabel}")
+            var_obj['type_label'] = vartypesMeta[otype-1,:].tobytes().decode('utf-8').strip()
+            var_obj['unit_label'] = unitLabels.get(var_obj['type_label'],'Undefined')
 
-            # rms error
-            n1 = prio.count()
-            rms_prior = np.sqrt(np.sum((prio-obs)**2)/n1)
-            n2 = post.count()
-            rms_post = np.sqrt(np.sum((post-obs)**2)/n2)
-            if cargs.verbose:
-                print(f"       prior = {n1} - {rms_prior}; post = {n2} - {rms_post}")
 
-            var_obj['rms_prior'].append( rms_prior )
-            var_obj['rms_post'].append( rms_post )
+            #
+            # Select by threshold for reflectivity only
+            #
+            if var_obj['type_label'] == "RADAR_REFLECTIVITY" and wargs.threshold is not None:
+                newindex=[]
+                for index in obs_index:
+                    if varobs[index,0] >= wargs.threshold:
+                        newindex.append(index)
+                obs_index = newindex.copy()
 
-            # rms ensemble spread
-            n3 = sprd_pri.count()
-            n4 = sprd_pst.count()
-            if cargs.spreadtype == 2:
-                sprd_prior = np.sqrt( variance[0] + np.sum( sprd_pri*sprd_pri )/n3 )
-                sprd_post  = np.sqrt( variance[0] + np.sum( sprd_pst*sprd_pst )/n4 )
-            elif cargs.spreadtype == 1:
-                sprd_prior = np.sqrt( np.sum( sprd_pri*sprd_pri )/n3 )
-                sprd_post  = np.sqrt( np.sum( sprd_pst*sprd_pst )/n4 )
+                if cargs.verbose:
+                    print(f"Obs length after threshold >= {wargs.threshold} selection: {len(obs_index)}")
 
-            var_obj['sprd_prior'].append( sprd_prior )
-            var_obj['sprd_post'].append(  sprd_post )
+            #
+            # Check observation numbers based on qc flags, which should be done before the dataqc & dartqc narrowers
+            #
+            nobs_type = len(obs_index)
+            if nobs_type > 0:
+                typeqcs = np.unique(varqc[obs_index,1])
+                uniqqcs = []
+                for qval in typeqcs:
+                    obs_index1 = np.where(varqc[obs_index,1] == qval)[0]
+                    qckey = str(qval)
+                    if qckey in var_obj["qc_numbers"].keys():
+                        #print(f"Added {qckey} number {len(obs_index1)} numf = {var_obj['numfile']} to type {otype}")
+                        var_obj["qc_numbers"][qckey].append(len(obs_index1))
+                    else:
+                        #print(f"initialize qc = {qckey} number {len(obs_index1)} numf = {var_obj['numfile']} to type {otype}")
+                        var_obj["qc_numbers"][qckey] = [0]*var_obj['numfile']+[len(obs_index1)]
+                    uniqqcs.append(qckey)
 
-            # mean bias
-            var_obj['bias_prior'].append( np.sum(obs-prio)/n1 )
-            var_obj['bias_post'].append(  np.sum(obs-post)/n2 )
+                # if some qc value not appear in this cycle
+                for qckey in var_obj["qc_numbers"].keys()-uniqqcs:
+                   var_obj["qc_numbers"][qckey].append(0)
 
-            # consistency ratio
-            var_obj['ratio'].append( (variance[0] + (np.sum(sprd_pri*sprd_pri)/n3))/(np.sum((obs-prio)**2)/n1) )
+                var_obj['numfile'] = var_obj['numfile']+1
 
-            var_obj['obs_std'].append( np.sqrt(variance[0]) )
+            #
+            # Select by dataqc & dartqc
+            #
+            if wargs.dataqc is not None:
+                newindex=[]
+                for index in obs_index:
+                    if varqc[index,0] < wargs.dataqc:
+                        newindex.append(index)
+                obs_index = newindex.copy()
 
-            var_obj['times'].append( timestr )
+                if cargs.verbose:
+                    print(f"Obs length after dataqc < {wargs.dataqc} selection: {len(obs_index)}")
 
-    var_obj['type_label'] = typeLabel
-    var_obj['unit_label'] = unitLabel
+            if wargs.dartqc is not None:
+                newindex=[]
+                for index in obs_index:
+                    if varqc[index,1] == wargs.dartqc:
+                        newindex.append(index)
+                obs_index = newindex.copy()
 
-    return make_namespace(var_obj,level=1)
+                if cargs.verbose:
+                    print(f"Obs length after dartqc == {wargs.dartqc} selection: {len(obs_index)}")
+
+            #
+            # Now, fill the derived arrays
+            #
+            nobs_type = len(obs_index)
+            if nobs_type > 0:
+                obs  = varobs[obs_index,0]
+                prio = varobs[obs_index,1]
+                post = varobs[obs_index,2]
+                sprd_pri = varobs[obs_index,3]
+                sprd_pst = varobs[obs_index,4]
+                variance = varobs[obs_index,11]
+
+                if cargs.verbose:
+                    print(f"time = {timestr}, number of obs = {nobs_type} for {var_obj['type_label']}")
+
+                # rms error
+                n1 = prio.count()
+                rms_prior = np.sqrt(np.sum((prio-obs)**2)/n1)
+                n2 = post.count()
+                rms_post = np.sqrt(np.sum((post-obs)**2)/n2)
+                if cargs.verbose:
+                    print(f"       prior = {n1} - {rms_prior}; post = {n2} - {rms_post}")
+
+                var_obj['rms_prior'].append( rms_prior )
+                var_obj['rms_post'].append( rms_post )
+
+                # rms ensemble spread
+                n3 = sprd_pri.count()
+                n4 = sprd_pst.count()
+                if cargs.spreadtype == 2:
+                    sprd_prior = np.sqrt( variance[0] + np.sum( sprd_pri*sprd_pri )/n3 )
+                    sprd_post  = np.sqrt( variance[0] + np.sum( sprd_pst*sprd_pst )/n4 )
+                elif cargs.spreadtype == 1:
+                    sprd_prior = np.sqrt( np.sum( sprd_pri*sprd_pri )/n3 )
+                    sprd_post  = np.sqrt( np.sum( sprd_pst*sprd_pst )/n4 )
+
+                var_obj['sprd_prior'].append( sprd_prior )
+                var_obj['sprd_post'].append(  sprd_post )
+
+                # mean bias
+                var_obj['bias_prior'].append( np.sum(obs-prio)/n1 )
+                var_obj['bias_post'].append(  np.sum(obs-post)/n2 )
+
+                # consistency ratio
+                var_obj['ratio'].append( (variance[0] + (np.sum(sprd_pri*sprd_pri)/n3))/(np.sum((obs-prio)**2)/n1) )
+
+                var_obj['obs_std'].append( np.sqrt(variance[0]) )
+
+                var_obj['times'].append( timestr )
+
+    # finally, make the return objects a set of namespaces
+    for otype in var_objs.keys():
+        var_objs[otype] = make_namespace(var_objs[otype],level=1)
+
+    return var_objs
 
 ########################################################################
 
@@ -379,19 +417,11 @@ QCValMeta = { '0' : 'assimilated successfully',
               '8' : 'vertical location conversion failed'
             }
 
-def print_meta(wargs,time4str):
+def print_meta(wargs,obsfile):
     ''' Output variable information in the file
     '''
 
     global QCValMeta
-
-    obs_dt = datetime.strptime(f"{wargs.eventdate} {time4str}", "%Y%m%d %H%M")
-    if int(time4str) < 1200:
-        obs_dt = obs_dt + timedelta(days=1)
-
-    obs_timestr = obs_dt.strftime("%Y%m%d%H%M")
-
-    obsfile = os.path.join(wargs.run_dir,f'obs_seq.final.{obs_timestr}.nc')
 
     if os.path.lexists(obsfile):
 
@@ -601,8 +631,11 @@ def plot_rms(cargs,wargs,wobj):
     ax.set_title(f'RMS of {wobj.type_label} for {wargs.eventdate} ')
     ax.set_xticks(x[0::2])
     ax.set_xticklabels(wobj.times, rotation = 50)
-    ax.xaxis.set_minor_locator(IndexLocator(1,0))
-    ax.xaxis.set_major_locator(IndexLocator(2,1))
+    if len(wobj.times) > 40:
+        ax.xaxis.set_minor_locator(IndexLocator(1,0))
+        ax.xaxis.set_major_locator(IndexLocator(2,1))
+    ax.yaxis.set_minor_locator(MultipleLocator(1))
+    ax.yaxis.set_major_locator(AutoLocator())
     ax.set_ylabel(wobj.unit_label)
     ax.set_xlabel("Data Assimilation Cycles")
     ax.legend(loc="upper right")
@@ -639,7 +672,7 @@ def plot_rms(cargs,wargs,wobj):
             outpng = wargs.outfile
 
     figname = os.path.join(wargs.outdir,outpng)
-    print(f"Saving figure to {figname} ...")
+    print(f"    Saving figure to {figname} ...")
     figure.savefig(figname, format='png', dpi=100)
     plt.close(figure)
 
@@ -676,8 +709,9 @@ def plot_qcnumbers(cargs,wargs,wobj):
     ax.set_title(f'Numbers of {wobj.type_label} for {wargs.eventdate} ')
     ax.set_xticks(wobj.times)
     ax.set_xticklabels(wobj.times, rotation = 50)
-    ax.xaxis.set_minor_locator(IndexLocator(1,0))
-    ax.xaxis.set_major_locator(IndexLocator(2,1))
+    if len(wobj.times) > 40:
+        ax.xaxis.set_minor_locator(IndexLocator(1,0))
+        ax.xaxis.set_major_locator(IndexLocator(2,1))
     ax.set_ylabel("Number of Observations")
     ax.set_xlabel("Data Assimilation Cycles")
     ax.legend(loc="upper left")
@@ -693,7 +727,7 @@ def plot_qcnumbers(cargs,wargs,wobj):
             outpng = wargs.outfile
 
     figname = os.path.join(wargs.outdir,outpng)
-    print(f"Saving figure to {figname} ...")
+    print(f"    Saving figure to {figname} ...")
     figure.savefig(figname, format='png', dpi=100)
     plt.close(figure)
 
@@ -729,8 +763,9 @@ def plot_ratio(cargs,wargs,wobj):
     ax.set_title(f'Consistency Ratio of {wobj.type_label} for {wargs.eventdate} ')
     ax.set_xticks(x)
     ax.set_xticklabels(wobj.times, rotation = 50)
-    ax.xaxis.set_minor_locator(IndexLocator(1,0))
-    ax.xaxis.set_major_locator(IndexLocator(2,1))
+    if len(wobj.times) > 40:
+        ax.xaxis.set_minor_locator(IndexLocator(1,0))
+        ax.xaxis.set_major_locator(IndexLocator(2,1))
     ax.set_ylabel("Consistency Ratio")
     ax.set_xlabel("Data Assimilation Cycles")
     #ax.legend(loc="upper right")
@@ -746,7 +781,7 @@ def plot_ratio(cargs,wargs,wobj):
             outpng = wargs.outfile
 
     figname = os.path.join(wargs.outdir,outpng)
-    print(f"Saving figure to {figname} ...")
+    print(f"    Saving figure to {figname} ...")
     figure.savefig(figname, format='png', dpi=100)
     plt.close(figure)
 
@@ -765,10 +800,13 @@ def make_plot(cargs,wargs,wobj):
     #
     #-----------------------------------------------------------------------
 
+    print(f"    Ploting RMS for {wobj.type_label} ....")
     plot_rms(cargs,wargs,wobj)
 
+    print(f"    Ploting Observation Numbers for {wobj.type_label} ....")
     plot_qcnumbers(cargs,wargs,wobj)
 
+    print(f"    Ploting Consistent Ratio of {wobj.type_label} ....")
     plot_ratio(cargs,wargs,wobj)
 
 
@@ -789,7 +827,14 @@ if __name__ == "__main__":
     if wargs.obstype == "list":
         time1 = timeit.time()
 
-        print_meta(wargs,cargs.time)
+        if cargs.filename is None:
+            filename = os.path.join(wargs.run_dir, f"obs_seq.final.{wargs.eventdate}1700.nc")
+        else:
+            filename = cargs.filename
+
+        print(f"Filename: {filename}")
+
+        print_meta(wargs,filename)
 
         if cargs.verbose: print("\n Elapsed time of print_meta is:  %f seconds" % (timeit.time() - time1))
 
@@ -800,12 +845,33 @@ if __name__ == "__main__":
         #
         time2 = timeit.time()
 
-        obs_obj = load_variables(cargs,wargs, '1515','0300')
+        dt1 = datetime.strptime(f"{wargs.eventdate}",'%Y%m%d')
+        dt2 = dt1 + timedelta(days=1)
+        nextdatestr = dt2.strftime('%Y%m%d')
+
+        filelist = []
+        for item in os.listdir(wargs.run_dir):
+            rematch1 = re.match(f'obs_seq.final.{wargs.eventdate}([12][0-9][0-5][05]).nc',item)
+            rematch2 = re.match(f'obs_seq.final.{nextdatestr}(0[0-9][0-5][05]).nc',item)
+            if rematch1:
+                filelist.append(os.path.join(wargs.run_dir,rematch1.group(0)))
+            elif rematch2:
+                filelist.append(os.path.join(wargs.run_dir,rematch2.group(0)))
+
+        filelist.sort()
+
+        if len(filelist) <= 10:
+            print(f"ERROR: found no enough obs_seq.final files in {wargs.run_dir}: {filelist}.")
+            sys.exit(0)
+
+        obs_objs = load_variables(cargs,wargs, filelist)
 
         if cargs.verbose: print("\n Elapsed time of load_variables is:  %f seconds" % (timeit.time() - time2))
 
         time3 = timeit.time()
 
-        make_plot(cargs, wargs,obs_obj)
+        for otype,obsobj in obs_objs.items():
+            print(f"Ploting {obsobj.type_label} for {wargs.eventdate} ....")
+            make_plot(cargs, wargs,obsobj)
 
         if cargs.verbose: print("\n Elapsed time of make_plot is:  %f seconds" % (timeit.time() - time3))
