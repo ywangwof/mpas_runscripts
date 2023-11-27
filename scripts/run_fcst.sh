@@ -147,11 +147,13 @@ function run_mpas {
     # $1        $2
     # wrkdir    iseconds
     local wrkdir=$1
-    local iseconds=$2
+    local -r iseconds=$2
 
     #
     # GLOBAL: ENS_SIZE, rundir, npefcst
     # RETURN: mpas_jobscript
+
+    local isec jsec dawrkdir
 
     #
     # Build working directory
@@ -542,7 +544,7 @@ function run_mpassit_oneAtime {
     # $1        $2
     # wrkdir    iseconds
     local wrkdir=$1
-    local iseconds0=$2
+    local -r iseconds=$2
     local jobarraystr=$3
 
     cd $wrkdir
@@ -559,7 +561,7 @@ function run_mpassit_oneAtime {
             continue               # already done, is running or is in queue, skip this hour
         fi
 
-        mpassit_wait_create_nml_onetime $wrkdir ${iseconds0} $i
+        mpassit_wait_create_nml_onetime $wrkdir ${iseconds} $i
 
         #
         # Create job script and submit it
@@ -594,10 +596,10 @@ EOF
 
 function run_mpassit_alltimes {
     # $1        $2
-    # wrkdir    iseconds0
-    local wrkdir=$1
-    local iseconds0=$2
-    local jobarraystr=$3
+    # wrkdir    iseconds
+    local -r wrkdir=$1
+    local -r iseconds=$2
+    local    jobarraystr=$3
 
     cd $wrkdir
 
@@ -620,7 +622,7 @@ function run_mpassit_alltimes {
             continue               # is running or is in queue, skip this hour
         fi
 
-        mpassit_wait_create_nml_onetime $wrkdir ${iseconds0} $i
+        mpassit_wait_create_nml_onetime $wrkdir ${iseconds} $i
         fcsttimes+=($i)
     done
 
@@ -669,17 +671,17 @@ function mpassit_wait_create_nml_onetime {
     # 2. Create namelist files
 
     # $1        $2
-    # wrkdir    i0seconds
-    local wrkdir=$1
-    local i0seconds=$2
-    local fctseconds=$3
+    # wrkdir    iseconds
+    local -r wrkdir=$1
+    local -r iseconds=$2
+    local -r fctseconds=$3
 
     cd $wrkdir
 
     minstr=$(printf "%03d" $((fctseconds/60)))
-    fcst_lauch_time=$(date -d @${i0seconds} +%H%M)
+    fcst_lauch_time=$(date -d @${iseconds} +%H%M)
 
-    isec=$(( i0seconds+fctseconds ))
+    isec=$(( iseconds+fctseconds ))
     fcst_time_str=$(date -d @$isec +%Y-%m-%d_%H.%M.%S)
 
     outdone=false
@@ -696,29 +698,27 @@ function mpassit_wait_create_nml_onetime {
         histfile="$fcstmemdir/fcst_$memstr/${domname}_${memstr}.history.${fcst_time_str}.nc"
         diagfile="$fcstmemdir/fcst_$memstr/${domname}_${memstr}.diag.${fcst_time_str}.nc"
 
-        if [[ $dorun == true ]]; then
-            for fn in $histfile $diagfile; do
-                #echo "$$-${FUNCNAME[0]}: Checking ${fn##$rundir/} ..."
-                if [[ $outdone == false ]]; then
-                    echo "$$-${FUNCNAME[0]}: Checking forecast files at $minstr for all $ENS_SIZE memebers from fcst/${fcst_lauch_time} ..."
-                    outdone=true
+        for fn in $histfile $diagfile; do
+            #echo "$$-${FUNCNAME[0]}: Checking ${fn##$rundir/} ..."
+            if [[ $outdone == false ]]; then
+                echo "$$-${FUNCNAME[0]}: Checking forecast files at $minstr for all $ENS_SIZE memebers from fcst/${fcst_lauch_time} ..."
+                outdone=true
+            fi
+            while [[ ! -f $fn ]]; do
+                if [[ $jobwait -eq 0 ]]; then    # do not wait for it
+                    continue 3                   # go ahead to process next hour
                 fi
-                while [[ ! -f $fn ]]; do
-                    if [[ $jobwait -eq 0 ]]; then    # do not wait for it
-                        continue 3                   # go ahead to process next hour
-                    fi
 
-                    if [[ $verb -eq 1 ]]; then
-                        echo "Waiting for $fn ..."
-                    fi
-                    sleep 10
-                done
-                fileage=$(( $(date +%s) - $(stat -c %Y -- "$fn") ))
-                if [[ $fileage -lt 30 ]]; then
-                    sleep 30
+                if [[ $verb -eq 1 ]]; then
+                    echo "Waiting for $fn ..."
                 fi
+                sleep 10
             done
-        fi
+            fileage=$(( $(date +%s) - $(stat -c %Y -- "$fn") ))
+            if [[ $fileage -lt 30 ]]; then
+                sleep 30
+            fi
+        done
 
         nmlfile="namelist.fcst_$minstr"
         cat << EOF > $nmlfile
@@ -958,11 +958,11 @@ function fcst_driver() {
 
     echo "Forecasting cycles from $date_beg to $date_end ...."
 
-    for isec in $(seq $start_sec ${fcst_launch_intvl} $end_sec ); do
-        timestr_curr=$(date -d @$isec +%Y%m%d%H%M)
-        eventtime=$(date    -d @$isec +%H%M)
+    for ilaunch in $(seq $start_sec ${fcst_launch_intvl} $end_sec ); do
+        timestr_curr=$(date -d @$ilaunch +%Y%m%d%H%M)
+        eventtime=$(date    -d @$ilaunch +%H%M)
 
-        eventMM=$(date    -d @$isec +%M)
+        eventMM=$(date    -d @$ilaunch +%M)
         fcstindex=1
         if [[ "${eventMM}" == "00" ]]; then fcstindex=0; fi
         fcst_seconds=${fcst_length_seconds[$fcstindex]}
@@ -987,7 +987,7 @@ function fcst_driver() {
             if [[ $verb -eq 1 ]]; then echo "    Run MPAS model at $eventtime"; fi
 
             mpas_jobscript="run_mpas.${mach}"
-            run_mpas $fcstwrkdir $isec
+            run_mpas $fcstwrkdir $ilaunch
 
             #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
             check_and_resubmit "fcst" $fcstwrkdir $ENS_SIZE $mpas_jobscript ${num_resubmit}
@@ -999,7 +999,7 @@ function fcst_driver() {
             #------------------------------------------------------
             if [[ $verb -eq 1 ]]; then echo "    Run MPASSIT at $eventtime"; fi
 
-            run_mpassit $fcstwrkdir $isec
+            run_mpassit $fcstwrkdir $ilaunch
 
             if [[ $rt_run == true ]]; then
                 for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
@@ -1028,7 +1028,7 @@ function fcst_driver() {
 
             if [[ $verb -eq 1 ]]; then echo "    Run UPP at $eventtime"; fi
 
-            run_upp $fcstwrkdir $isec
+            run_upp $fcstwrkdir $ilaunch
 
             if [[ $dorun == true && $jobwait -eq 1 ]]; then
                 for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
@@ -1234,7 +1234,7 @@ while [[ $# > 0 ]]
             usage 0
             ;;
         -n)
-            runcmd="echo"
+            runcmd="echo $runcmd"
             dorun=false
             ;;
         -v)
@@ -1457,6 +1457,10 @@ exedir="$rootdir/exec"
 #
 # read configurations that is not set from command line
 #
+if [[ ! -r $WORKDIR/config.${eventdate} ]]; then
+    echo "ERROR: Configuration file $WORKDIR/config.${eventdate} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
+    exit 2
+fi
 readconf $WORKDIR/config.${eventdate} COMMON fcst
 # get ENS_SIZE, time_step, EXTINVL, OUTINVL, OUTIOTYPE
 

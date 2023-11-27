@@ -2264,7 +2264,7 @@ while [[ $# > 0 ]]; do
             usage 0
             ;;
         -n)
-            runcmd="echo"
+            runcmd="echo $runcmd"
             dorun=false
             ;;
         -v)
@@ -2483,6 +2483,10 @@ exedir="$rootdir/exec"
 #
 # read configurations that is not set from command line
 #
+if [[ ! -r $WORKDIR/config.${eventdate} ]]; then
+    echo "ERROR: Configuration file $WORKDIR/config.${eventdate} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
+    exit 2
+fi
 readconf $WORKDIR/config.${eventdate} COMMON dacycles
 # get ENS_SIZE, time_step, EXTINVL, ADAPTIVE_INF, update_in_place
 
