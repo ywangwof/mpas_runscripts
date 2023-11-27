@@ -1150,6 +1150,7 @@ function write_runtimeconfig {
     update_in_place=false               # update MPAS states in-place or
                                         # making a copy of the restart files
     run_updatebc=true
+    run_obs2nc=true
 
     OUTIOTYPE="netcdf4"
     OBS_DIR="${OBS_DIR}"

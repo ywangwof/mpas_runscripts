@@ -87,7 +87,8 @@ function submit_a_jobscript {
 
     sed -f $sedscript $myjobtemp > $myjobscript
     if [[ $verb -eq 1 ]]; then
-        echo "Generated job file \"$myjobscript\" from \"$myjobtemp\" with sed file \"$sedscript\""
+        echo "$$-${FUNCNAME[0]}: Generated job file \"$myjobscript\" from "
+        echo "                  \"$myjobtemp\" with sed file \"$sedscript\""
     else
         rm -f $sedscript
     fi

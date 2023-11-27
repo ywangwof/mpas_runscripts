@@ -1311,6 +1311,22 @@ function run_update_states {
     fi
 
     #------------------------------------------------------
+    # Run obs_seq_to_netcdf
+    #------------------------------------------------------
+
+    if ${run_obs2nc}; then
+        if [[ $verb -eq 1 ]]; then
+            srunout="1"
+        else
+            srunout="obs_seq_to_netcdf.log"
+        fi
+
+        echo "    Running ${exedir}/dart/obs_seq_to_netcdf"
+        ${runcmd_str} ${exedir}/dart/obs_seq_to_netcdf >& $srunout
+        mv obs_epoch_001.nc obs_seq.final.${timestr_cur}.nc
+    fi
+
+    #------------------------------------------------------
     # Run update_mpas_states for all ensemble members
     #------------------------------------------------------
 
@@ -2171,8 +2187,8 @@ function run_clean {
                 mpas )
                     rm -f error.fcst_* log.????.abort
                     rm -f log.atmosphere.????.out log.atmosphere.????.err #fcst_*_*.log
-                    if [[ $verb -eq 1 ]]; then echo "    clean mpas in $dawrkdir"; fi
-                    clean_mem_runfiles "fcst" $dawrkdir $ENS_SIZE
+                    #if [[ $verb -eq 1 ]]; then echo "    clean mpas in $dawrkdir"; fi
+                    #clean_mem_runfiles "fcst" $dawrkdir $ENS_SIZE
                     ;;
                 filter )
                     if [[ -e done.filter ]]; then

@@ -511,7 +511,7 @@ function run_mpassit {
         parmfiles=(diaglist histlist_2d histlist_3d histlist_soil)
         for fn in ${parmfiles[@]}; do
             if [[ ! -e $fn ]]; then
-                if [[ $verb -eq 1 ]]; then echo "Linking $fn ..."; fi
+                #if [[ $verb -eq 1 ]]; then echo "Linking $fn ..."; fi
                 if [[ -e $FIXDIR/MPASSIT/${fn}.${fileappend} ]]; then
                     ln -sf $FIXDIR/MPASSIT/${fn}.${fileappend} $fn
                 elif [[ -e $FIXDIR/MPASSIT/${fn} ]]; then
@@ -542,7 +542,7 @@ function run_mpassit_oneAtime {
     # $1        $2
     # wrkdir    iseconds
     local wrkdir=$1
-    local iseconds=$2
+    local iseconds0=$2
     local jobarraystr=$3
 
     cd $wrkdir
@@ -559,7 +559,7 @@ function run_mpassit_oneAtime {
             continue               # already done, is running or is in queue, skip this hour
         fi
 
-        mpassit_wait_create_nml_onetime $wrkdir $iseconds $i
+        mpassit_wait_create_nml_onetime $wrkdir ${iseconds0} $i
 
         #
         # Create job script and submit it
@@ -594,9 +594,9 @@ EOF
 
 function run_mpassit_alltimes {
     # $1        $2
-    # wrkdir    iseconds
+    # wrkdir    iseconds0
     local wrkdir=$1
-    local iseconds=$2
+    local iseconds0=$2
     local jobarraystr=$3
 
     cd $wrkdir
@@ -620,7 +620,7 @@ function run_mpassit_alltimes {
             continue               # is running or is in queue, skip this hour
         fi
 
-        mpassit_wait_create_nml_onetime $wrkdir $iseconds $i
+        mpassit_wait_create_nml_onetime $wrkdir ${iseconds0} $i
         fcsttimes+=($i)
     done
 
@@ -669,18 +669,20 @@ function mpassit_wait_create_nml_onetime {
     # 2. Create namelist files
 
     # $1        $2
-    # wrkdir    iseconds
+    # wrkdir    i0seconds
     local wrkdir=$1
-    local iseconds=$2
+    local i0seconds=$2
     local fctseconds=$3
 
     cd $wrkdir
 
     minstr=$(printf "%03d" $((fctseconds/60)))
+    fcst_lauch_time=$(date -d @${i0seconds} +%H%M)
 
-    isec=$(( iseconds+fctseconds ))
+    isec=$(( i0seconds+fctseconds ))
     fcst_time_str=$(date -d @$isec +%Y-%m-%d_%H.%M.%S)
 
+    outdone=false
     jobarrays=()
     for mem in $(seq 1 $ENS_SIZE); do
         memstr=$(printf "%02d" $mem)
@@ -696,15 +698,19 @@ function mpassit_wait_create_nml_onetime {
 
         if [[ $dorun == true ]]; then
             for fn in $histfile $diagfile; do
-                echo "$$-${FUNCNAME[0]}: Checking $fn ..."
+                #echo "$$-${FUNCNAME[0]}: Checking ${fn##$rundir/} ..."
+                if [[ $outdone == false ]]; then
+                    echo "$$-${FUNCNAME[0]}: Checking forecast files at $minstr for all $ENS_SIZE memebers from fcst/${fcst_lauch_time} ..."
+                    outdone=true
+                fi
                 while [[ ! -f $fn ]]; do
                     if [[ $jobwait -eq 0 ]]; then    # do not wait for it
                         continue 3                   # go ahead to process next hour
                     fi
 
-                    #if [[ $verb -eq 1 ]]; then
-                    #    echo "Waiting for $fn ..."
-                    #fi
+                    if [[ $verb -eq 1 ]]; then
+                        echo "Waiting for $fn ..."
+                    fi
                     sleep 10
                 done
                 fileage=$(( $(date +%s) - $(stat -c %Y -- "$fn") ))
