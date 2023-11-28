@@ -611,7 +611,7 @@ else    # Vecna at NSSL
     source ${modulename}
 fi
 
-source $scpdir/Common_Utilfuncs.sh
+source $scpdir/Common_Utilfuncs.sh || exit $?
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
@@ -647,7 +647,7 @@ if [[ ! -r $WORKDIR/config.${eventdate} ]]; then
     echo "ERROR: Configuration file $WORKDIR/config.${eventdate} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
     exit 2
 fi
-readconf $WORKDIR/config.${eventdate} COMMON init
+readconf $WORKDIR/config.${eventdate} COMMON init || exit $?
 # get ENS_SIZE, time_step, EXTINVL, OUTINVL, OUTIOTYPE
 
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
