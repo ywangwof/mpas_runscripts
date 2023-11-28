@@ -2,7 +2,7 @@
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
-rootdir=$(realpath $(dirname $scpdir))
+rootdir=$(realpath $(dirname "${scpdir}"))
 
 eventdateDF=$(date +%Y%m%d)
 
@@ -158,17 +158,17 @@ function run_mpas {
     #
     # Build working directory
     #
-    mkwrkdir $wrkdir 0
-    cd $wrkdir
+    mkwrkdir ${wrkdir} 0
+    cd ${wrkdir} || exit 1
 
-    dawrkdir=${wrkdir/fcst/dacycles}
+    dawrkdir=${wrkdir}/fcst/dacycles
     #
     # Waiting for job conditions
     #
-    conditions=($rundir/lbc/done.lbc $dawrkdir/done.update_states)
+    conditions=("${rundir}/lbc/done.lbc" "${dawrkdir}/done.update_states")
 
     if [[ $dorun == true ]]; then
-        for cond in ${conditions[@]}; do
+        for cond in "${conditions[@]}"; do
             echo "$$-${FUNCNAME[0]}: Checking $cond"
             while [[ ! -e $cond ]]; do
                 #if [[ $verb -eq 1 ]]; then
@@ -189,17 +189,19 @@ function run_mpas {
     #
     # Preparation for all members
     #
+    # shellcheck disable=SC2154
     if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npefcst} ]]; then
-        cd $rundir/$domname
+        cd $rundir/$domname || exit $?
         if [[ $verb -eq 1 ]]; then
             echo "Generating ${domname}.graph.info.part.${npefcst} in $rundir/$domname using $exedir/gpmetis"
         fi
         $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst} > gpmetis.out$npefcst
-        if [[ $? -ne 0 ]]; then
-            echo "$?: $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst}"
-            exit $?
+        estatus=$?
+        if [[ ${estatus} -ne 0 ]]; then
+            echo "${estatus}: $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst}"
+            exit ${estatus}
         fi
-        cd $wrkdir
+        cd $wrkdir || exit $?
     fi
 
     currtime_str=$(date -d @$iseconds +%Y-%m-%d_%H:%M:%S)
@@ -207,6 +209,7 @@ function run_mpas {
 
     #
     # Preparation for each member
+    # nenslbc/pbl_schemes/sfclayer_schemes are from the config file
     #
     jobarrays=()
     for iens in $(seq 1 $ENS_SIZE); do
@@ -219,12 +222,14 @@ function run_mpas {
         else
             idx=2
         fi
+        # shellcheck disable=SC2154
         pblscheme=${pbl_schemes[$idx]}
+        # shellcheck disable=SC2154
         sfcscheme=${sfclayer_schemes[$idx]}
 
         memwrkdir=$wrkdir/fcst_$memstr
         mkwrkdir $memwrkdir 1
-        cd $memwrkdir
+        cd $memwrkdir || exit $?
 
         #
         # init files
@@ -236,6 +241,7 @@ function run_mpas {
         #
         # lbc files
         #
+        # shellcheck disable=SC2154         #undefined variable nenslbc
         jens=$(( (iens-1)%nenslbc+1 ))
         mlbcstr=$(printf "%02d" $jens)
 
@@ -260,7 +266,7 @@ function run_mpas {
 
 
         streamlists=(stream_list.atmosphere.diagnostics stream_list.atmosphere.output stream_list.atmosphere.surface)
-        for fn in ${streamlists[@]}; do
+        for fn in "${streamlists[@]}"; do
             cp -f ${FIXDIR}/$fn .
         done
 
@@ -269,7 +275,7 @@ function run_mpas {
                      RRTMG_LW_DATA.DBL RRTMG_SW_DATA       RRTMG_SW_DATA.DBL SOILPARM.TBL   \
                      VEGPARM.TBL )
 
-        for fn in ${datafiles[@]}; do
+        for fn in "${datafiles[@]}"; do
             ln -sf ${FIXDIR}/$fn .
         done
 
@@ -277,13 +283,14 @@ function run_mpas {
             thompson_tables=( MP_THOMPSON_QRacrQG_DATA.DBL   MP_THOMPSON_QRacrQS_DATA.DBL   \
                               MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL )
 
-            for fn in ${thompson_tables[@]}; do
+            for fn in "${thompson_tables[@]}"; do
                 ln -sf ${FIXDIR}/$fn .
             done
         fi
 
         fcsthr_str=$(printf "%02d:00:00" $((fcst_seconds/3600)))
 
+        # shellcheck disable=SC2154
         cat << EOF > namelist.atmosphere
 &nhyd_model
     config_time_integration_order   = 2
@@ -444,18 +451,20 @@ EOF
 
 </streams>
 EOF
-        jobarrays+=($iens)
+        jobarrays+=("$iens")
     done
 
     #
     # Create job script and submit it
     #
-    cd $wrkdir
+    cd $wrkdir || exit $?
 
     #mpas_jobscript="run_mpas.${mach}"
-    jobarraystr="--array=$(join_by_comma ${jobarrays[@]})"
+    jobarraystr="--array=$(join_by_comma "${jobarrays[@]}")"
 
+    # undefined variables are from the config file
     sedfile=$(mktemp -t mpas_${eventtime}.sed_XXXX)
+    # shellcheck disable=SC2154
     cat <<EOF > $sedfile
 s/PARTION/${partition_fcst}/
 s/NOPART/$npefcst/
@@ -472,6 +481,7 @@ s/EXCLSTR/${job_exclusive_str}/
 s/RUNMPCMD/${job_runmpexe_str}/
 s/SAVETAG/nothing_xxx/
 EOF
+    # shellcheck disable=SC2154
     if [[ "${mach}" == "pbs" ]]; then
         echo "s/NNODES/${nnodes_filter}/;s/NCORES/${ncores_filter}/" >> $sedfile
     fi
@@ -492,7 +502,7 @@ function run_mpassit {
     #
     wrkdir=$wrkdir/mpassit
     mkwrkdir $wrkdir 0
-    cd $wrkdir
+    cd $wrkdir || return
 
     if [[ "${mpscheme}" == "Thompson" ]]; then
         fileappend="THOM"
@@ -505,13 +515,13 @@ function run_mpassit {
         memstr=$(printf "%02d" $mem)
         memdir=$wrkdir/mem$memstr
         mkwrkdir $memdir 0
-        cd $memdir
+        cd $memdir || exit $?
 
         rm -f core.*           # Maybe core-dumped, resubmission will solves the problem if the machine is unstable.
 
         # Linking working file for this member
         parmfiles=(diaglist histlist_2d histlist_3d histlist_soil)
-        for fn in ${parmfiles[@]}; do
+        for fn in "${parmfiles[@]}"; do
             if [[ ! -e $fn ]]; then
                 #if [[ $verb -eq 1 ]]; then echo "Linking $fn ..."; fi
                 if [[ -e $FIXDIR/MPASSIT/${fn}.${fileappend} ]]; then
@@ -524,17 +534,17 @@ function run_mpassit {
                 fi
             fi
         done
-        jobarrays+=($mem)
+        jobarrays+=("$mem")
     done
 
-    jobarrays_str=$(join_by_comma ${jobarrays[@]})
+    jobarrays_str=$(join_by_comma "${jobarrays[@]}")
 
-    cd $wrkdir
+    cd $wrkdir || exit $?
 
     if [[ $rt_run == true ]]; then
-        run_mpassit_oneAtime $wrkdir $iseconds $jobarrays_str
+        run_mpassit_oneAtime ${wrkdir} ${iseconds} ${jobarrays_str}
     else
-        run_mpassit_alltimes $wrkdir $iseconds $jobarrays_str
+        run_mpassit_alltimes ${wrkdir} ${iseconds} ${jobarrays_str}
     fi
 }
 
@@ -547,7 +557,7 @@ function run_mpassit_oneAtime {
     local -r iseconds=$2
     local jobarraystr=$3
 
-    cd $wrkdir
+    cd $wrkdir || return
 
     if [[ -f done.mpassit || -f running.mpassit || -f queue.mpassit || -f error.mpassit ]]; then
         return               # already done, is running or is in queue, skip this hour
@@ -570,6 +580,7 @@ function run_mpassit_oneAtime {
         jobarrayopt="--array=${jobarraystr}"
 
         sedfile=$(mktemp -t mpassit_${eventtime}_$minstr.sed_XXXX)
+        # shellcheck disable=SC2154
         cat <<EOF > $sedfile
 s/PARTION/${partition_post}/
 s/NOPART/$npepost/
@@ -601,7 +612,7 @@ function run_mpassit_alltimes {
     local -r iseconds=$2
     local    jobarraystr=$3
 
-    cd $wrkdir
+    cd $wrkdir || return
 
     if [[ -f done.mpassit || -f running.mpassit || -f queue.mpassit || -f error.mpassit ]]; then
         return               # already done, is running or is in queue, skip this hour
@@ -614,7 +625,7 @@ function run_mpassit_alltimes {
         minstr=$(printf "%03d" $((i/60)))
 
         if [[ -f done.mpassit$minstr ]]; then
-            let n+=1
+            (( n+=1 ))
             continue               # already done, skip this hour
         fi
 
@@ -623,7 +634,7 @@ function run_mpassit_alltimes {
         fi
 
         mpassit_wait_create_nml_onetime $wrkdir ${iseconds} $i
-        fcsttimes+=($i)
+        fcsttimes+=("$i")
     done
 
     n_fcst=$((fcst_seconds/OUTINVL))
@@ -636,11 +647,12 @@ function run_mpassit_alltimes {
         #
         # Create job script and submit it
         #
-        cd $wrkdir
+        cd $wrkdir || return
         jobscript="run_mpassit.slurm"
         jobarrayopt="--array=${jobarraystr}"
 
         sedfile=$(mktemp -t mpassit_${eventtime}.sed_XXXX)
+        # shellcheck disable=SC2154
         cat <<EOF > $sedfile
 s/PARTION/${partition_post}/
 s/NOPART/$npepost/
@@ -676,7 +688,7 @@ function mpassit_wait_create_nml_onetime {
     local -r iseconds=$2
     local -r fctseconds=$3
 
-    cd $wrkdir
+    cd $wrkdir || return
 
     minstr=$(printf "%03d" $((fctseconds/60)))
     fcst_lauch_time=$(date -d @${iseconds} +%H%M)
@@ -690,7 +702,7 @@ function mpassit_wait_create_nml_onetime {
         memstr=$(printf "%02d" $mem)
         memdir=$wrkdir/mem$memstr
         mkwrkdir $memdir 0
-        cd $memdir
+        cd $memdir || return
 
         rm -f core.*           # Maybe core-dumped, resubmission will solves the problem if the machine is unstable.
 
@@ -737,7 +749,7 @@ function mpassit_wait_create_nml_onetime {
 EOF
     done
 
-    cd $wrkdir
+    cd $wrkdir || exit $?
 }
 
 ########################################################################
@@ -753,12 +765,17 @@ function run_upp {
     #
     wrkdir=$wrkdir/upp
     mkwrkdir $wrkdir 0
-    cd $wrkdir
+    cd $wrkdir || exit $?
 
+    # these arrays are referred indirectly later
+    # shellcheck disable=SC2034
     fixfiles_AerosolCoeff=( AerosolCoeff.bin )
+    # shellcheck disable=SC2034
     fixfiles_CloudCoeff=( CloudCoeff.bin )
+    # shellcheck disable=SC2034
     fixfiles_EmisCoeff=( EmisCoeff.bin )
 
+    # shellcheck disable=SC2034
     fixfiles_SpcCoeff=( amsre_aqua.SpcCoeff.bin       imgr_g11.SpcCoeff.bin    \
         imgr_g12.SpcCoeff.bin     imgr_g13.SpcCoeff.bin  imgr_g15.SpcCoeff.bin  \
         imgr_insat3d.SpcCoeff.bin imgr_mt1r.SpcCoeff.bin imgr_mt2.SpcCoeff.bin  \
@@ -767,6 +784,7 @@ function run_upp {
         ssmis_f18.SpcCoeff.bin    ssmis_f19.SpcCoeff.bin ssmis_f20.SpcCoeff.bin \
         tmi_trmm.SpcCoeff.bin     v.seviri_m10.SpcCoeff.bin)
 
+    # shellcheck disable=SC2034
     fixfiles_TauCoeff=( amsre_aqua.TauCoeff.bin       imgr_g11.TauCoeff.bin    \
         imgr_g12.TauCoeff.bin     imgr_g13.TauCoeff.bin  imgr_g15.TauCoeff.bin  \
         imgr_insat3d.TauCoeff.bin imgr_mt1r.TauCoeff.bin imgr_mt2.TauCoeff.bin  \
@@ -826,7 +844,7 @@ function run_upp {
 
         if [[ $dorun == true ]]; then
             echo "$$-${FUNCNAME[0]}: Checking $donefile ...."
-            while [[ ! -f $donefile ]]; do
+            while [[ ! -f $donefile && ! -f "$mpassitdir/mpassit/done.mpassit" ]]; do
                 if [[ $jobwait -eq 0 ]]; then     # do not wait
                     continue 2                    # go ahread to process next forecast hour
                 fi
@@ -846,21 +864,22 @@ function run_upp {
             memstr=$(printf "%02d" $mem)
             memdir=$wrkdir/mem$memstr
             mkwrkdir $memdir 0
-            cd $memdir
+            cd $memdir || exit $?
 
             mpassitmemdir=${memdir/upp/mpassit}
 
             mpasfile="$mpassitmemdir/MPASSIT_${memstr}.${fcst_time_str}.nc"
 
             mkwrkdir $memdir/post_$minstr 1
-            cd $memdir/post_$minstr
+            cd $memdir/post_$minstr || exit $?
 
             #for coeff in ${!fixfiles[@]}; do
             #    echo "$coeff"
             #    for fn in ${!fixfiles[$coeff][@]}; do
-            for coeff in ${fixfiles[@]}; do
-                eval filearray=\( \${fixfiles_${coeff}[@]} \)
-                for fn in ${filearray[@]}; do
+            for coeff in "${fixfiles[@]}"; do
+                #eval filearray=\( \${fixfiles_${coeff}[@]} \)
+                fixfilename="fixfiles_${coeff}[@]"
+                for fn in "${!fixfilename}"; do
                     #echo "$coeff -> ${fixdirs[$coeff]}/$fn"
                     ln -sf ${fixdirs[$coeff]}/$fn .
                 done
@@ -882,7 +901,7 @@ function run_upp {
             #   file which defines the GRIB2 table values
             #
             parmfiles=(params_grib2_tbl_new post_avblflds.xml postcntrl.xml postxconfig-NT.txt )
-            for fn in ${parmfiles[@]}; do
+            for fn in "${parmfiles[@]}"; do
                 ln -sf $FIXDIR/UPP/hrrr_$fn $fn
             done
 
@@ -894,17 +913,17 @@ grib2
 ${fcst_time_str//./:}
 RAPR
 EOF
-            jobarrays+=($mem)
+            jobarrays+=("$mem")
         done
 
         #
         # Create job script and submit it
         #
-        cd $wrkdir
+        cd $wrkdir || exit $?
         if [[ ${#jobarrays} -gt 0 ]]; then
 
             jobscript="run_upp$minstr.slurm"
-            jobarraystr="--array=$(join_by_comma ${jobarrays[@]})"
+            jobarraystr="--array=$(join_by_comma "${jobarrays[@]}")"
 
             sedfile=$(mktemp -t upp_${eventtime}_$minstr.sed_XXXX)
             cat <<EOF > $sedfile
@@ -936,18 +955,17 @@ function fcst_driver() {
     #  Free forecast driver from an analysis cycle
     #
 
-    # $1    $2    $3
-    # init start  end
-    local init_sec=$1
-    local start_sec=$2
-    local end_sec=$3
+    # $1     $2
+    # start  end       in seconds
+    local start_sec=$1
+    local end_sec=$2
 
     #
     # Build working directory
     #
     wrkdir=$rundir/fcst
     mkwrkdir $wrkdir $overwrite
-    cd $wrkdir
+    cd $wrkdir || exit $?
 
     #------------------------------------------
     # Time Cylces start here
@@ -958,8 +976,10 @@ function fcst_driver() {
 
     echo "Forecasting cycles from $date_beg to $date_end ...."
 
+    # fcst_length_seconds/fcst_launch_intvl from the config file
+    # shellcheck disable=SC2154
     for ilaunch in $(seq $start_sec ${fcst_launch_intvl} $end_sec ); do
-        timestr_curr=$(date -d @$ilaunch +%Y%m%d%H%M)
+        #timestr_curr=$(date -d @$ilaunch +%Y%m%d%H%M)
         eventtime=$(date    -d @$ilaunch +%H%M)
 
         eventMM=$(date    -d @$ilaunch +%M)
@@ -969,7 +989,7 @@ function fcst_driver() {
 
         fcstwrkdir=$wrkdir/${eventtime}
         mkwrkdir $fcstwrkdir 0        # keep original directory
-        cd $fcstwrkdir
+        cd $fcstwrkdir || exit $?
 
         if [[ $dorun == true && $jobwait -eq 1 ]]; then
             num_resubmit=2               # resubmit failed jobs
@@ -1001,14 +1021,16 @@ function fcst_driver() {
 
             run_mpassit $fcstwrkdir $ilaunch
 
-            if [[ $rt_run == true ]]; then
-                for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
-                    minstr=$(printf "%03d" $((i/60)))
-                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                    check_and_resubmit "mpassit$minstr mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit_$minstr.slurm ${num_resubmit}
-                done
-            else
-                check_and_resubmit "mpassit mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit.slurm ${num_resubmit}
+            if [[ $jobwait -eq 1 ]]; then
+                if [[ $rt_run == true ]]; then
+                    for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
+                        minstr=$(printf "%03d" $((i/60)))
+                        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+                        check_and_resubmit "mpassit$minstr mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit_$minstr.slurm ${num_resubmit}
+                    done
+                else
+                    check_and_resubmit "mpassit mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit.slurm ${num_resubmit}
+                fi
             fi
         fi
 
@@ -1017,13 +1039,17 @@ function fcst_driver() {
             # 3. Post-processing the data on the WRF grid
             #------------------------------------------------------
             if [[ $dorun == true ]]; then
-                for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
-                    minstr=$(printf "%03d" $((i/60)))
-                    if [[ ! -e $fcstwrkdir/mpassit/done.mpassit$minstr ]]; then
-                        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                        check_and_resubmit "mpassit$minstr mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit_$minstr.slurm 0
-                    fi
-                done
+                if [[ $rt_run == true ]]; then
+                    for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
+                        minstr=$(printf "%03d" $((i/60)))
+                        if [[ ! -e $fcstwrkdir/mpassit/done.mpassit$minstr ]]; then
+                            #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+                            check_and_resubmit "mpassit$minstr mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit_$minstr.slurm 0
+                        fi
+                    done
+                else
+                    check_and_resubmit "mpassit mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit.slurm 0
+                fi
             fi
 
             if [[ $verb -eq 1 ]]; then echo "    Run UPP at $eventtime"; fi
@@ -1064,13 +1090,13 @@ function run_clean {
 
         fcstwrkdir=$wrkdir/$eventtime
         if [[ -d $fcstwrkdir ]]; then
-            cd $fcstwrkdir
+            cd $fcstwrkdir || exit $?
 
             if [[ $verb -eq 1 ]]; then echo "    Cleaning working directory $fcstwrkdir"; fi
 
             for dirname in mpas mpassit upp; do
 
-                cd $fcstwrkdir
+                cd $fcstwrkdir || exit $?
 
                 case $dirname in
                 mpas )
@@ -1086,13 +1112,13 @@ function run_clean {
                         if [[ "$what" == "clean_fcst" ]]; then
                             rm -rf $memdir
                             rm -f fcst_${mem}_*.log
-                            let done+=1
+                            (( done+=1 ))
                         else
                             donefile="$memdir/done.fcst_$memstr"
                             if [[ -e $donefile ]]; then
                                 rm -f fcst_${mem}_*.log
                                 #rm $donefile
-                                let done+=1
+                                (( done+=1 ))
                             fi
                         fi
                     done
@@ -1105,7 +1131,7 @@ function run_clean {
                 mpassit )
                     mywrkdir=$fcstwrkdir/mpassit
                     if [[ -d $mywrkdir ]]; then
-                        cd $mywrkdir
+                        cd $mywrkdir || exit $?
                         for ((i=0;i<=fcst_seconds;i+=OUTINVL)); do
                             minstr=$(printf "%03d" $((i/60)))
 
@@ -1117,13 +1143,13 @@ function run_clean {
                                 if [[ "$what" == "clean_mpassit" ]]; then
                                     rm -rf $memdir
                                     rm -f $mywrkdir/mpassit${minstr}_${mem}_*.log
-                                    let done+=1
+                                    (( done+=1 ))
                                 else
                                     donefile="$memdir/done.mpassit${minstr}_$memstr"
                                     if [[ -e $donefile ]]; then
                                         rm -f $mywrkdir/mpassit${minstr}_${mem}_*.log
                                         #rm $donefile
-                                        let done+=1
+                                        (( done+=1 ))
                                     fi
                                 fi
                             done
@@ -1139,7 +1165,7 @@ function run_clean {
                 upp )
                     mywrkdir=$fcstwrkdir/upp
                     if [[ -r $mywrkdir ]]; then
-                        cd $mywrkdir
+                        cd $mywrkdir || exit $?
                         for ((i=0;i<=fcst_seconds;i+=OUTINVL)); do
                             minstr=$(printf "%03d" $((i/60)))
 
@@ -1153,13 +1179,13 @@ function run_clean {
                                 if [[ "$what" == "clean_mpassit" ]]; then
                                     rm -rf $memdir
                                     rm -f $mywrkdir/upp${minstr}_${mem}_*.log
-                                    let done+=1
+                                    (( done+=1 ))
                                 else
                                     donefile="$memdir/done.upp${minstr}_$memstr"
                                     if [[ -e $donefile ]]; then
                                         rm -f $mywrkdir/upp${minstr}_${mem}_*.log
                                         rm -rf $postdir
-                                        let done+=1
+                                        (( done+=1 ))
                                     fi
                                 fi
                             done
@@ -1192,7 +1218,6 @@ FIXDIR="${rootdir}/fix_files"
 eventdate="$eventdateDF"
 eventtime="1700"
 initdatetime=""
-eventdatetime=""
 enddatetime=""
 
 domname="wofs_mpas"
@@ -1205,18 +1230,20 @@ runcmd="sbatch"
 dorun=true
 rt_run=false            # realtime run?
 
-machine="Jet"
-if [[ "$(hostname)" == ln? ]]; then
+myhost="$(hostname)"
+if [[ "${myhost}" == ln? ]]; then
     machine="Vecna"
-elif [[ "$(hostname)" == hercules* ]]; then
+elif [[ "${myhost}" == hercules* ]]; then
     machine="Hercules"
-elif [[ "$(hostname)" == cheyenne* ]]; then
+elif [[ "${myhost}" == cheyenne* ]]; then
     machine="Cheyenne"
+else
+    machine="Jet"
 fi
 
 jobs=(mpas mpassit clean)
 
-source $scpdir/Common_Utilfuncs.sh
+source $scpdir/Common_Utilfuncs.sh || exit $?
 
 #-----------------------------------------------------------------------
 #
@@ -1225,7 +1252,7 @@ source $scpdir/Common_Utilfuncs.sh
 #-----------------------------------------------------------------------
 #% ARGS
 
-while [[ $# > 0 ]]
+while [[ $# -gt 0 ]]
     do
     key="$1"
 
@@ -1296,7 +1323,7 @@ while [[ $# > 0 ]]
             if [[ $2 =~ ^[0-9]{12}$ ]]; then
                 eventtime=${2:8:4}
                 eventhour=${2:8:2}
-                if [[ 10#$eventhour -lt 12 ]]; then
+                if [[ $((10#$eventhour)) -lt 12 ]]; then
                     eventdate=$(date -d "${2:0:8} 1 day ago" +%Y%m%d)
                 else
                     eventdate=${2:0:8}
@@ -1315,7 +1342,7 @@ while [[ $# > 0 ]]
             elif [[ $2 =~ ^[0-9]{4}$ ]]; then
                 endhrmin=$2
                 endhour=${endhrmin:0:2}
-                if [[ 10#$endhour -lt 12 ]]; then
+                if [[ $((10#$endhour)) -lt 12 ]]; then
                     enddatetime=$(date -d "$eventdate $endhrmin 1 day" +%Y%m%d%H%M)
                 else
                     enddatetime=$(date -d "$eventdate $endhrmin" +%Y%m%d%H%M)
@@ -1341,15 +1368,16 @@ while [[ $# > 0 ]]
             echo "Unknown option: $key"
             usage 2
             ;;
-        mpas* | mpassit* | upp* | clean* )
-            jobs=(${key//,/ })
+        mpassit* | mpas* | upp* | clean* )
+            #jobs=(${key//,/ })
+            IFS="," read -r -a jobs <<< "$key"
             ;;
         *)
             if [[ $key =~ ^[0-9]{12}$ ]]; then
                 enddatetime=${key}
                 eventtime=${key:8:4}
                 eventhour=${key:8:2}
-                if [[ 10#$eventhour -lt 12 ]]; then
+                if [[ $((10#$eventhour)) -lt 12 ]]; then
                     eventdate=$(date -d "${key:0:8} 1 day ago" +%Y%m%d)
                 else
                     eventdate=${key:0:8}
@@ -1429,7 +1457,7 @@ echo "     Domain name: $domname;  MP scheme: ${mpscheme}"
 echo " "
 
 eventhour=${eventtime:0:2}
-if [[ $eventhour -lt 12 ]]; then
+if [[ $((10#$eventhour)) -lt 12 ]]; then
     startday="1 day"
 else
     startday=""
@@ -1443,9 +1471,9 @@ if [[ "$enddatetime" == "" ]]; then
     enddatetime=$(date -d "$eventdate 03:00 1 day" +%Y%m%d%H%M)
 fi
 
-inittime_sec=$(date -d "${initdatetime:0:8} ${initdatetime:8:4}" +%s)
-starttime_sec=$(date -d "${eventdate} ${eventtime} $startday"    +%s)
-stoptime_sec=$(date -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
+#inittime_sec=$(date  -d "${initdatetime:0:8} ${initdatetime:8:4}" +%s)
+starttime_sec=$(date -d "${eventdate} ${eventtime} $startday"     +%s)
+stoptime_sec=$(date  -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
 
 rundir="$WORKDIR/${eventdate}"
 if [[ ! -d $rundir ]]; then
@@ -1461,7 +1489,7 @@ if [[ ! -r $WORKDIR/config.${eventdate} ]]; then
     echo "ERROR: Configuration file $WORKDIR/config.${eventdate} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
     exit 2
 fi
-readconf $WORKDIR/config.${eventdate} COMMON fcst
+readconf $WORKDIR/config.${eventdate} COMMON fcst  || exit $?
 # get ENS_SIZE, time_step, EXTINVL, OUTINVL, OUTIOTYPE
 
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
@@ -1474,7 +1502,7 @@ RSTINVL_STR="10:00:00"         # turn off restart file output
 if [[ " ${jobs[*]} " =~ " mpas " || " ${jobs[*]} " =~ " mpassit " || " ${jobs[*]} " =~ " upp " ]]; then
     # $1    $2    $3
     # init start  end
-    fcst_driver $inittime_sec $starttime_sec $stoptime_sec
+    fcst_driver $starttime_sec $stoptime_sec
 elif [[ " ${jobs[*]} " =~ " clean " ]]; then
     run_clean $starttime_sec $stoptime_sec
 elif [[ "${jobs[*]}" == @(clean_fcst|clean_mpassit|clean_upp) ]]; then
@@ -1488,7 +1516,7 @@ elif [[ "${jobs[*]}" == @(clean_fcst|clean_mpassit|clean_upp) ]]; then
     echo -e "\nWARNING: Clean ${cleanmsg[$cleanjob]} from $(date -d @${starttime_sec} +%Y%m%d_%H:%M:%S) to $(date -d @${stoptime_sec} +%Y%m%d_%H:%M:%S)"
     echo -e   "         in ${WORKDIR}/${eventdate}/fcst?\n"
     echo -n "[YES,NO]? "
-    read doit
+    read -r doit
     if [[ ${doit^^} == "YES" ]]; then
         echo -e "\nWARNING: ${cleanmsg[$cleanjob]} will be cleaned."
         run_clean $starttime_sec $stoptime_sec ${cleanjob}

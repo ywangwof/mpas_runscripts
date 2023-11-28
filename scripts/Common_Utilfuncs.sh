@@ -36,11 +36,11 @@ function mkwrkdir {
             bakno=0
             bakdir="$basedir/${namedir}.bak$bakno"
             while [[ -d $bakdir ]]; do
-                let bakno++
+                (( bakno++ ))
                 bakdir="$basedir/${namedir}.bak$bakno"
             done
 
-            for ((i=$bakno;i>0;i--)); do
+            for ((i=bakno;i>0;i--)); do
                 j=$((i-1))
                 olddir="$basedir/${namedir}.bak$j"
                 bakdir="$basedir/${namedir}.bak$i"
@@ -72,7 +72,7 @@ function submit_a_jobscript {
     #    if the job script is submitted correctly
     #
     if [[ $# -ne 6 ]]; then
-        echo "No enough argument in \"submit_a_jobscript\", get: $@"
+        echo "No enough argument in \"submit_a_jobscript\", get: $*"
         exit 0
     fi
 
@@ -83,17 +83,20 @@ function submit_a_jobscript {
     local myjobscript=$5
     local myjoboption=$6
 
-    cd $mywrkdir
+    cd $mywrkdir  || return
 
     sed -f $sedscript $myjobtemp > $myjobscript
-    if [[ $verb -eq 1 ]]; then
+    # shellcheck disable=SC2154
+    if [[ ${verb} -eq 1 ]]; then
         echo "$$-${FUNCNAME[0]}: Generated job file \"$myjobscript\" from "
         echo "                  \"$myjobtemp\" with sed file \"$sedscript\""
     else
         rm -f $sedscript
     fi
 
+    # shellcheck disable=SC2154
     if [[ $dorun == true ]]; then echo -n "Submitting $myjobscript .... "; fi
+    # shellcheck disable=SC2154
     $runcmd $myjoboption $myjobscript
     if [[ $dorun == true && $? -eq 0 ]]; then touch $mywrkdir/queue.$myjobname; fi
     echo " "
@@ -121,10 +124,10 @@ function check_and_resubmit {
     # global variables:
     # $runcmd, $verb
 
-    local numtry done memdir runjobs jobarrays mem memstr
+    local numtry "done" memdir runjobs jobarrays mem memstr
     local donefile errorfile
 
-    cd $mywrkdir
+    cd $mywrkdir  || return
 
     checkonly=false
     if [[ $numtries -lt 0 ]]; then
@@ -150,11 +153,11 @@ function check_and_resubmit {
                 if [[ $verb -eq 1 ]]; then echo "$$-${FUNCNAME[0]}: Checking $donefile"; fi
                 while [[ ! -e $donefile ]]; do
                     if [[ -e $errorfile ]]; then
-                        jobarrays+=($mem)
-                        let done-=-1
+                        jobarrays+=("$mem")
+                        (( done-=-1 ))
                         break
                     elif $checkonly; then
-                        let running+=1
+                        (( running+=1 ))
                         continue 2
                     fi
 
@@ -164,7 +167,7 @@ function check_and_resubmit {
                     sleep 10
                 done
                 #if [[ $verb -eq 1 ]]; then echo $donefile; fi
-                let done+=1
+                (( done+=1 ))
             done
 
             if [[ $done -eq $donenum ]]; then
@@ -173,10 +176,11 @@ function check_and_resubmit {
                 break
             elif [[ $myjobscript && ${#jobarrays[@]} -gt 0 && $numtry -lt $numtries ]]; then
                 runjobs=( "${jobarrays[@]} ")
-                echo "Try these failed jobs again: ${runjobs[@]}"
-                $runcmd "--array=$(join_by_comma ${runjobs[@]})" $myjobscript
+                echo "Try these failed jobs again: ${runjobs[*]}"
+                jobs_str=$(join_by_comma "${runjobs[@]}")
+                $runcmd "--array=${jobs_str}" $myjobscript
             fi
-            let numtry+=1
+            (( numtry+=1 ))
         done
     fi
 
@@ -189,7 +193,7 @@ function check_and_resubmit {
     fi
 
     if [[ ${#jobarrays[@]} -gt 0 ]]; then
-        outmessage="$outmessage; failed: ${#jobarrays[@]} - [${jobarrays[@]}]"
+        outmessage="$outmessage; failed: ${#jobarrays[@]} - [${jobarrays[*]}]"
     fi
 
     echo "$$-${FUNCNAME[0]}: $outmessage"
@@ -227,7 +231,9 @@ function readconf {
         exit 1
     fi
     local configfile=$1
-    local sections=$(join_by \| ${*:2})
+    local sections
+
+    sections=$(join_by \| "${@:2}")
     local debug=0
 
     if [[ ! -e $configfile ]]; then
@@ -238,7 +244,7 @@ function readconf {
     local readmode line
 
     readmode=false
-    while read line; do
+    while read -r line; do
         #echo -n "<$line>"
         if [[ "$line" =~ \[$sections\] ]]; then
             if [[ $debug -eq 1 ]]; then echo "Found $sections: $line"; fi
@@ -272,7 +278,7 @@ function upnlevels {
     local newndir=$1
     local n=$2
 
-    for ((i=1; i<=$n; i++)); do
+    for ((i=1; i<=n; i++)); do
         newndir=$(dirname $newndir)
     done
 
@@ -289,16 +295,16 @@ function link_grib {
 
     rm -f GRIBFILE.??? >& /dev/null
 
-    for f in ${*}; do
+    for f in "$@"; do
        ln -sf ${f} GRIBFILE.${alpha[$i3]}${alpha[$i2]}${alpha[$i1]}
-       let i1++
+       (( i1++ ))
 
        if [[ $i1 -ge 26 ]]; then
-          let i1=0
-          let i2++
+          (( i1=0 ))
+          (( i2++ ))
          if [[ $i2 -ge 26 ]]; then
-            let i2=0
-            let i3++
+            (( i2=0 ))
+            (( i3++ ))
             if [[ $i3 -ge 26 ]]; then
                echo "RAN OUT OF GRIB FILE SUFFIXES!"
             fi
@@ -317,7 +323,7 @@ function clean_mem_runfiles {
 
     local mem memstr memdir donefile
 
-    cd $mywrkdir
+    cd $mywrkdir  || return
 
     done=0
     for mem in $(seq 1 $nummem); do
@@ -329,7 +335,7 @@ function clean_mem_runfiles {
         if [[ -e $donefile ]]; then
             rm -rf $memdir
             rm -f  ${jobname}_${mem}_*.log
-            let done+=1
+            (( done+=1 ))
         fi
     done
 

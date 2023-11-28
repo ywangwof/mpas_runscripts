@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2317
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
@@ -82,7 +83,7 @@ function usage {
     echo " "
     echo "    DATETIME - Case date and time in YYYYmmddHHMM, Default for today"
     echo "    WORKDIR  - Run Directory"
-    echo "    JOBS     - One or more jobs from [geogrid,init,lbc,mpas,mpassit,upp] or \"setup\" "
+    echo "    JOBS     - One or more jobs from [geogrid,ungrib_hrrr,rotate,meshplot_py,static,createWOFS,meshplot_ncl,clean] or \"setup\" "
     echo "               setup - just write set up configuration file"
     echo "               Default all jobs in sequence"
     echo " "
@@ -124,7 +125,7 @@ function run_geogrid {
 
     wrkdir=$1
     mkwrkdir $wrkdir $overwrite
-    cd $wrkdir
+    cd $wrkdir || return
 
     if [[ -f done.geogrid ]]; then
         echo "Found file \"done.geogrid\", skipping run_geogrid ...."
@@ -225,20 +226,20 @@ EOF
 function run_createWOFS {
 
     conditions=()
-    while [[ $# > 0 ]]; do
+    while [[ $# -gt 0 ]]; do
         case $1 in
         /*)
-            conditions+=($1)
+            conditions+=("$1")
             ;;
         *)
-            conditions+=($rundir/$1)
+            conditions+=("$rundir/$1")
             ;;
         esac
         shift
     done
 
     if [[ $dorun == true ]]; then
-        for cond in ${conditions[@]}; do
+        for cond in "${conditions[@]}"; do
             echo "$$: Checking: $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
@@ -251,7 +252,7 @@ function run_createWOFS {
 
     wrkdir="$rundir/$domname"
     mkwrkdir $wrkdir $overwrite
-    cd $wrkdir
+    cd $wrkdir || return
 
     if [[ -f done.create ]]; then
         echo "Found file \"done.create\", skipping run_createWOFS ...."
@@ -280,13 +281,15 @@ function run_createWOFS {
     fi
     ln -sf $FIXDIR/x1.65536002.grid.nc .
 
-    local geofile wrfdomain wrfkey vals newsval val keyval domelements
+    local geofile wrfdomain wrfkey vals val keyval domelements
     # Get lat/lon ranges
     geofile=$(dirname ${conditions[0]})/geo_em.d01.nc
     wrfdomain=$(ncattget $geofile)
 
+    # shellcheck disable=SC2206
     IFS=$'\n' domelements=($wrfdomain)
-    for var in ${domelements[@]}; do
+    # shellcheck disable=SC2206
+    for var in "${domelements[@]}"; do
         IFS='= ' keyval=(${var%%;})
         wrfkey=${keyval[0]:1}
         vals=(${keyval[@]:1})
@@ -301,7 +304,7 @@ function run_createWOFS {
         corner_lats | corner_lons)
             minval=360.0
             maxval=-360.0
-            for val in ${vals[@]}; do
+            for val in "${vals[@]}"; do
                 newval=${val%%f*}
                 if (( $(echo "$newval > $maxval" | bc -l) )); then
                     maxval=$newval
@@ -325,13 +328,18 @@ function run_createWOFS {
     #echo $corner_lons_min, $corner_lons_max
     #exit 0
 
+    # shellcheck disable=SC2154
     lat_s=$(echo "$corner_lats_min-0.2" | bc -l)
+    # shellcheck disable=SC2154
     lat_n=$(echo "$corner_lats_max+0.2" | bc -l)
+    # shellcheck disable=SC2154
     lon_sw=$(echo "$corner_lons_min+0.5" | bc -l)
     lon_nw=$(echo "$corner_lons_min-0.2" | bc -l)
+    # shellcheck disable=SC2154
     lon_ne=$(echo "$corner_lons_max+0.2" | bc -l)
     lon_se=$(echo "$corner_lons_max-0.5" | bc -l)
 
+    # shellcheck disable=SC2153
     cat <<EOF > $domname.custom.pts
 Name: $domname
 Type: custom
@@ -366,20 +374,20 @@ EOF
 function run_static {
 
     conditions=()
-    while [[ $# > 0 ]]; do
+    while [[ $# -gt 0 ]]; do
         case $1 in
         /*)
-            conditions+=($1)
+            conditions+=("$1")
             ;;
         *)
-            conditions+=($rundir/$1)
+            conditions+=("$rundir/$1")
             ;;
         esac
         shift
     done
 
     if [[ $dorun == true ]]; then
-        for cond in ${conditions[@]}; do
+        for cond in "${conditions[@]}"; do
             echo "$$: Checking: $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
@@ -392,16 +400,17 @@ function run_static {
 
     wrkdir=$rundir/$domname
     mkwrkdir $wrkdir $overwrite
-    cd $wrkdir
+    cd $wrkdir || return
 
     if [[ ! -f $domname.graph.info.part.${npestatic} ]]; then
         if [[ $verb -eq 1 ]]; then
             echo "Generating ${domname}.graph.info.part.${npestatic} in $wrkdir using ${gpmetis}"
         fi
         ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npestatic} > gpmetis.out$npestatic
-        if [[ $? -ne 0 ]]; then
-            echo "$?: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npestatic}"
-            exit $?
+        estatus=$?
+        if [[ ${estatus} -ne 0 ]]; then
+            echo "${estatus}: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npestatic}"
+            exit ${estatus}
         fi
     fi
 
@@ -539,20 +548,20 @@ EOF
 function run_rotate {
 
     conditions=()
-    while [[ $# > 0 ]]; do
+    while [[ $# -gt 0 ]]; do
         case $1 in
         /*)
-            conditions+=($1)
+            conditions+=("$1")
             ;;
         *)
-            conditions+=($rundir/$1)
+            conditions+=("$rundir/$1")
             ;;
         esac
         shift
     done
 
     if [[ $dorun == true ]]; then
-        for cond in ${conditions[@]}; do
+        for cond in "${conditions[@]}"; do
             echo "$$: Checking: $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
@@ -565,7 +574,7 @@ function run_rotate {
 
     wrkdir="$rundir/$domname"
     mkwrkdir $wrkdir $overwrite
-    cd $wrkdir
+    cd $wrkdir || return
 
     if [[ -f done.rotate ]]; then
         echo "Found file \"done.rotate\", skipping run_rotate ...."
@@ -575,13 +584,15 @@ function run_rotate {
         return                   # skip
     fi
 
-    local geofile wrfdomain wrfkey vals newsval val keyval domelements
+    local geofile wrfdomain wrfkey vals val keyval domelements
     # Get lat/lon ranges
     geofile=$(dirname ${conditions[0]})/geo_em.d01.nc
     wrfdomain=$(ncattget $geofile)
 
+    # shellcheck disable=SC2206
     IFS=$'\n' domelements=($wrfdomain)
-    for var in ${domelements[@]}; do
+    # shellcheck disable=SC2206
+    for var in "${domelements[@]}"; do
         IFS='= ' keyval=(${var%%;})
         wrfkey=${keyval[0]:1}
         vals=(${keyval[@]:1})
@@ -596,7 +607,7 @@ function run_rotate {
         corner_lats | corner_lons)
             minval=360.0
             maxval=-360.0
-            for val in ${vals[@]}; do
+            for val in "${vals[@]}"; do
                 newval=${val%%f*}
                 if (( $(echo "$newval > $maxval" | bc -l) )); then
                     maxval=$newval
@@ -669,7 +680,7 @@ function run_ungrib_hrrr {
 
     wrkdir=$rundir/ungrib
     mkwrkdir $wrkdir 0
-    cd $wrkdir
+    cd $wrkdir || return
 
     if [[ -f done.ungrib ]]; then
         echo "Found file \"done.ungrib\", skipping run_ungrib_hrrr ...."
@@ -751,20 +762,20 @@ EOF
 function run_meshplot_ncl {
     # NCL version
     conditions=()
-    while [[ $# > 0 ]]; do
+    while [[ $# -gt 0 ]]; do
         case $1 in
         /*)
-            conditions+=($1)
+            conditions+=("$1")
             ;;
         *)
-            conditions+=($rundir/$1)
+            conditions+=("$rundir/$1")
             ;;
         esac
         shift
     done
 
     if [[ $dorun == true ]]; then
-        for cond in ${conditions[@]}; do
+        for cond in "${conditions[@]}"; do
             echo "$$: Checking: $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
@@ -780,14 +791,13 @@ function run_meshplot_ncl {
         echo "Working file: $wrkdir/$domname.grid.nc not exist."
         return
     fi
-    cd $wrkdir
+    cd $wrkdir || return
 
     ln -sf ../geo_${domname##*_}/geo_em.d01.nc .
 
     #
     # Create job script and submit it
     #
-    datestring=$()
     jobscript="wofs_mesh.ncl"
 
     sedfile=$(mktemp -t rotate_ncl.sed_XXXX)
@@ -801,7 +811,7 @@ EOF
     $nclpath $jobscript
 
     if [[ -f $domname.png ]]; then
-        echo "Domain on ${starttime_str:0:10} is saved as $wrkdir/$domame.png."
+        echo "Domain on ${starttime_str:0:10} is saved as $wrkdir/$domname.png."
     fi
 }
 
@@ -811,20 +821,20 @@ function run_meshplot_py {
     # Python version also include code for the radar list within domain
 
     conditions=()
-    while [[ $# > 0 ]]; do
+    while [[ $# -gt 0 ]]; do
         case $1 in
         /*)
-            conditions+=($1)
+            conditions+=("$1")
             ;;
         *)
-            conditions+=($rundir/$1)
+            conditions+=("$rundir/$1")
             ;;
         esac
         shift
     done
 
     if [[ $dorun == true ]]; then
-        for cond in ${conditions[@]}; do
+        for cond in "${conditions[@]}"; do
             echo "$$: Checking: $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
@@ -840,7 +850,7 @@ function run_meshplot_py {
         echo "Working file: $wrkdir/$domname.grid.nc not exist."
         return
     fi
-    cd $wrkdir
+    cd $wrkdir  || return
 
     if [[ -f "radars.${eventdate}.sh" ]]; then
         echo "Found file \"radars.${eventdate}.sh\", skipping run_run_meshplot_py ...."
@@ -887,10 +897,10 @@ function run_meshplot_py {
 
 function run_clean {
 
-    for dirname in $@; do
+    for dirname in "$@"; do
         case $dirname in
         geogrid )
-            cd $rundir/geo_mpas
+            cd $rundir/geo_mpas || return
 
             donegeo="$rundir/geo_mpas/done.geogrid"
             if [[ -f $donegeo ]]; then
@@ -900,7 +910,7 @@ function run_clean {
             ;;
         createWOFS )
             if [[ -d $rundir/$domname ]]; then
-                cd $rundir/$domname
+                cd $rundir/$domname || return
 
                 donecreate="$rundir/$domname/done.create"
                 if [[ -e $donecreate ]]; then
@@ -910,7 +920,7 @@ function run_clean {
             ;;
         static )
             if [[ -d $rundir/$domname ]]; then
-                cd $rundir/$domname
+                cd $rundir/$domname || return
 
                 donestatic="$rundir/$domname/done.static"
                 if [[ -e $donestatic ]]; then
@@ -934,7 +944,7 @@ function write_runtimeconfig {
 
     if [[ -e $configname ]]; then
         echo -n "Case configuration file: $configname exist. Overwrite, [yes,no,skip,bak]? "
-        read doit
+        read -r doit
         if [[ ${doit^^} == "YES" ]]; then
             echo -e "\nWARNING: $configname will be replaced."
         elif [[ ${doit^^} == "SKIP" ]]; then
@@ -1042,7 +1052,7 @@ function write_runtimeconfig {
         partition_fcst="regular"   ; claim_cpu_fcst="ncpus=${ncores_fcst}"
         partition_post="regular"   ; claim_cpu_post="ncpus=${ncores_post}"
 
-        npepost=48     ; nnodes_post=$((  npepostr/ncores_post   ))
+        npepost=48     ; nnodes_post=$(( npepost/ncores_post   ))
         npefcst=48     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
         ;;
 
@@ -1234,7 +1244,7 @@ fi
 #-----------------------------------------------------------------------
 #% ARGS
 
-while [[ $# > 0 ]]
+while [[ $# -gt 0 ]]
     do
     key="$1"
 
@@ -1243,7 +1253,7 @@ while [[ $# > 0 ]]
             usage 0
             ;;
         -n)
-            runcmd="echo"
+            runcmd="echo $runcmd"
             dorun=false
             ;;
         -v)
@@ -1274,7 +1284,9 @@ while [[ $# > 0 ]]
 
         -c)
             if [[ $2 =~ ^[0-9.]+,[0-9.-]+$ ]]; then
-                latlons=(${2//,/ })
+                #latlons=(${2//,/ })
+                #mapfile -t latlons <<< "${2//,/ }"
+                IFS="," read -r -a latlons <<< "$2"
                 cen_lat=${latlons[0]}
                 cen_lon=${latlons[1]}
             else
@@ -1306,8 +1318,9 @@ while [[ $# > 0 ]]
             echo "Unknown option: $key"
             usage 2
             ;;
-        static* | geogrid* | createWOFS | meshplot | clean* | setup )
-            jobs=(${key//,/ })
+        static* | geogrid* | createWOFS | meshplot* | clean* | setup )
+            #jobs=(${key//,/ })
+            IFS="," read -r -a jobs <<< "$key"
             ;;
         *)
             if [[ $key =~ ^[0-9]{8}$ ]]; then
@@ -1373,8 +1386,8 @@ if [[ $machine == "Jet" ]]; then
 
 elif [[ $machine == "Hercules" ]]; then
     partition_wps="batch"
-    partition_static="batch"  ; static_cpu_static="--cpus-per-task=12"
-    partition_create="batch"  ; create_cpu_create="--mem-per-cpu=128G"
+    partition_static="batch"  ; claim_cpu_static="--cpus-per-task=12"
+    partition_create="batch"  ; claim_cpu_create="--mem-per-cpu=128G"
 
     npepost=40
 
@@ -1423,8 +1436,6 @@ elif [[ $machine == "Cheyenne" ]]; then
     WPSGEOG_PATH="/glade/work/ywang/WPS_GEOG/"
     wgrib2path="wgrib2_not_found"
 else    # Vecna at NSSL
-
-    account="${hpcaccount-batch}"
     ncores_static=96
     partition_wps="batch"
     partition_static="batch"    ; claim_cpu_static=""
@@ -1509,7 +1520,7 @@ EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 #
 declare -A jobargs=([geogrid]="${rundir}/geo_${domname##*_}"            \
                     [createWOFS]="geo_${domname##*_}/done.geogrid"      \
-                    #[static]="$domname/done.create ungrib/done.ungrib"  \
+                    #[static]="$domname/done.create ungrib/done.ungrib"
                     [rotate]="geo_${domname##*_}/done.geogrid"          \
                     [meshplot_ncl]="$domname/done.rotate"                         \
                     [meshplot_py]="$domname/done.rotate $domname/$domname.grid.nc" \
@@ -1518,7 +1529,7 @@ declare -A jobargs=([geogrid]="${rundir}/geo_${domname##*_}"            \
                     [clean]="geogrid static createWOFS"                 \
                    )
 
-for job in ${jobs[@]}; do
+for job in "${jobs[@]}"; do
     if [[ $verb -eq 1 ]]; then
         echo " "
         echo "run_$job ${jobargs[$job]}"

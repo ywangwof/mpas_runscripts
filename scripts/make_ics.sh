@@ -1,8 +1,9 @@
 #!/bin/bash
+# shellcheck disable=SC2317
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
-rootdir=$(realpath $(dirname $scpdir))
+rootdir=$(realpath $(dirname "${scpdir}"))
 
 eventdateDF=$(date +%Y%m%d)
 
@@ -92,7 +93,7 @@ function run_ungrib {
 
     wrkdir=$rundir/init/ungrib
     mkwrkdir $wrkdir 0
-    cd $wrkdir
+    cd $wrkdir || return
 
     if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
         return 0                   # skip
@@ -101,6 +102,7 @@ function run_ungrib {
         hstr=$(printf "%02d" $starthr)
 
         jobarrays=()
+        # shellcheck disable=SC2154
         for mem in $(seq 1 $nensics); do
             memstr=$(printf "%02d" $mem)
             gribfile=$grib_dir/$eventdate/${gribtime}/mem${memstr}/wrfnat_hrrre_newse_mem00${memstr}_${hstr}.grib2
@@ -115,9 +117,10 @@ function run_ungrib {
 
             mywrkdir="$wrkdir/ungrib_$memstr"
             mkwrkdir $mywrkdir 1
-            cd $mywrkdir
+            cd $mywrkdir || return
 
             ln -sf $gribfile GRIBFILE.AAA
+             # shellcheck disable=SC2154
             ln -sf $FIXDIR/WRFV4.0/${hrrrvtable} Vtable
 
             cat << EOF > namelist.wps
@@ -138,19 +141,21 @@ function run_ungrib {
 &metgrid
 /
 EOF
-            jobarrays+=($mem)
+            jobarrays+=("$mem")
         done
 
         #
         # Create job script and submit it
         #
-        cd $wrkdir
+        cd $wrkdir || return
 
         if [[ ${#jobarrays[@]} -gt 0 ]]; then
             jobscript="run_ungrib.slurm"
-            jobarraystr="--array=$(join_by_comma ${jobarrays[@]})"
+            array_str=$(join_by_comma "${jobarrays[@]}")
+            jobarraystr="--array=${array_str}"
 
             sedfile=$(mktemp -t ungrib_${jobname}.sed_XXXX)
+            # shellcheck disable=SC2154
             cat <<EOF > $sedfile
 s/PARTION/${partition_ics}/
 s/JOBNAME/ungrb_${jobname}/
@@ -162,6 +167,7 @@ s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/RUNCMD/${job_runexe_str}/
 EOF
+            # shellcheck disable=SC2154
             submit_a_jobscript $wrkdir "ungrib" $sedfile $TEMPDIR/run_ungrib_array.${mach} $jobscript ${jobarraystr}
         fi
     fi
@@ -190,28 +196,28 @@ function run_init {
             done
         fi
 
-        cd $rundir
+        cd $rundir || return
         ln -sf $init_dir/init .
         return
     fi
 
     # Otherwise, run init normally
     conditions=()
-    while [[ $# > 0 ]]; do
+    while [[ $# -gt 0 ]]; do
         case $1 in
         /*)
-            conditions+=($1)
+            conditions+=("$1")
             ;;
         *)
-            conditions+=($rundir/$1)
+            conditions+=("$rundir/$1")
             ;;
         esac
         shift
     done
 
     if [[ $dorun == true ]]; then
-        for cond in ${conditions[@]}; do
-            echo "$$: Checking: $cond"
+        for cond in "${conditions[@]}"; do
+            echo "$$: Checking $cond"
             while [[ ! -e $cond ]]; do
                 check_and_resubmit "ungrib" $rundir/init/ungrib $nensics
                 if [[ $verb -eq 1 ]]; then
@@ -228,7 +234,7 @@ function run_init {
     fi
 
     mkwrkdir $wrkdir $overwrite
-    cd $wrkdir
+    cd $wrkdir || return
 
     jobarrays=()
     for mem in $(seq 1 $nensics); do
@@ -236,22 +242,24 @@ function run_init {
         mywrkdir="$wrkdir/init_$memstr"
 
         mkwrkdir $mywrkdir 1
-        cd $mywrkdir
+        cd $mywrkdir || return
 
         ln -sf ../ungrib/${EXTHEAD}${memstr}:${starttime_str:0:13} .
         ln -sf $rundir/$domname/$domname.static.nc .
 
         if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npeics} ]]; then
-            cd $rundir/$domname
+            cd $rundir/$domname || return
+            # shellcheck disable=SC2154
             if [[ $verb -eq 1 ]]; then
                 echo "Generating ${domname}.graph.info.part.${npeics} in $rundir/$domname using ${gpmetis}"
             fi
             ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npeics} > gpmetis.out$npeics
-            if [[ $? -ne 0 ]]; then
-                echo "$?: $${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npeics}"
-                exit $?
+            estatus=$?
+            if [[ ${estatus} -ne 0 ]]; then
+                echo "${estatus}: $${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npeics}"
+                exit ${estatus}
             fi
-            cd $mywrkdir
+            cd $mywrkdir || return
         fi
         ln -sf $rundir/$domname/$domname.graph.info.part.${npeics} .
 
@@ -345,16 +353,19 @@ EOF
 
 </streams>
 EOF
-        jobarrays+=($mem)
+        jobarrays+=("$mem")
     done
     #
     # Create job script and submit it
     #
     if [[ ${#jobarrays[@]} -gt 0 ]]; then
         jobscript="run_init.${mach}"
-        jobarraystr="--array=$(join_by_comma ${jobarrays[@]})"
+        array_str=$(join_by_comma "${jobarrays[@]}")
+        jobarraystr="--array=${array_str}"
 
         sedfile=$(mktemp -t init_${jobname}.sed_XXXX)
+
+        # shellcheck disable=SC2154
         cat <<EOF > $sedfile
 s/PARTION/${partition_ics}/
 s/MACHINE/${machine}/g
@@ -370,6 +381,7 @@ s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/RUNMPCMD/${job_runmpexe_str}/
 EOF
+        # shellcheck disable=SC2154
         if [[ "${mach}" == "pbs" ]]; then
             echo "s/NNODES/${nnodes_ics}/;s/NCORES/${ncores_ics}/" >> $sedfile
         fi
@@ -388,15 +400,15 @@ EOF
 
 function run_clean {
 
-    for dirname in $@; do
+    for dirname in "$@"; do
         case $dirname in
         ungrib )
-            cd $rundir/init/ungrib
+            cd $rundir/init/ungrib  || return
             #jobname=$1 mywrkdir=$2 nummem=$3
             clean_mem_runfiles "ungrib" $rundir/init/ungrib $nensics
             ;;
         init )
-            cd $rundir/init
+            cd $rundir/init  || return
             #jobname=$1 mywrkdir=$2 nummem=$3
             clean_mem_runfiles "init" $rundir/init $nensics
             ;;
@@ -407,7 +419,7 @@ function run_clean {
 ########################################################################
 
 function run_cleanungrib {
-    cd $rundir/init
+    cd $rundir/init  || return
     rm -rf ungrib
 }
 
@@ -451,7 +463,7 @@ fi
 #-----------------------------------------------------------------------
 #% ARGS
 
-while [[ $# > 0 ]]
+while [[ $# -gt 0 ]]
     do
     key="$1"
 
@@ -538,7 +550,8 @@ while [[ $# > 0 ]]
             usage 2
             ;;
         ungrib* | init* | clean* )
-            jobs=(${key//,/ })
+            #jobs=(${key//,/ })
+            IFS="," read -r -a jobs <<< "$key"
             ;;
         *)
             if [[ $key =~ ^[0-9]{8}$ ]]; then
@@ -548,7 +561,7 @@ while [[ $# > 0 ]]
                 lastdir=$(basename $WORKDIR)
                 if [[ $lastdir =~ ^[0-9]{8}$ ]]; then
                     eventstr=${lastdir}
-                    WORKDIR=${WORKDIR%%/$lastdir}
+                    WORKDIR=${WORKDIR%%/"$lastdir"}
                     eventdate=${eventstr:0:8}
                 fi
 
@@ -648,7 +661,7 @@ declare -A jobargs=([ungrib]="$hrrr_dir $hrrr_time"                     \
                     [cleanungrib]=""
                    )
 
-for job in ${jobs[@]}; do
+for job in "${jobs[@]}"; do
     if [[ $verb -eq 1 ]]; then
         echo " "
         echo "run_$job ${jobargs[$job]}"

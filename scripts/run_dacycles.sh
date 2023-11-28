@@ -2,7 +2,7 @@
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
-rootdir=$(realpath $(dirname $scpdir))
+rootdir=$(realpath $(dirname "${scpdir}"))
 
 eventdateDF=$(date +%Y%m%d)
 
@@ -131,7 +131,6 @@ function run_obsmerge {
     # wrkdir    iseconds    seqfilename
     local wrkdir=$1               # DA directory for this cycle
     local iseconds=$2
-    local outfilename=$3
 
     if [[ ! -d $wrkdir ]]; then
         echo "run_obsmerge: Working directory $wrkdir not exist"
@@ -148,6 +147,7 @@ function run_obsmerge {
     fi
 
     if [[ $verb -eq 1 ]]; then echo "Runing ${exedir}/dart/convertdate"; fi
+    # shellcheck disable=SC2207
     g_datestr=($(${exedir}/dart/convertdate << EOF
 1
 ${anlys_date:0:4} ${anlys_date:4:2} ${anlys_date:6:2} ${anlys_time:0:2} ${anlys_time:2:2} 00
@@ -159,7 +159,7 @@ EOF
 
     mkwrkdir $wrkdir/OBSDIR 1     # 0: Keep existing directory as is
                                   # 1: Remove existing same name directory
-    cd $wrkdir/OBSDIR
+    cd $wrkdir/OBSDIR || exit $?
 
     rm -fr obsflist.bufr obsflist.meso obsflist.sat obsflist.mrms obsflist.radvr obsflist obs_seq.*
 
@@ -209,8 +209,10 @@ EOF
         if [[ $verb -eq 1 ]]; then
             echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
         fi
+        # shellcheck disable=SC2154
         ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >& ${srunout}_CWP
 
+        # shellcheck disable=SC2181
         if [[ $? -eq 0 ]]; then
             mv ./obs_seq.new ./obs_seq.cwp
 
@@ -237,14 +239,14 @@ EOF
     cp ${FIXDIR}/rttov_sensor_db.csv .
 
     i=0
-    for abifile in ${RAD_DIR}/obs_seq_abi.G16_C*.${anlys_date}${anlys_time}; do
+    for abifile in "${RAD_DIR}"/obs_seq_abi.G16_C*."${anlys_date}${anlys_time}"; do
         if [[ -e ${abifile} ]]; then
             i=$((i+1))
 
             a=$(basename $abifile)
             chan=${a##obs_seq_abi.G16_C}
-            chan=${chan%%.${anlys_date}${anlys_time}}
-            if [[ " ${channels[*]} " =~ " $chan " ]]; then
+            chan=${chan%%."${anlys_date}${anlys_time}"}
+            if [[ " ${channels[*]} " == *" $chan "* ]]; then
                 echo "    $k-$i: Using Radiance data in ${abifile}"
                 cp ${abifile} ./obs_seq.old
 
@@ -253,6 +255,7 @@ EOF
                 fi
                 ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >& ${srunout}_RAD
 
+                # shellcheck disable=SC2181
                 if [[ $? -eq 0 ]]; then
                     mv ./obs_seq.new ./obs_seq.abiC$chan
                     rm ./obs_seq.old
@@ -295,6 +298,7 @@ EOF
         fi
         ${runcmd_str} echo "$g_date $g_sec" | ${obspreprocess} >& ${srunout}_REF
 
+        # shellcheck disable=SC2181
         if [[ $? -eq 0 ]]; then
             mv ./obs_seq.new ./obs_seq.mrms
 
@@ -320,7 +324,7 @@ EOF
     #
 
     if [[ -e $rundir/$domname/radars.${eventdate}.sh ]]; then
-        source $rundir/$domname/radars.${eventdate}.sh
+        source $rundir/$domname/radars.${eventdate}.sh || exit $?
     else
         echo "ERROR: File $rundir/$domname/radars.${eventdate}.sh not exist"
         exit 0
@@ -329,6 +333,7 @@ EOF
     VR_DIR=${OBS_DIR}/VEL
 
     j=0; n=1
+    # shellcheck disable=SC2154
     while [[ ${j} -lt ${num_rad} ]]; do
 
         if [[ -e ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out ]]; then
@@ -349,12 +354,12 @@ EOF
                 mv ./obs_seq.new ./obs_seq.vr${j}
                 rm ./obs_seq.old
                 echo $wrkdir/OBSDIR/obs_seq.vr${j} >> obsflist.radvr
-                let n++
+                (( n++ ))
             fi
 
         fi
 
-        let j++
+        (( j++ ))
     done
 
     if [[ $n -gt 0 ]]; then
@@ -366,7 +371,7 @@ EOF
     #===================================================================
 
     if [[ ${#obsflists[@]} -gt 0 ]]; then
-        cat ${obsflists[*]} > obsflist
+        cat "${obsflists[*]}" > obsflist
     else
         echo "    No valid observation was found"
         exit 0
@@ -375,7 +380,9 @@ EOF
     #===================================================================
 
     if [[ $verb -eq 1 ]]; then echo "Runing ${exedir}/dart/advance_time"; fi
+    # shellcheck disable=SC2207
     gobef=($(echo ${anlys_date}${anlys_time} -5m-29s -g | ${exedir}/dart/advance_time))
+    # shellcheck disable=SC2207
     goaft=($(echo ${anlys_date}${anlys_time} +2m+30s -g |  ${exedir}/dart/advance_time))
 
     sedfile=$(mktemp -t input.nml_${eventtime}.sed_XXXX)
@@ -425,7 +432,7 @@ EOF
     #rm -f obsflist* wrfinput_d0*
 
     echo " "
-    cd $wrkdir
+    cd $wrkdir || return
 }
 
 ########################################################################
@@ -447,7 +454,7 @@ function run_filter {
     # Build working directory
     #
     mkwrkdir $wrkdir 0
-    cd $wrkdir
+    cd $wrkdir || return
 
     #
     # Return if is running or is done
@@ -456,24 +463,25 @@ function run_filter {
         return
     fi
 
+    # shellcheck disable=SC2154
     timesec_pre=$((iseconds-intvl_sec))
-    event_pre=$(date -d @$timesec_pre   +%H%M)
-    timestr_cur=$(date -d @$iseconds    +%Y%m%d%H%M)
+    event_pre=$(date -d @${timesec_pre}   +%H%M)
+    timestr_cur=$(date -d @${iseconds}    +%Y%m%d%H%M)
 
-    parentdir=$(dirname $wrkdir)
+    parentdir=$(dirname ${wrkdir})
 
     #------------------------------------------------------
     # Waiting for job conditions before submit the job
     #------------------------------------------------------
 
     if [[ $icycle -eq 0 ]]; then
-        conditions=($rundir/init/done.init)
+        conditions=("${rundir}/init/done.init")
     else
-        conditions=($parentdir/${event_pre}/done.fcst)
+        conditions=("${parentdir}/${event_pre}/done.fcst")
     fi
 
     if [[ $dorun == true ]]; then
-        for cond in ${conditions[@]}; do
+        for cond in "${conditions[@]}"; do
             echo "$$-${FUNCNAME[0]}: Checking $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
@@ -506,12 +514,12 @@ function run_filter {
             exit 1
         fi
         echo $input_file >> filter_in.txt
-        input_file_list+=($input_file)
+        input_file_list+=("$input_file")
 
         #output_file="${domname}_${memstr}.analysis.$currtime_str.nc"
         output_file="${domname}_${memstr}.analysis"
         echo $output_file >> filter_out.txt
-        output_file_list+=($output_file)
+        output_file_list+=("$output_file")
     done
 
     if [[ $icycle -eq 0 ]]; then
@@ -542,6 +550,7 @@ function run_filter {
     #------------------------------------------------------
     # 3. Prepare namelist file
     #------------------------------------------------------
+    # shellcheck disable=SC2154
     cat << EOF > input.nml
 &perfect_model_obs_nml
    read_input_state_from_file = .true.
@@ -605,8 +614,8 @@ function run_filter {
    write_all_stages_at_end  = .false.
 
    inf_flavor                  = 2,                       0,
-   inf_initial_from_restart    = $(join_by_comma ${inf_initial[@]}),
-   inf_sd_initial_from_restart = $(join_by_comma ${inf_initial[@]}),
+   inf_initial_from_restart    = $(join_by_comma "${inf_initial[@]}"),
+   inf_sd_initial_from_restart = $(join_by_comma "${inf_initial[@]}"),
    inf_deterministic           = .true.,                  .true.,
    inf_initial                 = 1.0,                     1.0
    inf_sd_initial              = 0.6,                     0.0
@@ -1216,8 +1225,10 @@ EOF
     #
     # Create job script and submit it
     #
+    # shellcheck disable=SC2154
     jobscript="run_filter.${mach}"
     sedfile=$(mktemp -t filter_${eventtime}.sed_XXXX)
+    # shellcheck disable=SC2154
     cat <<EOF > $sedfile
 s/PARTION/${partition_filter}/
 s/NOPART/$npefilter/
@@ -1232,6 +1243,7 @@ s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/RUNMPCMD/${job_runmpexe_str}/
 EOF
+    # shellcheck disable=SC2154
     if [[ "${mach}" == "pbs" ]]; then
         echo "s/NNODES/${nnodes_filter}/;s/NCORES/${ncores_filter}/" >> $sedfile
     fi
@@ -1255,7 +1267,7 @@ function run_update_states {
     #
     # Build working directory
     #
-    cd $wrkdir
+    cd $wrkdir || return
 
     timestr_cur=$(date -d @$iseconds    +%Y%m%d%H%M)
     #
@@ -1272,6 +1284,7 @@ function run_update_states {
     readarray -t input_file_list < ${state_input_file:1:${#state_input_file}-2}
     #update_input_file_list='filter_out.txt'
 
+    # shellcheck disable=SC2154
     if [[ $update_in_place == true ]]; then
         cpcmd="ln -sf"
     else
@@ -1281,7 +1294,7 @@ function run_update_states {
 
     update_output_file_list='update_out.txt'
     rm -rf ${update_output_file_list}
-    for fn in ${input_file_list[@]}; do
+    for fn in "${input_file_list[@]}"; do
         fnbase=$(basename $fn)
         if [[ ! -e $fnbase ]]; then
             echo "    ${cpcmd} $fn ."
@@ -1299,7 +1312,7 @@ function run_update_states {
     conditions=(done.filter)
 
     if [[ $dorun == true ]]; then
-        for cond in ${conditions[@]}; do
+        for cond in "${conditions[@]}"; do
             echo "$$-${FUNCNAME[0]}: Checking $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
@@ -1314,6 +1327,7 @@ function run_update_states {
     # Run obs_seq_to_netcdf
     #------------------------------------------------------
 
+    # shellcheck disable=SC2154
     if ${run_obs2nc}; then
         if [[ $verb -eq 1 ]]; then
             srunout="1"
@@ -1335,6 +1349,7 @@ function run_update_states {
     #
     jobscript="run_update_states.${mach}"
     sedfile=$(mktemp -t update_${eventtime}.sed_XXXX)
+    # shellcheck disable=SC2154
     cat <<EOF > $sedfile
 s/PARTION/${partition_filter}/
 s/NOPART/1/
@@ -1365,7 +1380,7 @@ function run_update_bc {
 
     # use lbc0_files & lbc_myfiles from the caller
 
-    cd $wrkdir
+    cd $wrkdir || return
 
     #
     # Return if is running or is done
@@ -1388,7 +1403,7 @@ function run_update_bc {
     update_output_file_list='boundary_inout.txt'
     rm -rf ${update_output_file_list}
 
-    for i in ${!lbc_myfiles[@]}; do
+    for i in "${!lbc_myfiles[@]}"; do
         lbcfn=${lbc0_files[$i]}
         mylfn=${lbc_myfiles[$i]}
         if [[ -e $mylfn ]]; then
@@ -1408,7 +1423,7 @@ function run_update_bc {
         conditions=(done.filter)
 
         if [[ $dorun == true ]]; then
-            for cond in ${conditions[@]}; do
+            for cond in "${conditions[@]}"; do
                 echo "$$-${FUNCNAME[0]}: Checking $cond"
                 while [[ ! -e $cond ]]; do
                     if [[ $verb -eq 1 ]]; then
@@ -1467,15 +1482,15 @@ function run_mpas {
     # Build working directory
     #
     mkwrkdir $wrkdir 0
-    cd $wrkdir
+    cd $wrkdir || exit $?
 
     #
     # Waiting for job conditions
     #
-    conditions=($rundir/lbc/done.lbc $wrkdir/done.update_states)
+    conditions=("${rundir}/lbc/done.lbc" "${wrkdir}/done.update_states")
 
     if [[ $dorun == true ]]; then
-        for cond in ${conditions[@]}; do
+        for cond in "${conditions[@]}"; do
             echo "$$-${FUNCNAME[0]}: Checking $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
@@ -1496,25 +1511,27 @@ function run_mpas {
     #
     # Preparation for all members
     #
+    # shellcheck disable=SC2154
     if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npefcst} ]]; then
-        cd $rundir/$domname
+        cd "${rundir}/${domname}" || exit $?
         if [[ $verb -eq 1 ]]; then
             echo "Generating ${domname}.graph.info.part.${npefcst} in $rundir/$domname using $exedir/gpmetis"
         fi
         $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst} > $rundir/$domname/gpmetis.out$npefcst
-        if [[ $? -ne 0 ]]; then
-            echo "$?: $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst}"
-            exit $?
+        estatus=$?
+        if [[ ${estatus} -ne 0 ]]; then
+            echo "${estatus}: $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst}"
+            exit ${estatus}
         fi
-        cd $wrkdir
+        cd "${wrkdir}" || exit $?
     fi
 
     intvl_min=$((intvl_sec/60))
 
     fcst_sec=$(( iseconds + intvl_sec ))
-    currtime_str=$(date -d @$iseconds +%Y-%m-%d_%H:%M:%S)
+    currtime_str=$(date -d @${iseconds} +%Y-%m-%d_%H:%M:%S)
     currtime_fil=${currtime_str//:/.}
-    fcsttime_fil=$(date -d @$fcst_sec +%Y-%m-%d_%H.%M.%S)
+    fcsttime_fil=$(date -d @${fcst_sec} +%Y-%m-%d_%H.%M.%S)
 
     #
     # Preparation for each member
@@ -1532,12 +1549,14 @@ function run_mpas {
         else
             idx=2
         fi
+        # shellcheck disable=SC2154
         pblscheme=${pbl_schemes[$idx]}
+        # shellcheck disable=SC2154
         sfcscheme=${sfclayer_schemes[$idx]}
 
         memwrkdir=$wrkdir/fcst_$memstr
         mkwrkdir $memwrkdir 1
-        cd $memwrkdir
+        cd $memwrkdir  || return
 
         #
         # init files
@@ -1560,37 +1579,38 @@ function run_mpas {
         #
         # lbc files
         #
+        # shellcheck disable=SC2154
         jens=$(( (iens-1)%nenslbc+1 ))
         mlbcstr=$(printf "%02d" $jens)
         isec_nlbc1=$(( iseconds/3600*3600 ))
         isec_nlbc2=${isec_nlbc1}
         isec_elbc=$(( iseconds+intvl_sec ))
         while [[ $isec_elbc -gt $isec_nlbc2 ]]; do
-            let isec_nlbc2+=EXTINVL
+            (( isec_nlbc2+=EXTINVL ))
         done
         # External GRIB file provided file times
-        lbctime_str1=$(date -d @$isec_nlbc1 +%Y-%m-%d_%H.%M.%S)
-        lbctime_str2=$(date -d @$isec_nlbc2 +%Y-%m-%d_%H.%M.%S)
+        lbctime_str1=$(date -d @${isec_nlbc1} +%Y-%m-%d_%H.%M.%S)
+        lbctime_str2=$(date -d @${isec_nlbc2} +%Y-%m-%d_%H.%M.%S)
 
         # MPAS expected boundary file times
         isec_elbc=$((iseconds+EXTINVL))
-        mpastime_str1=$(date -d @$iseconds  +%Y-%m-%d_%H.%M.%S)
-        mpastime_str2=$(date -d @$isec_elbc +%Y-%m-%d_%H.%M.%S)
+        mpastime_str1=$(date -d @${iseconds}  +%Y-%m-%d_%H.%M.%S)
+        mpastime_str2=$(date -d @${isec_elbc} +%Y-%m-%d_%H.%M.%S)
         if [[ $verb -eq 1 ]]; then
             echo "Member: $iens use lbc files from $rundir/lbc:"
             echo "       ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc";
             echo "       ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc";
         fi
         #ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc ${domname}_${memstr}.lbc.${mpastime_str1}.nc
-        lbc0_files+=($rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc)
-        lbc_myfiles+=(${memwrkdir}/${domname}_${memstr}.lbc.${mpastime_str1}.nc)
+        lbc0_files+=("$rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc")
+        lbc_myfiles+=("${memwrkdir}/${domname}_${memstr}.lbc.${mpastime_str1}.nc")
         ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc ${domname}_${memstr}.lbc.${mpastime_str2}.nc
 
         ln -sf $rundir/$domname/$domname.graph.info.part.${npefcst} .
 
 
         streamlists=(stream_list.atmosphere.diagnostics stream_list.atmosphere.output stream_list.atmosphere.surface)
-        for fn in ${streamlists[@]}; do
+        for fn in "${streamlists[@]}"; do
             cp -f ${FIXDIR}/$fn .
         done
 
@@ -1599,7 +1619,7 @@ function run_mpas {
                      RRTMG_LW_DATA.DBL RRTMG_SW_DATA       RRTMG_SW_DATA.DBL SOILPARM.TBL   \
                      VEGPARM.TBL )
 
-        for fn in ${datafiles[@]}; do
+        for fn in "${datafiles[@]}"; do
             ln -sf ${FIXDIR}/$fn .
         done
 
@@ -1607,13 +1627,14 @@ function run_mpas {
             thompson_tables=( MP_THOMPSON_QRacrQG_DATA.DBL   MP_THOMPSON_QRacrQS_DATA.DBL   \
                               MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL )
 
-            for fn in ${thompson_tables[@]}; do
+            for fn in "${thompson_tables[@]}"; do
                 ln -sf ${FIXDIR}/$fn .
             done
         fi
 
-        fcstmin_str=$(printf "%02d" $intvl_min)
+        fcstmin_str=$(printf "%02d" "${intvl_min}")
 
+        # shellcheck disable=SC2154
         cat << EOF > namelist.atmosphere
 &nhyd_model
     config_time_integration_order   = 2
@@ -1774,20 +1795,20 @@ EOF
 
 </streams>
 EOF
-        jobarrays+=($iens)
+        jobarrays+=("$iens")
     done
 
     #
     # Create job script and submit it
     #
-    cd $wrkdir
+    cd $wrkdir || return
 
     # will use lbc0_files & lbc_myfiles
     if [[ $icycle -gt 0 && $run_updatebc ]]; then
-        run_update_bc $wrkdir $dorun_updatebc
-        conditions=($wrkdir/done.update_bc)
+        run_update_bc $wrkdir
+        conditions=("$wrkdir/done.update_bc")
     else             # do not need to run update_bc, just link the files
-        for i in ${!lbc_myfiles[@]}; do
+        for i in "${!lbc_myfiles[@]}"; do
             lbcfn=${lbc0_files[$i]}
             mylfn=${lbc_myfiles[$i]}
             if [[ -e $mylfn ]]; then
@@ -1805,7 +1826,7 @@ EOF
     #
 
     if [[ $dorun == true ]]; then
-        for cond in ${conditions[@]}; do
+        for cond in "${conditions[@]}"; do
             echo "$$-${FUNCNAME[0]}: Checking $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
@@ -1817,9 +1838,11 @@ EOF
     fi
 
     #mpas_jobscript="run_mpas.${mach}"
-    jobarraystr="--array=$(join_by_comma ${jobarrays[@]})"
+    jobs_str=$(join_by_comma "${jobarrays[@]}")
+    jobarraystr="--array=${jobs_str}"
 
     sedfile=$(mktemp -t mpas_${eventtime}.sed_XXXX)
+    # shellcheck disable=SC2154
     cat <<EOF > $sedfile
 s/PARTION/${partition_fcst}/
 s/NOPART/$npefcst/
@@ -1878,7 +1901,7 @@ function da_cycle_driver() {
     #
     wrkdir=$rundir/dacycles
     mkwrkdir $wrkdir $overwrite
-    cd $wrkdir
+    cd $wrkdir || return
 
     #------------------------------------------
     # Time Cylces start here
@@ -1898,7 +1921,7 @@ function da_cycle_driver() {
 
         dawrkdir=${wrkdir}/${eventtime}
         mkwrkdir $dawrkdir 0    # keep original directory
-        cd $dawrkdir
+        cd $dawrkdir || return
 
         echo ""
         echo "- Cycle $icyc at ${timestr_curr}"
@@ -1963,7 +1986,7 @@ function da_cycle_driver() {
             fi
         fi
 
-        let icyc+=1
+        (( icyc+=1 ))
     done
 }
 
@@ -1985,7 +2008,7 @@ function run_obs_diag {
     fi
     wrkdir=$dawrkdir/obs_diag
     mkwrkdir $wrkdir $overwrite
-    cd $wrkdir
+    cd $wrkdir || return
 
     #------------------------------------------
     # Time Cylces start here
@@ -2009,9 +2032,9 @@ function run_obs_diag {
     #------------------------------------------------------
     # Prepare obs_diag
     #------------------------------------------------------
-    obs_final_files1=$(ls -1 $dawrkdir/[12]???/obs_seq.final | sort)
-    obs_final_files2=$(ls -1 $dawrkdir/0???/obs_seq.final | sort)
-    obs_final_files=(${obs_final_files1[@]} ${obs_final_files2[@]})
+    obs_final_files1=$(find $dawrkdir/[12]??? -name obs_seq.final | sort)
+    obs_final_files2=$(find $dawrkdir/0???    -name obs_seq.final | sort)
+    obs_final_files=("${obs_final_files1[@]}" "${obs_final_files2[@]}")
 
     printf "%s\n" "${obs_final_files[@]}" > obs_seq.final.list
 
@@ -2089,7 +2112,7 @@ function run_obs_final2nc {
     fi
     wrkdir=$dawrkdir/obs_diag
     mkwrkdir $wrkdir $overwrite
-    cd $wrkdir
+    cd $wrkdir || return
 
     #------------------------------------------
     # Time Cylces start here
@@ -2108,9 +2131,9 @@ function run_obs_final2nc {
     #------------------------------------------------------
     # Prepare obs_diag
     #------------------------------------------------------
-    obs_final_files1=$(ls -1 $dawrkdir/[12]???/obs_seq.final | sort)
-    obs_final_files2=$(ls -1 $dawrkdir/0???/obs_seq.final | sort)
-    obs_final_files=(${obs_final_files1[@]} ${obs_final_files2[@]})
+    obs_final_files1=$(find $dawrkdir/[12]??? -name obs_seq.final | sort)
+    obs_final_files2=$(find $dawrkdir/0??? -name obs_seq.final | sort)
+    obs_final_files=("${obs_final_files1[@]}" "${obs_final_files2[@]}")
 
     #
     # Waiting for job conditions
@@ -2167,6 +2190,8 @@ function run_clean {
     local start_sec=$1
     local end_sec=$2
 
+    local isec
+
     wrkdir=$rundir/dacycles
 
     for isec in $(seq $start_sec $intvl_sec $end_sec ); do
@@ -2175,13 +2200,13 @@ function run_clean {
 
         dawrkdir=$wrkdir/$eventtime
         if [[ -d $dawrkdir ]]; then
-            cd $dawrkdir
+            cd $dawrkdir || return
 
             if [[ $verb -eq 1 ]]; then echo "    Cleaning working directory $dawrkdir"; fi
 
             for dirname in mpas filter update_states update_bc; do
 
-                cd $dawrkdir
+                cd $dawrkdir || return
 
                 case $dirname in
                 mpas )
@@ -2247,7 +2272,7 @@ fi
 
 jobs=(filter update_states mpas clean)
 
-source $scpdir/Common_Utilfuncs.sh
+source $scpdir/Common_Utilfuncs.sh || exit $?
 
 #-----------------------------------------------------------------------
 #
@@ -2256,7 +2281,7 @@ source $scpdir/Common_Utilfuncs.sh
 #-----------------------------------------------------------------------
 #% ARGS
 
-while [[ $# > 0 ]]; do
+while [[ $# -gt 0 ]]; do
     key="$1"
 
     case $key in
@@ -2320,7 +2345,7 @@ while [[ $# > 0 ]]; do
             if [[ $2 =~ ^[0-9]{12}$ ]]; then
                 eventtime=${2:8:4}
                 eventhour=${2:8:2}
-                if [[ 10#$eventhour -lt 12 ]]; then
+                if [[ $((10#$eventhour)) -lt 12 ]]; then
                     eventdate=$(date -d "${2:0:8} 1 day ago" +%Y%m%d)
                 else
                     eventdate=${2:0:8}
@@ -2339,7 +2364,7 @@ while [[ $# > 0 ]]; do
             elif [[ $2 =~ ^[0-9]{4}$ ]]; then
                 endhrmin=$2
                 endhour=${endhrmin:0:2}
-                if [[ 10#$endhour -lt 12 ]]; then
+                if [[ $((10#$endhour)) -lt 12 ]]; then
                     enddatetime=$(date -d "$eventdate $endhrmin 1 day" +%Y%m%d%H%M)
                 else
                     enddatetime=$(date -d "$eventdate $endhrmin" +%Y%m%d%H%M)
@@ -2366,14 +2391,15 @@ while [[ $# > 0 ]]; do
             usage 2
             ;;
         filter* | mpas* | update_states* | clean* | obs_diag* | obs_final2nc )
-            jobs=(${key//,/ })
+            #jobs=(${key//,/ })
+            IFS="," read -r -a jobs <<< "$key"
             ;;
         *)
             if [[ $key =~ ^[0-9]{12}$ ]]; then
                 enddatetime=${key}
                 eventtime=${key:8:4}
                 eventhour=${key:8:2}
-                if [[ 10#$eventhour -lt 12 ]]; then
+                if [[ $((10#$eventhour)) -lt 12 ]]; then
                     eventdate=$(date -d "${key:0:8} 1 day ago" +%Y%m%d)
                 else
                     eventdate=${key:0:8}
@@ -2421,13 +2447,13 @@ if [[ $machine == "Jet" ]]; then
     source /etc/profile.d/modules.sh
     module purge
     module use ${rootdir}/modules
-    module load $modulename
+    module load ${modulename}
 elif [[ $machine == "Hercules" ]]; then
     modulename="build_hercules_intel"
 
     module purge
     module use ${rootdir}/modules
-    module load $modulename
+    module load ${modulename}
 elif [[ $machine == "Cheyenne" ]]; then
     if [[ $dorun == true ]]; then
         runcmd="qsub"
@@ -2487,7 +2513,7 @@ if [[ ! -r $WORKDIR/config.${eventdate} ]]; then
     echo "ERROR: Configuration file $WORKDIR/config.${eventdate} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
     exit 2
 fi
-readconf $WORKDIR/config.${eventdate} COMMON dacycles
+readconf $WORKDIR/config.${eventdate} COMMON dacycles || exit $?
 # get ENS_SIZE, time_step, EXTINVL, ADAPTIVE_INF, update_in_place
 
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
