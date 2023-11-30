@@ -10,29 +10,22 @@
 
 import os
 import sys
-import re,math
+#import re
+import math
 import argparse
 
 from datetime import datetime, timedelta
 
 import numpy as np
 
-#''' By default matplotlib will try to open a display windows of the plot, even
-#though sometimes we just want to save a plot. Somtimes this can cause the
-#program to crash if the display can't open. The two commands below makes it so
-#matplotlib doesn't try to open a window
-#'''
-import matplotlib
-matplotlib.use('Agg')
-
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
-# '''
+# """
 # cm = Color Map. Within the matplotlib.cm module will contain access to a number
 # of colormaps for a plot. A reference to colormaps can be found at:
 #
 #     - https://matplotlib.org/examples/color/colormaps_reference.html
-# '''
+# """
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 from metpy.plots import ctables
@@ -48,6 +41,14 @@ from scipy.interpolate import griddata
 
 import time as timeit
 
+#""" By default matplotlib will try to open a display windows of the plot, even
+#though sometimes we just want to save a plot. Somtimes this can cause the
+#program to crash if the display can't open. The two commands below makes it so
+#matplotlib doesn't try to open a window
+#"""
+import matplotlib
+matplotlib.use('Agg')
+
 ########################################################################
 #
 # Load the dictionary into a Namespace data structure.
@@ -57,17 +58,17 @@ import time as timeit
 #            dict: ds_dict['GFS']['dynf'][0]
 #       Namespace: datasets.GFS.dynf[0]
 
-def make_namespace(d: dict,l=0,level=None):
-    ''' l    : level of this call
+def make_namespace(d: dict,lvl=0,level=None):
+    """ lvl  : level of this call
         level: level to stop, None is infinity
-    '''
+    """
     assert(isinstance(d, dict))
     ns =  argparse.Namespace()
     for k, v in d.items():
-        l += 1
+        lvl += 1
         if isinstance(v, dict):
-            if level is None or (level is not None and l < level):
-                leaf_ns = make_namespace(v,l,level)
+            if level is None or (level is not None and lvl < level):
+                leaf_ns = make_namespace(v,lvl,level)
                 ns.__dict__[k] = leaf_ns
             else:
                 ns.__dict__[k] = v
@@ -79,7 +80,7 @@ def make_namespace(d: dict,l=0,level=None):
 ########################################################################
 
 def dumpobj(obj, level=0, maxlevel=10):
-    ''' Print object members nicely'''
+    """ Print object members nicely"""
 
     for a in dir(obj):
         val = getattr(obj, a)
@@ -107,7 +108,7 @@ def fnormalize(fmin,fmax):
 ########################################################################
 
 def get_var_contours(varname,var2d,cntlevels):
-    '''set contour specifications'''
+    """set contour specifications"""
     #
     # set color map to be used
     #
@@ -210,7 +211,7 @@ def get_var_contours(varname,var2d,cntlevels):
 ########################################################################
 
 def setup_hrrr_projection(carr):
-    '''Lambert conformal map projection for the HRRR domain'''
+    """Lambert conformal map projection for the HRRR domain"""
 
     ctrlat = 38.5
     ctrlon = -97.5    # -97.5  # 262.5
@@ -255,11 +256,11 @@ def setup_hrrr_projection(carr):
 ########################################################################
 
 def parse_args():
-    ''' Parse command line arguments
-    '''
+    """ Parse command line arguments
+    """
     parser = argparse.ArgumentParser(description='Plot DART obs_seq.fial in netCDF format',
-                                     epilog='''        ---- Yunheng Wang (2023-07-24).
-                                            ''')
+                                     epilog="""        ---- Yunheng Wang (2023-07-24).
+                                            """)
                                      #formatter_class=CustomFormatter)
 
     parser.add_argument('obsfiles',help='DART obs_seq.fial in netCDF format')
@@ -542,8 +543,8 @@ QCValMeta = { '0' : 'assimilated successfully',
             }
 
 def print_meta(varobj):
-    ''' Output variable information in the file
-    '''
+    """ Output variable information in the file
+    """
 
     global QCValMeta
 
@@ -618,7 +619,7 @@ def print_meta(varobj):
 ########################################################################
 
 def retrieve_plotvar(varargs,varobj):
-    ''' Select observation index based on command line arguments'''
+    """ Select observation index based on command line arguments"""
 
     plot_meta = {}
     #
@@ -697,7 +698,7 @@ def retrieve_plotvar(varargs,varobj):
 ########################################################################
 
 def retrieve_scattervar(cmdargs,varargs,varobj):
-    ''' Select observation index based on command line arguments'''
+    """ Select observation index based on command line arguments"""
 
     global QCValMeta
 
@@ -867,10 +868,10 @@ def interpolation2D(obs_obj,mod_obj):
 ########################################################################
 
 def make_plot(cargs,wargs,wobj):
-    ''' cargs: Command line arguments
+    """ cargs: Command line arguments
         wargs: Decoded working arguments
         wobj:  Working object
-    '''
+    """
 
     global QCValMeta
 
@@ -916,7 +917,7 @@ def make_plot(cargs,wargs,wobj):
         varname = plot_meta.varlabel
 
     color_map, normc,cmin, cmax, ticks_list = get_var_contours(varname,vardat,wargs.cntlevel)
-    cntlevels = list(np.linspace(cmin,cmax,9))
+    #cntlevels = list(np.linspace(cmin,cmax,9))
 
     if wargs.basmap == "latlon":
         #carr._threshold = carr._threshold/10.
@@ -1056,10 +1057,10 @@ def get_array_lenstr(arr):
 ########################################################################
 
 def make_scatter(cargs,wargs,wobj):
-    ''' cargs: Command line arguments
+    """ cargs: Command line arguments
         wargs: Decoded working arguments
         wobj:  Working object
-    '''
+    """
 
     figure = plt.figure(figsize = (12,12) )
 

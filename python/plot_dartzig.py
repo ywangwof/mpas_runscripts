@@ -10,16 +10,17 @@
 
 import os
 import sys
-import re, math
+import re
+#import math
 import argparse
 
 import numpy as np
 
-#''' By default matplotlib will try to open a display windows of the plot, even
+#""" By default matplotlib will try to open a display windows of the plot, even
 #though sometimes we just want to save a plot. Somtimes this can cause the
 #program to crash if the display can't open. The two commands below makes it so
 #matplotlib doesn't try to open a window
-#'''
+#"""
 #import matplotlib
 #matplotlib.use('Agg')
 
@@ -41,17 +42,17 @@ import copy
 #            dict: ds_dict['GFS']['dynf'][0]
 #       Namespace: datasets.GFS.dynf[0]
 
-def make_namespace(d: dict,l=0,level=None):
-    ''' l    : level of this call
+def make_namespace(d: dict,lvl=0,level=None):
+    """ lvl  : level of this call
         level: level to stop, None is infinity
-    '''
+    """
     assert(isinstance(d, dict))
     ns =  argparse.Namespace()
     for k, v in d.items():
-        l += 1
+        lvl += 1
         if isinstance(v, dict):
-            if level is None or (level is not None and l < level):
-                leaf_ns = make_namespace(v,l,level)
+            if level is None or (level is not None and lvl < level):
+                leaf_ns = make_namespace(v,lvl,level)
                 ns.__dict__[k] = leaf_ns
             else:
                 ns.__dict__[k] = v
@@ -64,8 +65,8 @@ def make_namespace(d: dict,l=0,level=None):
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Plot DART obs_seq.fial sequences',
-                                     epilog='''        ---- Yunheng Wang (2023-11-10).
-                                            ''')
+                                     epilog="""        ---- Yunheng Wang (2023-11-10).
+                                            """)
                                      #formatter_class=CustomFormatter)
 
     parser.add_argument('date',    help='MPAS-WoFS event date',type=str, nargs='?',default=None)
@@ -177,7 +178,7 @@ def daterange(start_date, end_date, minutes=15):
 ########################################################################
 
 def load_variables(cargs,wargs, filelist):
-    ''' Load obs_seq.final sequence files'''
+    """ Load obs_seq.final sequence files """
 
     #begtime = timestrlist[0]
     #endtime = timestrlist[-1]
@@ -185,7 +186,7 @@ def load_variables(cargs,wargs, filelist):
     #intvlmin = int(timestrlist[1])-int(begtime)
 
     unitLabels = {'DOPPLER_RADIAL_VELOCITY': 'm/s',
-                  'RADAR_REFLECTIVITY': 'dBZ',
+                  'RADAR_REFLECTIVITY':      'dBZ',
                   }
 
     #beg_dt = datetime.strptime(f"{wargs.eventdate} {begtime}",'%Y%m%d %H%M')
@@ -418,8 +419,8 @@ QCValMeta = { '0' : 'assimilated successfully',
             }
 
 def print_meta(wargs,obsfile):
-    ''' Output variable information in the file
-    '''
+    """ Output variable information in the file
+    """
 
     global QCValMeta
 
@@ -585,10 +586,10 @@ def print_meta(wargs,obsfile):
 ########################################################################
 
 def plot_rms(cargs,wargs,wobj):
-    ''' cargs: Command line arguments
+    """ cargs: Command line arguments
         wargs: Decoded working arguments
         wobj:  Working object
-    '''
+    """
     #-----------------------------------------------------------------------
     #
     # Plot RMS
@@ -681,10 +682,10 @@ def plot_rms(cargs,wargs,wobj):
 ########################################################################
 
 def plot_qcnumbers(cargs,wargs,wobj):
-    ''' cargs: Command line arguments
+    """ cargs: Command line arguments
         wargs: Decoded working arguments
         wobj:  Working object
-    '''
+    """
     #-----------------------------------------------------------------------
     #
     # Plot Numbers
@@ -736,10 +737,10 @@ def plot_qcnumbers(cargs,wargs,wobj):
 ########################################################################
 
 def plot_ratio(cargs,wargs,wobj):
-    ''' cargs: Command line arguments
+    """ cargs: Command line arguments
         wargs: Decoded working arguments
         wobj:  Working object
-    '''
+    """
     #-----------------------------------------------------------------------
     #
     # Plot ratio
@@ -790,10 +791,10 @@ def plot_ratio(cargs,wargs,wobj):
 ########################################################################
 
 def make_plot(cargs,wargs,wobj):
-    ''' cargs: Command line arguments
+    """ cargs: Command line arguments
         wargs: Decoded working arguments
         wobj:  Working object
-    '''
+    """
     #-----------------------------------------------------------------------
     #
     # Plot RMS
@@ -871,7 +872,7 @@ if __name__ == "__main__":
         time3 = timeit.time()
 
         for otype,obsobj in obs_objs.items():
-            print(f"Ploting {obsobj.type_label} for {wargs.eventdate} ....")
+            print(f"Ploting {otype} - {obsobj.type_label} for {wargs.eventdate} ....")
             make_plot(cargs, wargs,obsobj)
 
         if cargs.verbose: print("\n Elapsed time of make_plot is:  %f seconds" % (timeit.time() - time3))
