@@ -8,6 +8,8 @@ eventdateDF=$(date +%Y%m%d)
 
 #-----------------------------------------------------------------------
 #
+#-----------------------------------------------------------------------
+#
 # Required files from ROOTDIR
 #
 # 0. module files in modules
@@ -153,7 +155,7 @@ function usage {
     echo "              -m  Machine     Machine name to run on, [Jet, Cheyenne, Vecna]."
     echo "              -a  wof         Account name for job submission."
     echo "              -d  wofs_mpas   Domain name to be used"
-    echo "              -i  hrrr        Initialization model, [hrrr, gfs, rrfs, rrfsp], default: hrrr"
+    echo "              -i  hrrr        Initialization model, [hrrr, gfs, rrfs, rrfsp, rrfsna], default: hrrr"
     echo "              -s  init_dir    Directory name from which init & lbc subdirectories are used to initialize this run"
     echo "                              which avoids runing duplicated preprocessing jobs (ungrib, init/lbc) again. default: false"
     echo "              -p  nssl        MP scheme, [nssl, thompson], default: nssl"
@@ -348,7 +350,7 @@ EOF
     jobscript="run_geogrid.slurm"
     sed "s/PARTION/${partition}/;s/JOBNAME/geogrid_${geoname}/;s/NOPART/$npepost/" $TEMPDIR/$jobscript > $jobscript
     sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-    sed -i "s/ACCTSTR/${job_account_str}/;s/EXCLSTR/${job_exclusive_str}/;s/RUNMPCMD/${job_runmpexe_str}/" $jobscript
+    sed -i "s/ACCTSTR/${job_account_str}/;s^EXCLSTR^${job_exclusive_str}^;s/RUNMPCMD/${job_runmpexe_str}/" $jobscript
     if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
     $runcmd $jobscript
 }
@@ -493,7 +495,7 @@ s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
 s#EXEDIR#${exedir}#
 s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
+s^EXCLSTR^${job_exclusive_str}^
 s/RUNMPCMD/${job_runmpexe_str}/
 EOF
     submit_a_jobscript $wrkdir "static" $sedfile $TEMPDIR/$jobscript $jobscript ""
@@ -557,7 +559,7 @@ s#GRIBFILE#$hrrr_grib_dir/${hrrrbase}#
 s#TARGETFILE#NSSL_${hrrrbase}#
 s#VERBOSE#$verb#g
 s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
+s^EXCLSTR^${job_exclusive_str}^
 s/RUNCMD/${job_runexe_str}/
 EOF
             submit_a_jobscript $wrkdir "wgrib2" $sedfile $TEMPDIR/$jobscript $jobscript ${jobarraystr}
@@ -616,7 +618,7 @@ s#EVENTDATE#${eventdate}#g
 s#EVENTTIME#${eventtime}#g
 s#EXTINVL#$EXTINVL#g
 s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
+s^EXCLSTR^${job_exclusive_str}^
 s/RUNCMD/${job_runexe_str}/
 EOF
             submit_a_jobscript $wrkdir "ungrib" $sedfile $TEMPDIR/run_ungrib_parallel.${mach} $jobscript ${jobarraystr}
@@ -732,7 +734,7 @@ EOF
         jobscript="run_ungrib.slurm"
         sed    "s/PARTION/${partition}/;s/JOBNAME/ungrib_${jobname}/" $TEMPDIR/$jobscript > $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-        sed -i "s/ACCTSTR/${job_account_str}/;s/EXCLSTR/${job_exclusive_str}/;s/RUNCMD/${job_runexe_str}/" $jobscript
+        sed -i "s/ACCTSTR/${job_account_str}/;s^EXCLSTR^${job_exclusive_str}^;s/RUNCMD/${job_runexe_str}/" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
         if [[ $dorun == true && $? -eq 0 ]]; then touch queue.ungrib; fi
@@ -849,7 +851,7 @@ s#GRIBFILE#$rrfs_grib_dir/rrfs.t${currtime}z.natlev.f0#
 s#TARGETFILE#HRRR_rrfs.t${currtime}z.natlev.f0#
 s#VERBOSE#$verb#g
 s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
+s^EXCLSTR^${job_exclusive_str}^
 s/RUNCMD/${job_runexe_str}/
 EOF
             submit_a_jobscript $wrkdir "wgrib2" $sedfile $TEMPDIR/$jobscript $jobscript ${jobarraystr}
@@ -898,7 +900,7 @@ EOF
             sed    "s/PARTION/${partition}/;s/JOBNAME/ungrb_rrfs_${jobname}/" $TEMPDIR/run_ungrib_parallel.${mach} > $jobscript
             sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
             sed -i "s#PREFIX#${EXTHEAD}#g;s#EVENTDATE#${eventdate}#g;s#EVENTTIME#${eventtime}#g;s#EXTINVL#$EXTINVL#g" $jobscript
-            sed -i "s/ACCTSTR/${job_account_str}/;s/EXCLSTR/${job_exclusive_str}/;s/RUNCMD/${job_runexe_str}/" $jobscript
+            sed -i "s/ACCTSTR/${job_account_str}/;s^EXCLSTR^${job_exclusive_str}^;s/RUNCMD/${job_runexe_str}/" $jobscript
             if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
             $runcmd $jobarraystr $jobscript
             if [[ $dorun == true && $? -eq 0 ]]; then touch queue.ungrib; fi
@@ -1131,7 +1133,7 @@ EOF
             sed    "s/PARTION/${partition}/;s/JOBNAME/ungrb_rrfs_${jobname}/" $TEMPDIR/run_ungrib_parallel.${mach} > $jobscript
             sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
             sed -i "s#PREFIX#${EXTHEAD}#g;s#EVENTDATE#${eventdate}#g;s#EVENTTIME#${eventtime}#g;s#EXTINVL#$EXTINVL#g" $jobscript
-            sed -i "s/ACCTSTR/${job_account_str}/;s/EXCLSTR/${job_exclusive_str}/;s/RUNCMD/${job_runexe_str}/" $jobscript
+            sed -i "s/ACCTSTR/${job_account_str}/;s^EXCLSTR^${job_exclusive_str}^;s/RUNCMD/${job_runexe_str}/" $jobscript
             if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
             $runcmd $jobarraystr $jobscript
             if [[ $dorun == true && $? -eq 0 ]]; then touch queue.ungrib; fi
@@ -1280,7 +1282,7 @@ EOF
         jobscript="run_ungrib.slurm"
         sed    "s/PARTION/${partition}/;s/JOBNAME/ungrb_rrfs_${jobname}/" $TEMPDIR/$jobscript > $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-        sed -i "s/ACCTSTR/${job_account_str}/;s/EXCLSTR/${job_exclusive_str}/;s/RUNCMD/${job_runexe_str}/" $jobscript
+        sed -i "s/ACCTSTR/${job_account_str}/;s^EXCLSTR^${job_exclusive_str}^;s/RUNCMD/${job_runexe_str}/" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
         if [[ $dorun == true && $? -eq 0 ]]; then touch queue.ungrib; fi
@@ -1480,7 +1482,7 @@ s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
 s#EXEDIR#${exedir}#
 s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
+s^EXCLSTR^${job_exclusive_str}^
 s/RUNMPCMD/${job_runmpexe_str}/
 EOF
         if [[ "${mach}" == "pbs" ]]; then
@@ -1658,7 +1660,7 @@ s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
 s#EXEDIR#${exedir}#
 s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
+s^EXCLSTR^${job_exclusive_str}^
 s/RUNMPCMD/${job_runmpexe_str}/
 EOF
 
@@ -1912,7 +1914,7 @@ s#WRKDIR#$wrkdir#g
 s#EXEDIR#${exedir}#
 s/MACHINE/${machine}/g
 s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
+s^EXCLSTR^${job_exclusive_str}^
 s/RUNMPCMD/${job_runmpexe_str}/
 EOF
         if [[ "${mach}" == "pbs" ]]; then
@@ -2020,7 +2022,7 @@ s#WRKDIR#$wrkdir#g
 s#EXEDIR#${exedir}#
 s/MACHINE/${machine}/g
 s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
+s^EXCLSTR^${job_exclusive_str}^
 s/RUNMPCMD/${job_runmpexe_str}/
 EOF
         submit_a_jobscript $wrkdir "mpassit$hstr" $sedfile $TEMPDIR/run_mpassit.slurm $jobscript ""
@@ -2170,7 +2172,7 @@ s#WRKDIR#$wrkdir/post_$hstr#g
 s#EXEDIR#${exedir}#
 s/MACHINE/${machine}/g
 s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
+s^EXCLSTR^${job_exclusive_str}^
 s/RUNMPCMD/${job_runmpexe_str}/
 EOF
 
@@ -2210,7 +2212,7 @@ function run_pcp {
         sed    "s/PARTION/${partition_upp}/;s/CPUSPEC/${claim_cpu}/" $TEMPDIR/run_pcp.slurm > $jobscript
         sed -i "s/JOBNAME/pcp_${jobname}/;s/HHHSTR/${fcst_hours}/g;s/MODULE/${modulename}/g" $jobscript
         sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s/MACHINE/${machine}/g" $jobscript
-        sed -i "s/ACCTSTR/${job_account_str}/;s/EXCLSTR/${job_exclusive_str}/;s/RUNCMD/${job_runexe_str}/" $jobscript
+        sed -i "s/ACCTSTR/${job_account_str}/;s^EXCLSTR^${job_exclusive_str}^;s/RUNCMD/${job_runexe_str}/" $jobscript
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
         $runcmd $jobscript
         if [[ $dorun == true ]]; then touch $wrkdir/queue.pcp; fi
@@ -2510,19 +2512,29 @@ fi
 mach="slurm"
 
 if [[ $machine == "Jet" ]]; then
-    #ncores_ics=5; ncores_fcst=6; ncores_post=6
-    partition="ujet,tjet,xjet,vjet,kjet"; claim_cpu="--cpus-per-task=2"
-                                          claim_cpu_ics="--cpus-per-task=2"
-    partition_static="${partition}"     ; static_cpu="--cpus-per-task=12"
-    partition_upp="kjet,xjet,vjet"
+    if [[ $hpcaccount == "rtwrfruc" ]]; then
+        #ncores_ics=5; ncores_fcst=6; ncores_post=6
+        partition="kjet"; claim_cpu="--cpus-per-task=2"
+                                              claim_cpu_ics="--cpus-per-task=2"
+        partition_static="${partition}"     ; static_cpu="--cpus-per-task=12"
+        partition_upp="kjet"
+        job_account_str="#SBATCH -A rtwrfruc"
+        job_exclusive_str="#SBATCH --exclusive\n#SBATCH -q rth\n#SBATCH --reservation=rrfsens"
+    else
+        #ncores_ics=5; ncores_fcst=6; ncores_post=6
+        partition="ujet,tjet,xjet,vjet,kjet"; claim_cpu="--cpus-per-task=2"
+                                              claim_cpu_ics="--cpus-per-task=2"
+        partition_static="${partition}"     ; static_cpu="--cpus-per-task=12"
+        partition_upp="kjet,xjet,vjet"
+        job_exclusive_str="#SBATCH --exclusive"
+        job_account_str="#SBATCH -A ${hpcaccount-wof}"
+    fi
 
     npeics=768   #; nnodes_ics=$((  npeics/ncores_ics   ))
     npefcst=1200 #; nnodes_fcst=$(( npefcst/ncores_fcst ))
     npepost=72   #; nnodes_post=$(( npepost/ncores_post ))
 
     mach="slurm"
-    job_exclusive_str="#SBATCH --exclusive"
-    job_account_str="#SBATCH -A ${hpcaccount-wof}"
     job_runmpexe_str="srun"
     job_runexe_str="srun"
 

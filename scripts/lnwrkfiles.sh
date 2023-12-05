@@ -302,8 +302,7 @@ for cmd in ${cmds[@]}; do
 
         staticfiles=(CAM_ABS_DATA.DBL  CAM_AEROPT_DATA.DBL GENPARM.TBL       LANDUSE.TBL    \
                 OZONE_DAT.TBL     OZONE_LAT.TBL       OZONE_PLEV.TBL    RRTMG_LW_DATA  \
-                RRTMG_LW_DATA.DBL RRTMG_SW_DATA       RRTMG_SW_DATA.DBL SOILPARM.TBL   \
-                VEGPARM.TBL)
+                RRTMG_LW_DATA.DBL RRTMG_SW_DATA       RRTMG_SW_DATA.DBL VEGPARM.TBL )
 
         echo ""
         echo "  -- Linking runtime static files to ${desdir} ...."

@@ -35,5 +35,5 @@ SHELL=/bin/bash
 17,47 6-18   * * * $scriptdir/run_mpas.sh -i hrrr -p nssl     $rundirs mpassit,upp,clean      >> $rundirs/postHN$($curdate).log 2>&1
 
 # RT
-50    4      * * * $scriptdir/run_mpas.sh -i rrfs -p thompson $rundirs ungrib,init,lbc,mpas   >> $rundirs/fcstRT$($curdate).log 2>&1
-19,49 6-18   * * * $scriptdir/run_mpas.sh -i rrfs -p thompson $rundirs mpassit,upp,clean      >> $rundirs/postRT$($curdate).log 2>&1
+50    4      * * * $scriptdir/run_mpas.sh -i rrfsna -p thompson $rundirs ungrib,init,lbc,mpas   >> $rundirs/fcstRT$($curdate).log 2>&1
+19,49 6-18   * * * $scriptdir/run_mpas.sh -i rrfsna -p thompson $rundirs mpassit,upp,clean      >> $rundirs/postRT$($curdate).log 2>&1
