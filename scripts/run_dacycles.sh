@@ -535,7 +535,7 @@ function run_filter {
     # 2. Adaptive inflation
     #------------------------------------------------------
 
-    inf_initial=(".false" ".false.")
+    inf_initial=(".false." ".false.")
     if [[ $ADAPTIVE_INF == true && $icycle -gt 1 ]]; then
         if [[ ! -e ${parentdir}/${event_pre}/output_priorinf_mean.nc ]]; then
           echo "File ${parentdir}/${event_pre}/output_priorinf_mean.nc does not exist. Stop."
@@ -544,7 +544,7 @@ function run_filter {
         ln -sf ${parentdir}/${event_pre}/output_priorinf_mean.nc input_priorinf_mean.nc
         ln -sf ${parentdir}/${event_pre}/output_priorinf_sd.nc   input_priorinf_sd.nc
 
-        inf_initial=(".true" ".true.")
+        inf_initial=(".true." ".true.")
     fi
 
     #------------------------------------------------------
@@ -628,12 +628,12 @@ function run_filter {
 
 &quality_control_nml
    input_qc_threshold = 5,
-   outlier_threshold  = 3,
+   outlier_threshold  = 3.5,
    enable_special_outlier_code = .false.
   /
 
 &state_vector_io_nml
-   single_precision_output    = .true.,
+   single_precision_output    = .false.,
   /
 
 &mpi_utilities_nml
@@ -654,7 +654,7 @@ function run_filter {
 
 &assim_tools_nml
    filter_kind                       = 1
-   cutoff                            = 0.0015
+   cutoff                            = 0.036,
    distribute_mean                   = .false.
    convert_all_obs_verticals_first   = .true.
    convert_all_state_verticals_first = .false.
@@ -665,19 +665,152 @@ function run_filter {
    output_localization_diagnostics   = .false.
    localization_diagnostics_file     = 'localization_diagnostics'
    print_every_nth_obs               = 0
+   special_localization_obs_types  = 'METAR_ALTIMETER',
+                                     'METAR_U_10_METER_WIND',
+                                     'METAR_V_10_METER_WIND',
+                                     'METAR_TEMPERATURE_2_METER',
+                                     'METAR_DEWPOINT_2_METER',
+                                     'LAND_SFC_U_WIND_COMPONENT',
+                                     'LAND_SFC_V_WIND_COMPONENT',
+                                     'LAND_SFC_TEMPERATURE',
+                                     'LAND_SFC_DEWPOINT',
+                                     'LAND_SFC_ALTIMETER',
+                                     'RADAR_REFLECTIVITY',
+                                     'RADAR_CLEARAIR_REFLECTIVITY',
+                                     'DOPPLER_RADIAL_VELOCITY',
+                                     'GOES_CWP_PATH',
+                                     'GOES_LWP_PATH',
+                                     'GOES_LWP0_PATH',
+                                     'GOES_IWP_PATH',
+                                     'GOES_CWP_ZERO',
+                                     'GOES_CWP_ZERO_NIGHT',
+   special_localization_cutoffs    = 0.0094247,
+                                     0.0094247,
+                                     0.0094247,
+                                     0.0094247,
+                                     0.0094247,
+                                     0.0047123,
+                                     0.0047123,
+                                     0.0047123,
+                                     0.0047123,
+                                     0.0047123,
+                                     0.0014137,
+                                     0.0014137,
+                                     0.0014137,
+                                     0.00315,
+                                     0.00315,
+                                     0.00315,
+                                     0.00315,
+                                     0.0035,
+                                     0.0035
   /
 
 &location_nml
    horiz_dist_only                 = .false.
-   vert_normalization_pressure     = 100000.0
-   vert_normalization_height       = 30000.0
-   vert_normalization_level        = 20.0
+   vert_normalization_pressure     = 700000.0,
+   vert_normalization_height       = 111111.1,
+   vert_normalization_level        = 2666.7,
    vert_normalization_scale_height = 2.0
    approximate_distance            = .false.
-   nlon                            = 141
-   nlat                            = 72
+   nlon                            = 283,
+   nlat                            = 144,
    output_box_info                 = .false.
-   print_box_level                 = 0
+   print_box_level                 = 0,
+   special_vert_normalization_obs_types =  'METAR_ALTIMETER',
+                                           'METAR_U_10_METER_WIND',
+                                           'METAR_V_10_METER_WIND',
+                                           'METAR_TEMPERATURE_2_METER',
+                                           'METAR_DEWPOINT_2_METER',
+                                           'LAND_SFC_U_WIND_COMPONENT',
+                                           'LAND_SFC_V_WIND_COMPONENT',
+                                           'LAND_SFC_TEMPERATURE',
+                                           'LAND_SFC_DEWPOINT',
+                                           'LAND_SFC_ALTIMETER',
+                                           'RADAR_REFLECTIVITY',
+                                           'RADAR_CLEARAIR_REFLECTIVITY',
+                                           'DOPPLER_RADIAL_VELOCITY',
+                                           'GOES_CWP_PATH',
+                                           'GOES_LWP_PATH',
+                                           'GOES_LWP0_PATH',
+                                           'GOES_IWP_PATH',
+                                           'GOES_CWP_ZERO',
+                                           'GOES_CWP_ZERO_NIGHT',
+   special_vert_normalization_pressures =  100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
+                                         15873016.0,
+                                         12698413.0,
+                                         12698413.0,
+                                         15873016.0,
+                                           100000.0,
+                                           100000.0,
+   special_vert_normalization_heights  =   424416.6,
+                                           424416.6,
+                                           424416.6,
+                                           424416.6,
+                                           424416.6,
+                                           848842.3,
+                                           848842.3,
+                                           848842.3,
+                                           848842.3,
+                                           848842.3,
+                                           2122090.9,
+                                           2083333.2,
+                                           2122090.9,
+                                           1587301.0,
+                                           1587301.0,
+                                           1587301.3,
+                                           1587301.3,
+                                           1000000.0,
+                                           1000000.0,
+   special_vert_normalization_levels    =  20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+   special_vert_normalization_scale_heights = 5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0
   /
 
 &xyz_location_nml

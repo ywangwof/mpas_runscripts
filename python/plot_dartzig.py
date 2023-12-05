@@ -16,14 +16,6 @@ import argparse
 
 import numpy as np
 
-#""" By default matplotlib will try to open a display windows of the plot, even
-#though sometimes we just want to save a plot. Somtimes this can cause the
-#program to crash if the display can't open. The two commands below makes it so
-#matplotlib doesn't try to open a window
-#"""
-#import matplotlib
-#matplotlib.use('Agg')
-
 import matplotlib.pyplot as plt
 
 from netCDF4 import Dataset
@@ -32,6 +24,15 @@ from matplotlib.ticker import IndexLocator, AutoLocator, MultipleLocator # AutoM
 
 import time as timeit
 import copy
+
+#
+# By default matplotlib will try to open a display windows of the plot, even
+# though sometimes we just want to save a plot. Somtimes this can cause the
+# program to crash if the display can't open. The two commands below makes it so
+# matplotlib doesn't try to open a window
+#
+import matplotlib
+matplotlib.use('Agg')
 
 ########################################################################
 #
@@ -235,10 +236,32 @@ def load_variables(cargs,wargs, filelist):
                 varobs  = fh.variables['observations'][:,:]   # (ObsIndex, copy)
                 varqc   = fh.variables['qc'][:,:]             # (ObsIndex, qc_copy)
 
-                varobstypes = fh.variables['obs_type'][:]
+                varobstypes  = fh.variables['obs_type'][:]
                 vartypesMeta = fh.variables['ObsTypesMetaData'][:,:]
+                copyMetaData = fh.variables['CopyMetaData'][:,:]
+                ncopy        = fh.dimensions['copy'].size
 
             #nobs      = varobs.shape[0]
+
+            #
+            # find the variance index from CopyMetaData
+            #
+            variance_str = "observation error variance"
+            #copystrs     = []
+            ivariance    = None
+            for k in range(ncopy):
+                copy_str = copyMetaData[k,:].tobytes().decode('utf-8')
+                #copystrs.append(copy_str)
+                if  copy_str.strip() == variance_str:
+                    ivariance = k
+                    break
+
+            if ivariance is None:
+                print(f"ERROR: Cannot find copy for variance.")
+                sys.exit(1)
+            elif cargs.verbose:
+                print(f"observation error variance is the {ivariance}th copy")
+
         else:
             print(f"ERROR: file {obsfile} not found")
             sys.exit(1)
@@ -350,7 +373,7 @@ def load_variables(cargs,wargs, filelist):
                 post = varobs[obs_index,2]
                 sprd_pri = varobs[obs_index,3]
                 sprd_pst = varobs[obs_index,4]
-                variance = varobs[obs_index,11]
+                variance = varobs[obs_index,ivariance]
 
                 if cargs.verbose:
                     print(f"time = {timestr}, number of obs = {nobs_type} for {var_obj['type_label']}")
@@ -370,8 +393,13 @@ def load_variables(cargs,wargs, filelist):
                 n3 = sprd_pri.count()
                 n4 = sprd_pst.count()
                 if cargs.spreadtype == 2:
-                    sprd_prior = np.sqrt( variance[0] + np.sum( sprd_pri*sprd_pri )/n3 )
-                    sprd_post  = np.sqrt( variance[0] + np.sum( sprd_pst*sprd_pst )/n4 )
+                    #total spread: (modified to account for non-constant obs error)
+                    #sprd_prior = np.sqrt( variance[0] + np.sum( sprd_pri*sprd_pri )/n3 )
+                    #sprd_post  = np.sqrt( variance[0] + np.sum( sprd_pst*sprd_pst )/n4 )
+
+                    sprd_prior = np.sqrt( np.sum( variance+(sprd_pri*sprd_pri) )/n3)
+                    sprd_post  = np.sqrt( np.sum( variance+(sprd_pst*sprd_pst) )/n4)
+
                 elif cargs.spreadtype == 1:
                     sprd_prior = np.sqrt( np.sum( sprd_pri*sprd_pri )/n3 )
                     sprd_post  = np.sqrt( np.sum( sprd_pst*sprd_pst )/n4 )
@@ -383,10 +411,13 @@ def load_variables(cargs,wargs, filelist):
                 var_obj['bias_prior'].append( np.sum(obs-prio)/n1 )
                 var_obj['bias_post'].append(  np.sum(obs-post)/n2 )
 
-                # consistency ratio
-                var_obj['ratio'].append( (variance[0] + (np.sum(sprd_pri*sprd_pri)/n3))/(np.sum((obs-prio)**2)/n1) )
+                # consistency ratio (modified to account for non-constant obs error)
+                #var_obj['ratio'].append( (variance[0] + (np.sum(sprd_pri*sprd_pri)/n3))/(np.sum((obs-prio)**2)/n1) )
+                var_obj['ratio'].append(  (np.sum( variance+(sprd_pri*sprd_pri) )/ n3 ) /(np.sum((obs-prio)**2)/n1) )
 
-                var_obj['obs_std'].append( np.sqrt(variance[0]) )
+                #var_obj['obs_std'].append( np.sqrt(variance[0]) )
+                #Output mean value
+                var_obj['obs_std'].append( np.sqrt(np.mean(variance)) )
 
                 var_obj['times'].append( timestr )
 
@@ -861,7 +892,7 @@ if __name__ == "__main__":
 
         filelist.sort()
 
-        if len(filelist) <= 10:
+        if len(filelist) <= 5:
             print(f"ERROR: found no enough obs_seq.final files in {wargs.run_dir}: {filelist}.")
             sys.exit(0)
 
