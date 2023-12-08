@@ -138,7 +138,7 @@ function usage {
     echo " "
     echo "                                     -- By Y. Wang (2023.06.01)"
     echo " "
-    exit $1
+    exit "$1"
 }
 
 ########################################################################
@@ -159,7 +159,7 @@ function run_mpas {
     # Build working directory
     #
     mkwrkdir ${wrkdir} 0
-    cd ${wrkdir} || exit 1
+    cd ${wrkdir} || return
 
     timestr=$(date -d @${iseconds} +%H%M)
     dawrkdir=${rundir}/dacycles/${timestr}
@@ -192,7 +192,7 @@ function run_mpas {
     #
     # shellcheck disable=SC2154
     if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npefcst} ]]; then
-        cd $rundir/$domname || exit $?
+        cd $rundir/$domname || return
         if [[ $verb -eq 1 ]]; then
             echo "Generating ${domname}.graph.info.part.${npefcst} in $rundir/$domname using $exedir/gpmetis"
         fi
@@ -202,7 +202,7 @@ function run_mpas {
             echo "${estatus}: $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst}"
             exit ${estatus}
         fi
-        cd $wrkdir || exit $?
+        cd $wrkdir || return
     fi
 
     currtime_str=$(date -d @$iseconds +%Y-%m-%d_%H:%M:%S)
@@ -230,7 +230,7 @@ function run_mpas {
 
         memwrkdir=$wrkdir/fcst_$memstr
         mkwrkdir $memwrkdir 1
-        cd $memwrkdir || exit $?
+        cd $memwrkdir || return
 
         #
         # init files
@@ -249,9 +249,11 @@ function run_mpas {
         mpastime_str=$(date -d @$iseconds +%Y-%m-%d_%H.%M.%S)
         lbc_dafile=${dawrkdir}/fcst_${memstr}/${domname}_${memstr}.lbc.${mpastime_str}.nc
         lbc_myfile=${domname}_${memstr}.lbc.${mpastime_str}.nc
-        if [[ ! -e ${lbc_dafile} ]]; then
-            echo "File: ${lbc_dafile} not exist."
-            exit 1
+        if [[ $dorun == true ]]; then
+            if [[ ! -e ${lbc_dafile} ]]; then     # impossible condition unless not actual run
+                echo "File: ${lbc_dafile} not exist."
+                exit 1
+            fi
         fi
         ln -sf ${lbc_dafile} ${lbc_myfile}
 
@@ -458,7 +460,7 @@ EOF
     #
     # Create job script and submit it
     #
-    cd $wrkdir || exit $?
+    cd $wrkdir || return
 
     # shellcheck disable=SC2154
     jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
@@ -516,7 +518,7 @@ function run_mpassit {
         memstr=$(printf "%02d" $mem)
         memdir=$wrkdir/mem$memstr
         mkwrkdir $memdir 0
-        cd $memdir || exit $?
+        cd $memdir || return
 
         rm -f core.*           # Maybe core-dumped, resubmission will solves the problem if the machine is unstable.
 
@@ -540,7 +542,7 @@ function run_mpassit {
 
     jobarrays_str=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
-    cd $wrkdir || exit $?
+    cd $wrkdir || return
 
     if [[ $rt_run == true ]]; then
         run_mpassit_oneAtime "${wrkdir}" "${iseconds}" "${jobarrays_str}"
@@ -565,6 +567,7 @@ function run_mpassit_oneAtime {
     fi
 
     # Loop over forecast outputs
+    #missing=0
     for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
         minstr=$(printf "%03d" $((i/60)))
 
@@ -721,27 +724,30 @@ function mpassit_wait_create_nml_onetime {
         histfile="$fcstmemdir/fcst_$memstr/${domname}_${memstr}.history.${fcst_time_str}.nc"
         diagfile="$fcstmemdir/fcst_$memstr/${domname}_${memstr}.diag.${fcst_time_str}.nc"
 
-        for fn in $histfile $diagfile; do
-            #echo "$$-${FUNCNAME[0]}: Checking ${fn##$rundir/} ..."
-            if [[ $outdone == false ]]; then
-                echo "$$-${FUNCNAME[0]}: Checking forecast files at $minstr for all $ENS_SIZE memebers from fcst/${fcst_lauch_time} ..."
-                outdone=true
-            fi
-            while [[ ! -f $fn ]]; do
-                if [[ $jobwait -eq 0 ]]; then    # do not wait for it
-                    continue 3                   # go ahead to process next hour
+        if [[ $dorun == true ]]; then
+            for fn in $histfile $diagfile; do
+                #echo "$$-${FUNCNAME[0]}: Checking ${fn##$rundir/} ..."
+                if [[ $outdone == false ]]; then
+                    echo "$$-${FUNCNAME[0]}: Checking forecast files at $minstr for all $ENS_SIZE memebers from fcst/${fcst_lauch_time} ..."
+                    outdone=true
                 fi
+                while [[ ! -f $fn ]]; do
+                    #if [[ $jobwait -eq 0 ]]; then    # do not wait for it
+                    #    (( missing+=1 ))
+                    #    continue 3                   # go ahead to process next hour
+                    #fi
 
-                if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for $fn ..."
+                    if [[ $verb -eq 1 ]]; then
+                        echo "Waiting for $fn ..."
+                    fi
+                    sleep 10
+                done
+                fileage=$(( $(date +%s) - $(stat -c %Y -- "$fn") ))
+                if [[ $fileage -lt 30 ]]; then
+                    sleep 30
                 fi
-                sleep 10
             done
-            fileage=$(( $(date +%s) - $(stat -c %Y -- "$fn") ))
-            if [[ $fileage -lt 30 ]]; then
-                sleep 30
-            fi
-        done
+        fi
 
         nmlfile="namelist.fcst_$minstr"
         cat << EOF > $nmlfile
@@ -760,7 +766,7 @@ function mpassit_wait_create_nml_onetime {
 EOF
     done
 
-    cd $wrkdir || exit $?
+    cd $wrkdir || return
 }
 
 ########################################################################
@@ -776,7 +782,7 @@ function run_upp {
     #
     wrkdir=$wrkdir/upp
     mkwrkdir $wrkdir 0
-    cd $wrkdir || exit $?
+    cd $wrkdir || return
 
     # these arrays are referred indirectly later
     # shellcheck disable=SC2034
@@ -875,14 +881,14 @@ function run_upp {
             memstr=$(printf "%02d" $mem)
             memdir=$wrkdir/mem$memstr
             mkwrkdir $memdir 0
-            cd $memdir || exit $?
+            cd $memdir || return
 
             mpassitmemdir=${memdir/upp/mpassit}
 
             mpasfile="$mpassitmemdir/MPASSIT_${memstr}.${fcst_time_str}.nc"
 
             mkwrkdir $memdir/post_$minstr 1
-            cd $memdir/post_$minstr || exit $?
+            cd $memdir/post_$minstr || return
 
             #for coeff in ${!fixfiles[@]}; do
             #    echo "$coeff"
@@ -930,7 +936,7 @@ EOF
         #
         # Create job script and submit it
         #
-        cd $wrkdir || exit $?
+        cd $wrkdir || return
         if [[ ${#jobarrays} -gt 0 ]]; then
 
             jobscript="run_upp$minstr.slurm"
@@ -976,7 +982,7 @@ function fcst_driver() {
     #
     wrkdir=$rundir/fcst
     mkwrkdir $wrkdir $overwrite
-    cd $wrkdir || exit $?
+    cd $wrkdir || return
 
     #------------------------------------------
     # Time Cylces start here
@@ -1000,7 +1006,7 @@ function fcst_driver() {
 
         fcstwrkdir=$wrkdir/${eventtime}
         mkwrkdir $fcstwrkdir 0        # keep original directory
-        cd $fcstwrkdir || exit $?
+        cd $fcstwrkdir || return
 
         if [[ $dorun == true && $jobwait -eq 1 ]]; then
             num_resubmit=2               # resubmit failed jobs
@@ -1101,13 +1107,13 @@ function run_clean {
 
         fcstwrkdir=$wrkdir/$eventtime
         if [[ -d $fcstwrkdir ]]; then
-            cd $fcstwrkdir || exit $?
+            cd $fcstwrkdir || return
 
             if [[ $verb -eq 1 ]]; then echo "    Cleaning working directory $fcstwrkdir"; fi
 
             for dirname in mpas mpassit upp; do
 
-                cd $fcstwrkdir || exit $?
+                cd $fcstwrkdir || return
 
                 case $dirname in
                 mpas )
@@ -1142,7 +1148,7 @@ function run_clean {
                 mpassit )
                     mywrkdir=$fcstwrkdir/mpassit
                     if [[ -d $mywrkdir ]]; then
-                        cd $mywrkdir || exit $?
+                        cd $mywrkdir || return
                         for ((i=0;i<=fcst_seconds;i+=OUTINVL)); do
                             minstr=$(printf "%03d" $((i/60)))
 
@@ -1176,7 +1182,7 @@ function run_clean {
                 upp )
                     mywrkdir=$fcstwrkdir/upp
                     if [[ -r $mywrkdir ]]; then
-                        cd $mywrkdir || exit $?
+                        cd $mywrkdir || return
                         for ((i=0;i<=fcst_seconds;i+=OUTINVL)); do
                             minstr=$(printf "%03d" $((i/60)))
 
