@@ -14,6 +14,13 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  ${PBS_JOBID}"
 echo " "
 
+if [[ "MACHINE" == "Cheyenne" || "MACHINE" == "Derecho" ]]; then
+    module load parallel-netcdf/1.12.3
+    module load parallelio/2.6.2
+
+    module list
+    export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${NCAR_ROOT_PNETCDF}/lib:${NCAR_ROOT_NETCDF}/lib:${NCAR_ROOT_PARALLELIO}/lib
+fi
 
 ulimit -s unlimited
 

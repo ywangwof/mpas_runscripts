@@ -11,7 +11,7 @@ EXCLSTR
 #set -eux
 
 time1=$(date '+%s')
-echo "Job Started: $(date). Job Id:  $PBS_JOBID"
+echo "Job Started: $(date). Job Id:  ${PBS_JOBID}"
 echo " "
 
 if [[ "MACHINE" == "Cheyenne" || "MACHINE" == "Derecho" ]]; then

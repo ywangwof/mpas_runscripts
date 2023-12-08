@@ -2227,7 +2227,7 @@ EOF
         echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
     fi
 
-    submit_a_jobscript $wrkdir "obs_diag" $sedfile $TEMPDIR/$jobscript $jobscript ""
+    submit_a_jobscript "$wrkdir" "obs_diag" "$sedfile" "$TEMPDIR/$jobscript" "$jobscript" ""
 }
 
 ########################################################################

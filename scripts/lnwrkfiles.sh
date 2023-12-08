@@ -175,7 +175,7 @@ for cmd in "${cmds[@]}"; do
         cd "${desdir}/MPASSIT" || exit 1
         echo "===  MPASSIT"
         echo "     SRC: $srcmpassit"
-        echo "     CWD: $desdir"
+        #echo "     CWD: $desdir"
 
         # They are now managed through Git
         #
