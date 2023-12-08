@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
@@ -198,11 +199,11 @@ function mkwrkdir {
             bakno=0
             bakdir="$basedir/${namedir}.bak$bakno"
             while [[ -d $bakdir ]]; do
-                let bakno++
+                (( bakno++ ))
                 bakdir="$basedir/${namedir}.bak$bakno"
             done
 
-            for ((i=$bakno;i>0;i--)); do
+            for ((i=bakno;i>0;i--)); do
                 j=$((i-1))
                 olddir="$basedir/${namedir}.bak$j"
                 bakdir="$basedir/${namedir}.bak$i"
@@ -234,7 +235,7 @@ function submit_a_jobscript {
     #    if the job script is submitted correctly
     #
     if [[ $# -ne 6 ]]; then
-        echo "No enough argument in \"submit_a_jobscript\", get: $@"
+        echo "No enough argument in \"submit_a_jobscript\", get: $*"
         exit 0
     fi
 
@@ -245,7 +246,7 @@ function submit_a_jobscript {
     local myjobscript=$5
     local myjoboption=$6
 
-    cd $mywrkdir
+    cd $mywrkdir || return
 
     sed -f $sedscript $myjobtemp > $myjobscript
     if [[ $verb -eq 1 ]]; then
@@ -277,20 +278,20 @@ function link_grib {
 
     rm -f GRIBFILE.??? >& /dev/null
 
-    for f in ${*}; do
-       ln -sf ${f} GRIBFILE.${alpha[$i3]}${alpha[$i2]}${alpha[$i1]}
-       let i1++
+    for f in "$@"; do
+        ln -sf ${f} GRIBFILE.${alpha[$i3]}${alpha[$i2]}${alpha[$i1]}
+        (( i1++ ))
 
-       if [[ $i1 -ge 26 ]]; then
-          let i1=0
-          let i2++
-         if [[ $i2 -ge 26 ]]; then
-            let i2=0
-            let i3++
-            if [[ $i3 -ge 26 ]]; then
-               echo "RAN OUT OF GRIB FILE SUFFIXES!"
+        if [[ $i1 -ge 26 ]]; then
+            (( i1=0 ))
+            (( i2++ ))
+             if [[ $i2 -ge 26 ]]; then
+                (( i2=0 ))
+                (( i3++ ))
+                if [[ $i3 -ge 26 ]]; then
+                   echo "RAN OUT OF GRIB FILE SUFFIXES!"
+                fi
             fi
-         fi
        fi
     done
 }
@@ -301,7 +302,7 @@ function run_geogrid {
 
     wrkdir=$1
     mkwrkdir $wrkdir $overwrite
-    cd $wrkdir
+    cd $wrkdir || return
 
     ln -sf ${FIXDIR}/WRFV4.0/GEOGRID.TBL.ARW GEOGRID.TBL
 
@@ -360,7 +361,7 @@ EOF
 function run_static {
     wrkdir=$1
     mkwrkdir $wrkdir $overwrite
-    cd $wrkdir
+    cd $wrkdir || return
 
     cp $FIXDIR/$domname.graph.info      .
     cp $FIXDIR/$domname.grid.nc         .
@@ -370,9 +371,10 @@ function run_static {
             echo "Generating ${domname}.graph.info.part.${npepost} in $wrkdir using ${gpmetis}"
         fi
         ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npepost} > gpmetis.out$npepost
-        if [[ $? -ne 0 ]]; then
-            echo "$?: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npepost}"
-            exit $?
+        estatus=$?
+        if [[ ${estatus} -ne 0 ]]; then
+            echo "${estatus}: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npepost}"
+            exit ${estatus}
         fi
     fi
 
@@ -512,7 +514,7 @@ function run_ungrib_hrrr {
 
     wrkdir=$rundir/ungrib
     mkwrkdir $wrkdir 0
-    cd $wrkdir
+    cd $wrkdir || return
 
     julday=$(date -d "$eventdate ${eventtime}:00" +%y%j%H)
     hrrrbase="${julday}0000"
@@ -537,14 +539,14 @@ function run_ungrib_hrrr {
 
             if [[ ! -f $basefn ]]; then
                 #rm -f $basefn
-                jobarrays+=($h)
+                jobarrays+=("$h")
             fi
 
-            myhrrrfiles+=($basefn)
+            myhrrrfiles+=("$basefn")
         done
 
         if [[ ${#jobarrays[@]} -gt 0 ]]; then
-            jobarraystr="--array=$(join_by_comma ${jobarrays[@]})"
+            jobarraystr="--array=$(join_by_comma "${jobarrays[@]}")"
             jobscript="run_wgrib2_hrrr.${mach}"
 
             sedfile=$(mktemp -t wgrib2_${jobname}.sed_XXXX)
@@ -588,15 +590,15 @@ EOF
             donefile="done.ungrib_$hstr"
             if [[ ! -f $donefile ]]; then
                 mkdir -p $mywrkdir
-                cd $mywrkdir
+                cd $mywrkdir || return
 
                 ln -sf ../${myhrrrfiles[$i]} GRIBFILE.AAA
                 ln -sf $FIXDIR/WRFV4.0/Vtable.raphrrr Vtable
 
-                jobarrays+=($h)
-                cd $wrkdir
+                jobarrays+=("$h")
+                cd $wrkdir || return
             fi
-            let i=i+1
+            (( i=i+1 ))
         done
 
         #
@@ -604,7 +606,7 @@ EOF
         #
         if [[ ${#jobarrays[@]} -gt 0 ]]; then
             jobscript="run_ungrib.${mach}"
-            jobarraystr="--array=$(join_by_comma ${jobarrays[@]})"
+            jobarraystr="--array=$(join_by_comma "${jobarrays[@]}")"
 
             sedfile=$(mktemp -t ungrib_hrrr_${jobname}.sed_XXXX)
             cat <<EOF > $sedfile
@@ -641,7 +643,7 @@ EOF
                 rm -rf $wrkdir/ungrib_$hstr
             fi
             rm -f queue.ungrib
-            let done=done+1
+            (( done=done+1 ))
         fi
     fi
 
@@ -663,7 +665,7 @@ EOF
                     rm -rf $wrkdir/ungrib_$hstr
                 fi
                 rm -f queue.ungrib
-                let done=done+1
+                (( done=done+1 ))
             fi
         done
 
@@ -682,7 +684,7 @@ function run_ungrib_gfs {
 
     wrkdir=$rundir/ungrib
     mkwrkdir $wrkdir 0
-    cd $wrkdir
+    cd $wrkdir || return
 
     julday=$(date -d "$eventdate ${eventtime}:00" +%y%j%H)
 
@@ -692,10 +694,10 @@ function run_ungrib_gfs {
         gfsfiles=()
         for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
             hstr=$(printf "%02d" $h)
-            gfsfiles+=($grib_dir/${julday}0000$hstr)
+            gfsfiles+=("$grib_dir/${julday}0000$hstr")
         done
 
-        for fn in ${gfsfiles[@]}; do
+        for fn in "${gfsfiles[@]}"; do
             echo "GFS file: $fn"
             while [[ ! -f $fn ]]; do
                 if [[ $verb -eq 1 ]]; then
@@ -705,7 +707,7 @@ function run_ungrib_gfs {
             done
         done
 
-        link_grib ${gfsfiles[@]}
+        link_grib "${gfsfiles[@]}"
 
         ln -sf $FIXDIR/WRFV4.0/Vtable.GFS_full Vtable
 
@@ -764,7 +766,7 @@ function run_ungrib_rrfsna {
 
     wrkdir=$rundir/ungrib
     mkwrkdir $wrkdir 0
-    cd $wrkdir
+    cd $wrkdir || return
 
     julday=$(date -d "$eventdate ${eventtime}:00" +%y%j%H)
 
@@ -773,7 +775,7 @@ function run_ungrib_rrfsna {
     else
         currdate=$(date -d "$eventdate ${eventtime}:00" +%Y%m%d)
         currtime=$(date -d "$eventdate ${eventtime}:00" +%H)
-        if [[ "$rrfs_grib_dir" =~ "https://noaa-rrfs-pds.s3.amazonaws.com" ]]; then
+        if [[ "$rrfs_grib_dir" == "https://noaa-rrfs-pds.s3.amazonaws.com"* ]]; then
             rrfs_url="$rrfs_grib_dir/rrfs_a/rrfs_a.${currdate}/${currtime}/control"
             download_aws=1
         else
@@ -793,7 +795,8 @@ function run_ungrib_rrfsna {
                     if [[ $verb -eq 1 ]]; then echo "Downloading $rrfsfile ..."; fi
                     rrfsfidx="${rrfsfile}.idx"
                     wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfidx
-                    while [[ $? -ne 0 ]]; do
+                    estatus=$?
+                    while [[ ${estatus} -ne 0 ]]; do
                         sleep 10
                         echo "wget -c $rrfs_url/$rrfsfidx"
                         wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfidx
@@ -801,7 +804,8 @@ function run_ungrib_rrfsna {
                     rm -f ${rrfsfidx}
 
                     wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfile
-                    while [[ $? -ne 0 ]]; do
+                    estatus=$?
+                    while [[ ${estatus} -ne 0 ]]; do
                         sleep 10
                         echo "wget -c $rrfs_url/$rrfsfile"
                         wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfile
@@ -827,16 +831,16 @@ function run_ungrib_rrfsna {
                     sleep 10
                 done
             fi
-            rrfsfiles+=(${rrfsfile})
+            rrfsfiles+=("${rrfsfile}")
             if [[ ! -f $basefn ]]; then
                 #rm -f $basefn
-                jobarrays+=($h)
+                jobarrays+=("$h")
             fi
-            myrrfsfiles+=($basefn)
+            myrrfsfiles+=("$basefn")
         done
 
        if [[ ${#jobarrays[@]} -gt 0 ]]; then
-            jobarraystr="--array=$(join_by_comma ${jobarrays[@]})"
+            jobarraystr="--array=$(join_by_comma "${jobarrays[@]}")"
             jobscript="run_wgrib2_rrfsna.${mach}"
 
             sedfile=$(mktemp -t wgrib2_${jobname}.sed_XXXX)
@@ -880,15 +884,15 @@ EOF
             donefile="done.ungrib_$hstr"
             if [[ ! -f $donefile ]]; then
                 mkdir -p $mywrkdir
-                cd $mywrkdir
+                cd $mywrkdir || return
 
                 ln -sf ../${myrrfsfiles[$i]} GRIBFILE.AAA
                 ln -sf $FIXDIR/WRFV4.0/Vtable.RRFS Vtable
 
-                jobarrays+=($h)
-                cd $wrkdir
+                jobarrays+=("$h")
+                cd $wrkdir || return
             fi
-            let i=i+1
+            (( i=i+1 ))
         done
 
         #
@@ -896,7 +900,7 @@ EOF
         #
         if [[ ${#jobarrays[@]} -gt 0 ]]; then
             jobscript="run_ungrib.${mach}"
-            jobarraystr="--array=$(join_by_comma ${jobarrays[@]})"
+            jobarraystr="--array=$(join_by_comma "${jobarrays[@]}")"
             sed    "s/PARTION/${partition}/;s/JOBNAME/ungrb_rrfs_${jobname}/" $TEMPDIR/run_ungrib_parallel.${mach} > $jobscript
             sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
             sed -i "s#PREFIX#${EXTHEAD}#g;s#EVENTDATE#${eventdate}#g;s#EVENTTIME#${eventtime}#g;s#EXTINVL#$EXTINVL#g" $jobscript
@@ -923,7 +927,7 @@ EOF
                 rm -rf $wrkdir/ungrib_$hstr
             fi
             rm -f queue.ungrib
-            let done=done+1
+            (( done=done+1 ))
         fi
     fi
 
@@ -945,7 +949,7 @@ EOF
                     rm -rf $wrkdir/ungrib_$hstr
                 fi
                 rm -f queue.ungrib
-                let done=done+1
+                (( done=done+1 ))
             fi
         done
 
@@ -968,7 +972,7 @@ function run_ungrib_rrfs {
 
     wrkdir=$rundir/ungrib
     mkwrkdir $wrkdir 0
-    cd $wrkdir
+    cd $wrkdir || return
 
     julday=$(date -d "$eventdate ${eventtime}:00" +%y%j%H)
 
@@ -977,7 +981,7 @@ function run_ungrib_rrfs {
     else
         currdate=$(date -d "$eventdate ${eventtime}:00" +%Y%m%d)
         currtime=$(date -d "$eventdate ${eventtime}:00" +%H)
-        if [[ "$rrfs_grib_dir" =~ "https://noaa-rrfs-pds.s3.amazonaws.com" ]]; then
+        if [[ "$rrfs_grib_dir" == "https://noaa-rrfs-pds.s3.amazonaws.com"* ]]; then
             rrfs_url="$rrfs_grib_dir/rrfs_a/rrfs_a.${currdate}/${currtime}/control"
             download_aws=1
         else
@@ -997,7 +1001,8 @@ function run_ungrib_rrfs {
                     if [[ $verb -eq 1 ]]; then echo "Downloading $rrfsfile ..."; fi
                     rrfsfidx="${rrfsfile}.idx"
                     wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfidx
-                    while [[ $? -ne 0 ]]; do
+                    estatus=$?
+                    while [[ ${estatus} -ne 0 ]]; do
                         sleep 10
                         echo "wget -c $rrfs_url/$rrfsfidx"
                         wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfidx
@@ -1005,7 +1010,8 @@ function run_ungrib_rrfs {
                     rm -f ${rrfsfidx}
 
                     wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfile
-                    while [[ $? -ne 0 ]]; do
+                    estatus=$?
+                    while [[ ${estatus} -ne 0 ]]; do
                         sleep 10
                         echo "wget -c $rrfs_url/$rrfsfile"
                         wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfile
@@ -1022,12 +1028,12 @@ function run_ungrib_rrfs {
                     sleep 10
                 done
             fi
-            rrfsfiles+=(${rrfsfile})
-            myrrfsfiles+=($basefn)
+            rrfsfiles+=("${rrfsfile}")
+            myrrfsfiles+=("$basefn")
         done
 
 
-        for i in ${!rrfsfiles[@]}; do
+        for i in "${!rrfsfiles[@]}"; do
             fn=${rrfsfiles[$i]}
             basefn=${myrrfsfiles[$i]}
 
@@ -1113,15 +1119,15 @@ EOF
             donefile="done.ungrib_$hstr"
             if [[ ! -f $donefile ]]; then
                 mkdir -p $mywrkdir
-                cd $mywrkdir
+                cd $mywrkdir || return
 
                 ln -sf ../${myrrfsfiles[$i]} GRIBFILE.AAA
                 ln -sf $FIXDIR/WRFV4.0/Vtable.RRFS Vtable
 
-                jobarrays+=($h)
-                cd $wrkdir
+                jobarrays+=("$h")
+                cd $wrkdir || return
             fi
-            let i=i+1
+            (( i=i+1 ))
         done
 
         #
@@ -1129,7 +1135,7 @@ EOF
         #
         if [[ ${#jobarrays[@]} -gt 0 ]]; then
             jobscript="run_ungrib.${mach}"
-            jobarraystr="--array=$(join_by_comma ${jobarrays[@]})"
+            jobarraystr="--array=$(join_by_comma "${jobarrays[@]}")"
             sed    "s/PARTION/${partition}/;s/JOBNAME/ungrb_rrfs_${jobname}/" $TEMPDIR/run_ungrib_parallel.${mach} > $jobscript
             sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
             sed -i "s#PREFIX#${EXTHEAD}#g;s#EVENTDATE#${eventdate}#g;s#EVENTTIME#${eventtime}#g;s#EXTINVL#$EXTINVL#g" $jobscript
@@ -1156,7 +1162,7 @@ EOF
                 rm -rf $wrkdir/ungrib_$hstr
             fi
             rm -f queue.ungrib
-            let done=done+1
+            (( done=done+1 ))
         fi
     fi
 
@@ -1178,7 +1184,7 @@ EOF
                     rm -rf $wrkdir/ungrib_$hstr
                 fi
                 rm -f queue.ungrib
-                let done=done+1
+                (( done=done+1 ))
             fi
         done
 
@@ -1201,7 +1207,7 @@ function run_ungrib_rrfsp {
 
     wrkdir=$rundir/ungrib_rrfs
     mkwrkdir $wrkdir 0
-    cd $wrkdir
+    cd $wrkdir || return
 
     julday=$(date -d "$eventdate ${eventtime}:00" +%y%j%H)
 
@@ -1210,7 +1216,7 @@ function run_ungrib_rrfsp {
     else
         currdate=$(date -d "$eventdate ${eventtime}:00" +%Y%m%d)
         currtime=$(date -d "$eventdate ${eventtime}:00" +%H)
-        if [[ "$rrfs_grib_dir" =~ "https://noaa-rrfs-pds.s3.amazonaws.com" ]]; then
+        if [[ "$rrfs_grib_dir" == "https://noaa-rrfs-pds.s3.amazonaws.com"* ]]; then
             rrfs_url="${rrfs_grib_dir}/rrfs_a/rrfs_a.${currdate}/${currtime}/control"
             download_aws=1
         else
@@ -1226,7 +1232,8 @@ function run_ungrib_rrfsp {
                 if [[ ! -f $rrfsfile ]]; then
                     rrfsfidx="${rrfsfile}.idx"
                     wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfidx
-                    while [[ $? -ne 0 ]]; do
+                    estatus=$?
+                    while [[ ${estatus} -ne 0 ]]; do
                         sleep 10
                         echo "wget -c $rrfs_url/$rrfsfidx"
                         wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfidx
@@ -1234,7 +1241,8 @@ function run_ungrib_rrfsp {
                     rm -f ${rrfsfidx}
 
                     wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfile
-                    while [[ $? -ne 0 ]]; do
+                    estatus=$?
+                    while [[ ${estatus} -ne 0 ]]; do
                         sleep 10
                         echo "wget -c $rrfs_url/$rrfsfile"
                         wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfile
@@ -1250,10 +1258,10 @@ function run_ungrib_rrfsp {
                     sleep 10
                 done
             fi
-            rrfsfiles+=(${rrfsfile})
+            rrfsfiles+=("${rrfsfile}")
         done
 
-        link_grib ${rrfsfiles[@]}
+        link_grib "${rrfsfiles[@]}"
 
         ln -sf $FIXDIR/WRFV4.0/Vtable.RRFSP Vtable
 
@@ -1333,27 +1341,27 @@ function run_init {
             done
         fi
 
-        cd $rundir
+        cd $rundir || return
         ln -sf $init_dir/init .
         return
     fi
 
     # Otherwise, run init normally
     conditions=()
-    while [[ $# > 0 ]]; do
+    while [[ $# -gt 0 ]]; do
         case $1 in
         /*)
-            conditions+=($1)
+            conditions+=("$1")
             ;;
         *)
-            conditions+=($rundir/$1)
+            conditions+=("$rundir/$1")
             ;;
         esac
         shift
     done
 
     if [[ $dorun == true ]]; then
-        for cond in ${conditions[@]}; do
+        for cond in "${conditions[@]}"; do
             echo "$$: Checking: $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
@@ -1369,7 +1377,7 @@ function run_init {
         :                   # skip
     else
         mkwrkdir $wrkdir $overwrite
-        cd $wrkdir
+        cd $wrkdir || return
 
         ln -sf $rundir/ungrib/${EXTHEAD}:${starttime_str:0:13} .
         ln -sf $WORKDIR/$domname/$domname.static.nc .
@@ -1510,7 +1518,7 @@ function run_lbc {
             done
         fi
 
-        cd $rundir
+        cd $rundir || return
         ln -sf $init_dir/lbc .
         return
     fi
@@ -1518,20 +1526,20 @@ function run_lbc {
     # otherwise, run lbc normally
 
     conditions=()
-    while [[ $# > 0 ]]; do
+    while [[ $# -gt 0 ]]; do
         case $1 in
         /*)
-            conditions+=($1)
+            conditions+=("$1")
             ;;
         *)
-            conditions+=($rundir/$1)
+            conditions+=("$rundir/$1")
             ;;
         esac
         shift
     done
 
     if [[ $dorun == true ]]; then
-        for cond in ${conditions[@]}; do
+        for cond in "${conditions[@]}"; do
             echo "$$: Checking: $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
@@ -1547,7 +1555,7 @@ function run_lbc {
         :                   # skip
     else
         mkwrkdir $wrkdir $overwrite
-        cd $wrkdir
+        cd $wrkdir || return
 
         ln -sf $rundir/ungrib/${EXTHEAD}* .
         ln -sf $rundir/init/$domname.init.nc .
@@ -1679,21 +1687,21 @@ function run_mpas {
     # Waiting for job conditions
     #
     conditions=()
-    while [[ $# > 0 ]]; do
+    while [[ $# -gt 0 ]]; do
         case $1 in
         /*)
-            conditions+=($1)
+            conditions+=("$1")
             ;;
         *)
-            conditions+=($rundir/$1)
+            conditions+=("$rundir/$1")
             ;;
         esac
         shift
     done
 
     if [[ $dorun == true ]]; then
-        for cond in ${conditions[@]}; do
-            echo "$$: Checking: $cond"
+        for cond in "${conditions[@]}"; do
+            echo "$$: Checking $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
@@ -1711,14 +1719,14 @@ function run_mpas {
         :                   # skip
     else
         mkwrkdir $wrkdir $overwrite
-        cd $wrkdir
+        cd $wrkdir || return
 
         ln -sf $rundir/lbc/${domname}.lbc.* .
         ln -sf $rundir/init/$domname.init.nc .
         ln -sf $FIXDIR/$domname.graph.info.part.${npefcst} .
 
         streamlists=(stream_list.atmosphere.diagnostics stream_list.atmosphere.output stream_list.atmosphere.surface)
-        for fn in ${streamlists[@]}; do
+        for fn in "${streamlists[@]}"; do
             cp -f ${FIXDIR}/$fn .
         done
 
@@ -1727,7 +1735,7 @@ function run_mpas {
                      RRTMG_LW_DATA.DBL RRTMG_SW_DATA       RRTMG_SW_DATA.DBL SOILPARM.TBL   \
                      VEGPARM.TBL )
 
-        for fn in ${datafiles[@]}; do
+        for fn in "${datafiles[@]}"; do
             ln -sf ${FIXDIR}/$fn .
         done
 
@@ -1735,7 +1743,7 @@ function run_mpas {
             thompson_tables=( MP_THOMPSON_QRacrQG_DATA.DBL   MP_THOMPSON_QRacrQS_DATA.DBL   \
                               MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL )
 
-            for fn in ${thompson_tables[@]}; do
+            for fn in "${thompson_tables[@]}"; do
                 ln -sf ${FIXDIR}/$fn .
             done
         fi
@@ -1933,7 +1941,7 @@ function run_mpassit {
     #
     wrkdir=$rundir/mpassit
     mkwrkdir $wrkdir 0
-    cd $wrkdir
+    cd $wrkdir || return
 
     if [[ "${mpscheme}" == "Thompson" ]]; then
         fileappend="THOM"
@@ -1942,7 +1950,7 @@ function run_mpassit {
     fi
 
     parmfiles=(diaglist histlist_2d histlist_3d histlist_soil)
-    for fn in ${parmfiles[@]}; do
+    for fn in "${parmfiles[@]}"; do
         if [[ ! -e $fn ]]; then
             if [[ $verb -eq 1 ]]; then echo "Linking $fn ..."; fi
             if [[ -e $FIXDIR/MPASSIT/${fn}.${fileappend} ]]; then
@@ -2037,12 +2045,16 @@ function run_upp {
     #
     wrkdir=$rundir/upp
     mkwrkdir $wrkdir 0
-    cd $wrkdir
+    cd $wrkdir || return
 
+    # shellcheck disable=SC2034
     fixfiles_AerosolCoeff=( AerosolCoeff.bin )
+    # shellcheck disable=SC2034
     fixfiles_CloudCoeff=( CloudCoeff.bin )
+    # shellcheck disable=SC2034
     fixfiles_EmisCoeff=( EmisCoeff.bin )
 
+    # shellcheck disable=SC2034
     fixfiles_SpcCoeff=( amsre_aqua.SpcCoeff.bin       imgr_g11.SpcCoeff.bin    \
         imgr_g12.SpcCoeff.bin     imgr_g13.SpcCoeff.bin  imgr_g15.SpcCoeff.bin  \
         imgr_insat3d.SpcCoeff.bin imgr_mt1r.SpcCoeff.bin imgr_mt2.SpcCoeff.bin  \
@@ -2051,6 +2063,7 @@ function run_upp {
         ssmis_f18.SpcCoeff.bin    ssmis_f19.SpcCoeff.bin ssmis_f20.SpcCoeff.bin \
         tmi_trmm.SpcCoeff.bin     v.seviri_m10.SpcCoeff.bin)
 
+    # shellcheck disable=SC2034
     fixfiles_TauCoeff=( amsre_aqua.TauCoeff.bin       imgr_g11.TauCoeff.bin    \
         imgr_g12.TauCoeff.bin     imgr_g13.TauCoeff.bin  imgr_g15.TauCoeff.bin  \
         imgr_insat3d.TauCoeff.bin imgr_mt1r.TauCoeff.bin imgr_mt2.TauCoeff.bin  \
@@ -2113,14 +2126,16 @@ function run_upp {
         fi
 
         mkwrkdir $wrkdir/post_$hstr 1
-        cd $wrkdir/post_$hstr
+        cd $wrkdir/post_$hstr || return
 
         #for coeff in ${!fixfiles[@]}; do
         #    echo "$coeff"
         #    for fn in ${!fixfiles[$coeff][@]}; do
-        for coeff in ${fixfiles[@]}; do
-            eval filearray=\( \${fixfiles_${coeff}[@]} \)
-            for fn in ${filearray[@]}; do
+        for coeff in "${fixfiles[@]}"; do
+            #eval filearray=\( \${fixfiles_${coeff}[@]} \)
+            fixfilename="fixfiles_${coeff}[@]"
+            #for fn in ${filearray[@]}; do
+            for fn in "${!fixfilename}"; do
                 #echo "$coeff -> ${fixdirs[$coeff]}/$fn"
                 ln -sf ${fixdirs[$coeff]}/$fn .
             done
@@ -2142,7 +2157,7 @@ function run_upp {
         #   file which defines the GRIB2 table values
         #
         parmfiles=(params_grib2_tbl_new post_avblflds.xml postcntrl.xml postxconfig-NT.txt )
-        for fn in ${parmfiles[@]}; do
+        for fn in "${parmfiles[@]}"; do
             ln -sf $FIXDIR/UPP/hrrr_$fn $fn
         done
 
@@ -2191,7 +2206,7 @@ function run_pcp {
         echo "Directory: $wrkdir not exist."
         return
     fi
-    cd $wrkdir
+    cd $wrkdir || return
 
     expectednum=$(( fcst_hours/OUTINVL +1))
 
@@ -2223,13 +2238,13 @@ function run_pcp {
 
 function run_clean {
 
-    for dirname in $@; do
+    for dirname in "$@"; do
         case $dirname in
         ungrib )
             donelbc="$rundir/lbc/done.lbc"
             for dirsn in ungrib_gfs ungrib_hrrr ungrib_rrfs ungrib; do
                 if [[ -d $rundir/$dirsn && -e $donelbc ]]; then
-                    cd $rundir/$dirsn
+                    cd $rundir/$dirsn || return
                     rm -rf GFS:* HRRR:* RRFS:* PFILE:* RRFSGFS:* HRRRGFS:*
                     rm -rf RRFS_CONUS.*
                 fi
@@ -2324,7 +2339,7 @@ fi
 #-----------------------------------------------------------------------
 #% ARGS
 
-while [[ $# > 0 ]]
+while [[ $# -gt 0 ]]
     do
     key="$1"
 
@@ -2433,7 +2448,8 @@ while [[ $# > 0 ]]
             usage 2
             ;;
         static* | geogrid* | ungrib* | init* | lbc* | mpas* | upp* | clean* | pcp* )
-            jobs=(${key//,/ })
+            #jobs=(${key//,/ })
+            IFS="," read -r -a jobs <<< "$key"
             ;;
         *)
             if [[ $key =~ ^[0-9]{8}$ ]]; then
@@ -2444,10 +2460,10 @@ while [[ $# > 0 ]]
             elif [[ -d $key ]]; then
                 WORKDIR=$key
                 lastdir=$(basename $WORKDIR)
-                if [[ " ${jobs[*]} " =~ " $lastdir " ]]; then
-                    eventstr=$(basename ${WORKDIR%%/$lastdir})
-                    WORKDIR=$(dirname ${WORKDIR%%/$lastdir})
-                    jobs=($lastdir)
+                if [[ " ${jobs[*]} " == *" $lastdir "* ]]; then
+                    eventstr=$(basename ${WORKDIR%%/"$lastdir"})
+                    WORKDIR=$(dirname ${WORKDIR%%/"$lastdir"})
+                    jobs=("$lastdir")
                     eventdate=${eventstr:0:8}
                     eventtime=${eventstr:8:2}
                     casestr=${eventstr:11}
@@ -2560,8 +2576,8 @@ elif [[ $machine == "Cheyenne" ]]; then
     partition_upp="regular"
 
     npeics=768   ; nnodes_ics=$((  npeics/ncores_ics   ))
-    npefcst=1152 ; nnodes_fcst=$(( npefcst/ncores_fcst ))
-    npepost=72   ; nnodes_post=$(( npepost/ncores_post ))
+    npefcst=1152 ; #nnodes_fcst=$(( npefcst/ncores_fcst ))
+    npepost=72   ; #nnodes_post=$(( npepost/ncores_post ))
 
     mach="pbs"
     job_exclusive_str=""
@@ -2575,7 +2591,6 @@ elif [[ $machine == "Cheyenne" ]]; then
 
 else    # Vecna at NSSL
 
-    account="${hpcaccount-batch}"
     ncores_ics=96; ncores_fcst=96; ncores_post=24
     partition="batch"           ; claim_cpu="--ntasks-per-node=${ncores_fcst} --mem-per-cpu=4G";
                                   claim_cpu_ics="--ntasks-per-node=${ncores_ics} --mem-per-cpu=4G"
@@ -2690,7 +2705,7 @@ declare -A jobargs=([static]=$WORKDIR/$domname                                 \
 #[ungrib_rrfsp]="/mnt/lfs4/BMC/rtwbl/mhu/wcoss/emc/rrfs /public/data/grids/gfs/0p25deg/grib2 rrfs_a" \
 #[ungrib_rrfs]="/mnt/lfs4/BMC/nrtrr/NCO_dirs/ptmp/com/RRFS_CONUS/para /public/data/grids/gfs/0p25deg/grib2 RRFS_conus_3km"  \
 
-for job in ${jobs[@]}; do
+for job in "${jobs[@]}"; do
     if [[ $verb -eq 1 ]]; then
         echo " "
         echo "run_$job ${jobargs[$job]}"
