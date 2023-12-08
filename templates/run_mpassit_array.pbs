@@ -1,0 +1,52 @@
+#!/bin/bash -l
+#PBS -q PARTION
+#PBS -N JOBNAME
+#PBS -l select=NNODES:CPUSPEC:mpiprocs=NCORES:ompthreads=1
+#PBS -l walltime=CLAIMTIME
+#PBS -j oe
+#PBS -o WRKDIR/mpassitHHMINSTR.log
+ACCTSTR
+EXCLSTR
+
+#set -eux
+
+time1=$(date '+%s')
+echo "Job Started: $(date). Job Id:  ${PBS_JOBID}"
+echo " "
+
+
+ulimit -s unlimited
+
+mem=${PBS_ARRAY_INDEX}
+memstr=$(printf "%02d" $mem)
+
+cd WRKDIR/mem${memstr}
+
+rm -rf error.mpassitHHMINSTR_${memstr} queue.mpassitHHMINSTR_${memstr}
+
+touch running.mpassitHHMINSTR_${memstr}
+
+for ((i=FCST_START;i<=FCST_END;i+=FCST_INTVL)); do
+    minstr=$(printf "%03d" $((i/60)))
+    RUNMPCMD -n NOPART EXEDIR/mpassit namelist.fcst_${minstr}
+done
+
+if [[ $? -eq 0 ]]; then
+    touch done.mpassitHHMINSTR_${memstr}
+else
+    touch error.mpassitHHMINSTR_${memstr}
+fi
+
+rm -rf running.mpassitHHMINSTR_${memstr}
+
+time2=$(date '+%s')
+
+let diff=time2-time1
+let hour=diff/3600
+let diff=diff%3600
+let min=diff/60
+let sec=diff%60
+
+echo -n "Job   Ended: $(date). "
+printf 'Job run time:  %02d:%02d:%02d' $hour $min $sec
+echo " "

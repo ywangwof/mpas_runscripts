@@ -3,17 +3,18 @@
 srcroot="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS"
 
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
-rootdir=$(realpath $(dirname $scpdir))
+rootdir=$(realpath "$(dirname "${scpdir}")")
 
 desdir=${rootdir}/fix_files
 
-if [[ "$(hostname)" == "ln"* ]]; then
+myhost=$(hostname)
+if [[ "${myhost}" == "ln"* ]]; then
     srcmpassitdir=${srcroot}/MPASSIT
     srcuppdir=${srcroot}/UPP_KATE_kjet
     srcmodeldir=${srcroot}/MPAS-Model
     srcwpsdir=/oldscratch/ywang/NEWSVAR/news3dvar.2021/WPS
     srcwrfdir=/oldscratch/ywang/NEWSVAR/news3dvar.2021/WRFV3.9_WOFS_2021
-elif [[ "$(hostname)" == "cheyenne"* ]]; then
+elif [[ "${myhost}" == "cheyenne"* || ${myhost} == "derecho"* ]]; then
     rootdir="/glade/work/ywang/mpas_runscripts"
     scpdir="/glade/work/ywang/mpas_runscripts/scripts"
     srcroot="/glade/work/ywang"
@@ -22,6 +23,7 @@ elif [[ "$(hostname)" == "cheyenne"* ]]; then
     srcmodeldir=${srcroot}/MPAS-Model
     srcwpsdir=${srcroot}/WPS_SRC
     srcwrfdir=${srcroot}/WRFV4.0
+    srcdartdir=${srcroot}/DART
 else
     srcmpassitdir=${srcroot}/MPASSIT
     srcuppdir=${srcroot}/UPP_KATE_kjet
@@ -63,7 +65,7 @@ function usage {
     echo " "
     echo "                                     -- By Y. Wang (2022.10.12)"
     echo " "
-    exit $1
+    exit "$1"
 }
 
 #-----------------------------------------------------------------------
@@ -71,14 +73,16 @@ function usage {
 # Handle command line arguments
 #
 #-----------------------------------------------------------------------
-cmds=(mpas MPASSIT UPP WRF dart)
+#% ARGS
+
+cmds=(mpas MPASSIT UPP WRF DART)
 
 verb=0
-machine="Jet"
+#machine="Jet"
 runcmd="ln -sf"
 run=0
 
-while [[ $# > 0 ]]
+while [[ $# -gt 0 ]]
     do
     key="$1"
 
@@ -106,17 +110,17 @@ while [[ $# > 0 ]]
             fi
             shift
             ;;
-        -m )
-            if [[ ${2^^} == "JET" ]]; then
-                machine=Jet
-            elif [[ ${2^^} == "ODIN" ]]; then
-                machine=Odin
-            else
-                echo "ERROR: Unsupported machine name, got \"$2\"."
-                usage 1
-            fi
-            shift
-            ;;
+        #-m )
+        #    if [[ ${2^^} == "JET" ]]; then
+        #        machine=Jet
+        #    elif [[ ${2^^} == "ODIN" ]]; then
+        #        machine=Odin
+        #    else
+        #        echo "ERROR: Unsupported machine name, got \"$2\"."
+        #        usage 1
+        #    fi
+        #    shift
+        #    ;;
         -cmd )
             if [[ $2 == "copy" ]]; then
                 runcmd="cp -rf"
@@ -130,8 +134,9 @@ while [[ $# > 0 ]]
             fi
             shift
             ;;
-        mpas* | MPASSIT* | UPP* | WRF* | DART* )
-            cmds=(${key//,/ })
+        mpas* | MPASSIT* | UPP* | WRF* | DART* | dart* )
+            #cmds=(${key//,/ })
+            IFS="," read -r -a cmds <<< "$key"
             ;;
         -* )
             echo "Unknown option: $key"
@@ -157,19 +162,20 @@ done
 # Perform each task
 #
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\
+#@ MAIN
 
-exedir="$(dirname $desdir)/exec"
+exedir="$(dirname "${desdir}")/exec"
 
-for cmd in ${cmds[@]}; do
-    case $cmd in
+for cmd in "${cmds[@]}"; do
+    case ${cmd^^} in
 
     "MPASSIT" )
         srcmpassit=${srcdir-$srcmpassitdir}
 
-        cd $desdir/MPASSIT
+        cd "${desdir}/MPASSIT" || exit 1
         echo "===  MPASSIT"
-        echo "SRC: $srcmpassit"
-        echo "CWD: $desdir"
+        echo "     SRC: $srcmpassit"
+        echo "     CWD: $desdir"
 
         # They are now managed through Git
         #
@@ -180,20 +186,20 @@ for cmd in ${cmds[@]}; do
         #            echo "Linking $fn ...";
         #        fi
         #        if [[ ${runcmd} == "clean" ]]; then
-        #            rm $fn
+        #            rm -f $fn
         #        else
         #            ${runcmd} $srcmpassit/parm/$fn .
         #        fi
         #    #fi
         #done
 
-        cd $exedir
-        echo "---  Executable"
-        echo "CWD: $exedir"
+        cd "$exedir" || exit 1
+        echo "  --  Executable"
+        echo "     CWD: $exedir"
         if [[ ${runcmd} == "clean" ]]; then
-            rm mpassit
+            rm -f mpassit
         else
-            ${runcmd} $srcmpassit/build/mpassit .
+            ${runcmd} "$srcmpassit/build/mpassit" .
         fi
         ;;
 
@@ -216,14 +222,16 @@ for cmd in ${cmds[@]}; do
         #    fi
         #done
 
-        cd $exedir
+        cd "$exedir" || exit 1
+
+        echo ""
         echo "===  WRF "
-        echo "SRC: $srcwrf;    $srcwps"
-        echo "CWD: $exedir"
+        echo "     SRC: $srcwrf;    $srcwps"
+        echo "     CWD: $exedir"
         if [[ ${runcmd} == "clean" ]]; then
-            rm ungrib.exe
+            rm -f ungrib.exe
         else
-            ${runcmd} $srcwps/ungrib/src/ungrib.exe .
+            ${runcmd} "$srcwps/ungrib/src/ungrib.exe" .
         fi
 
         #${runcmd} $srcwps/geogrid/src/geogrid.exe .
@@ -232,24 +240,26 @@ for cmd in ${cmds[@]}; do
     "UPP" )
         srcupp=${srcdir-$srcuppdir}
 
-        cd $desdir/UPP
+        cd "$desdir/UPP" || exit 1
+
+        echo ""
         echo "===  UPP"
-        echo "SRC: $srcupp"
-        echo "CWD: $desdir"
+        echo "     SRC: $srcupp"
+        echo "     CWD: $desdir"
 
         if [[ ${runcmd} == "clean" ]]; then
-            rm crtm2_fix
+            rm -f crtm2_fix
         else
-            ${runcmd} $srcupp/src/lib/crtm2/src/fix crtm2_fix
+            ${runcmd} "$srcupp/src/lib/crtm2/src/fix" crtm2_fix
         fi
 
-        cd $exedir
-        echo "---  Executable"
-        echo "CWD: $exedir"
+        cd "$exedir" || exit 1
+        echo "  --  Executable"
+        echo "     CWD: $exedir"
         if [[ ${runcmd} == "clean" ]]; then
-            rm unipost.exe
+            rm -f unipost.exe
         else
-            ${runcmd} $srcupp/bin/unipost.exe .
+            ${runcmd} "${srcupp}/bin/unipost.exe" .
         fi
         ;;
 
@@ -258,36 +268,38 @@ for cmd in ${cmds[@]}; do
 
         if [[ $run -ne 1 ]]; then
             if [[ ! -e $exedir/dart ]]; then
-                mkdir -p $exedir/dart
+                mkdir -p "$exedir/dart"
             fi
-            cd $exedir/dart
-            echo "---  Executables of DART"
-            echo "CWD: $exedir"
-            dartprograms=( filter  mpas_dart_obs_preprocess  obs_sequence_tool  update_mpas_states advance_time obs_seq_to_netcdf obs_diag)
+            cd "$exedir/dart" || exit 1
+            echo ""
+            echo "===  DART"
+            echo "     SRC: ${srcdart}"
+            echo "     CWD: ${exedir}"
+            dartprograms=( filter  mpas_dart_obs_preprocess  obs_sequence_tool  update_mpas_states update_bc advance_time obs_seq_to_netcdf obs_diag)
             if [[ ${runcmd} == "clean" ]]; then
-                echo "    Deleting ${dartprograms[*]}"
-                rm -f ${dartprograms[*]}
+                #echo "    Deleting ${dartprograms[*]}"
+                rm -f "${dartprograms[@]}"
             else
                 echo ""
                 echo "  -- Copying DART programs to $(pwd) ...."
-                for prog in ${dartprograms[@]}; do
+                for prog in "${dartprograms[@]}"; do
                     echo "        $srcdart/models/mpas_atm/work/$prog"
-                    ${runcmd} $srcdart/models/mpas_atm/work/$prog .
+                    ${runcmd} "$srcdart/models/mpas_atm/work/$prog" .
                 done
                 echo "        $srcdart/models/wrf/work/convertdate"
-                ${runcmd} $srcdart/models/wrf/work/convertdate .
+                ${runcmd} "$srcdart/models/wrf/work/convertdate" .
             fi
         fi
         ;;
     "mpasregion" )
         if [[ $run -ne 1 ]]; then
-            cd $(dirname $desdir)
+            cd "$(dirname" ${desdir}")" || exit 1
             echo "---  Linking ${srcmpasregion}/MPAS-Limited-Area"
-            echo "CWD: $(dirname $desdir)"
+            echo "     CWD: $(dirname "$desdir")"
             if [[ ${runcmd} == "clean" ]]; then
                 rm -f MPAS-Limited-Area
             else
-                ${runcmd} ${srcmpasregion}/MPAS-Limited-Area .
+                ${runcmd} "${srcmpasregion}/MPAS-Limited-Area" .
             fi
         fi
         ;;
@@ -295,10 +307,11 @@ for cmd in ${cmds[@]}; do
 
         srcmodel=${srcdir-$srcmodeldir}
 
-        cd $desdir
+        cd "$desdir" || exit 1
+        echo ""
         echo "===  MPAS Model"
-        echo "SRC: $srcmodel"
-        echo "CWD: $desdir"
+        echo "     SRC: $srcmodel"
+        echo "     CWD: $desdir"
 
         staticfiles=(CAM_ABS_DATA.DBL  CAM_AEROPT_DATA.DBL GENPARM.TBL       LANDUSE.TBL    \
                 OZONE_DAT.TBL     OZONE_LAT.TBL       OZONE_PLEV.TBL    RRTMG_LW_DATA  \
@@ -306,19 +319,19 @@ for cmd in ${cmds[@]}; do
 
         echo ""
         echo "  -- Linking runtime static files to ${desdir} ...."
-        for fn in ${staticfiles[@]}; do
+        for fn in "${staticfiles[@]}"; do
             if [[ $verb -eq 1 ]]; then
                 echo "        $srcmodel/src/core_atmosphere/physics/physics_wrf/files/$fn";
             fi
             if [[ ${runcmd} == "clean" ]]; then
-                rm $fn
+                rm -f "$fn"
             else
-                ${runcmd} $srcmodel/src/core_atmosphere/physics/physics_wrf/files/$fn .
+                ${runcmd} "${srcmodel}/src/core_atmosphere/physics/physics_wrf/files/$fn" .
             fi
         done
 
         if [[ $run -ne 1 ]]; then
-            cd $desdir
+            cd "$desdir" || exit 1
 
             ln -sf /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/mesh_3km/x1.65536002.grid.nc .
 
@@ -333,7 +346,7 @@ for cmd in ${cmds[@]}; do
             #        echo "Linking $fn ....";
             #    fi
             #    if [[ ${runcmd} == "clean" ]]; then
-            #        rm $fn
+            #        rm -f $fn
             #    else
             #        ${runcmd} $srcmodel/$fn .
             #    fi
@@ -342,53 +355,53 @@ for cmd in ${cmds[@]}; do
             #domgridfiles=(wofs_mpas.grid.nc)
             #for domfile in ${domgridfiles[@]}; do
             #    if [[ ${runcmd} == "clean" ]]; then
-            #        rm $fn
+            #        rm -f $fn
             #    else
             #        ${runcmd} $srcroot/$domfile .
             #    fi
             #done
 
-            cd $exedir
+            cd "$exedir" || exit 1
             echo ""
             echo "  -- Executables to $exedir"
             if [[ ${runcmd} == "clean" ]]; then
-                rm init_atmosphere_model atmosphere_model.single
+                rm -f init_atmosphere_model atmosphere_model.single grid_rotate
             else
                 echo "        $srcmodel/init_atmosphere_model --> init_atmosphere_model"
-                ${runcmd} $srcmodel/init_atmosphere_model .
+                ${runcmd} "$srcmodel/init_atmosphere_model" .
                 echo "        $srcmodel/atmosphere_model      --> atmosphere_model.single"
-                ${runcmd} $srcmodel/atmosphere_model atmosphere_model.single
+                ${runcmd} "$srcmodel/atmosphere_model" atmosphere_model.single
 
-                srcdir=$(dirname $srcmodel)
+                srcdir=$(dirname "$srcmodel")
                 if [[ -e $srcdir/MPAS-Tools/mesh_tools/grid_rotate/grid_rotate  ]]; then
                     echo "        $srcdir/MPAS-Tools/mesh_tools/grid_rotate/grid_rotate --> grid_rotate"
-                    ${runcmd} $srcdir/MPAS-Tools/mesh_tools/grid_rotate/grid_rotate .
+                    ${runcmd} "$srcdir/MPAS-Tools/mesh_tools/grid_rotate/grid_rotate" .
                 else
                     echo "ERROR: not exist: $srcdir/MPAS-Tools/mesh_tools/grid_rotate/grid_rotate"
-                    exit 0
+                    #exit 0
                 fi
             fi
         else
             thompsonfiles=(MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL \
                            MP_THOMPSON_QRacrQG_DATA.DBL MP_THOMPSON_QRacrQS_DATA.DBL)
 
-            cd $desdir
+            cd "${desdir}" || exit 1
 
-            for fn in ${thompsonfiles[@]}; do
+            for fn in "${thompsonfiles[@]}"; do
                 if [[ $verb -eq 1 ]]; then
                     echo "Linking $fn ....";
                 fi
                 if [[ ${runcmd} == "clean" ]]; then
-                    rm $fn
+                    rm -f "$fn"
                 else
-                    ${runcmd} ${rootdir}/fix_files/$fn .
+                    ${runcmd} "${rootdir}/fix_files/$fn" .
                 fi
             done
         fi
 
         ;;
     * )
-        echo "Argument should be one of [mpas, MPASSIT, WRF, UPP, exec]. get \"${cmd}\"."
+        echo "Argument should be one of [${cmds[*]}]. get \"${cmd}\"."
         ;;
     esac
 done

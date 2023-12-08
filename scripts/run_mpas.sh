@@ -9,8 +9,6 @@ eventdateDF=$(date +%Y%m%d)
 
 #-----------------------------------------------------------------------
 #
-#-----------------------------------------------------------------------
-#
 # Required files from ROOTDIR
 #
 # 0. module files in modules
@@ -263,9 +261,22 @@ function submit_a_jobscript {
 
 ########################################################################
 
-function join_by_comma {
-    local IFS=","
-    echo "$*"
+function get_jobarray_str {
+    local jobschdler=$1
+    local subjobs=("${@:2}")
+    if [[ "${jobschdler,,}" == "slurm" ]]; then  # SLURM
+        local IFS=","
+        echo "--array=${subjobs[*]}"
+    else                                         # PBS
+        local minno=${subjobs[0]}
+        local maxno=${subjobs[-1]}
+
+        for i in "${subjobs[@]}"; do
+            (( i > maxno )) && maxno=$i
+            (( i < minno )) && minno=$i
+        done
+        echo "-J ${minno}-${maxno}:1"
+    fi
 }
 
 ########################################################################
@@ -546,7 +557,7 @@ function run_ungrib_hrrr {
         done
 
         if [[ ${#jobarrays[@]} -gt 0 ]]; then
-            jobarraystr="--array=$(join_by_comma "${jobarrays[@]}")"
+            jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
             jobscript="run_wgrib2_hrrr.${mach}"
 
             sedfile=$(mktemp -t wgrib2_${jobname}.sed_XXXX)
@@ -606,7 +617,7 @@ EOF
         #
         if [[ ${#jobarrays[@]} -gt 0 ]]; then
             jobscript="run_ungrib.${mach}"
-            jobarraystr="--array=$(join_by_comma "${jobarrays[@]}")"
+            jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
             sedfile=$(mktemp -t ungrib_hrrr_${jobname}.sed_XXXX)
             cat <<EOF > $sedfile
@@ -840,7 +851,7 @@ function run_ungrib_rrfsna {
         done
 
        if [[ ${#jobarrays[@]} -gt 0 ]]; then
-            jobarraystr="--array=$(join_by_comma "${jobarrays[@]}")"
+            jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
             jobscript="run_wgrib2_rrfsna.${mach}"
 
             sedfile=$(mktemp -t wgrib2_${jobname}.sed_XXXX)
@@ -900,7 +911,7 @@ EOF
         #
         if [[ ${#jobarrays[@]} -gt 0 ]]; then
             jobscript="run_ungrib.${mach}"
-            jobarraystr="--array=$(join_by_comma "${jobarrays[@]}")"
+            jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
             sed    "s/PARTION/${partition}/;s/JOBNAME/ungrb_rrfs_${jobname}/" $TEMPDIR/run_ungrib_parallel.${mach} > $jobscript
             sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
             sed -i "s#PREFIX#${EXTHEAD}#g;s#EVENTDATE#${eventdate}#g;s#EVENTTIME#${eventtime}#g;s#EXTINVL#$EXTINVL#g" $jobscript
@@ -1135,7 +1146,7 @@ EOF
         #
         if [[ ${#jobarrays[@]} -gt 0 ]]; then
             jobscript="run_ungrib.${mach}"
-            jobarraystr="--array=$(join_by_comma "${jobarrays[@]}")"
+            jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
             sed    "s/PARTION/${partition}/;s/JOBNAME/ungrb_rrfs_${jobname}/" $TEMPDIR/run_ungrib_parallel.${mach} > $jobscript
             sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
             sed -i "s#PREFIX#${EXTHEAD}#g;s#EVENTDATE#${eventdate}#g;s#EVENTTIME#${eventtime}#g;s#EXTINVL#$EXTINVL#g" $jobscript
@@ -2210,8 +2221,12 @@ function run_pcp {
 
     expectednum=$(( fcst_hours/OUTINVL +1))
 
-    donefiles=($(ls done.upp_??))
-    pcpfiles=($(ls  MPAS-A_PCP_*))
+    donefiles=()
+    pcpfiles=()
+    while IFS='' read -r line; do donefiles+=("$line"); done < <(ls done.upp_??)
+    while IFS='' read -r line; do pcpfiles+=("$line");  done < <(ls MPAS-A_PCP_*)
+    #donefiles=($(ls done.upp_??))
+    #pcpfiles=($(ls  MPAS-A_PCP_*))
 
     if [[ ${#donefiles[@]} -lt $expectednum ]]; then
         echo "WARNING: UPPs are still not all done. Skip run_pcp."

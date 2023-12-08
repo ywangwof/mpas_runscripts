@@ -146,7 +146,7 @@ function usage {
 function run_mpas {
     # $1        $2
     # wrkdir    iseconds
-    local wrkdir=$1
+    local -r wrkdir=$1
     local -r iseconds=$2
 
     #
@@ -161,11 +161,12 @@ function run_mpas {
     mkwrkdir ${wrkdir} 0
     cd ${wrkdir} || exit 1
 
-    dawrkdir=${wrkdir}/fcst/dacycles
+    timestr=$(date -d @${iseconds} +%H%M)
+    dawrkdir=${rundir}/dacycles/${timestr}
     #
     # Waiting for job conditions
     #
-    conditions=("${rundir}/lbc/done.lbc" "${dawrkdir}/done.update_states")
+    conditions=("${rundir}/lbc/done.lbc" "${dawrkdir}/done.update_states" "${dawrkdir}/done.update_bc")
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
@@ -459,8 +460,8 @@ EOF
     #
     cd $wrkdir || exit $?
 
-    #mpas_jobscript="run_mpas.${mach}"
-    jobarraystr="--array=$(join_by_comma "${jobarrays[@]}")"
+    # shellcheck disable=SC2154
+    jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
 
     # undefined variables are from the config file
     sedfile=$(mktemp -t mpas_${eventtime}.sed_XXXX)
@@ -483,10 +484,10 @@ s/SAVETAG/nothing_xxx/
 EOF
     # shellcheck disable=SC2154
     if [[ "${mach}" == "pbs" ]]; then
-        echo "s/NNODES/${nnodes_filter}/;s/NCORES/${ncores_filter}/" >> $sedfile
+        echo "s/NNODES/${nnodes_fcst}/;s/NCORES/${ncores_fcst}/" >> $sedfile
     fi
 
-    submit_a_jobscript $wrkdir "fcst" $sedfile $TEMPDIR/run_mpas_array.${mach} $mpas_jobscript ${jobarraystr}
+    submit_a_jobscript "${wrkdir}" "fcst" "${sedfile}" "${TEMPDIR}/run_mpas_array.${mach}" "${mpas_jobscript}" "${jobarraystr}"
 }
 
 ########################################################################
@@ -537,14 +538,14 @@ function run_mpassit {
         jobarrays+=("$mem")
     done
 
-    jobarrays_str=$(join_by_comma "${jobarrays[@]}")
+    jobarrays_str=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
     cd $wrkdir || exit $?
 
     if [[ $rt_run == true ]]; then
-        run_mpassit_oneAtime ${wrkdir} ${iseconds} ${jobarrays_str}
+        run_mpassit_oneAtime "${wrkdir}" "${iseconds}" "${jobarrays_str}"
     else
-        run_mpassit_alltimes ${wrkdir} ${iseconds} ${jobarrays_str}
+        run_mpassit_alltimes "${wrkdir}" "${iseconds}" "${jobarrays_str}"
     fi
 }
 
@@ -553,9 +554,9 @@ function run_mpassit {
 function run_mpassit_oneAtime {
     # $1        $2
     # wrkdir    iseconds
-    local wrkdir=$1
+    local -r wrkdir=$1
     local -r iseconds=$2
-    local jobarraystr=$3
+    local -r jobarraystr=$3
 
     cd $wrkdir || return
 
@@ -576,8 +577,7 @@ function run_mpassit_oneAtime {
         #
         # Create job script and submit it
         #
-        jobscript="run_mpassit_$minstr.slurm"
-        jobarrayopt="--array=${jobarraystr}"
+        jobscript="run_mpassit_$minstr.${mach}"
 
         sedfile=$(mktemp -t mpassit_${eventtime}_$minstr.sed_XXXX)
         # shellcheck disable=SC2154
@@ -599,7 +599,13 @@ s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/RUNMPCMD/${job_runmpexe_str}/
 EOF
-        submit_a_jobscript $wrkdir "mpassit$minstr" $sedfile $TEMPDIR/run_mpassit_array.slurm $jobscript $jobarrayopt
+
+        # shellcheck disable=SC2154
+        if [[ "${mach}" == "pbs" ]]; then
+            echo "s/NNODES/${nnodes_post}/;s/NCORES/${ncores_post}/" >> $sedfile
+        fi
+
+        submit_a_jobscript "${wrkdir}" "mpassit$minstr" "${sedfile}" "${TEMPDIR}/run_mpassit_array.${mach}" "${jobscript}" "${jobarraystr}"
     done
 }
 
@@ -610,7 +616,7 @@ function run_mpassit_alltimes {
     # wrkdir    iseconds
     local -r wrkdir=$1
     local -r iseconds=$2
-    local    jobarraystr=$3
+    local -r jobarraystr=$3
 
     cd $wrkdir || return
 
@@ -648,8 +654,7 @@ function run_mpassit_alltimes {
         # Create job script and submit it
         #
         cd $wrkdir || return
-        jobscript="run_mpassit.slurm"
-        jobarrayopt="--array=${jobarraystr}"
+        jobscript="run_mpassit.${mach}"
 
         sedfile=$(mktemp -t mpassit_${eventtime}.sed_XXXX)
         # shellcheck disable=SC2154
@@ -671,7 +676,13 @@ s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/RUNMPCMD/${job_runmpexe_str}/
 EOF
-        submit_a_jobscript $wrkdir "mpassit" $sedfile $TEMPDIR/run_mpassit_array.slurm $jobscript $jobarrayopt
+
+        # shellcheck disable=SC2154
+        if [[ "${mach}" == "pbs" ]]; then
+            echo "s/NNODES/${nnodes_post}/;s/NCORES/${ncores_post}/" >> $sedfile
+        fi
+
+        submit_a_jobscript "$wrkdir" "mpassit" "$sedfile" "$TEMPDIR/run_mpassit_array.${mach}" "$jobscript" "$jobarraystr"
     fi
 }
 
@@ -923,7 +934,7 @@ EOF
         if [[ ${#jobarrays} -gt 0 ]]; then
 
             jobscript="run_upp$minstr.slurm"
-            jobarraystr="--array=$(join_by_comma "${jobarrays[@]}")"
+            jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
 
             sedfile=$(mktemp -t upp_${eventtime}_$minstr.sed_XXXX)
             cat <<EOF > $sedfile
@@ -994,7 +1005,7 @@ function fcst_driver() {
         if [[ $dorun == true && $jobwait -eq 1 ]]; then
             num_resubmit=2               # resubmit failed jobs
         else
-            num_resubmit=-1              # Just check job status
+            num_resubmit=0               # Just check job status
         fi
 
         echo ""
@@ -1102,7 +1113,7 @@ function run_clean {
                 mpas )
                     rm -f error.fcst_* log.????.abort
                     #rm -f log.atmosphere.????.out log.atmosphere.????.err fcst_*_*.log
-                    #echo "clean mpas in $dawrkdir"
+                    #echo "clean mpas in $fcstwrkdir"
                     #clean_mem_runfiles "fcst" $fcstwrkdir $ENS_SIZE
                     done=0
                     for mem in $(seq 1 $ENS_SIZE); do
@@ -1230,12 +1241,12 @@ runcmd="sbatch"
 dorun=true
 rt_run=false            # realtime run?
 
-myhost="$(hostname)"
-if [[ "${myhost}" == ln? ]]; then
+myhostname=$(hostname)
+if [[ "${myhostname}" == ln? ]]; then
     machine="Vecna"
-elif [[ "${myhost}" == hercules* ]]; then
+elif [[ "${myhostname}" == hercules* ]]; then
     machine="Hercules"
-elif [[ "${myhost}" == cheyenne* ]]; then
+elif [[ "${myhostname}" == cheyenne* || "${myhostname}" == derecho* ]]; then
     machine="Cheyenne"
 else
     machine="Jet"
@@ -1261,7 +1272,6 @@ while [[ $# -gt 0 ]]
             usage 0
             ;;
         -n)
-            runcmd="echo $runcmd"
             dorun=false
             ;;
         -v)
@@ -1433,13 +1443,15 @@ elif [[ $machine == "Hercules" ]]; then
     module use ${rootdir}/modules
     module load $modulename
 elif [[ $machine == "Cheyenne" ]]; then
-    if [[ $dorun == true ]]; then
-        runcmd="qsub"
-    fi
+    runcmd="qsub"
     modulename="defaults"
 else    # Vecna at NSSL
     modulename="env.mpas_smiol"
     source ${modulename}
+fi
+
+if [[ $dorun == false ]]; then
+    runcmd="echo $runcmd"
 fi
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@

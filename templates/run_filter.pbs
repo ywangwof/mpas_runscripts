@@ -1,0 +1,46 @@
+#!/bin/bash -l
+#PBS -q PARTION
+#PBS -N JOBNAME
+#PBS -l select=NNODES:CPUSPEC:mpiprocs=NCORES:ompthreads=1
+#PBS -l walltime=00:30:00
+#PBS -j oe
+#PBS -o  WRKDIR/filter.log
+ACCTSTR
+EXCLSTR
+
+
+#set -eux
+
+time1=$(date '+%s')
+echo "Job Started: $(date). Job Id:  $PBS_JOBID"
+echo " "
+
+
+ulimit -s unlimited
+
+cd WRKDIR || exit 1
+
+touch filter.running
+rm -rf error.filter queue.filter
+
+RUNMPCMD -n NOPART EXEDIR/filter
+
+if [[ $? -eq 0 ]]; then
+    touch done.filter
+else
+    touch error.filter
+fi
+
+rm -rf filter.running
+
+time2=$(date '+%s')
+
+let diff=time2-time1
+let hour=diff/3600
+let diff=diff%3600
+let min=diff/60
+let sec=diff%60
+
+echo -n "Job   Ended: $(date). "
+printf 'Job run time:  %02d:%02d:%02d' $hour $min $sec
+echo " "

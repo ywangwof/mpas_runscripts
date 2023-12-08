@@ -1,0 +1,75 @@
+#!/bin/bash -l
+#PBS -q PARTION
+#PBS -N JOBNAME
+#PBS -l select=NNODES:CPUSPEC:mpiprocs=NCORES:ompthreads=1
+#PBS -l walltime=CLAIMTIME
+#PBS -j oe
+#PBS -o WRKDIR/fcst.log
+ACCTSTR
+EXCLSTR
+
+#set -eux
+
+time1=$(date '+%s')
+echo "Job Started: $(date). Job Id:  $PBS_JOBID"
+echo " "
+
+if [[ "MACHINE" == "Cheyenne" || "MACHINE" == "Derecho" ]]; then
+    ncores=NCORES
+else
+    #source ROOTDIR/modules/MODULE_impi
+    ncores=NCORES
+fi
+#nnode=$(( NOPART/ncores ))
+
+nnode=NNODES
+if (( NOPART % nnode == 0 )); then
+    ncores=$(( NOPART/nnode ))
+#else
+#    echo "Number of tasks (NOPART) is not divisible by number of nodes ($nnode) allocated."
+#    echo "Job cannot be run becasue the setting for \"pio_num_iotasks\""
+#    exit 0
+fi
+
+ulimit -s unlimited
+
+mem=${PBS_ARRAY_INDEX}
+memstr=$(printf "%02d" $mem)
+
+cd WRKDIR/fcst_${memstr}
+
+touch fcst.running_$memstr
+rm -rf error.fcst_$memstr queue.fcst_$memstr
+
+# first recover namelist parameters for possibly an old run.
+sed -i -e "/config_pio_num_iotasks/s/[0-9]\+/NNNODE/;/config_pio_stride/s/[0-9]\+/NNCORE/" namelist.atmosphere
+
+sed -i "s/NNNODE/$nnode/;s/NNCORE/$ncores/;" namelist.atmosphere
+
+RUNMPCMD -n NOPART EXEDIR/atmosphere_model.single
+
+if [[ $? -eq 0 ]]; then
+    touch done.fcst_$memstr
+    for fn in SAVETAG; do
+       if [[ -e $fn ]]; then
+          echo "Saving file: $fn to .."
+          mv ${fn} ..
+       fi
+    done
+else
+    touch error.fcst_$memstr
+fi
+
+rm -rf fcst.running_$memstr
+
+time2=$(date '+%s')
+
+let diff=time2-time1
+let hour=diff/3600
+let diff=diff%3600
+let min=diff/60
+let sec=diff%60
+
+echo -n "Job   Ended: $(date). "
+printf 'Job run time:  %02d:%02d:%02d' $hour $min $sec
+echo " "

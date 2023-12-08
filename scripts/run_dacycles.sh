@@ -1,8 +1,9 @@
 #!/bin/bash
+# shellcheck disable=SC1090,SC1091,SC2086
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
-rootdir=$(realpath $(dirname "${scpdir}"))
+rootdir=$(realpath "$(dirname "${scpdir}")")
 
 eventdateDF=$(date +%Y%m%d)
 
@@ -101,8 +102,6 @@ function usage {
     echo "              -k  [0,1,2]         Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
     echo "                                  Default is 0 for ungrib, mpassit, upp and 1 for others"
     echo "              -t  DIR             Template directory for runtime files"
-    echo "              -w                  Hold script to wait for all job conditions are satified and submitted (for mpassit & upp)."
-    echo "                                  By default, the script will exit after submitting all possible jobs."
     echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
     echo "              -d  wofs_mpas       Domain name to be used"
     echo "              -i  YYYYmmddHHMM    Initial time, default: same as start time from the command line argument"
@@ -371,7 +370,10 @@ EOF
     #===================================================================
 
     if [[ ${#obsflists[@]} -gt 0 ]]; then
-        cat "${obsflists[*]}" > obsflist
+        if [[ $verb -eq 1 ]]; then
+            echo "cat ${obsflists[*]} to obsflist"
+        fi
+        cat "${obsflists[@]}" > obsflist
     else
         echo "    No valid observation was found"
         exit 0
@@ -411,7 +413,7 @@ EOF
     if [[ $? -eq 0 && -e obs_seq.${anlys_date}${anlys_time} ]]; then
         echo "    Observation file ${wrkdir}/OBSDIR/obs_seq.${anlys_date}${anlys_time} created"
     else
-        echo "ERROR: srun ${exedir}/dart/obs_sequence_tool"
+        echo "ERROR: ${runcmd_str} ${exedir}/dart/obs_sequence_tool"
     fi
 
 #    # Recover input.nml to the original state
@@ -614,8 +616,8 @@ function run_filter {
    write_all_stages_at_end  = .false.
 
    inf_flavor                  = 2,                       0,
-   inf_initial_from_restart    = $(join_by_comma "${inf_initial[@]}"),
-   inf_sd_initial_from_restart = $(join_by_comma "${inf_initial[@]}"),
+   inf_initial_from_restart    = $(join_by ',' "${inf_initial[@]}"),
+   inf_sd_initial_from_restart = $(join_by ',' "${inf_initial[@]}"),
    inf_deterministic           = .true.,                  .true.,
    inf_initial                 = 1.0,                     1.0
    inf_sd_initial              = 0.6,                     0.0
@@ -1032,7 +1034,6 @@ function run_filter {
   /
 
 &obs_sequence_tool_nml
-   num_input_files   = 1
    filename_seq_list = 'obsflist'
    filename_out      = 'obs_seq.${timestr_cur}'
    first_obs_days    = -1
@@ -1732,7 +1733,7 @@ function run_mpas {
         if [[ $verb -eq 1 ]]; then
             echo "Member: $iens use lbc files from $rundir/lbc:"
             echo "       ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc";
-            echo "       ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc";
+            echo "       ${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc";
         fi
         #ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc ${domname}_${memstr}.lbc.${mpastime_str1}.nc
         lbc0_files+=("$rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc")
@@ -1938,8 +1939,8 @@ EOF
 
     # will use lbc0_files & lbc_myfiles
     if [[ $icycle -gt 0 && $run_updatebc ]]; then
+        echo "$$-${FUNCNAME[0]}: Running run_update_bc ..."
         run_update_bc $wrkdir
-        conditions=("$wrkdir/done.update_bc")
     else             # do not need to run update_bc, just link the files
         for i in "${!lbc_myfiles[@]}"; do
             lbcfn=${lbc0_files[$i]}
@@ -1948,11 +1949,13 @@ EOF
                 echo "    $mylfn exists, deleting ..."
                 rm -rf $mylfn
             fi
+            echo "$$-${FUNCNAME[0]}: Using lbc file: $lbcfn ..."
             ln -sf $lbcfn $mylfn
             #cp $lbcfn $mylfn
         done
-        conditions=()
+        touch "$wrkdir/done.update_bc"
     fi
+    conditions=("$wrkdir/done.update_bc")
 
     #
     # Waiting for update_bc
@@ -1969,10 +1972,6 @@ EOF
             done
         done
     fi
-
-    #mpas_jobscript="run_mpas.${mach}"
-    jobs_str=$(join_by_comma "${jobarrays[@]}")
-    jobarraystr="--array=${jobs_str}"
 
     sedfile=$(mktemp -t mpas_${eventtime}.sed_XXXX)
     # shellcheck disable=SC2154
@@ -1992,11 +1991,15 @@ s/EXCLSTR/${job_exclusive_str}/
 s/RUNMPCMD/${job_runmpexe_str}/
 s/SAVETAG/${domname}_??.restart.${fcsttime_fil}.nc/
 EOF
+    #mpas_jobscript="run_mpas.${mach}"
+    jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
+
+    # shellcheck disable=SC2154
     if [[ "${mach}" == "pbs" ]]; then
-        echo "s/NNODES/${nnodes_filter}/;s/NCORES/${ncores_filter}/" >> $sedfile
+        echo "s/NNODES/${nnodes_fcst}/;s/NCORES/${ncores_fcst}/" >> $sedfile
     fi
 
-    submit_a_jobscript $wrkdir "fcst" $sedfile $TEMPDIR/run_mpas_array.${mach} $mpas_jobscript ${jobarraystr}
+    submit_a_jobscript $wrkdir "fcst" $sedfile $TEMPDIR/run_mpas_array.${mach} "$mpas_jobscript" "${jobarraystr}"
 }
 
 ########################################################################
@@ -2043,9 +2046,9 @@ function da_cycle_driver() {
     date_beg=$(date -d @$start_sec +%Y%m%d%H%M)
     date_end=$(date -d @$end_sec +%Y%m%d%H%M)
     intvl_min=$((intvl_sec/60))
-    n_cycles=$(( (end_sec-start_sec)/intvl_sec ))
+    n_cycles=$(( (end_sec-start_sec)/intvl_sec+1 ))
 
-    echo "Total of ${n_cycles} cycles from $date_beg to $date_end will be run every $intvl_min minutes."
+    echo "Total ${n_cycles} cycles from $date_beg to $date_end will be run every $intvl_min minutes."
 
     local icyc=$(( (start_sec-init_sec)/intvl_sec ))
     for isec in $(seq $start_sec $intvl_sec $end_sec ); do
@@ -2395,12 +2398,16 @@ runcmd="sbatch"
 dorun=true
 
 machine="Jet"
-if [[ "$(hostname)" == ln? ]]; then
+
+myhostname=$(hostname)
+if [[ "${myhostname}" == ln? ]]; then
     machine="Vecna"
-elif [[ "$(hostname)" == hercules* ]]; then
+elif [[ "${myhostname}" == hercules* ]]; then
     machine="Hercules"
-elif [[ "$(hostname)" == cheyenne* ]]; then
+elif [[ "${myhostname}" == cheyenne* || "${myhostname}" == derecho* ]]; then
     machine="Cheyenne"
+else
+    machine="Jet"
 fi
 
 jobs=(filter update_states mpas clean)
@@ -2422,7 +2429,6 @@ while [[ $# -gt 0 ]]; do
             usage 0
             ;;
         -n)
-            runcmd="echo $runcmd"
             dorun=false
             ;;
         -v)
@@ -2453,7 +2459,7 @@ while [[ $# -gt 0 ]]; do
                 machine=Vecna
             elif [[ ${2^^} == "HERCULES" ]]; then
                 machine=Hercules
-            elif [[ ${2^^} == "CHEYENNE" ]]; then
+            elif [[ ${2^^} == "CHEYENNE" || ${2^^} == "DERECHO" ]]; then
                 machine=Cheyenne
             else
                 echo "ERROR: Unsupported machine name, got \"$2\"."
@@ -2588,15 +2594,17 @@ elif [[ $machine == "Hercules" ]]; then
     module use ${rootdir}/modules
     module load ${modulename}
 elif [[ $machine == "Cheyenne" ]]; then
-    if [[ $dorun == true ]]; then
-        runcmd="qsub"
-    fi
+    runcmd="qsub"
 
     modulename="defaults"
 else    # Vecna at NSSL
     modulename="env.mpas_smiol"
     source /usr/share/Modules/init/bash
     source ${rootdir}/modules/${modulename}
+fi
+
+if [[ $dorun == false ]]; then
+    runcmd="echo $runcmd"
 fi
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@

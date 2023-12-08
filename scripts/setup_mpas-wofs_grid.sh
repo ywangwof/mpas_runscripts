@@ -1,9 +1,9 @@
 #!/bin/bash
-# shellcheck disable=SC2317
+# shellcheck disable=SC2317,SC1090,SC1091,SC2086
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
-rootdir=$(realpath $(dirname $scpdir))
+rootdir=$(realpath "$(dirname "$scpdir")")
 
 eventdateDF=$(date +%Y%m%d)
 
@@ -108,7 +108,7 @@ function usage {
     echo " "
     echo "                                     -- By Y. Wang (2023.05.24)"
     echo " "
-    exit $1
+    exit "$1"
 }
 
 ########################################################################
@@ -116,7 +116,7 @@ function usage {
 # Extract WRF domain attributes
 #
 function ncattget {
-  ${nckspath} -x -M $1 | grep -E "(corner_lats|corner_lons|CEN_LAT|CEN_LON)"
+  ${nckspath} -x -M "$1" | grep -E "(corner_lats|corner_lons|CEN_LAT|CEN_LON)"
 }
 
 ########################################################################
@@ -124,8 +124,8 @@ function ncattget {
 function run_geogrid {
 
     wrkdir=$1
-    mkwrkdir $wrkdir $overwrite
-    cd $wrkdir || return
+    mkwrkdir "$wrkdir" "$overwrite"
+    cd "$wrkdir" || return
 
     if [[ -f done.geogrid ]]; then
         echo "Found file \"done.geogrid\", skipping run_geogrid ...."
@@ -900,7 +900,7 @@ function run_clean {
     for dirname in "$@"; do
         case $dirname in
         geogrid )
-            cd $rundir/geo_mpas || return
+            cd "$rundir/geo_mpas" || return
 
             donegeo="$rundir/geo_mpas/done.geogrid"
             if [[ -f $donegeo ]]; then
@@ -910,7 +910,7 @@ function run_clean {
             ;;
         createWOFS )
             if [[ -d $rundir/$domname ]]; then
-                cd $rundir/$domname || return
+                cd "$rundir/$domname" || return
 
                 donecreate="$rundir/$domname/done.create"
                 if [[ -e $donecreate ]]; then
@@ -920,7 +920,7 @@ function run_clean {
             ;;
         static )
             if [[ -d $rundir/$domname ]]; then
-                cd $rundir/$domname || return
+                cd "$rundir/$domname" || return
 
                 donestatic="$rundir/$domname/done.static"
                 if [[ -e $donestatic ]]; then
@@ -1029,31 +1029,31 @@ function write_runtimeconfig {
 
         # ICs
         ncores_ics=32
-        partition_ics="regular"
+        partition_ics="main"
         claim_cpu_ics="ncpus=${ncores_ics}"
         claim_cpu_ungrib=""
 
         # LBCs
         ncores_lbc=32
-        partition_lbc="regular"
+        partition_lbc="main"
         claim_cpu_lbc="ncpus=${ncores_lbc}"
 
         # DA cycles
         ncores_filter=32; ncores_dafcst=32
-        partition_dafcst="regular" ; claim_cpu_dafcst="ncpus=${ncores_dafcst}"
-        partition_filter="regular" ; claim_cpu_filter="ncpus=${ncores_filter}"
+        partition_dafcst="main" ; claim_cpu_dafcst="ncpus=${ncores_dafcst}"
+        partition_filter="main" ; claim_cpu_filter="ncpus=${ncores_filter}"
         claim_cpu_update="ncpus=${ncores_filter}"
 
-        npefilter=48    ; nnodes_filter=$((  npefilter/ncores_filter   ))
-        npedafcst=48   ; nnodes_dafcst=$(( npefcst/ncores_dafcst ))
+        npefilter=96     ; nnodes_filter=$(( npefilter/ncores_filter   ))
+        npedafcst=32     ; nnodes_dafcst=$(( npefcst/ncores_dafcst ))
 
         # FCST cycles
         ncores_post=32; ncores_fcst=32
-        partition_fcst="regular"   ; claim_cpu_fcst="ncpus=${ncores_fcst}"
-        partition_post="regular"   ; claim_cpu_post="ncpus=${ncores_post}"
+        partition_fcst="main"   ; claim_cpu_fcst="ncpus=${ncores_fcst}"
+        partition_post="main"   ; claim_cpu_post="ncpus=${ncores_post}"
 
-        npepost=48     ; nnodes_post=$(( npepost/ncores_post   ))
-        npefcst=48     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
+        npepost=32     ; nnodes_post=$(( npepost/ncores_post   ))
+        npefcst=96     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
         ;;
 
     * )    # Vecna at NSSL
@@ -1073,7 +1073,7 @@ function write_runtimeconfig {
         # DA cycles
         ncores_filter=96; ncores_dafcst=96
 
-        npefilter=768            ; nnodes_filter=$(( npefilter/ncores_filter  ))
+        npefilter=768           ; nnodes_filter=$(( npefilter/ncores_filter  ))
         npedafcst=96            ; nnodes_dafcst=$(( npefcst/ncores_dafcst ))
 
         partition_dafcst="batch"  ; claim_cpu_dafcst="--ntasks-per-node=96 --mem-per-cpu=4G";
@@ -1124,6 +1124,7 @@ function write_runtimeconfig {
     job_account_str="${job_account_str}"
     job_runmpexe_str="${job_runmpexe_str}"
     job_runexe_str="${job_runexe_str}"
+    runcmd_str="${runcmd_str}"
 
 [init]
     ICSIOTYPE="pnetcdf,cdf5"
@@ -1229,12 +1230,15 @@ verb=0
 overwrite=0
 machine="Jet"
 
-if [[ "$(hostname)" == ln? ]]; then
+myhostname=$(hostname)
+if [[ "${myhostname}" == ln? ]]; then
     machine="Vecna"
-elif [[ "$(hostname)" == hercules* ]]; then
+elif [[ "${myhostname}" == hercules* ]]; then
     machine="Hercules"
-elif [[ "$(hostname)" == cheyenne* ]]; then
+elif [[ "${myhostname}" == cheyenne* || "${myhostname}" == derecho* ]]; then
     machine="Cheyenne"
+else
+    machine="Jet"
 fi
 
 #-----------------------------------------------------------------------
@@ -1366,13 +1370,14 @@ if [[ $machine == "Jet" ]]; then
     job_account_str="#SBATCH -A ${hpcaccount-wof}"
     job_runmpexe_str="srun"
     job_runexe_str="srun"
+    runcmd_str=""
 
     modulename="build_jet_intel18_1.11"
     WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
 
     source /etc/profile.d/modules.sh
     module purge
-    module use ${rootdir}/modules
+    module use "${rootdir}/modules"
     module load $modulename
     #module load nco
     module load wgrib2/2.0.8
@@ -1401,7 +1406,7 @@ elif [[ $machine == "Hercules" ]]; then
     WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
 
     module purge
-    module use ${rootdir}/modules
+    module use "${rootdir}/modules"
     module load $modulename
 
     wgrib2path="/work2/noaa/wof/ywang/tools/hpc-stack/intel-oneapi-compilers-2022.2.1/wgrib2/2.0.8/bin/wgrib2"
@@ -1418,19 +1423,20 @@ elif [[ $machine == "Cheyenne" ]]; then
         runcmd="qsub"
     fi
     ncores_static=32
-    partition_wps="regular"
-    partition_static="regular" ; claim_cpu_static="ncpus=${ncores_static}"
-    partition_create="regular" ; claim_cpu_create="ncpus=${ncores_static}"
+    partition_wps="main"
+    partition_static="main" ; claim_cpu_static="ncpus=${ncores_static}"
+    partition_create="main" ; claim_cpu_create="ncpus=${ncores_static}"
 
     npestatic=72
 
     mach="pbs"
     job_exclusive_str=""
     job_account_str="#PBS -A ${hpcaccount-NMMM0013}"
-    job_runmpexe_str="mpiexec_mpt"
-    job_runexe_str="mpiexec_mpt"
+    job_runmpexe_str="mpiexec"
+    job_runexe_str="mpiexec"
+    runcmd_str=""
 
-    OBS_DIR="/scratch/ywang/MPAS/mpas_scripts/run_dirs/OBSGEN"
+    OBS_DIR="/glade/work/ywang/observations"
 
     modulename="defaults"
     WPSGEOG_PATH="/glade/work/ywang/WPS_GEOG/"
@@ -1449,6 +1455,7 @@ else    # Vecna at NSSL
     job_account_str=""
     job_runmpexe_str="srun"
     job_runexe_str="srun"
+    runcmd_str="srun -n 1"
 
     modulename="env.mpas_smiol"
     #source ${rootdir}/modules/${modulename}
@@ -1464,7 +1471,7 @@ else    # Vecna at NSSL
     hrrr_dir="/scratch/wofuser/MODEL_DATA/HRRRE"
 fi
 
-source $scpdir/Common_Utilfuncs.sh
+source "${scpdir}/Common_Utilfuncs.sh" || exit $?
 
 #
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1485,7 +1492,7 @@ starttime_str=$(date -d "${eventdate} ${eventtime}" +%Y-%m-%d_%H:%M:%S)
 rundir="$WORKDIR/${eventdate}"
 
 if [[ ! -d $rundir ]]; then
-    mkdir -p $rundir
+    mkdir -p "$rundir"
 fi
 
 jobname="${eventdate:4:4}"
@@ -1495,7 +1502,7 @@ exedir="$rootdir/exec"
 # write runtime configuration file
 #
 caseconfig="$WORKDIR/config.${eventdate}"
-write_runtimeconfig $caseconfig
+write_runtimeconfig "$caseconfig"
 
 if [[ " ${jobs[*]} " == " setup " ]]; then exit 0; fi
 #
@@ -1535,7 +1542,7 @@ for job in "${jobs[@]}"; do
         echo "run_$job ${jobargs[$job]}"
     fi
 
-    run_$job ${jobargs[$job]}
+    "run_$job" "${jobargs[$job]}"
 done
 
 echo " "

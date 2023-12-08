@@ -1,9 +1,9 @@
 #!/bin/bash
-# shellcheck disable=SC2317
+# shellcheck disable=SC2317,SC1090,SC1091,SC2086
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
-rootdir=$(realpath $(dirname "${scpdir}"))
+rootdir=$(realpath "$(dirname "${scpdir}")")
 
 eventdateDF=$(date +%Y%m%d)
 
@@ -164,8 +164,7 @@ EOF
 
     if [[ ${#jobarrays[@]} -gt 0 ]]; then
         jobscript="run_ungrib.slurm"
-        array_str=$(join_by_comma "${jobarrays[@]}")
-        jobarraystr="--array=${array_str}"
+        jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
         sedfile=$(mktemp -t ungrib_${jobname}.sed_XXXX)
         # shellcheck disable=SC2154
@@ -376,8 +375,7 @@ EOF
     #
     if [[ ${#jobarrays[@]} -gt 0 ]]; then
         jobscript="run_lbc.${mach}"
-        array_str=$(join_by_comma "${jobarrays[@]}")
-        jobarraystr="--array=${array_str}"
+        jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
         sedfile=$(mktemp -t lbc_${jobname}.sed_XXXX)
 
@@ -421,14 +419,19 @@ function run_clean {
     for dirname in "$@"; do
         case $dirname in
         ungrib )
-            cd $rundir/lbc/ungrib || return
-            #jobname=$1 mywrkdir=$2 nummem=$3
-            clean_mem_runfiles "ungrib" $rundir/lbc/ungrib $nenslbc
+            if "${cleanall}"; then
+                cd "$rundir/lbc" || return
+                rm -rf ungrib
+            else
+                cd "$rundir/lbc/ungrib" || return
+                #jobname=$1 mywrkdir=$2 nummem=$3
+                clean_mem_runfiles "ungrib" "$rundir/lbc/ungrib" "$nenslbc"
+            fi
             ;;
         lbc )
-            cd $rundir/lbc || return
+            cd "$rundir/lbc" || return
             #jobname=$1 mywrkdir=$2 nummem=$3
-            clean_mem_runfiles "lbc" $rundir/lbc $nenslbc
+            clean_mem_runfiles "lbc" "$rundir/lbc" "$nenslbc"
             ;;
         esac
     done
@@ -465,13 +468,20 @@ dorun=true
 verb=0
 overwrite=0
 jobwait=0
+
+cleanall=false
+
 machine="Jet"
-if [[ "$(hostname)" == ln? ]]; then
+
+myhostname=$(hostname)
+if [[ "${myhostname}" == ln? ]]; then
     machine="Vecna"
-elif [[ "$(hostname)" == hercules* ]]; then
+elif [[ "${myhostname}" == hercules* ]]; then
     machine="Hercules"
-elif [[ "$(hostname)" == cheyenne* ]]; then
+elif [[ "${myhostname}" == cheyenne* || "${myhostname}" == derecho* ]]; then
     machine="Cheyenne"
+else
+    machine="Jet"
 fi
 
 #-----------------------------------------------------------------------
@@ -495,6 +505,9 @@ while [[ $# -gt 0 ]]
             ;;
         -v)
             verb=1
+            ;;
+        -a)
+            cleanall=true
             ;;
         -k)
             if [[ $2 =~ [012] ]]; then
@@ -626,7 +639,7 @@ elif [[ $machine == "Cheyenne" ]]; then
     modulename="defaults"
 else    # Vecna at NSSL
     modulename="env.mpas_smiol"
-    source ${modulename}
+    source "${modulename}"
 fi
 
 source $scpdir/Common_Utilfuncs.sh || exit $?

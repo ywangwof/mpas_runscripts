@@ -1,11 +1,14 @@
 #!/bin/bash
+# shellcheck disable=SC2317,SC1090,SC1091,SC2086
 
 # Export Functions:
 #
-# o mkwrkdir submit_a_jobscript
+# o mkwrkdir
+# o submit_a_jobscript
 # o check_and_resubmit
-# o join_by_comma
-# o link_grib
+# o get_jobarray_str         # Retrieve job array option string based on job scheduler
+# o join_by                  # Join array into a string by a separator
+# o link_grib                # Link grib files for ungrib.exe
 # o clean_mem_runfiles
 #
 
@@ -88,8 +91,9 @@ function submit_a_jobscript {
     sed -f $sedscript $myjobtemp > $myjobscript
     # shellcheck disable=SC2154
     if [[ ${verb} -eq 1 ]]; then
-        echo "$$-${FUNCNAME[0]}: Generated job file \"$myjobscript\" from "
-        echo "                  \"$myjobtemp\" with sed file \"$sedscript\""
+        echo "$$-${FUNCNAME[0]}: Generated job script: \"$myjobscript\" "
+        echo "                   from template: \"$myjobtemp\" "
+        echo "                   with sed file: \"$sedscript\"  "
     else
         rm -f $sedscript
     fi
@@ -97,7 +101,7 @@ function submit_a_jobscript {
     # shellcheck disable=SC2154
     if [[ $dorun == true ]]; then echo -n "Submitting $myjobscript .... "; fi
     # shellcheck disable=SC2154
-    $runcmd $myjoboption $myjobscript
+    $runcmd ${myjoboption} "$myjobscript"
     if [[ $dorun == true && $? -eq 0 ]]; then touch $mywrkdir/queue.$myjobname; fi
     echo " "
 }
@@ -110,8 +114,8 @@ function check_and_resubmit {
     local donenum=$3                    # total number of jobs
     local myjobscript=${4-}             # empty no resubmissions
     local numtries=${5-0}               # number of resubmissions
-                                        # >= 0 check and wait for job done or failed to exit the whole program
-                                        # <  0 check number of done files only
+                                        # > 0 Wait for job done or resubmit failed jobs before exiting
+                                        # = 0 check number of done jobs only
 
     read -r -a jobnames <<< "$1"
     local jobname=${jobnames[0]}
@@ -129,60 +133,70 @@ function check_and_resubmit {
 
     cd $mywrkdir  || return
 
+    if [[ -e $mywrkdir/done.${jobname} ]]; then    # do nothing
+        done=$donenum
+        return
+    fi
+
     checkonly=false
-    if [[ $numtries -lt 0 ]]; then
-        numtries=0
+    if [[ $numtries -eq 0 ]]; then
+        numtries=1
         checkonly=true
     fi
 
-    numtry=0; done=0; running=0
+    # check each member's status
+    while IFS='' read -r line; do runjobs+=("$line"); done < <(seq 1 $donenum)
 
-    if [[ -e $mywrkdir/done.${jobname} ]]; then    # do nothing
-        done=$donenum
-    else                                           # check each member's status
-        runjobs=$(seq 1 $donenum)
-        #echo ${runjobs[@]}
-        while [[ $done -lt $donenum && $numtry -le $numtries ]]; do
-            jobarrays=()
-            for mem in ${runjobs}; do
-                memstr=$(printf "%02d" $mem)
-                memdir="$mywrkdir/${memname}$memstr"
-                donefile="$memdir/done.${jobname}_$memstr"
-                errorfile="$memdir/error.${jobname}_$memstr"
+    numtry=0
+    done=0; error=0; running=0
+    while [[ $numtry -lt $numtries ]]; do
+        jobarrays=()
+        for mem in "${runjobs[@]}"; do
+            memstr=$(printf "%02d" $mem)
+            memdir="$mywrkdir/${memname}$memstr"
+            donefile="$memdir/done.${jobname}_$memstr"
+            errorfile="$memdir/error.${jobname}_$memstr"
 
-                if [[ $verb -eq 1 ]]; then echo "$$-${FUNCNAME[0]}: Checking $donefile"; fi
-                while [[ ! -e $donefile ]]; do
-                    if [[ -e $errorfile ]]; then
-                        jobarrays+=("$mem")
-                        (( done-=-1 ))
-                        break
-                    elif $checkonly; then
-                        (( running+=1 ))
-                        continue 2
-                    fi
+            if [[ $verb -eq 1 ]]; then echo "$$-${FUNCNAME[0]}: Checking $donefile"; fi
+            while [[ ! -e $donefile ]]; do
+                if [[ -e $errorfile ]]; then
+                    jobarrays+=("$mem")
+                    (( error+=1 ))
+                    break
+                elif $checkonly; then
+                    (( running+=1 ))
+                    break
+                fi
 
-                    #if [[ $verb -eq 1 ]]; then
-                    #    echo "Waiting for $donefile"
-                    #fi
-                    sleep 10
-                done
-                #if [[ $verb -eq 1 ]]; then echo $donefile; fi
-                (( done+=1 ))
+                #if [[ $verb -eq 1 ]]; then echo "Waiting for $donefile"; fi
+                sleep 10
             done
-
-            if [[ $done -eq $donenum ]]; then
-                touch $mywrkdir/done.${jobname}
-                rm -f $mywrkdir/queue.${jobname}
-                break
-            elif [[ $myjobscript && ${#jobarrays[@]} -gt 0 && $numtry -lt $numtries ]]; then
-                runjobs=( "${jobarrays[@]} ")
-                echo "Try these failed jobs again: ${runjobs[*]}"
-                jobs_str=$(join_by_comma "${runjobs[@]}")
-                $runcmd "--array=${jobs_str}" $myjobscript
-            fi
-            (( numtry+=1 ))
+            if [[ -e $donefile ]]; then (( done+=1 )); fi
         done
-    fi
+
+        if $checkonly; then break; fi
+
+        (( numtry+=1 ))
+
+        if [[ $done -eq $donenum ]]; then
+            touch $mywrkdir/done.${jobname}
+            rm -f $mywrkdir/queue.${jobname}
+            break                                  # No further check needed
+        elif $checkonly; then
+            break                                  # Stop further try
+        elif [[ ${#jobarrays[@]} -gt 0 ]]; then    # failed jobs found
+            if [[ $myjobscript == *.slurm ]]; then
+                runjobs=( "${jobarrays[@]}" )
+                echo "$$-${FUNCNAME[0]}: ${numtry}/${numtries} - Try these failed jobs again: ${runjobs[*]}"
+                jobs_str=$(get_jobarray_str 'slurm' "${runjobs[@]}")
+                $runcmd ${jobs_str} $myjobscript
+                error=0                            # Perform another try
+            else
+                break                              # Stop further try for PBS jobs scheduler
+            fi
+        fi
+
+    done
 
     #
     # Output a message and then return or exit
@@ -208,9 +222,22 @@ function check_and_resubmit {
 
 ########################################################################
 
-function join_by_comma {
-    local IFS=","
-    echo "$*"
+function get_jobarray_str {
+    local jobschdler=$1
+    local subjobs=("${@:2}")
+    if [[ "${jobschdler,,}" == "slurm" ]]; then  # SLURM
+        local IFS=","
+        echo "--array=${subjobs[*]}"
+    else                                         # PBS
+        local minno=${subjobs[0]}
+        local maxno=${subjobs[-1]}
+
+        for i in "${subjobs[@]}"; do
+            (( i > maxno )) && maxno=$i
+            (( i < minno )) && minno=$i
+        done
+        echo "-J ${minno}-${maxno}:1"
+    fi
 }
 
 ########################################################################
