@@ -1155,7 +1155,7 @@ function write_runtimeconfig {
 
 [dacycles]
     ENS_SIZE=36
-    time_step=25
+    time_step=20
     intvl_sec=900
     ADAPTIVE_INF=true
     update_in_place=false               # update MPAS states in-place or
@@ -1181,7 +1181,7 @@ function write_runtimeconfig {
 
 [fcst]
     ENS_SIZE=18
-    time_step=25
+    time_step=20
     fcst_launch_intvl=3600
     fcst_length_seconds=(21600 10800)   # 6 hours at :00 and 3 hours at :30
     OUTINVL=300

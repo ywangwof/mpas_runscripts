@@ -2168,8 +2168,14 @@ function run_obs_diag {
     #------------------------------------------------------
     # Prepare obs_diag
     #------------------------------------------------------
-    obs_final_files1=$(find $dawrkdir/[12]??? -name obs_seq.final | sort)
-    obs_final_files2=$(find $dawrkdir/0???    -name obs_seq.final | sort)
+    #obs_final_files1=$(find $dawrkdir/[12]??? -name obs_seq.final | sort)
+    #obs_final_files2=$(find $dawrkdir/0???    -name obs_seq.final | sort)
+    while IFS='' read -r line; do
+        obs_final_files1+=("$line");
+    done < <(find $dawrkdir/[12]??? -name obs_seq.final | sort)
+    while IFS='' read -r line; do
+        obs_final_files1+=("$line");
+    done < <(find $dawrkdir/0???    -name obs_seq.final | sort)
     obs_final_files=("${obs_final_files1[@]}" "${obs_final_files2[@]}")
 
     printf "%s\n" "${obs_final_files[@]}" > obs_seq.final.list
@@ -2267,8 +2273,15 @@ function run_obs_final2nc {
     #------------------------------------------------------
     # Prepare obs_diag
     #------------------------------------------------------
-    obs_final_files1=$(find $dawrkdir/[12]??? -name obs_seq.final | sort)
-    obs_final_files2=$(find $dawrkdir/0??? -name obs_seq.final | sort)
+    #obs_final_files1=$(find $dawrkdir/[12]??? -name obs_seq.final | sort)
+    #obs_final_files2=$(find $dawrkdir/0??? -name obs_seq.final | sort)
+    #obs_final_files=("${obs_final_files1[@]}" "${obs_final_files2[@]}")
+    while IFS='' read -r line; do
+        obs_final_files1+=("$line");
+    done < <(find $dawrkdir/[12]??? -name obs_seq.final | sort)
+    while IFS='' read -r line; do
+        obs_final_files1+=("$line");
+    done < <(find $dawrkdir/0???    -name obs_seq.final | sort)
     obs_final_files=("${obs_final_files1[@]}" "${obs_final_files2[@]}")
 
     #

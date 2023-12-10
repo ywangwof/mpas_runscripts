@@ -1,8 +1,9 @@
 #!/bin/bash
+# shellcheck disable=SC1090,SC1091,SC2086
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
-rootdir=$(realpath $(dirname "${scpdir}"))
+rootdir=$(realpath "$(dirname "${scpdir}")")
 
 eventdateDF=$(date +%Y%m%d)
 
@@ -507,47 +508,100 @@ function run_mpassit {
     mkwrkdir $wrkdir 0
     cd $wrkdir || return
 
-    if [[ "${mpscheme}" == "Thompson" ]]; then
-        fileappend="THOM"
-    else
-        fileappend="NSSL"
+    #
+    # Check MPASSIT status
+    #
+    if [[ -f done.mpassit ]]; then
+        echo "$$-${FUNCNAME[0]}: MPASSIT done for all forecast minutes"
+        return
     fi
 
-    jobarrays=()
-    for mem in $(seq 1 $ENS_SIZE); do
-        memstr=$(printf "%02d" $mem)
-        memdir=$wrkdir/mem$memstr
-        mkwrkdir $memdir 0
-        cd $memdir || return
+    if [[ -f running.mpassit || -f queue.mpassit ]]; then
+        echo "$$-${FUNCNAME[0]}: MPASSIT is running/queued for all forecast minutes"
+        return
+    fi
 
-        rm -f core.*           # Maybe core-dumped, resubmission will solves the problem if the machine is unstable.
+    if [[ -f error.mpassit ]]; then
+        echo "$$-${FUNCNAME[0]}: MPASSIT failed for all forecast minutes "
+        return
+    fi
 
-        # Linking working file for this member
-        parmfiles=(diaglist histlist_2d histlist_3d histlist_soil)
-        for fn in "${parmfiles[@]}"; do
-            if [[ ! -e $fn ]]; then
-                #if [[ $verb -eq 1 ]]; then echo "Linking $fn ..."; fi
-                if [[ -e $FIXDIR/MPASSIT/${fn}.${fileappend} ]]; then
-                    ln -sf $FIXDIR/MPASSIT/${fn}.${fileappend} $fn
-                elif [[ -e $FIXDIR/MPASSIT/${fn} ]]; then
-                    ln -sf $FIXDIR/MPASSIT/$fn .
-                else
-                    echo "ERROR: file \"$FIXDIR/MPASSIT/${fn}\" not exist."
-                    return
-                fi
-            fi
-        done
-        jobarrays+=("$mem")
+    n=0; fcst_minutes=()
+    for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
+        minstr=$(printf "%03d" $((i/60)))
+
+        if [[ -f done.mpassit$minstr ]]; then
+            echo "$$-${FUNCNAME[0]}: MPASSIT done for forecast at ${minstr}"
+            (( n+=1 ))
+            continue
+        fi
+
+        if [[ -f running.mpassit$minstr || -f queue.mpassit$minstr ]]; then
+            echo "$$-${FUNCNAME[0]}: MPASSIT is running/queued for forecast at ${minstr}"
+            continue
+        fi
+
+        if [[ -f error.mpassit$minstr ]]; then
+            echo "$$-${FUNCNAME[0]}: MPASSIT failed for forecast at ${minstr}"
+            continue
+        fi
+
+        fcst_minutes+=("${minstr}")
     done
 
-    jobarrays_str=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
+    n_fcst=$((fcst_seconds/OUTINVL))
+    if [[ $n -eq $n_fcst ]]; then
+        touch done.mpassit
+        rm -rf done.mpassit???
+        echo "$$-${FUNCNAME[0]}: MPASSIT done for all forecast minutes"
+    fi
 
-    cd $wrkdir || return
+    #
+    # Prepare MPASSIT working files
+    #
+    if [[ ${#fcst_minutes[@]} -gt 0 ]]; then
+        if [[ "${mpscheme}" == "Thompson" ]]; then
+            fileappend="THOM"
+        else
+            fileappend="NSSL"
+        fi
 
-    if [[ $rt_run == true ]]; then
-        run_mpassit_oneAtime "${wrkdir}" "${iseconds}" "${jobarrays_str}"
-    else
-        run_mpassit_alltimes "${wrkdir}" "${iseconds}" "${jobarrays_str}"
+        jobarrays=()
+        for mem in $(seq 1 $ENS_SIZE); do
+            memstr=$(printf "%02d" $mem)
+            memdir=$wrkdir/mem$memstr
+            mkwrkdir $memdir 0
+            cd $memdir || return
+
+            rm -f core.*           # Maybe core-dumped, resubmission will solves the problem if the machine is unstable.
+
+            # Linking working file for this member
+            parmfiles=(diaglist histlist_2d histlist_3d histlist_soil)
+            for fn in "${parmfiles[@]}"; do
+                if [[ ! -e $fn ]]; then
+                    #if [[ $verb -eq 1 ]]; then echo "Linking $fn ..."; fi
+                    if [[ -e $FIXDIR/MPASSIT/${fn}.${fileappend} ]]; then
+                        ln -sf $FIXDIR/MPASSIT/${fn}.${fileappend} $fn
+                    elif [[ -e $FIXDIR/MPASSIT/${fn} ]]; then
+                        ln -sf $FIXDIR/MPASSIT/$fn .
+                    else
+                        echo "ERROR: file \"$FIXDIR/MPASSIT/${fn}\" not exist."
+                        return
+                    fi
+                fi
+            done
+            jobarrays+=("$mem")
+        done
+
+        jobarrays_str=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
+
+        cd $wrkdir || return
+
+        if [[ $rt_run == true ]]; then
+            run_mpassit_oneAtime "${wrkdir}" "${iseconds}" "${fcst_minutes[*]}" "${jobarrays_str}"
+        else
+            run_mpassit_alltimes "${wrkdir}" "${iseconds}" "${fcst_minutes[*]}" "${jobarrays_str}"
+        fi
     fi
 }
 
@@ -558,24 +612,22 @@ function run_mpassit_oneAtime {
     # wrkdir    iseconds
     local -r wrkdir=$1
     local -r iseconds=$2
-    local -r jobarraystr=$3
+    local fcsttimes
+    local -r jobarraystr=$4
+
+    IFS=" " read -r -a fcsttimes <<< "$3"
 
     cd $wrkdir || return
 
-    if [[ -f done.mpassit || -f running.mpassit || -f queue.mpassit || -f error.mpassit ]]; then
-        return               # already done, is running or is in queue, skip this hour
-    fi
+    # Loop over forecast minutes
+    for minstr in "${fcsttimes[@]}"; do
 
-    # Loop over forecast outputs
-    #missing=0
-    for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
-        minstr=$(printf "%03d" $((i/60)))
-
-        if [[ -f done.mpassit$minstr || -f running.mpassit$minstr || -f queue.mpassit$minstr || -f error.mpassit$minstr ]]; then
-            continue               # already done, is running or is in queue, skip this hour
-        fi
-
+        (( i=10#${minstr}*60 ))
         mpassit_wait_create_nml_onetime $wrkdir ${iseconds} $i
+        local estatus=$?               # number of missing members
+        if [[ ${estatus} -gt 0 ]]; then
+            continue
+        fi
 
         #
         # Create job script and submit it
@@ -619,39 +671,32 @@ function run_mpassit_alltimes {
     # wrkdir    iseconds
     local -r wrkdir=$1
     local -r iseconds=$2
-    local -r jobarraystr=$3
+    local fcsttimes
+    local -r jobarraystr=$4
+
+    IFS=" " read -r -a fcsttimes <<< "$3"
 
     cd $wrkdir || return
 
-    if [[ -f done.mpassit || -f running.mpassit || -f queue.mpassit || -f error.mpassit ]]; then
-        return               # already done, is running or is in queue, skip this hour
-    fi
+    # Loop over forecast minutes
+    local missed=false
+    local minsec=${fcst_seconds}
+    local maxsec=0
 
-    # Loop over forecast outputs
-    fcsttimes=()
-    n=0
-    for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
-        minstr=$(printf "%03d" $((i/60)))
-
-        if [[ -f done.mpassit$minstr ]]; then
-            (( n+=1 ))
-            continue               # already done, skip this hour
-        fi
-
-        if [[ -f running.mpassit$minstr || -f queue.mpassit$minstr || -f error.mpassit$minstr ]]; then
-            continue               # is running or is in queue, skip this hour
-        fi
+    for minstr in "${fcsttimes[@]}"; do
+        (( i=10#${minstr}*60 ))
+        (( i > maxsec )) && maxsec=$i
+        (( i < minsec )) && minsec=$i
 
         mpassit_wait_create_nml_onetime $wrkdir ${iseconds} $i
-        fcsttimes+=("$i")
+        local estatus=$?               # number of missing members
+        if [[ ${estatus} -gt 0 ]]; then
+            missed=true
+            continue
+        fi
     done
 
-    n_fcst=$((fcst_seconds/OUTINVL))
-    if [[ $n -eq $n_fcst ]]; then
-        touch done.mpassit
-    fi
-
-    if [[ ${#fcsttimes[@]} -gt 0 ]]; then
+    if [[ ${#fcsttimes[@]} -gt 0 && ! ${missed} ]]; then
 
         #
         # Create job script and submit it
@@ -668,8 +713,8 @@ s/JOBNAME/mpassit_${eventtime}/
 s/CPUSPEC/${claim_cpu_post}/
 s/CLAIMTIME/${claim_time_mpassit_alltimes}/
 s/HHMINSTR//g
-s/FCST_START/${fcsttimes[0]}/
-s/FCST_END/${fcsttimes[-1]}/
+s/FCST_START/${minsec}/
+s/FCST_END/${maxsec}/
 s/FCST_INTVL/${OUTINVL}/
 s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
@@ -712,6 +757,7 @@ function mpassit_wait_create_nml_onetime {
 
     outdone=false
     jobarrays=()
+    missing=0
     for mem in $(seq 1 $ENS_SIZE); do
         memstr=$(printf "%02d" $mem)
         memdir=$wrkdir/mem$memstr
@@ -732,10 +778,10 @@ function mpassit_wait_create_nml_onetime {
                     outdone=true
                 fi
                 while [[ ! -f $fn ]]; do
-                    #if [[ $jobwait -eq 0 ]]; then    # do not wait for it
-                    #    (( missing+=1 ))
-                    #    continue 3                   # go ahead to process next hour
-                    #fi
+                    if [[ $jobwait -eq 0 ]]; then    # do not wait for it
+                        (( missing+=1 ))
+                        continue 3                   # go ahead to process next hour
+                    fi
 
                     if [[ $verb -eq 1 ]]; then
                         echo "Waiting for $fn ..."
@@ -767,6 +813,8 @@ EOF
     done
 
     cd $wrkdir || return
+
+    return ${missing}
 }
 
 ########################################################################
@@ -1043,10 +1091,10 @@ function fcst_driver() {
                     for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
                         minstr=$(printf "%03d" $((i/60)))
                         #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                        check_and_resubmit "mpassit$minstr mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit_$minstr.slurm ${num_resubmit}
+                        check_and_resubmit "mpassit$minstr mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit_$minstr.${mach} ${num_resubmit}
                     done
                 else
-                    check_and_resubmit "mpassit mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit.slurm ${num_resubmit}
+                    check_and_resubmit "mpassit mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit.${mach} ${num_resubmit}
                 fi
             fi
         fi
@@ -1468,7 +1516,7 @@ fi
 #% ENTRY
 
 echo "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
-echo "     Event date : $eventdate ${eventtime}:00"
+echo "     Event date : $eventdate ${eventtime} UTC"
 echo "     Root    dir: $rootdir"
 echo "     Working dir: $WORKDIR"
 echo "     Domain name: $domname;  MP scheme: ${mpscheme}"

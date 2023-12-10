@@ -7,7 +7,10 @@
 # o submit_a_jobscript
 # o check_and_resubmit
 # o get_jobarray_str         # Retrieve job array option string based on job scheduler
+# o group_jobs_for_pbs       # Group job numbers for PBS job array option "-J X-Y[:Z]%num"
 # o join_by                  # Join array into a string by a separator
+# o readconf                 # Read config file, written from "setup_mpas-wofs_grid.sh"
+# o upnlevels                # get n level parent directory path
 # o link_grib                # Link grib files for ungrib.exe
 # o clean_mem_runfiles
 #
@@ -18,9 +21,9 @@ function mkwrkdir {
     # make a directory
     # the second argument is the creating mode
     # 0: Keep existing directory as is
-    # 1: Remove existing same name directory
+    # 1: Remove existing directory
     # 2: Back up existing same name directory with appendix ".bakX"
-    #    X starts from 0, the less the number, the backup directory is the newer one.
+    #    X starts from 0, the less the number, the backup directory is newer.
     #
     if [[ $# -ne 2 ]]; then
         echo "ERROR: argument in mkwrkdir, get \"$*\"."
@@ -192,7 +195,16 @@ function check_and_resubmit {
                 $runcmd ${jobs_str} $myjobscript
                 error=0                            # Perform another try
             else
-                break                              # Stop further try for PBS jobs scheduler
+                jobgroupstr=$(group_jobs_for_pbs "${runjobs[@]}")
+                IFS=";" read -r -a jobgroups <<< "${jobgroupstr}"; unset IFS  # convert string to array
+                #while IFS=';' read -r line; do jobgroups+=("$line"); done < <(group_jobs_for_pbs "${runjobs[*]}")
+                for jobg in "${jobgroups[@]}"; do
+                    IFS=" " read -r -a jobgar <<< "${jobg}"; unset IFS        # convert string to array
+                    jobgstr=$(get_jobarray_str 'pbs' "${jobgar[@]}")
+                    $runcmd ${jobgstr} $myjobscript
+                done
+                error=0                             # Perform another try
+                #break                              # Stop further try for PBS jobs scheduler
             fi
         fi
 
@@ -222,6 +234,79 @@ function check_and_resubmit {
 
 ########################################################################
 
+function group_jobs_for_pbs {
+    local jobnos=("${@}")
+
+    # Sort job nos
+    IFS=$'\n' origjobstr="${jobnos[*]}"; unset IFS
+    mapfile -t sortedjobno < <(sort -g <<<"${origjobstr}")
+
+    # Find continous job nos
+    local ars=()
+    local sortedar=("${sortedjobno[@]}")
+
+    local ar2=()
+    # shellcheck disable=SC2206
+    if [[ ${#sortedar[@]} -lt 3 ]]; then
+        ar2+=("${sortedar[@]}")
+    else
+        for step in $(seq 1 10); do
+
+            if [[ ${#sortedar[@]} -lt 3 ]]; then break; fi
+
+            local prev=0
+            local ar1=()
+            ar2=()
+            for curr in "${sortedar[@]}"; do
+                #echo "step: $step, curr=$curr: ${ar1[*]}; ${ar2[*]}; ${ars[*]}"
+                if (( 10#$curr == (10#$prev+step) )); then
+                    ar1+=("$curr")
+                else
+                    #echo "step: $step; curr=$curr, ${ar1[*]}"
+                    if [[ ${#ar1[@]} -ge 3 ]]; then
+                        ars+=("${ar1[*]}");
+                    elif [[ ${#ar1[@]} -gt 0 ]]; then
+                        ar2+=(${ar1[@]})
+                    fi
+                    ar1=("$curr")
+                fi
+                prev=${curr}
+            done
+            if [[ ${#ar1[@]} -ge 3 ]]; then
+                ars+=("${ar1[*]}");
+            elif [[ ${#ar1[@]} -gt 0 ]]; then
+                ar2+=(${ar1[@]})
+            fi
+            #echo "stepB: $step, ${ar1[*]}; ${ar2[*]}; ${ars[*]}"
+
+            # sorted all elements that are not grouped
+            IFS=$'\n' origjobstr="${ar2[*]}"; unset IFS
+            mapfile -t sortedar < <(sort -g <<<"${origjobstr}")
+        done
+    fi
+
+    # every element contains at least two jobs no even they are not continous
+    #echo "onejobs = ${ar2[*]}"
+    for ((i=0;i<${#ar2[@]};i+=2)); do
+        (( j=i+1))
+        #echo "$i-$j: ${ar2[i]}, ${ar2[j]}"
+        if [[ $j -lt ${#ar2[@]} ]]; then
+            ars+=("${ar2[i]} ${ar2[j]}")
+        else
+            ars+=("${ar2[i]}")
+        fi
+    done
+
+    #echo "${onejobs[@]}"
+    #for ar in "${ars[@]}"; do
+    #    echo "ar in newars: ${ar}"
+    #done
+    IFS=$';' retjobstr="${ars[*]}"; unset IFS    # convert array to string
+    echo "${retjobstr}"
+}
+
+########################################################################
+
 function get_jobarray_str {
     local jobschdler=$1
     local subjobs=("${@:2}")
@@ -229,14 +314,23 @@ function get_jobarray_str {
         local IFS=","
         echo "--array=${subjobs[*]}"
     else                                         # PBS
-        local minno=${subjobs[0]}
-        local maxno=${subjobs[-1]}
+        if [[ ${#subjobs[@]} -eq 1 ]]; then
+            (( nextno = subjobs[0]+1 ))
+            echo "-J ${subjobs[0]}-${nextno}%1"
+        elif [[ ${#subjobs[@]} -eq 2 ]]; then
+            (( stepno = subjobs[1]-subjobs[0] ))
+            echo "-J ${subjobs[0]}-${subjobs[1]}:${stepno}"
+        else
+            local minno=${subjobs[0]}
+            local maxno=${subjobs[-1]}
 
-        for i in "${subjobs[@]}"; do
-            (( i > maxno )) && maxno=$i
-            (( i < minno )) && minno=$i
-        done
-        echo "-J ${minno}-${maxno}:1"
+            for i in "${subjobs[@]}"; do
+                (( i > maxno )) && maxno=$i
+                (( i < minno )) && minno=$i
+            done
+            (( stepno = (maxno-minno)/(${#subjobs[@]}-1) ))
+            echo "-J ${minno}-${maxno}:${stepno}"
+        fi
     fi
 }
 
