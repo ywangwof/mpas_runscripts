@@ -280,8 +280,9 @@ function group_jobs_for_pbs {
             #echo "stepB: $step, ${ar1[*]}; ${ar2[*]}; ${ars[*]}"
 
             # sorted all elements that are not grouped
-            IFS=$'\n' origjobstr="${ar2[*]}"; unset IFS
-            mapfile -t sortedar < <(sort -g <<<"${origjobstr}")
+            #IFS=$'\n' origjobstr="${ar2[*]}"; unset IFS
+            #mapfile -t sortedar < <(sort -g <<<"${origjobstr}")
+            sortedar=("${ar2[@]}")
         done
     fi
 
@@ -316,7 +317,7 @@ function get_jobarray_str {
     else                                         # PBS
         if [[ ${#subjobs[@]} -eq 1 ]]; then
             (( nextno = subjobs[0]+1 ))
-            echo "-J ${subjobs[0]}-${nextno}%1"
+            echo "-J ${subjobs[0]}-${nextno}:2"
         elif [[ ${#subjobs[@]} -eq 2 ]]; then
             (( stepno = subjobs[1]-subjobs[0] ))
             echo "-J ${subjobs[0]}-${subjobs[1]}:${stepno}"
