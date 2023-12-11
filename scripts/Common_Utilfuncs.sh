@@ -148,7 +148,9 @@ function check_and_resubmit {
     fi
 
     # check each member's status
-    while IFS='' read -r line; do runjobs+=("$line"); done < <(seq 1 $donenum)
+    while IFS='' read -r line; do
+        runjobs+=("$line");
+    done < <(seq 1 $donenum)
 
     numtry=0
     done=0; error=0; running=0
@@ -239,69 +241,64 @@ function group_jobs_for_pbs {
 
     # Sort job nos
     IFS=$'\n' origjobstr="${jobnos[*]}"; unset IFS
-    mapfile -t sortedjobno < <(sort -g <<<"${origjobstr}")
+    #mapfile -t sortedjobno < <(sort -g <<<"${origjobstr}")
+    local sortedjobno=()
+    while IFS='' read -r line; do
+        sortedjobno+=("$line")
+    done < <(sort -g <<<"${origjobstr}")
 
     # Find continous job nos
     local ars=()
     local sortedar=("${sortedjobno[@]}")
 
-    local ar2=()
-    # shellcheck disable=SC2206
-    if [[ ${#sortedar[@]} -lt 3 ]]; then
-        ar2+=("${sortedar[@]}")
-    else
-        for step in $(seq 1 10); do
+    local ar2=("${sortedar[@]}")
+    for step in $(seq 1 10); do
 
-            if [[ ${#sortedar[@]} -lt 3 ]]; then break; fi
+        if [[ ${#sortedar[@]} -lt 3 ]]; then break; fi
 
-            local prev=0
-            local ar1=()
-            ar2=()
-            for curr in "${sortedar[@]}"; do
-                #echo "step: $step, curr=$curr: ${ar1[*]}; ${ar2[*]}; ${ars[*]}"
-                if (( 10#$curr == (10#$prev+step) )); then
-                    ar1+=("$curr")
-                else
-                    #echo "step: $step; curr=$curr, ${ar1[*]}"
-                    if [[ ${#ar1[@]} -ge 3 ]]; then
-                        ars+=("${ar1[*]}");
-                    elif [[ ${#ar1[@]} -gt 0 ]]; then
-                        ar2+=(${ar1[@]})
+        #echo "step=${step}: ${sortedar[*]}"
+        for cidx in "${!sortedar[@]}"; do
+
+            local prev=${sortedar[$cidx]}
+
+            #echo "    prev=$prev: ${ar2[*]}"
+
+            if [[ " ${ar2[*]} " =~ \ ${prev}\  ]]; then   # the number is still in the left set
+
+                local ar1=("$prev")
+                local dropset=()
+
+                for nidx in "${!ar2[@]}"; do
+                    local next=${ar2[$nidx]}
+                    #echo "        next=${next}, ar1=${ar1[*]}"
+                    if (( 10#$next == (10#$prev+step) )); then
+                        ar1+=("$next")
+                        dropset+=("$nidx")
+                        prev=${next}
+                    elif [[ $next -eq $prev ]]; then
+                        dropset+=("$nidx")
                     fi
-                    ar1=("$curr")
+                done
+
+                if [[ ${#ar1[@]} -ge 3 ]]; then
+                    ars+=("${ar1[*]}")
+                    for didx in "${dropset[@]}"; do
+                        unset -v "ar2[$didx]"
+                    done
+                    ar2=("${ar2[@]}")
+                    #echo "        new ar2=${ar2[*]}"
                 fi
-                prev=${curr}
-            done
-            if [[ ${#ar1[@]} -ge 3 ]]; then
-                ars+=("${ar1[*]}");
-            elif [[ ${#ar1[@]} -gt 0 ]]; then
-                ar2+=(${ar1[@]})
             fi
-            #echo "stepB: $step, ${ar1[*]}; ${ar2[*]}; ${ars[*]}"
-
-            # sorted all elements that are not grouped
-            #IFS=$'\n' origjobstr="${ar2[*]}"; unset IFS
-            #mapfile -t sortedar < <(sort -g <<<"${origjobstr}")
-            sortedar=("${ar2[@]}")
         done
-    fi
-
-    # every element contains at least two jobs no even they are not continous
-    #echo "onejobs = ${ar2[*]}"
-    for ((i=0;i<${#ar2[@]};i+=2)); do
-        (( j=i+1))
-        #echo "$i-$j: ${ar2[i]}, ${ar2[j]}"
-        if [[ $j -lt ${#ar2[@]} ]]; then
-            ars+=("${ar2[i]} ${ar2[j]}")
-        else
-            ars+=("${ar2[i]}")
-        fi
+        sortedar=("${ar2[@]}")
     done
 
-    #echo "${onejobs[@]}"
-    #for ar in "${ars[@]}"; do
-    #    echo "ar in newars: ${ar}"
-    #done
+    # every element contains at least two jobs numbers even they are not continous
+    for ((i=0;i<${#ar2[@]};i+=2)); do
+        (( j=i+1 ))
+        ars+=("${ar2[$i]} ${ar2[$j]}")
+    done
+
     IFS=$';' retjobstr="${ars[*]}"; unset IFS    # convert array to string
     echo "${retjobstr}"
 }
