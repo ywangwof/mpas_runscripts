@@ -117,8 +117,8 @@ function check_and_resubmit {
     local donenum=$3                    # total number of jobs
     local myjobscript=${4-}             # empty no resubmissions
     local numtries=${5-0}               # number of resubmissions
-                                        # > 0 Wait for job done or resubmit failed jobs before exiting
-                                        # = 0 check number of done jobs only
+                                        # >= 0 Wait for job done or resubmit failed jobs before exiting
+                                        # < 0 check number of done jobs only
 
     read -r -a jobnames <<< "$1"
     local jobname=${jobnames[0]}
@@ -142,11 +142,10 @@ function check_and_resubmit {
     fi
 
     checkonly=false
-    if [[ $numtries -eq 0 ]]; then
+    if [[ $numtries -lt 0 ]]; then
         numtries=1
         checkonly=true
     fi
-
     # check each member's status
     while IFS='' read -r line; do
         runjobs+=("$line");
@@ -154,7 +153,7 @@ function check_and_resubmit {
 
     numtry=0
     done=0; error=0; running=0
-    while [[ $numtry -lt $numtries ]]; do
+    while [[ $numtry -le $numtries ]]; do
         jobarrays=()
         for mem in "${runjobs[@]}"; do
             memstr=$(printf "%02d" $mem)
@@ -179,8 +178,6 @@ function check_and_resubmit {
             if [[ -e $donefile ]]; then (( done+=1 )); fi
         done
 
-        if $checkonly; then break; fi
-
         (( numtry+=1 ))
 
         if [[ $done -eq $donenum ]]; then
@@ -189,7 +186,7 @@ function check_and_resubmit {
             break                                  # No further check needed
         elif $checkonly; then
             break                                  # Stop further try
-        elif [[ ${#jobarrays[@]} -gt 0 ]]; then    # failed jobs found
+        elif [[ ${#jobarrays[@]} -gt 0 && $numtry -lt $numtries ]]; then    # failed jobs found
             if [[ $myjobscript == *.slurm ]]; then
                 runjobs=( "${jobarrays[@]}" )
                 echo "$$-${FUNCNAME[0]}: ${numtry}/${numtries} - Try these failed jobs again: ${runjobs[*]}"

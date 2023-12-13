@@ -1027,6 +1027,7 @@ function write_runtimeconfig {
 
     "Cheyenne" )
 
+        # Derecho node has 128 processors
         # ICs
         ncores_ics=32
         partition_ics="main"
@@ -1039,21 +1040,21 @@ function write_runtimeconfig {
         claim_cpu_lbc="ncpus=${ncores_lbc}"
 
         # DA cycles
-        ncores_filter=32; ncores_dafcst=32
+        ncores_filter=128; ncores_dafcst=128
         partition_dafcst="main" ; claim_cpu_dafcst="ncpus=${ncores_dafcst}"
         partition_filter="main" ; claim_cpu_filter="ncpus=${ncores_filter}"
         claim_cpu_update="ncpus=${ncores_filter}"
 
-        npefilter=96     ; nnodes_filter=$(( npefilter/ncores_filter   ))
-        npedafcst=32     ; nnodes_dafcst=$(( npefcst/ncores_dafcst ))
+        npefilter=128     ; nnodes_filter=$(( npefilter/ncores_filter   ))
+        npedafcst=128     ; nnodes_dafcst=$(( npefcst/ncores_dafcst ))
 
         # FCST cycles
-        ncores_post=32; ncores_fcst=32
+        ncores_post=32; ncores_fcst=128
         partition_fcst="main"   ; claim_cpu_fcst="ncpus=${ncores_fcst}"
         partition_post="main"   ; claim_cpu_post="ncpus=${ncores_post}"
 
-        npepost=32     ; nnodes_post=$(( npepost/ncores_post   ))
-        npefcst=96     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
+        npepost=32      ; nnodes_post=$(( npepost/ncores_post   ))
+        npefcst=128     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
         ;;
 
     * )    # Vecna at NSSL
@@ -1162,9 +1163,11 @@ function write_runtimeconfig {
                                         # making a copy of the restart files
     run_updatebc=true
     run_obs2nc=true
+    run_addnoise=true
 
     OUTIOTYPE="netcdf4"
     OBS_DIR="${OBS_DIR}"
+    WOFSNOSE_PATH="/scratch/ywang/MPAS/wofs_new_noise"
 
     #ncores_fcst="${ncores_dafcst}"
     ncores_filter="${ncores_filter}"
@@ -1430,7 +1433,7 @@ elif [[ $machine == "Cheyenne" ]]; then
     npestatic=72
 
     mach="pbs"
-    job_exclusive_str=""
+    job_exclusive_str="#PBS -l job_priority=economy"
     job_account_str="#PBS -A ${hpcaccount-NMMM0013}"
     job_runmpexe_str="mpiexec"
     job_runexe_str="mpiexec"

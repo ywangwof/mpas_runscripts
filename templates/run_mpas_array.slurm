@@ -1,4 +1,4 @@
-#!/bin/sh -l
+#!/bin/bash -l
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
@@ -17,24 +17,13 @@ if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
     module purge
     module use ROOTDIR/modules
     module load MODULE
-
-    #ncores=NCORES
-
-    #nnode=$(( NOPART/$SLURM_CPUS_ON_NODE ))
-    #nnode=$SLURM_JOB_NUM_NODES
 else
     source ROOTDIR/modules/MODULE_impi
-    #ncores=NCORES
 fi
-#nnode=$(( NOPART/ncores ))
 
 nnode=$SLURM_JOB_NUM_NODES
 if (( NOPART % nnode == 0 )); then
     ncores=$(( NOPART/nnode ))
-#else
-#    echo "Number of tasks (NOPART) is not divisible by number of nodes ($nnode) allocated."
-#    echo "Job cannot be run becasue the setting for \"pio_num_iotasks\""
-#    exit 0
 fi
 
 ulimit -s unlimited

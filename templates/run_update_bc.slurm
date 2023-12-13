@@ -1,9 +1,9 @@
-#!/bin/sh -l
+#!/bin/bash -l
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
 #SBATCH -t 00:30:00
-#SBATCH --output=WRKDIR/update_bc_%j.log
+#SBATCH --output=WRKDIR/update_bc_%a_%j.log
 ACCTSTR
 EXCLSTR
 
@@ -25,20 +25,23 @@ fi
 
 ulimit -s unlimited
 
-cd WRKDIR
+mem=${SLURM_ARRAY_TASK_ID}
+memstr=$(printf "%02d" $mem)
 
-touch update_bc.running
-rm -rf error.update_bc queue.update_bc
+cd WRKDIR/fcst_${memstr}
+
+touch update_bc.running_${memstr}
+rm -rf error.update_bc_${memstr} queue.update_bc_${memstr}
 
 RUNMPCMD -n NOPART EXEDIR/update_bc
 
 if [[ $? -eq 0 ]]; then
-    touch done.update_bc
+    touch done.update_bc_${memstr}
 else
-    touch error.update_bc
+    touch error.update_bc_${memstr}
 fi
 
-rm -rf update_bc.running
+rm -rf update_bc.running_${memstr}
 
 time2=$(date '+%s')
 

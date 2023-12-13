@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC1091,SC2086
+# shellcheck disable=SC2317,SC1090,SC1091,SC2086
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
@@ -682,10 +682,8 @@ function run_filter {
                                      'DOPPLER_RADIAL_VELOCITY',
                                      'GOES_CWP_PATH',
                                      'GOES_LWP_PATH',
-                                     'GOES_LWP0_PATH',
                                      'GOES_IWP_PATH',
                                      'GOES_CWP_ZERO',
-                                     'GOES_CWP_ZERO_NIGHT',
    special_localization_cutoffs    = 0.0094247,
                                      0.0094247,
                                      0.0094247,
@@ -702,9 +700,7 @@ function run_filter {
                                      0.00315,
                                      0.00315,
                                      0.00315,
-                                     0.00315,
                                      0.0035,
-                                     0.0035
   /
 
 &location_nml
@@ -733,10 +729,8 @@ function run_filter {
                                            'DOPPLER_RADIAL_VELOCITY',
                                            'GOES_CWP_PATH',
                                            'GOES_LWP_PATH',
-                                           'GOES_LWP0_PATH',
                                            'GOES_IWP_PATH',
                                            'GOES_CWP_ZERO',
-                                           'GOES_CWP_ZERO_NIGHT',
    special_vert_normalization_pressures =  100000.0,
                                            100000.0,
                                            100000.0,
@@ -754,7 +748,6 @@ function run_filter {
                                          12698413.0,
                                          12698413.0,
                                          15873016.0,
-                                           100000.0,
                                            100000.0,
    special_vert_normalization_heights  =   424416.6,
                                            424416.6,
@@ -774,9 +767,7 @@ function run_filter {
                                            1587301.3,
                                            1587301.3,
                                            1000000.0,
-                                           1000000.0,
    special_vert_normalization_levels    =  20.0,
-                                           20.0,
                                            20.0,
                                            20.0,
                                            20.0,
@@ -812,7 +803,6 @@ function run_filter {
                                               5.0,
                                               5.0,
                                               5.0,
-                                              5.0
   /
 
 &xyz_location_nml
@@ -888,8 +878,8 @@ function run_filter {
                                 'DOPPLER_RADIAL_VELOCITY',
                                 'GOES_IWP_PATH',
                                 'GOES_CWP_ZERO',
+                                'GOES_CWP_ZERO_NIGHT',
                                 'GOES_16_ABI_TB',
-
    evaluate_these_obs_types = ''
   /
 
@@ -1403,7 +1393,6 @@ function run_update_states {
     #
     cd $wrkdir || return
 
-    timestr_cur=$(date -d @$iseconds    +%Y%m%d%H%M)
     #
     # Return if is running or is done
     #
@@ -1414,10 +1403,6 @@ function run_update_states {
     #------------------------------------------------------
     # Prepare update_mpas_states by copying/linking the background files
     #------------------------------------------------------
-    state_input_file=$(awk '/input_state_file_list/{print $3}' input.nml)
-    readarray -t input_file_list < ${state_input_file:1:${#state_input_file}-2}
-    #update_input_file_list='filter_out.txt'
-
     # shellcheck disable=SC2154
     if [[ $update_in_place == true ]]; then
         cpcmd="ln -sf"
@@ -1426,9 +1411,38 @@ function run_update_states {
         cpcmd="rsync -a"
     fi
 
-    update_output_file_list='update_out.txt'
-    rm -rf ${update_output_file_list}
-    for fn in "${input_file_list[@]}"; do
+    # Anaysis background file list, for retrieving update_states output file name
+    state_input_file=$(awk '/input_state_file_list/{print $3}' input.nml)
+    readarray -t input_file_array < ${state_input_file:1:${#state_input_file}-2}
+
+    # update_states input file list, will be modified for one member only
+    update_input_file=$(awk '/update_input_file_list/{print $3}' input.nml)
+    readarray -t update_file_array < ${update_input_file:1:${#update_input_file}-2}
+
+    jobarrays=()
+    for iens in $(seq 1 $ENS_SIZE); do
+        (( jindex=iens-1 ))
+
+        memstr=$(printf "%02d" $iens)
+
+        memwrkdir=$wrkdir/fcst_$memstr
+        mkwrkdir $memwrkdir 0
+        cd $memwrkdir  || return
+
+        cp ../input.nml .
+
+        update_input_file_name='update_states_in.txt'
+        rm -rf ${update_input_file_name}
+        #if [[ ! -e ../${update_file_array[$jindex]} ]]; then
+        #    echo "ERROR: file: ../${update_file_array[$jindex]} not exists"
+        #    exit 1              # something wrong should never happen
+        #fi
+        echo "../${update_file_array[$jindex]}" > ${update_input_file_name}
+
+        update_output_file_name='update_states_out.txt'
+        rm -rf ${update_output_file_name}
+
+        fn="${input_file_array[$jindex]}"
         fnbase=$(basename $fn)
         if [[ ! -e $fnbase ]]; then
             echo "    ${cpcmd} $fn ."
@@ -1436,9 +1450,15 @@ function run_update_states {
         else
             echo "    $fnbase exists"
         fi
-        echo "./$fnbase" >> ${update_output_file_list}
+        echo "./$fnbase" > ${update_output_file_name}
+        sed -i "/update_input_file_list/s/filter_out.txt/${update_input_file_name}/" input.nml
+        sed -i "/update_output_file_list/s/filter_in.txt/${update_output_file_name}/" input.nml
+        sed -i "/init_template_filename/s/init.nc/${fnbase}/" input.nml
+
+        jobarrays+=("$iens")
     done
-    sed -i "/update_output_file_list/s/filter_in.txt/${update_output_file_list}/" input.nml
+
+    cd $wrkdir || return
 
     #
     # Waiting for job conditions
@@ -1458,23 +1478,6 @@ function run_update_states {
     fi
 
     #------------------------------------------------------
-    # Run obs_seq_to_netcdf
-    #------------------------------------------------------
-
-    # shellcheck disable=SC2154
-    if ${run_obs2nc}; then
-        if [[ $verb -eq 1 ]]; then
-            srunout="1"
-        else
-            srunout="obs_seq_to_netcdf.log"
-        fi
-
-        echo "    Running ${exedir}/dart/obs_seq_to_netcdf"
-        ${runcmd_str} ${exedir}/dart/obs_seq_to_netcdf >& $srunout
-        mv obs_epoch_001.nc obs_seq.final.${timestr_cur}.nc
-    fi
-
-    #------------------------------------------------------
     # Run update_mpas_states for all ensemble members
     #------------------------------------------------------
 
@@ -1487,7 +1490,7 @@ function run_update_states {
     cat <<EOF > $sedfile
 s/PARTION/${partition_filter}/
 s/NOPART/1/
-s/JOBNAME/update_${eventtime}/
+s/JOBNAME/updatestates_${eventtime}/
 s/CPUSPEC/${claim_cpu_update}/g
 s/MODULE/${modulename}/g
 s#ROOTDIR#$rootdir#g
@@ -1502,7 +1505,9 @@ EOF
         echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
     fi
 
-    submit_a_jobscript $wrkdir "update_states" $sedfile $TEMPDIR/$jobscript $jobscript ""
+    jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
+
+    submit_a_jobscript "$wrkdir" "update_states" "$sedfile" "$TEMPDIR/$jobscript" "$jobscript" "${jobarraystr}"
 }
 
 ########################################################################
@@ -1511,8 +1516,8 @@ function run_update_bc {
     # $1
     # wrkdir
     local wrkdir=$1
-
-    # use lbc0_files & lbc_myfiles from the caller
+    local icycle=$2
+    local iseconds=$3
 
     cd $wrkdir || return
 
@@ -1521,6 +1526,23 @@ function run_update_bc {
     #
     if [[ -f $wrkdir/update_bc.running || -f $wrkdir/done.update_bc || -f $wrkdir/queue.update_bc ]]; then
         return
+    fi
+
+    #
+    # Waiting for job conditions
+    #
+    conditions=("${rundir}"/lbc/done.lbc done.filter)
+
+    if [[ $dorun == true ]]; then
+        for cond in "${conditions[@]}"; do
+            echo "$$-${FUNCNAME[0]}: Checking $cond"
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    echo "Waiting for file: $cond"
+                fi
+                sleep 10
+            done
+        done
     fi
 
     if [[ $run_updatebc == true ]]; then
@@ -1534,39 +1556,90 @@ function run_update_bc {
     # Prepare update_bc by copying/linking the background files
     #------------------------------------------------------
 
-    update_output_file_list='boundary_inout.txt'
-    rm -rf ${update_output_file_list}
+    # update_states input file list, will be modified for one member only
+    update_input_file=$(awk '/update_analysis_file_list/{print $3}' input.nml)
+    readarray -t anlfile_array < ${update_input_file:1:${#update_input_file}-2}
 
-    for i in "${!lbc_myfiles[@]}"; do
-        lbcfn=${lbc0_files[$i]}
-        mylfn=${lbc_myfiles[$i]}
-        if [[ -e $mylfn ]]; then
-            echo "    $mylfn exists, deleting ..."
-            rm -rf $mylfn
+    jobarrays=()
+    for iens in $(seq 1 $ENS_SIZE); do
+        (( jindex=iens-1 ))
+
+        memstr=$(printf "%02d" $iens)
+
+        memwrkdir=$wrkdir/fcst_$memstr
+        mkwrkdir $memwrkdir 0
+        cd $memwrkdir  || return
+
+        if [[ ! -e input.nml ]]; then
+            cp ../input.nml .
         fi
-        ${cpcmd} $lbcfn $mylfn
-        echo "$mylfn" >> ${update_output_file_list}
+
+        update_output_file_name='update_bc_inout.txt'
+        rm -rf ${update_output_file_name}
+
+        update_anal_file_name='update_bc_in.txt'
+        rm -rf ${update_anal_file_name}
+
+        #
+        # lbc files
+        #
+        # shellcheck disable=SC2154
+        jens=$(( (iens-1)%nenslbc+1 ))
+        mlbcstr=$(printf "%02d" $jens)           # get LBC member string
+
+        isec_nlbc1=$(( iseconds/3600*3600 ))
+        isec_nlbc2=${isec_nlbc1}
+        isec_elbc=$(( iseconds+intvl_sec ))
+        while [[ $isec_elbc -gt $isec_nlbc2 ]]; do
+            (( isec_nlbc2+=EXTINVL ))
+        done
+        # External GRIB file provided file times
+        lbctime_str1=$(date -d @${isec_nlbc1} +%Y-%m-%d_%H.%M.%S)
+        lbctime_str2=$(date -d @${isec_nlbc2} +%Y-%m-%d_%H.%M.%S)
+
+        # MPAS expected boundary file times
+        isec_elbc=$((iseconds+EXTINVL))
+        mpastime_str1=$(date -d @${iseconds}  +%Y-%m-%d_%H.%M.%S)
+        mpastime_str2=$(date -d @${isec_elbc} +%Y-%m-%d_%H.%M.%S)
+        if [[ $verb -eq 1 ]]; then
+            echo "Member: $iens use lbc files from $rundir/lbc:"
+            echo "       ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc";
+            echo "       ${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc";
+        fi
+        #ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc ${domname}_${memstr}.lbc.${mpastime_str1}.nc
+        lbc_file0="$rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc"
+        lbc_filem="${domname}_${memstr}.lbc.${mpastime_str1}.nc"
+
+        if [[ -e $lbc_filem ]]; then
+            #echo "    $lbc_filem exists, deleting ..."
+            rm -rf $lbc_filem
+        fi
+        echo "$$-${FUNCNAME[0]}: Using lbc file: $lbc_file0 ..."
+        ${cpcmd} $lbc_file0 $lbc_filem
+
+        if [[ $icycle -gt 0 && $run_updatebc ]]; then
+            echo "$lbc_filem" >> ${update_output_file_name}
+            sed -i "/update_boundary_file_list/s/boundary_inout.txt/${update_output_file_name}/" input.nml
+            echo "../${anlfile_array[$jindex]}" >> ${update_anal_file_name}
+            sed -i "/update_analysis_file_list/s/filter_out.txt/${update_anal_file_name}/" input.nml
+        else             # do not need to run update_bc, just link the files
+            touch "$wrkdir/done.update_bc.${memstr}"
+        fi
+
+        #echo "$$-${FUNCNAME[0]}: Using lbc file: $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc ..."
+        ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc ${domname}_${memstr}.lbc.${mpastime_str2}.nc
+
+        jobarrays+=("$iens")
     done
 
-    if [[ ${run_updatebc} == true ]]; then
-        sed -i "/update_boundary_file_list/s/boundary_inout.txt/${update_output_file_list}/" input.nml
+    cd $wrkdir || return
 
-        #
-        # Waiting for job conditions
-        #
-        conditions=(done.filter)
+    #------------------------------------------------------
+    # Run update_bc for all ensemble members
+    #------------------------------------------------------
 
-        if [[ $dorun == true ]]; then
-            for cond in "${conditions[@]}"; do
-                echo "$$-${FUNCNAME[0]}: Checking $cond"
-                while [[ ! -e $cond ]]; do
-                    if [[ $verb -eq 1 ]]; then
-                        echo "Waiting for file: $cond"
-                    fi
-                    sleep 10
-                done
-            done
-        fi
+    if [[ $icycle -gt 0 && $run_updatebc ]]; then
+        echo "$$-${FUNCNAME[0]}: Running run_update_bc ..."
 
         #------------------------------------------------------
         # Run update_bc for all ensemble members
@@ -1580,7 +1653,7 @@ function run_update_bc {
         cat <<EOF > $sedfile
 s/PARTION/${partition_filter}/
 s/NOPART/1/
-s/JOBNAME/update_${eventtime}/
+s/JOBNAME/updatebc_${eventtime}/
 s/CPUSPEC/${claim_cpu_update}/g
 s/MODULE/${modulename}/g
 s#ROOTDIR#$rootdir#g
@@ -1595,7 +1668,210 @@ EOF
             echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
         fi
 
-        submit_a_jobscript $wrkdir "update_bc" $sedfile $TEMPDIR/$jobscript $jobscript ""
+        jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
+
+        submit_a_jobscript $wrkdir "update_bc" $sedfile $TEMPDIR/$jobscript $jobscript "${jobarraystr}"
+    fi
+}
+
+########################################################################
+
+function run_obs2nc {
+    # $1        $2
+    # wrkdir    iseconds
+    local wrkdir=$1
+    local iseconds=$2
+
+    cd $wrkdir || return
+
+    timestr_cur=$(date -d @$iseconds    +%Y%m%d%H%M)
+
+    if [[ -e obs_seq.final.${timestr_cur}.nc ]]; then
+        return
+    fi
+    #
+    # Waiting for job conditions
+    #
+    conditions=(done.filter)
+
+    if [[ $dorun == true ]]; then
+        for cond in "${conditions[@]}"; do
+            echo "$$-${FUNCNAME[0]}: Checking $cond"
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    echo "Waiting for file: $cond"
+                fi
+                sleep 10
+            done
+        done
+
+        if [[ $verb -eq 1 ]]; then
+            srunout="1"
+        else
+            srunout="obs_seq_to_netcdf.log"
+        fi
+
+        echo "    Running ${exedir}/dart/obs_seq_to_netcdf"
+        ${runcmd_str} ${exedir}/dart/obs_seq_to_netcdf >& $srunout
+        mv obs_epoch_001.nc obs_seq.final.${timestr_cur}.nc
+    fi
+}
+
+########################################################################
+
+function run_add_noise {
+    # $1        $2
+    # wrkdir    iseconds
+    local wrkdir=$1
+    local iseconds=$2
+
+    #
+    # GLOBAL: ENS_SIZE, rundir, update_in_place
+    #         input_file_list
+    #
+
+    #
+    # Build working directory
+    #
+    cd $wrkdir || return
+
+    timestr_cur=$(date  -d @$iseconds    +%Y%m%d%H%M)
+    mpas_timestr=$(date -d @$iseconds    +%Y-%m-%d_%H.%M.%S)
+    #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/done.add_noise ]]; then
+        echo "$$-${FUNCNAME[0]}: add_noise is already done"
+        return
+    fi
+
+    if [[ -f $wrkdir/running.add_noise || -f $wrkdir/queue.add_noise ]]; then
+        echo "$$-${FUNCNAME[0]}: add_noise is running/queued."
+        return
+    fi
+
+    seqfile="obs_seq.final.${timestr_cur}.nc"
+
+    #------------------------------------------------------
+    # Run grid_refl_obs.py for noise mask files
+    #------------------------------------------------------
+
+    #
+    # Waiting for done.update_states
+    #
+    conditions=("${wrkdir}/done.update_states" "${seqfile}")
+
+    if [[ $dorun == true ]]; then
+        for cond in "${conditions[@]}"; do
+            echo "$$-${FUNCNAME[0]}: Checking $cond"
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    echo "Waiting for file: $cond"
+                fi
+                sleep 10
+            done
+        done
+    fi
+
+    if [[ ! -e done.noise_mask && ! -e running.noise_mask && ! -e queue.noise_mask ]]; then
+        if [[ $verb -eq 1 ]]; then echo ""; echo "    Running grid_refl_obs.py at $timestr_cur"; fi
+
+        bkgfile="fcst_01/wofs_mpas_01.restart.${mpas_timestr}.nc"
+
+        #
+        # Create job script and submit it
+        #
+        jobscript="run_noise_mask.${mach}"
+        sedfile=$(mktemp -t mask_${eventtime}.sed_XXXX)
+        cat <<EOF > $sedfile
+s/PARTION/${partition_filter}/
+s/NOPART/1/
+s/JOBNAME/noise_mask_${eventtime}/
+s/CPUSPEC/${claim_cpu_update}/g
+s#WRKDIR#$wrkdir#g
+s/MACHINE/${machine}/g
+s/ACCTSTR/${job_account_str}/
+s/EXCLSTR/${job_exclusive_str}/
+s/SEQFILE/${seqfile}/g
+s#BKGFILE#${bkgfile}#g
+s#WAN_PATH#${WOFSNOSE_PATH}#g
+s/EVENTDATE/${timestr_cur:0:8}/g
+s/EVENTTIME/${timestr_cur:8:4}/g
+EOF
+        if [[ "${mach}" == "pbs" ]]; then
+            echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
+        fi
+
+        submit_a_jobscript $wrkdir "noise_mask" "$sedfile" "$TEMPDIR/$jobscript" "$jobscript" "${jobarraystr}"
+    fi
+
+    #------------------------------------------------------
+    # Run add_pert_where_high_refl.py for all members
+    #------------------------------------------------------
+
+    #
+    # Waiting for done.noise_mask
+    #
+    conditions=("${wrkdir}/done.noise_mask")
+
+    if [[ $dorun == true ]]; then
+        for cond in "${conditions[@]}"; do
+            echo "$$-${FUNCNAME[0]}: Checking $cond"
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    echo "Waiting for file: $cond"
+                fi
+                sleep 10
+            done
+        done
+    fi
+
+    if [[ $verb -eq 1 ]]; then echo ""; echo "    Running add_pert_where_high_refl.py at $timestr_cur"; fi
+
+    jobarrays=()
+    for iens in $(seq 1 $ENS_SIZE); do
+        memstr=$(printf "%02d" $iens)
+
+        memwrkdir=$wrkdir/fcst_$memstr
+        mkwrkdir $memwrkdir 0
+        cd $memwrkdir  || return
+
+        if [[ ! -e done.add_noise_${memstr} && ! -e running.add_noise_${memstr} ]]; then
+            ln -sf ../refl_obs_${timestr_cur:0:8}_${timestr_cur:8:4}.pkl ../wofs_mpas_grid_kdtree.pkl ../mpas_XYZ.pkl .
+            jobarrays+=("$iens")
+        fi
+    done
+
+    cd "${wrkdir}" || return
+
+    #
+    # Create job script and submit it
+    #
+    if [[ ${#jobarrays[@]} -gt 0 ]]; then
+        jobscript="run_noise_pert.${mach}"
+        sedfile=$(mktemp -t pert_${eventtime}.sed_XXXX)
+        cat <<EOF > $sedfile
+s/PARTION/${partition_filter}/
+s/NOPART/1/
+s/JOBNAME/noist_pert_${eventtime}/
+s/CPUSPEC/${claim_cpu_update}/g
+s#WRKDIR#$wrkdir#g
+s/MACHINE/${machine}/g
+s/ACCTSTR/${job_account_str}/
+s/EXCLSTR/${job_exclusive_str}/
+s/SEQFILE/${seqfile}/g
+s#WAN_PATH#${WOFSNOSE_PATH}#g
+s/EVENTDATE/${timestr_cur:0:8}/g
+s/EVENTTIME/${timestr_cur:8:4}/g
+s/MPASTIME/${mpas_timestr}/g
+EOF
+        if [[ "${mach}" == "pbs" ]]; then
+            echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
+        fi
+
+        jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
+
+        submit_a_jobscript $wrkdir "noise_pert" "$sedfile" "$TEMPDIR/$jobscript" "$jobscript" "${jobarraystr}"
     fi
 }
 
@@ -1619,9 +1895,20 @@ function run_mpas {
     cd $wrkdir || exit $?
 
     #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/fcst.running || -f $wrkdir/done.fcst || -f $wrkdir/queue.fcst ]]; then
+        return
+    fi
+
+    #
     # Waiting for job conditions
     #
-    conditions=("${rundir}/lbc/done.lbc" "${wrkdir}/done.update_states")
+    conditions=("${wrkdir}/done.update_states" "${wrkdir}/done.update_bc")
+
+    if $run_addnoise; then
+        conditions+=("${wrkdir}/done.add_noise")
+    fi
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
@@ -1633,13 +1920,6 @@ function run_mpas {
                 sleep 10
             done
         done
-    fi
-
-    #
-    # Return if is running or is done
-    #
-    if [[ -f $wrkdir/fcst.running || -f $wrkdir/done.fcst || -f $wrkdir/queue.fcst ]]; then
-        return
     fi
 
     #
@@ -1671,8 +1951,6 @@ function run_mpas {
     # Preparation for each member
     #
     jobarrays=()
-    lbc0_files=()
-    lbc_myfiles=()
     for iens in $(seq 1 $ENS_SIZE); do
         memstr=$(printf "%02d" $iens)
         basen=$(( (iens-1)%6 ))
@@ -1689,7 +1967,7 @@ function run_mpas {
         sfcscheme=${sfclayer_schemes[$idx]}
 
         memwrkdir=$wrkdir/fcst_$memstr
-        mkwrkdir $memwrkdir 1
+        mkwrkdir $memwrkdir 0
         cd $memwrkdir  || return
 
         #
@@ -1703,45 +1981,18 @@ function run_mpas {
             do_restart="false"
             do_dacyle="false"
         else
-            restartfile="../${domname}_${memstr}.restart.${currtime_fil}.nc"
+            restartfile="./${domname}_${memstr}.restart.${currtime_fil}.nc"
             if [[ $verb -eq 1 ]]; then echo "Member: $iens use restart file: ${restartfile}"; fi
-            ln -sf  $restartfile .
+            #ln -sf  $restartfile .
+            if [[ ! -e ${restartfile} && ${dorun} ]]; then
+                echo "ERROR: restart file: ${restartfile} not exists"
+                exit 1              # something wrong should never happen
+            fi
             do_restart="true"
             do_dacyle="true"
         fi
 
-        #
-        # lbc files
-        #
-        # shellcheck disable=SC2154
-        jens=$(( (iens-1)%nenslbc+1 ))
-        mlbcstr=$(printf "%02d" $jens)
-        isec_nlbc1=$(( iseconds/3600*3600 ))
-        isec_nlbc2=${isec_nlbc1}
-        isec_elbc=$(( iseconds+intvl_sec ))
-        while [[ $isec_elbc -gt $isec_nlbc2 ]]; do
-            (( isec_nlbc2+=EXTINVL ))
-        done
-        # External GRIB file provided file times
-        lbctime_str1=$(date -d @${isec_nlbc1} +%Y-%m-%d_%H.%M.%S)
-        lbctime_str2=$(date -d @${isec_nlbc2} +%Y-%m-%d_%H.%M.%S)
-
-        # MPAS expected boundary file times
-        isec_elbc=$((iseconds+EXTINVL))
-        mpastime_str1=$(date -d @${iseconds}  +%Y-%m-%d_%H.%M.%S)
-        mpastime_str2=$(date -d @${isec_elbc} +%Y-%m-%d_%H.%M.%S)
-        if [[ $verb -eq 1 ]]; then
-            echo "Member: $iens use lbc files from $rundir/lbc:"
-            echo "       ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc";
-            echo "       ${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc";
-        fi
-        #ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc ${domname}_${memstr}.lbc.${mpastime_str1}.nc
-        lbc0_files+=("$rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc")
-        lbc_myfiles+=("${memwrkdir}/${domname}_${memstr}.lbc.${mpastime_str1}.nc")
-        ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc ${domname}_${memstr}.lbc.${mpastime_str2}.nc
-
         ln -sf $rundir/$domname/$domname.graph.info.part.${npefcst} .
-
 
         streamlists=(stream_list.atmosphere.diagnostics stream_list.atmosphere.output stream_list.atmosphere.surface)
         for fn in "${streamlists[@]}"; do
@@ -1835,8 +2086,8 @@ function run_mpas {
     config_sst_update                = false
     config_sstdiurn_update           = false
     config_deepsoiltemp_update       = false
-    config_radtlw_interval           = '00:30:00'
-    config_radtsw_interval           = '00:30:00'
+    config_radtlw_interval           = '00:10:00'
+    config_radtsw_interval           = '00:10:00'
     config_bucket_update             = 'none'
     config_lsm_scheme                = '${MPASLSM}'
     num_soil_layers                  = ${MPASNFLS}
@@ -1932,47 +2183,11 @@ EOF
         jobarrays+=("$iens")
     done
 
-    #
-    # Create job script and submit it
-    #
     cd $wrkdir || return
 
-    # will use lbc0_files & lbc_myfiles
-    if [[ $icycle -gt 0 && $run_updatebc ]]; then
-        echo "$$-${FUNCNAME[0]}: Running run_update_bc ..."
-        run_update_bc $wrkdir
-    else             # do not need to run update_bc, just link the files
-        for i in "${!lbc_myfiles[@]}"; do
-            lbcfn=${lbc0_files[$i]}
-            mylfn=${lbc_myfiles[$i]}
-            if [[ -e $mylfn ]]; then
-                echo "    $mylfn exists, deleting ..."
-                rm -rf $mylfn
-            fi
-            echo "$$-${FUNCNAME[0]}: Using lbc file: $lbcfn ..."
-            ln -sf $lbcfn $mylfn
-            #cp $lbcfn $mylfn
-        done
-        touch "$wrkdir/done.update_bc"
-    fi
-    conditions=("$wrkdir/done.update_bc")
-
     #
-    # Waiting for update_bc
+    # Create job script for MPAS forecast and submit it
     #
-
-    if [[ $dorun == true ]]; then
-        for cond in "${conditions[@]}"; do
-            echo "$$-${FUNCNAME[0]}: Checking $cond"
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for file: $cond"
-                fi
-                sleep 10
-            done
-        done
-    fi
-
     sedfile=$(mktemp -t mpas_${eventtime}.sed_XXXX)
     # shellcheck disable=SC2154
     cat <<EOF > $sedfile
@@ -1999,7 +2214,7 @@ EOF
         echo "s/NNODES/${nnodes_fcst}/;s/NCORES/${ncores_fcst}/" >> $sedfile
     fi
 
-    submit_a_jobscript $wrkdir "fcst" $sedfile $TEMPDIR/run_mpas_array.${mach} "$mpas_jobscript" "${jobarraystr}"
+    submit_a_jobscript "$wrkdir" "fcst" "$sedfile" "$TEMPDIR/run_mpas_array.${mach}" "$mpas_jobscript" "${jobarraystr}"
 }
 
 ########################################################################
@@ -2062,40 +2277,37 @@ function da_cycle_driver() {
         echo ""
         echo "- Cycle $icyc at ${timestr_curr}"
 
+        #------------------------------------------------------
+        # 0. Check forecast status of the early cycle or inital boundary status
+        #------------------------------------------------------
         if [[ $icyc -gt 0 && $dorun == true ]]; then
 
             timesec_pre=$((isec-intvl_sec))
             event_pre=$(date -d @$timesec_pre  +%H%M)
             wrkdir_pre=${wrkdir}/${event_pre}
-            #------------------------------------------------------
-            # 0. Check forecast status of the early cycle as needed
-            #------------------------------------------------------
             if [[ ! -e ${wrkdir_pre}/done.fcst ]]; then
                 #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
                 check_and_resubmit "fcst" $wrkdir_pre $ENS_SIZE run_mpas.${mach} 0
             fi
         elif [[ $icyc -eq 0 && $dorun == true ]]; then
-            #------------------------------------------------------
-            # 0. Check boundary status at inital time
-            #------------------------------------------------------
             if [[ ! -e $rundir/lbc/done.lbc ]]; then
                 #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
                 check_and_resubmit "lbc" $rundir/lbc $nenslbc run_lbc.${mach} 0
             fi
         fi
 
+        #------------------------------------------------------
+        # 1. Run filter
+        #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " filter " ]]; then
-            #------------------------------------------------------
-            # 1. Run filter
-            #------------------------------------------------------
             if [[ $verb -eq 1 ]]; then echo ""; echo "    Run filter at $eventtime"; fi
             run_filter $dawrkdir $icyc $isec
         fi
 
+        #------------------------------------------------------
+        # 2. Run update_states for all ensemble members
+        #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " update_states " ]]; then
-            #------------------------------------------------------
-            # 2. Run update_states for all ensemble members
-            #------------------------------------------------------
             if [[ $icyc -eq 0 ]]; then
                 touch $dawrkdir/done.update_states
             else
@@ -2104,11 +2316,73 @@ function da_cycle_driver() {
             fi
         fi
 
+        #------------------------------------------------------
+        # 3. Run obs_seq_to_netcdf
+        #------------------------------------------------------
+        # shellcheck disable=SC2154
+        if [[ $icyc -gt 0 && (${run_obs2nc} || ${run_addnoise}) ]]; then
+            if [[ $verb -eq 1 ]]; then echo ""; echo "    Run obs_seq_to_netcdf at $eventtime"; fi
+            run_obs2nc $dawrkdir $isec
+        fi
+
+        #------------------------------------------------------
+        # 4. Run update_bc for all ensemble members
+        #------------------------------------------------------
+        if [[ " ${jobs[*]} " =~ " update_bc " ]]; then
+            if [[ $verb -eq 1 ]]; then echo ""; echo "    Run update_bc at $eventtime"; fi
+            run_update_bc $dawrkdir $icyc $isec
+        fi
+
+        #------------------------------------------------------
+        # 5. Add noise
+        #------------------------------------------------------
+        if [[ $run_addnoise == true ]]; then
+
+            if [[ $icyc -eq 0 ]]; then
+                touch $dawrkdir/done.add_noise
+            else
+                # check and set update_states status
+                if [[ $dorun == true ]]; then
+                    if [[ ! -e done.update_states ]]; then
+                        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+                        check_and_resubmit "update_states fcst_" $dawrkdir $ENS_SIZE run_update_states.${mach} 1
+                    fi
+                fi
+
+                if [[ $verb -eq 1 ]]; then echo ""; echo "    Run add_noise at $eventtime"; fi
+                run_add_noise $dawrkdir $isec
+            fi
+        fi
+
+        #------------------------------------------------------
+        # 6. Advance model for each member
+        #------------------------------------------------------
+        # Run forecast for ensemble members until the next analysis time
         if [[ " ${jobs[*]} " =~ " mpas " ]]; then
-            #------------------------------------------------------
-            # 3. Advance model for each member
-            #------------------------------------------------------
-            # Run forecast for ensemble members until the next analysis time
+            # check and set update_states status
+            if [[ $dorun == true ]]; then
+                if [[ ! -e done.update_states ]]; then
+                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+                    check_and_resubmit "update_states fcst_" $dawrkdir $ENS_SIZE run_update_states.${mach} 0
+                fi
+            fi
+
+            # check and set update_bc status
+            if [[ $dorun == true ]]; then
+                if [[ ! -e done.update_bc ]]; then
+                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+                    check_and_resubmit "update_bc fcst_" $dawrkdir $ENS_SIZE run_update_bc.${mach} 0
+                fi
+            fi
+
+            # check and set add_noise status
+            if [[ $dorun == true && ${run_addnoise} ]]; then
+                if [[ ! -e done.add_noise ]]; then
+                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+                    check_and_resubmit "add_noise fcst_" $dawrkdir $ENS_SIZE run_noise_pert.${mach} 0
+                fi
+            fi
+
             if [[ $verb -eq 1 ]]; then echo ""; echo "    Run advance model at $eventtime"; fi
 
             mpas_jobscript="run_mpas.${mach}"
@@ -2423,7 +2697,7 @@ else
     machine="Jet"
 fi
 
-jobs=(filter update_states mpas clean)
+jobs=(filter update_states update_bc mpas clean)
 
 source $scpdir/Common_Utilfuncs.sh || exit $?
 
@@ -2542,7 +2816,7 @@ while [[ $# -gt 0 ]]; do
             echo "Unknown option: $key"
             usage 2
             ;;
-        filter* | mpas* | update_states* | clean* | obs_diag* | obs_final2nc )
+        filter* | mpas* | update_states* | update_bc* | clean* | obs_diag* | obs_final2nc )
             #jobs=(${key//,/ })
             IFS="," read -r -a jobs <<< "$key"
             ;;
@@ -2680,7 +2954,7 @@ OUTINVL_STR="1:00:00"              # turn off history/diag outputs
 
 # $1    $2    $3
 # init start  end
-if [[ " ${jobs[*]} " =~ " filter " || " ${jobs[*]} " =~ " mpas " || " ${jobs[*]} " =~ " update_states " ]]; then
+if [[ " ${jobs[*]} " =~ " "(filter|mpas|update_states|update_bc)" " ]]; then
     da_cycle_driver $inittime_sec $starttime_sec $stoptime_sec
 elif [[ " ${jobs[*]} " =~ " clean " ]]; then
     run_clean $starttime_sec $stoptime_sec

@@ -236,7 +236,7 @@ function run_mpas {
         #
         # init files
         #
-        ln -sf $dawrkdir/${domname}_${memstr}.restart.${currtime_fil}.nc .
+        ln -sf $dawrkdir/fcst_${memstr}/${domname}_${memstr}.restart.${currtime_fil}.nc .
         do_restart="true"
         do_dacyle="true"
 
@@ -361,8 +361,8 @@ function run_mpas {
     config_sst_update                = false
     config_sstdiurn_update           = false
     config_deepsoiltemp_update       = false
-    config_radtlw_interval           = '00:30:00'
-    config_radtsw_interval           = '00:30:00'
+    config_radtlw_interval           = '00:10:00'
+    config_radtsw_interval           = '00:10:00'
     config_bucket_update             = 'none'
     config_lsm_scheme                = '${MPASLSM}'
     num_soil_layers                  = ${MPASNFLS}
@@ -1059,7 +1059,7 @@ function fcst_driver() {
         if [[ $dorun == true && $jobwait -eq 1 ]]; then
             num_resubmit=2               # resubmit failed jobs
         else
-            num_resubmit=0               # Just check job status
+            num_resubmit=-1              # Just check job status
         fi
 
         echo ""

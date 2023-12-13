@@ -17,20 +17,23 @@ echo " "
 
 ulimit -s unlimited
 
-cd WRKDIR
+mem=${PBS_ARRAY_INDEX}
+memstr=$(printf "%02d" $mem)
 
-touch update_states.running
-rm -rf error.update_states queue.update_states
+cd WRKDIR/fcst_${memstr}
+
+touch update_states.running_${memstr}
+rm -rf error.update_states_${memstr} queue.update_states_${memstr}
 
 RUNMPCMD -n NOPART EXEDIR/update_mpas_states
 
 if [[ $? -eq 0 ]]; then
-    touch done.update_states
+    touch done.update_states_${memstr}
 else
-    touch error.update_states
+    touch error.update_states_${memstr}
 fi
 
-rm -rf update_states.running
+rm -rf update_states.running_${memstr}
 
 time2=$(date '+%s')
 

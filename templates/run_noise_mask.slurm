@@ -1,0 +1,70 @@
+#!/bin/bash -l
+#SBATCH --partition=PARTION
+#SBATCH -J JOBNAME
+#SBATCH --ntasks=NOPART CPUSPEC
+#SBATCH -t 00:20:00
+#SBATCH --output=WRKDIR/noise_mask_%j.log
+ACCTSTR
+EXCLSTR
+
+time1=$(date '+%s')
+echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
+echo " "
+
+if [[ "MACHINE" == "Vecna" ]]; then
+    # >>> conda initialize >>>
+    # !! Contents within this block are managed by 'conda init' !!
+    __conda_setup="$('/scratch/software/miniconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
+    if [ $? -eq 0 ]; then
+        eval "$__conda_setup"
+    else
+        if [ -f "/scratch/software/miniconda3/etc/profile.d/conda.sh" ]; then
+            . "/scratch/software/miniconda3/etc/profile.d/conda.sh"
+        else
+            export PATH="/scratch/software/miniconda3/bin:$PATH"
+        fi
+    fi
+    unset __conda_setup
+    # <<< conda initialize <<<
+
+    conda activate wofs_post
+else
+    echo "Please set python environment for MACHINE"
+    exit 1
+fi
+
+# Retrieve command line parameters
+ncseq_file="SEQFILE"
+bkg_file="BKGFILE"
+eventdate="EVENTDATE"
+eventtime="EVENTTIME"
+
+export PYTHONPATH="WAN_PATH"
+
+cd WRKDIR
+
+touch noise_mask.running
+rm -rf error.noise_mask queue.noise_mask
+
+# Run the python programs
+python WAN_PATH/grid_refl_obs.py ${ncseq_file} 35.0 10.0 ${bkg_file} ${eventtime} ${eventdate} mpas
+
+if [[ $? -eq 0 ]]; then
+    touch done.noise_mask
+else
+    touch error.noise_mask
+fi
+
+rm -rf noise_mask.running
+
+time2=$(date '+%s')
+
+let diff=time2-time1
+let hour=diff/3600
+let diff=diff%3600
+let min=diff/60
+let sec=diff%60
+
+echo -n "Job   Ended: $(date). "
+printf 'Job run time:  %02d:%02d:%02d' $hour $min $sec
+echo " "
