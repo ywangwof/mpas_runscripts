@@ -27,7 +27,7 @@ ulimit -s unlimited
 
 cd WRKDIR
 
-touch PRONAME.running
+touch running.PRONAME
 rm -rf error.PRONAME queue.PRONAME
 
 RUNMPCMD -n NOPART EXEDIR/EXENAME
@@ -38,7 +38,7 @@ else
     touch error.PRONAME
 fi
 
-rm -rf PRONAME.running
+rm -rf running.PRONAME
 
 time2=$(date '+%s')
 

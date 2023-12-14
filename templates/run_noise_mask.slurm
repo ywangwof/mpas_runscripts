@@ -28,6 +28,20 @@ if [[ "MACHINE" == "Vecna" ]]; then
     # <<< conda initialize <<<
 
     conda activate wofs_post
+elif [[ "MACHINE" == wof-epyc? ]]; then
+    # >>> mamba initialize >>>
+    # !! Contents within this block are managed by 'mamba init' !!
+    export MAMBA_EXE='/home/yunheng.wang/y/micromamba';
+    export MAMBA_ROOT_PREFIX='/home/yunheng.wang/y';
+    __mamba_setup="$("$MAMBA_EXE" shell hook --shell zsh --root-prefix "$MAMBA_ROOT_PREFIX" 2> /dev/null)"
+    if [ $? -eq 0 ]; then
+        eval "$__mamba_setup"
+    else
+        alias micromamba="$MAMBA_EXE"  # Fallback on help from mamba activate
+    fi
+    unset __mamba_setup
+    # <<< mamba initialize <<<
+    micromamba activate /home/brian.matilla/micromamba/envs/wofs-func
 else
     echo "Please set python environment for MACHINE"
     exit 1
@@ -43,11 +57,11 @@ export PYTHONPATH="WAN_PATH"
 
 cd WRKDIR
 
-touch noise_mask.running
+touch running.noise_mask
 rm -rf error.noise_mask queue.noise_mask
 
 # Run the python programs
-RUNMPCMD -n NOPART python WAN_PATH/grid_refl_obs.py ${ncseq_file} 35.0 10.0 ${bkg_file} ${eventsecs} ${eventdays} mpas
+RUNMPCMD python WAN_PATH/grid_refl_obs.py ${ncseq_file} 35.0 10.0 ${bkg_file} ${eventsecs} ${eventdays} mpas
 
 if [[ $? -eq 0 ]]; then
     touch done.noise_mask
@@ -55,7 +69,7 @@ else
     touch error.noise_mask
 fi
 
-rm -rf noise_mask.running
+rm -rf running.noise_mask
 
 time2=$(date '+%s')
 

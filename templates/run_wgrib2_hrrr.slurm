@@ -128,7 +128,7 @@ hstr=$(printf "%02d" $fhr)
 hrrrfile="$hrrrbase$hstr"
 basefn="$targetbase$hstr"
 
-touch wgrib2_${hstr}.running
+touch running.wgrib2_${hstr}
 rm -rf error.wgrib2_${hstr} queue.wgrib2
 
 # drop un-wanted records
@@ -222,7 +222,7 @@ else
     touch error.wgrib2_${hstr}
 fi
 
-rm -rf wgrib2_${hstr}.running
+rm -rf running.wgrib2_${hstr}
 
 time2=$(date '+%s')
 

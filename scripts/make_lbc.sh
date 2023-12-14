@@ -95,7 +95,7 @@ function run_ungrib {
     mkwrkdir $wrkdir 0
     cd $wrkdir || return
 
-    if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
+    if [[ -f running.ungrib || -f done.ungrib || -f queue.ungrib ]]; then
         return 0                   # skip
     fi
 
@@ -243,7 +243,7 @@ function run_lbc {
     fi
 
     wrkdir=$rundir/lbc
-    if [[ -f $wrkdir/lbc.running || -f $wrkdir/done.lbc || -f $wrkdir/queue.lbc ]]; then
+    if [[ -f $wrkdir/running.lbc || -f $wrkdir/done.lbc || -f $wrkdir/queue.lbc ]]; then
         return 0
     fi
 

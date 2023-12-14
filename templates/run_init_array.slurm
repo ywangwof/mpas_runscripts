@@ -29,7 +29,7 @@ memstr=$(printf "%02d" $mem)
 
 cd WRKDIR/init_$memstr
 
-touch init.running_$memstr
+touch running.init_$memstr
 rm -rf error.init_$memstr queue.init_$memstr 
 
 RUNMPCMD -n NOPART EXEDIR/init_atmosphere_model
@@ -41,7 +41,7 @@ else
     touch error.init_$memstr
 fi
 
-rm -rf init.running_$memstr
+rm -rf running.init_$memstr
 
 time2=$(date '+%s')
 

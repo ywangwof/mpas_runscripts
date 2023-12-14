@@ -28,6 +28,24 @@ if [[ "MACHINE" == "Vecna" ]]; then
     # <<< conda initialize <<<
 
     conda activate wofs_post
+
+    mem_arr=("${SLURM_ARRAY_TASK_ID}")
+elif [[ "MACHINE" == wof-epyc? ]]; then
+    # >>> mamba initialize >>>
+    # !! Contents within this block are managed by 'mamba init' !!
+    export MAMBA_EXE='/home/yunheng.wang/y/micromamba';
+    export MAMBA_ROOT_PREFIX='/home/yunheng.wang/y';
+    __mamba_setup="$("$MAMBA_EXE" shell hook --shell zsh --root-prefix "$MAMBA_ROOT_PREFIX" 2> /dev/null)"
+    if [ $? -eq 0 ]; then
+        eval "$__mamba_setup"
+    else
+        alias micromamba="$MAMBA_EXE"  # Fallback on help from mamba activate
+    fi
+    unset __mamba_setup
+    # <<< mamba initialize <<<
+    micromamba activate /home/brian.matilla/micromamba/envs/wofs-func
+
+    mem_arr=( MEMARRAY )
 else
     echo "Please set python environment for MACHINE"
     exit 1
@@ -40,26 +58,29 @@ time_str="MPASTIME"
 
 export PYTHONPATH="WAN_PATH"
 
-mem=${SLURM_ARRAY_TASK_ID}
-memstr=$(printf "%02d" $mem)
+for mem in "${mem_arr[@]}"; do
+    memstr=$(printf "%02d" $mem)
 
-cd WRKDIR/fcst_${memstr}
+    cd WRKDIR/fcst_${memstr}
 
-touch add_noise.running_${memstr}
-rm -rf error.add_noise_${memstr} queue.add_noise_${memstr}
+    #touch running.add_noise_${memstr}
+    #rm -rf error.add_noise_${memstr} queue.add_noise_${memstr}
 
-# Run the python programs
+    # Run the python programs
 
-bkg_file="wofs_mpas_${memstr}.restart.${time_str}.nc"
-RUNMPCMD -n NOPART python WAN_PATH/add_pert_where_high_refl.py ${bkg_file} 9000.0 3000.0 0.50 0.50 0.0 0.50 0.50 0.0 ${eventsecs} ${eventdays} ${mem} mpas
+    bkg_file="wofs_mpas_${memstr}.restart.${time_str}.nc"
+    RUNMPCMD python WAN_PATH/add_pert_where_high_refl.py ${bkg_file} 9000.0 3000.0 0.50 0.50 0.0 0.50 0.50 0.0 ${eventsecs} ${eventdays} ${mem} mpas &
 
-if [[ $? -eq 0 ]]; then
-    touch done.add_noise_${memstr}
-else
-    touch error.add_noise_${memstr}
-fi
+    #if [[ $? -eq 0 ]]; then
+    #    touch done.add_noise_${memstr}
+    #else
+    #    touch error.add_noise_${memstr}
+    #fi
+    #
+    #rm -rf running.add_noise_${memstr}
+done
 
-rm -rf add_noise.running_${memstr}
+wait
 
 time2=$(date '+%s')
 

@@ -184,7 +184,7 @@ function run_mpas {
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/fcst.running || -f $wrkdir/done.fcst || -f $wrkdir/queue.fcst ]]; then
+    if [[ -f $wrkdir/running.fcst || -f $wrkdir/done.fcst || -f $wrkdir/queue.fcst ]]; then
         return
     fi
 

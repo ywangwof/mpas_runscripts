@@ -27,7 +27,7 @@ ulimit -s unlimited
 
 cd WRKDIR
 
-touch filter.running
+touch running.filter
 rm -rf error.filter queue.filter
 
 RUNMPCMD -n NOPART EXEDIR/filter
@@ -38,7 +38,7 @@ else
     touch error.filter
 fi
 
-rm -rf filter.running
+rm -rf running.filter
 
 time2=$(date '+%s')
 

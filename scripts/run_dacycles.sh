@@ -457,7 +457,7 @@ function run_filter {
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/filter.running || -f $wrkdir/done.filter || -f $wrkdir/queue.filter ]]; then
+    if [[ -f $wrkdir/running.filter || -f $wrkdir/done.filter || -f $wrkdir/queue.filter ]]; then
         return
     fi
 
@@ -1392,7 +1392,7 @@ function run_update_states {
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/update_states.running || -f $wrkdir/done.update_states || -f $wrkdir/queue.update_states ]]; then
+    if [[ -f $wrkdir/running.update_states || -f $wrkdir/done.update_states || -f $wrkdir/queue.update_states ]]; then
         return
     fi
 
@@ -1520,7 +1520,7 @@ function run_update_bc {
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/update_bc.running || -f $wrkdir/done.update_bc || -f $wrkdir/queue.update_bc ]]; then
+    if [[ -f $wrkdir/running.update_bc || -f $wrkdir/done.update_bc || -f $wrkdir/queue.update_bc ]]; then
         return
     fi
 
@@ -1595,9 +1595,15 @@ function run_update_bc {
         lbctime_str2=$(date -u -d @${isec_nlbc2} +%Y-%m-%d_%H.%M.%S)
 
         # MPAS expected boundary file times
-        isec_elbc=$((iseconds+EXTINVL))
         mpastime_str1=$(date -u -d @${iseconds}  +%Y-%m-%d_%H.%M.%S)
-        mpastime_str2=$(date -u -d @${isec_elbc} +%Y-%m-%d_%H.%M.%S)
+        if $run_updatebc; then
+            mpastime_str2=${lbctime_str2}
+            icycle_lbcgap=$(( isec_nlbc2-iseconds ))
+        else
+            isec_elbc=$((iseconds+EXTINVL))
+            mpastime_str2=$(date -u -d @${isec_elbc} +%Y-%m-%d_%H.%M.%S)
+            icycle_lbcgap=${EXTINVL}
+        fi
         if [[ $verb -eq 1 ]]; then
             echo "Member: $iens use lbc files from $rundir/lbc:"
             echo "       ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc";
@@ -1779,6 +1785,13 @@ function run_add_noise {
         #
         # Create job script and submit it
         #
+        mymachine=${machine}
+        runexe_str=${job_runexe_str}
+        if [[ -n "${python_machine}" ]]; then
+            mymachine=${python_machine}
+            runexe_str=""
+        fi
+
         jobscript="run_noise_mask.${mach}"
         sedfile=$(mktemp -t mask_${eventtime}.sed_XXXX)
         cat <<EOF > $sedfile
@@ -1787,21 +1800,27 @@ s/NOPART/1/
 s/JOBNAME/noise_mask_${eventtime}/
 s/CPUSPEC/${claim_cpu_update}/g
 s#WRKDIR#$wrkdir#g
-s/MACHINE/${machine}/g
+s/MACHINE/${mymachine}/g
 s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/SEQFILE/${seqfile}/g
 s#BKGFILE#${bkgfile}#g
-s#WAN_PATH#${WOFSNOSE_PATH}#g
+s#WAN_PATH#${WOFSAN_PATH}#g
 s/EVENTDAYS/${days_secs[0]}/g
 s/EVENTSECS/${days_secs[1]}/g
-s/RUNMPCMD/${job_runexe_str}/
+s/RUNMPCMD/${runexe_str}/
 EOF
         if [[ "${mach}" == "pbs" ]]; then
             echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
         fi
 
-        submit_a_jobscript $wrkdir "noise_mask" "$sedfile" "$TEMPDIR/$jobscript" "$jobscript" ""
+        if [[ -n "${python_machine}" ]]; then    # run the job on the submitted machine
+            sed -f "$sedfile" "$TEMPDIR/$jobscript" > "$jobscript"
+            echo "Running ${jobscript} on ${python_machine} at $(date +%H:%M:%S)..."
+            ssh ${python_machine} "cd ${wrkdir};bash ${jobscript} &> noise_mask.log" &>/dev/null
+        else
+            submit_a_jobscript $wrkdir "noise_mask" "$sedfile" "$TEMPDIR/$jobscript" "$jobscript" ""
+        fi
     fi
 
     #------------------------------------------------------
@@ -1850,29 +1869,43 @@ EOF
     if [[ ${#jobarrays[@]} -gt 0 ]]; then
         jobscript="run_noise_pert.${mach}"
         sedfile=$(mktemp -t pert_${eventtime}.sed_XXXX)
+
+        mymachine=${machine}
+        runexe_str=${job_runexe_str}
+        if [[ -n "${python_machine}" ]]; then
+            mymachine=${python_machine}
+            runexe_str=""
+        fi
+
         cat <<EOF > $sedfile
 s/PARTION/${partition_filter}/
 s/NOPART/1/
 s/JOBNAME/noist_pert_${eventtime}/
 s/CPUSPEC/${claim_cpu_update}/g
 s#WRKDIR#$wrkdir#g
-s/MACHINE/${machine}/g
+s/MACHINE/${mymachine}/g
 s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/SEQFILE/${seqfile}/g
-s#WAN_PATH#${WOFSNOSE_PATH}#g
+s#WAN_PATH#${WOFSAN_PATH}#g
 s/EVENTDAYS/${days_secs[0]}/g
 s/EVENTSECS/${days_secs[1]}/g
 s/MPASTIME/${mpas_timestr}/g
-s/RUNMPCMD/${job_runexe_str}/
+s/RUNMPCMD/${runexe_str}/
 EOF
         if [[ "${mach}" == "pbs" ]]; then
             echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
         fi
 
-        jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
-
-        submit_a_jobscript $wrkdir "noise_pert" "$sedfile" "$TEMPDIR/$jobscript" "$jobscript" "${jobarraystr}"
+        if [[ -n "${python_machine}" ]]; then
+            sed -f "$sedfile" "$TEMPDIR/$jobscript" > "$jobscript"
+            sed -i "s/MEMARRAY/${jobarrays[*]}/" "$jobscript"
+            echo "Running ${jobscript} on ${python_machine} at $(date +%H:%M:%S)..."
+            ssh ${python_machine} "cd ${wrkdir};bash ${jobscript} &> noise_pert.log" &>/dev/null
+        else
+            jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
+            submit_a_jobscript $wrkdir "add_noise" "$sedfile" "$TEMPDIR/$jobscript" "$jobscript" "${jobarraystr}"
+        fi
     fi
 }
 
@@ -1898,7 +1931,7 @@ function run_mpas {
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/fcst.running || -f $wrkdir/done.fcst || -f $wrkdir/queue.fcst ]]; then
+    if [[ -f $wrkdir/running.fcst || -f $wrkdir/done.fcst || -f $wrkdir/queue.fcst ]]; then
         return
     fi
 
@@ -2121,6 +2154,11 @@ EOF
 /
 EOF
 
+        (( icycle_extinvl_hr=icycle_lbcgap/3600 ))
+        (( icycle_extinvl_min=(icycle_lbcgap-3600*icycle_extinvl_hr)/60 ))
+        icycle_extinvl_str=$(printf "%02d:%02d:00" ${icycle_extinvl_hr} ${icycle_extinvl_min})
+        #echo "icycle_extinvl_str=${icycle_extinvl_str},$icycle_extinvl_hr,$icycle_extinvl_min"
+
         cat << EOF > streams.atmosphere
 <streams>
 <immutable_stream name="input"
@@ -2177,7 +2215,7 @@ EOF
                   filename_template="${domname}_${memstr}.lbc.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
                   filename_interval="input_interval"
                   packages="limited_area"
-                  input_interval="${EXTINVL_STR}" />
+                  input_interval="${icycle_extinvl_str}" />
 
 </streams>
 EOF
@@ -2271,6 +2309,13 @@ function da_cycle_driver() {
         timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
         eventtime=$(date -u -d @$isec +%H%M)
 
+        if $run_updatebc; then
+            min_passhr=$(date -u -d @$isec +%M)
+            icycle_lbcgap=$(( EXTINVL-(min_passhr*60) ))             # Seconds to next available boundary time
+        else
+            icycle_lbcgap=${EXTINVL}
+        fi
+
         dawrkdir=${wrkdir}/${eventtime}
         mkwrkdir $dawrkdir 0    # keep original directory
         cd $dawrkdir || return
@@ -2318,20 +2363,20 @@ function da_cycle_driver() {
         fi
 
         #------------------------------------------------------
-        # 3. Run obs_seq_to_netcdf
+        # 3. Run update_bc for all ensemble members
+        #------------------------------------------------------
+        if [[ " ${jobs[*]} " =~ " update_bc " ]]; then
+            if [[ $verb -eq 1 ]]; then echo ""; echo "    Run update_bc at $eventtime"; fi
+            run_update_bc $dawrkdir $icyc $isec
+        fi
+
+        #------------------------------------------------------
+        # 4. Run obs_seq_to_netcdf
         #------------------------------------------------------
         # shellcheck disable=SC2154
         if [[ $icyc -gt 0 && (${run_obs2nc} || ${run_addnoise}) ]]; then
             if [[ $verb -eq 1 ]]; then echo ""; echo "    Run obs_seq_to_netcdf at $eventtime"; fi
             run_obs2nc $dawrkdir $isec
-        fi
-
-        #------------------------------------------------------
-        # 4. Run update_bc for all ensemble members
-        #------------------------------------------------------
-        if [[ " ${jobs[*]} " =~ " update_bc " ]]; then
-            if [[ $verb -eq 1 ]]; then echo ""; echo "    Run update_bc at $eventtime"; fi
-            run_update_bc $dawrkdir $icyc $isec
         fi
 
         #------------------------------------------------------
@@ -2435,7 +2480,7 @@ function run_obs_diag {
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/obs_diag.running || -f $wrkdir/done.obs_diag || -f $wrkdir/queue.obs_diag ]]; then
+    if [[ -f $wrkdir/running.obs_diag || -f $wrkdir/done.obs_diag || -f $wrkdir/queue.obs_diag ]]; then
         return
     fi
 
@@ -2540,7 +2585,7 @@ function run_obs_final2nc {
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/obs_final2nc.running || -f $wrkdir/done.obs_final2nc || -f $wrkdir/queue.obs_final2nc ]]; then
+    if [[ -f $wrkdir/running.obs_final2nc || -f $wrkdir/done.obs_final2nc || -f $wrkdir/queue.obs_final2nc ]]; then
         return
     fi
 
@@ -2944,7 +2989,7 @@ fi
 readconf $WORKDIR/config.${eventdate} COMMON dacycles || exit $?
 # get ENS_SIZE, time_step, EXTINVL, ADAPTIVE_INF, update_in_place
 
-EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
+#EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 RSTINVL_STR=$(printf "00:%02d:00" $((intvl_sec/60)) )
 OUTINVL_STR="1:00:00"              # turn off history/diag outputs
 

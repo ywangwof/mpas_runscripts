@@ -119,7 +119,7 @@ function grid_defn {
 
 cd WRKDIR
 
-touch wgrib2_${hstr}.running
+touch running.wgrib2_${hstr}
 rm -rf error.wgrib2_${hstr} queue.wgrib2
 
 wgrib2path="wgrib2"
@@ -228,7 +228,7 @@ else
     touch error.wgrib2_${hstr}
 fi
 
-rm -rf wgrib2_${hstr}.running
+rm -rf running.wgrib2_${hstr}
 
 #
 # Clean working files

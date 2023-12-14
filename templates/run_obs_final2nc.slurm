@@ -27,7 +27,7 @@ ulimit -s unlimited
 
 cd WRKDIR
 
-touch obs_final2nc.running
+touch running.obs_final2nc
 rm -rf error.obs_final2nc queue.obs_final2nc
 
 for((i=START_S;i<=END_S;i+=INTVL_S)); do
@@ -60,7 +60,7 @@ else
     touch error.obs_final2nc
 fi
 
-rm -rf obs_final2nc.running
+rm -rf running.obs_final2nc
 
 time2=$(date '+%s')
 

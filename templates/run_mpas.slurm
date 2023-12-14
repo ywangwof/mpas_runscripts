@@ -41,7 +41,7 @@ ulimit -s unlimited
 
 cd WRKDIR
 
-touch fcst.running
+touch running.fcst
 rm -rf error.fcst queue.fcst
 
 # first recover namelist parameters for possibly an old run.
@@ -57,7 +57,7 @@ else
     touch error.fcst
 fi
 
-rm -rf fcst.running
+rm -rf running.fcst
 
 time2=$(date '+%s')
 

@@ -96,7 +96,7 @@ function run_ungrib {
     mkwrkdir "$wrkdir" 0
     cd "$wrkdir" || return
 
-    if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
+    if [[ -f running.ungrib || -f done.ungrib || -f queue.ungrib ]]; then
         return 0                   # skip
     else
         starthr=$(((eventtime-gribtime)/100))
@@ -229,7 +229,7 @@ function run_init {
     fi
 
     wrkdir=$rundir/init
-    if [[ -f $wrkdir/init.running || -f $wrkdir/done.init || -f $wrkdir/queue.init ]]; then
+    if [[ -f $wrkdir/running.init || -f $wrkdir/done.init || -f $wrkdir/queue.init ]]; then
         return 0
     fi
 

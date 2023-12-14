@@ -30,7 +30,7 @@ memstr=$(printf "%02d" $mem)
 
 cd WRKDIR/lbc_$memstr
 
-touch lbc.running_$memstr
+touch running.lbc_$memstr
 rm -rf error.lbc_$memstr queue.lbc_$memstr
 
 RUNMPCMD -n NOPART EXEDIR/init_atmosphere_model
@@ -42,7 +42,7 @@ else
     touch error.lbc_$memstr
 fi
 
-rm -rf lbc.running_$memstr
+rm -rf running.lbc_$memstr
 
 time2=$(date '+%s')
 

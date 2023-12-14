@@ -30,7 +30,7 @@ memstr=$(printf "%02d" $mem)
 
 cd WRKDIR/fcst_${memstr}
 
-touch update_states.running_$memstr
+touch running.update_states_$memstr
 rm -rf error.update_states_$memstr queue.update_states_$memstr
 
 RUNMPCMD -n NOPART EXEDIR/update_mpas_states
@@ -41,7 +41,7 @@ else
     touch error.update_states_$memstr
 fi
 
-rm -rf update_states.running_$memstr
+rm -rf running.update_states_$memstr
 
 time2=$(date '+%s')
 

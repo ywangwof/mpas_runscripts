@@ -18,7 +18,7 @@ memstr=$(printf "%02d" $mem)
 
 cd WRKDIR/ungrib_$memstr
 
-touch ungrib.running_$memstr
+touch running.ungrib_$memstr
 rm -rf error.ungrib_$memstr 
 
 RUNCMD -n 1 EXEDIR/ungrib.exe
@@ -30,7 +30,7 @@ else
     touch error.ungrib_$memstr
 fi
 
-rm -rf ungrib.running_$memstr
+rm -rf running.ungrib_$memstr
 
 time2=$(date '+%s')
 

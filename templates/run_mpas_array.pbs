@@ -38,7 +38,7 @@ memstr=$(printf "%02d" $mem)
 
 cd WRKDIR/fcst_${memstr}
 
-touch fcst.running_$memstr
+touch running.fcst_$memstr
 rm -rf error.fcst_$memstr queue.fcst_$memstr
 
 # first recover namelist parameters for possibly an old run.
@@ -60,7 +60,7 @@ else
     touch error.fcst_$memstr
 fi
 
-rm -rf fcst.running_$memstr
+rm -rf running.fcst_$memstr
 
 time2=$(date '+%s')
 

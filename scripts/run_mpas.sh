@@ -530,7 +530,7 @@ function run_ungrib_hrrr {
     julday=$(date -u -d "$eventdate ${eventtime}:00" +%y%j%H)
     hrrrbase="${julday}0000"
 
-    if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
+    if [[ -f running.ungrib || -f done.ungrib || -f queue.ungrib ]]; then
         :                   # skip
     else
         myhrrrfiles=(); jobarrays=()
@@ -699,7 +699,7 @@ function run_ungrib_gfs {
 
     julday=$(date -u -d "$eventdate ${eventtime}:00" +%y%j%H)
 
-    if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
+    if [[ -f running.ungrib || -f done.ungrib || -f queue.ungrib ]]; then
         return 0                   # skip
     else
         gfsfiles=()
@@ -781,7 +781,7 @@ function run_ungrib_rrfsna {
 
     julday=$(date -u -d "$eventdate ${eventtime}:00" +%y%j%H)
 
-    if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
+    if [[ -f running.ungrib || -f done.ungrib || -f queue.ungrib ]]; then
         :                   # skip
     else
         currdate=$(date -u -d "$eventdate ${eventtime}:00" +%Y%m%d)
@@ -987,7 +987,7 @@ function run_ungrib_rrfs {
 
     julday=$(date -u -d "$eventdate ${eventtime}:00" +%y%j%H)
 
-    if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
+    if [[ -f running.ungrib || -f done.ungrib || -f queue.ungrib ]]; then
         :                   # skip
     else
         currdate=$(date -u -d "$eventdate ${eventtime}:00" +%Y%m%d)
@@ -1222,7 +1222,7 @@ function run_ungrib_rrfsp {
 
     julday=$(date -u -d "$eventdate ${eventtime}:00" +%y%j%H)
 
-    if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
+    if [[ -f running.ungrib || -f done.ungrib || -f queue.ungrib ]]; then
         :                   # skip
     else
         currdate=$(date -u -d "$eventdate ${eventtime}:00" +%Y%m%d)
@@ -1384,7 +1384,7 @@ function run_init {
     fi
 
     wrkdir=$rundir/init
-    if [[ -f $wrkdir/ics.running || -f $wrkdir/done.ics || -f $wrkdir/queue.ics ]]; then
+    if [[ -f $wrkdir/running.ics || -f $wrkdir/done.ics || -f $wrkdir/queue.ics ]]; then
         :                   # skip
     else
         mkwrkdir $wrkdir $overwrite
@@ -1562,7 +1562,7 @@ function run_lbc {
     fi
 
     wrkdir=$rundir/lbc
-    if [[ -f $wrkdir/lbc.running || -f $wrkdir/done.lbc || -f $wrkdir/queue.lbc ]]; then
+    if [[ -f $wrkdir/running.lbc || -f $wrkdir/done.lbc || -f $wrkdir/queue.lbc ]]; then
         :                   # skip
     else
         mkwrkdir $wrkdir $overwrite
@@ -1726,7 +1726,7 @@ function run_mpas {
     # Build working directory
     #
     wrkdir=$rundir/fcst
-    if [[ -f $wrkdir/fcst.running || -f $wrkdir/done.fcst || -f $wrkdir/queue.fcst ]]; then
+    if [[ -f $wrkdir/running.fcst || -f $wrkdir/done.fcst || -f $wrkdir/queue.fcst ]]; then
         :                   # skip
     else
         mkwrkdir $wrkdir $overwrite

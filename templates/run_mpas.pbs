@@ -25,7 +25,7 @@ ulimit -s unlimited
 
 cd WRKDIR
 
-touch fcst.running
+touch running.fcst
 rm -rf error.fcst queue.fcst
 
 sed -i "s/NNNODE/$nnode/;s/NNCORE/$ncores/;" namelist.atmosphere
@@ -38,7 +38,7 @@ else
     touch error.mpas
 fi
 
-rm -rf fcst.running
+rm -rf running.fcst
 
 time2=$(date '+%s')
 

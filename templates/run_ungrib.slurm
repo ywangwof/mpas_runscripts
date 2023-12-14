@@ -15,7 +15,7 @@ echo " "
 
 cd WRKDIR
 
-touch ungrib.running
+touch running.ungrib
 rm -rf error.ungrib queue.ungrib
 
 RUNCMD -n 1 EXEDIR/ungrib.exe
@@ -26,7 +26,7 @@ else
     touch error.ungrib
 fi
 
-rm -rf ungrib.running
+rm -rf running.ungrib
 
 time2=$(date '+%s')
 

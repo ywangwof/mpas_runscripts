@@ -258,7 +258,7 @@ function run_createWOFS {
         echo "Found file \"done.create\", skipping run_createWOFS ...."
         echo ""
         return
-    elif [[ -f create.running || -f queue.create ]]; then
+    elif [[ -f running.create || -f queue.create ]]; then
         return                   # skip
     fi
 
@@ -580,7 +580,7 @@ function run_rotate {
         echo "Found file \"done.rotate\", skipping run_rotate ...."
         echo ""
         return
-    elif [[ -f rotate.running || -f queue.rotate ]]; then
+    elif [[ -f running.rotate || -f queue.rotate ]]; then
         return                   # skip
     fi
 
@@ -686,7 +686,7 @@ function run_ungrib_hrrr {
         echo "Found file \"done.ungrib\", skipping run_ungrib_hrrr ...."
         echo ""
         return                   # skip
-    elif [[ -f ungrib.running || -f queue.ungrib ]]; then
+    elif [[ -f running.ungrib || -f queue.ungrib ]]; then
         return                   # skip
     fi
 
@@ -964,6 +964,7 @@ function write_runtimeconfig {
     # Machine specific setting for init, lbc, dacycles & fcst
     #-------------------------------------------------------------------
 
+    pythonmachine=""
     case $machine in
     "Jet" )
         # ICs
@@ -1058,6 +1059,8 @@ function write_runtimeconfig {
         ;;
 
     * )    # Vecna at NSSL
+
+        pythonmachine="wof-epyc3"
 
         # ICs
         ncores_ics=96
@@ -1163,11 +1166,14 @@ function write_runtimeconfig {
                                         # making a copy of the restart files
     run_updatebc=true
     run_obs2nc=true
+
     run_addnoise=true
+    python_machine="${pythonmachine}"   # if not empty, you should have set up passwordless access on it and the
+                                        # Python environment is properly set in run_noise_mask.slurm & run_noise_pert.slurm
+    WOFSAN_PATH="/scratch/ywang/MPAS/wofs_new_noise"
 
     OUTIOTYPE="netcdf4"
     OBS_DIR="${OBS_DIR}"
-    WOFSNOSE_PATH="/scratch/ywang/MPAS/wofs_new_noise"
 
     #ncores_fcst="${ncores_dafcst}"
     ncores_filter="${ncores_filter}"
