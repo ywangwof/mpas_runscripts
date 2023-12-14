@@ -51,7 +51,7 @@ rm -rf error.add_noise_${memstr} queue.add_noise_${memstr}
 # Run the python programs
 
 bkg_file="wofs_mpas_${memstr}.restart.${time_str}.nc"
-python WAN_PATH/add_pert_where_high_refl.py ${bkg_file} 9000.0 3000.0 0.50 0.50 0.0 0.50 0.50 0.0 ${eventsecs} ${eventdays} ${mem} mpas
+RUNMPCMD -n NOPART python WAN_PATH/add_pert_where_high_refl.py ${bkg_file} 9000.0 3000.0 0.50 0.50 0.0 0.50 0.50 0.0 ${eventsecs} ${eventdays} ${mem} mpas
 
 if [[ $? -eq 0 ]]; then
     touch done.add_noise_${memstr}

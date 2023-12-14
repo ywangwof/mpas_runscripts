@@ -522,6 +522,7 @@ function run_filter {
 
     if [[ $icycle -eq 0 ]]; then
         # Skip filter at cycle 0 temporarily
+        touch done.filter
         return
     fi
 
@@ -606,7 +607,6 @@ function run_filter {
    silence                  = .false.
 
    stages_to_write          = 'preassim', 'output'
-   output_members           = .true.
    output_mean              = .true.
    output_sd                = .true.
    write_all_stages_at_end  = .false.
@@ -1447,8 +1447,8 @@ function run_update_states {
             echo "    $fnbase exists"
         fi
         echo "./$fnbase" > ${update_output_file_name}
-        sed -i "/update_input_file_list/s/filter_out.txt/${update_input_file_name}/" input.nml
-        sed -i "/update_output_file_list/s/filter_in.txt/${update_output_file_name}/" input.nml
+        sed -i "/update_input_file_list/s/=.*/= '${update_input_file_name}'/" input.nml
+        sed -i "/update_output_file_list/s/=.*/= '${update_output_file_name}'/" input.nml
         sed -i "/init_template_filename/s/init.nc/${fnbase}/" input.nml
 
         jobarrays+=("$iens")
@@ -1541,7 +1541,7 @@ function run_update_bc {
         done
     fi
 
-    if [[ $run_updatebc == true ]]; then
+    if [[ $icycle -gt 0 && $run_updatebc == true ]]; then
         #cpcmd="cp"
         cpcmd="rsync -a"
     else
@@ -1552,9 +1552,11 @@ function run_update_bc {
     # Prepare update_bc by copying/linking the background files
     #------------------------------------------------------
 
-    # update_states input file list, will be modified for one member only
-    update_input_file=$(awk '/update_analysis_file_list/{print $3}' input.nml)
-    readarray -t anlfile_array < ${update_input_file:1:${#update_input_file}-2}
+    if [[ $icycle -gt 0 && $run_updatebc ]]; then
+        # update_states input file list, will be modified for one member only
+        update_input_file=$(awk '/update_analysis_file_list/{print $3}' input.nml)
+        readarray -t anlfile_array < ${update_input_file:1:${#update_input_file}-2}
+    fi
 
     jobarrays=()
     for iens in $(seq 1 $ENS_SIZE); do
@@ -1566,15 +1568,14 @@ function run_update_bc {
         mkwrkdir $memwrkdir 0
         cd $memwrkdir  || return
 
-        if [[ ! -e input.nml ]]; then
-            cp ../input.nml .
-        fi
-
         update_output_file_name='update_bc_inout.txt'
-        rm -rf ${update_output_file_name}
-
         update_anal_file_name='update_bc_in.txt'
-        rm -rf ${update_anal_file_name}
+
+        if [[ ! -e input.nml && $icycle -gt 0 && $run_updatebc ]]; then
+            cp ../input.nml .
+            rm -rf ${update_output_file_name}
+            rm -rf ${update_anal_file_name}
+        fi
 
         #
         # lbc files
@@ -1615,11 +1616,11 @@ function run_update_bc {
 
         if [[ $icycle -gt 0 && $run_updatebc ]]; then
             echo "$lbc_filem" >> ${update_output_file_name}
-            sed -i "/update_boundary_file_list/s/boundary_inout.txt/${update_output_file_name}/" input.nml
+            sed -i "/update_boundary_file_list/s/=.*/= '${update_output_file_name}'/" input.nml
             echo "../${anlfile_array[$jindex]}" >> ${update_anal_file_name}
-            sed -i "/update_analysis_file_list/s/filter_out.txt/${update_anal_file_name}/" input.nml
+            sed -i "/update_analysis_file_list/s/=.*/= '${update_anal_file_name}'/" input.nml
         else             # do not need to run update_bc, just link the files
-            touch "$wrkdir/done.update_bc.${memstr}"
+            touch "$memwrkdir/done.update_bc_${memstr}"
         fi
 
         #echo "$$-${FUNCNAME[0]}: Using lbc file: $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc ..."
@@ -1794,6 +1795,7 @@ s#BKGFILE#${bkgfile}#g
 s#WAN_PATH#${WOFSNOSE_PATH}#g
 s/EVENTDAYS/${days_secs[0]}/g
 s/EVENTSECS/${days_secs[1]}/g
+s/RUNMPCMD/${job_runexe_str}/
 EOF
         if [[ "${mach}" == "pbs" ]]; then
             echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
@@ -1862,6 +1864,7 @@ s#WAN_PATH#${WOFSNOSE_PATH}#g
 s/EVENTDAYS/${days_secs[0]}/g
 s/EVENTSECS/${days_secs[1]}/g
 s/MPASTIME/${mpas_timestr}/g
+s/RUNMPCMD/${job_runexe_str}/
 EOF
         if [[ "${mach}" == "pbs" ]]; then
             echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
