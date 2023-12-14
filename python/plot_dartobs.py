@@ -10,11 +10,11 @@
 
 import os
 import sys
-#import re
+import re
 import math
 import argparse
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 
@@ -40,6 +40,7 @@ from pyproj import Transformer
 from scipy.interpolate import griddata
 
 import time as timeit
+from itertools import islice
 
 #""" By default matplotlib will try to open a display windows of the plot, even
 #though sometimes we just want to save a plot. Somtimes this can cause the
@@ -285,20 +286,20 @@ def parse_args():
         parsed_args['basmap'] = "latlon"
 
     if args.vertLevels is not None:
-        rlist = [float(item) for item in args.vertLevels.split(',')]
-        parsed_args['t_level'] = f"{rlist[1]:8.2f}"
-        parsed_args['t_level_type'] = str(rlist[0])
-        parsed_args['t_level_tolr'] = rlist[2]
+        rlist = [item for item in args.vertLevels.split(',')]
+        parsed_args['t_level_type'] = rlist[0]
+        parsed_args['t_level']      = float(rlist[1])
+        parsed_args['t_level_tolr'] = float(rlist[2])
     else:
         parsed_args['t_level'] = 'ALL'
 
     parsed_args['t_copy'] = None
     parsed_args['t_qc']   = 'ALL'
     if args.parms is not None:
-        rlist = [int(item) for item in args.parms.split(',')]
-        parsed_args['t_copy'] = str(rlist[0])
+        rlist = [item for item in args.parms.split(',')]
+        parsed_args['t_copy'] = rlist[0]
         if len(rlist) > 1:
-            parsed_args['t_qc']   = str(rlist[1])
+            parsed_args['t_qc'] = rlist[1]
 
     obsfiles  = []
     types     = []
@@ -319,6 +320,10 @@ def parse_args():
         print(f"file name can only be one. Got \"{obsfiles}\"")
         sys.exit(0)
 
+    parsed_args['ncfmt'] = False
+    if parsed_args['obsfile'].endswith('.nc'):
+        parsed_args['ncfmt'] = True
+
     if len(types) == 1:
         type = types[0]
     else:
@@ -336,17 +341,15 @@ def parse_args():
     elif args.range is not None:
         rlist = [float(item) for item in args.range.split(',')]
         if len(rlist) < 4:
-            print("-range expects 4 or more degrees as [lat1,lon1,lat2,lon2, ...].")
+            print("-range expects 4 or more degrees as [lat1,lat2,lon1,lon2, ...].")
             sys.exit(0)
         rlist = [float(item) for item in args.range.split(',')]
 
-        lats=rlist[0::2]
-        lons=rlist[1::2]
-        parsed_args['ranges'] = [min(lons)-2.0,max(lons)+2.0,min(lats)-2.0,max(lats)+2.0]
-
+        lats=rlist[0:2]
+        lons=rlist[2:4]
+        parsed_args['ranges'] = [min(lons),max(lons),min(lats),max(lats)]
 
     # Require t_copy parameter for slice plotting
-
     if args.scatter is None and parsed_args['type'] != "list":
         if parsed_args['t_copy'] is None:
             print('ERROR: need option "-p" to know which observation copy to be plotted.')
@@ -507,18 +510,215 @@ def load_variables(args):
     var_obj['validpres']  = validpres    # location, distinguis values in 3rd dimension of location
     var_obj['validhgts']  = validhgts    # location, distinguis values in 3rd dimension of location
     var_obj['copyMeta']   = copyMeta     # CopyMetaData
-    var_obj['varlabels']  = varlabels     # CopyMetaData
+    var_obj['varlabels']  = varlabels    # CopyMetaData
     var_obj['qclabels']   = qclabels     # CopyMetaData
 
-    var_obj['nobs']    = nobs
-    var_obj['varqc']   = varqc      # int qc(ObsIndex, qc_copy)
-    var_obj['obstype'] = obstype    # int obs_type(ObsIndex)
-    var_obj['varloc']  = varloc     # double location(ObsIndex, locdim)
-    var_obj['varvert'] = varvert    # int which_vert(ObsIndex)
-    var_obj['varobs']  = varobs     # double observations(ObsIndex, copy)
-    var_obj['vartime'] = vartime     # double observations(ObsIndex, copy)
+    var_obj['nobs']     = nobs
+    var_obj['nvarcopy'] = ncopy
+    var_obj['nqccopy']  = nqc_copy
+    var_obj['varqc']    = varqc      # int qc(ObsIndex, qc_copy)
+    var_obj['obstype']  = obstype    # int obs_type(ObsIndex)
+    var_obj['varloc']   = varloc     # double location(ObsIndex, locdim)
+    var_obj['varvert']  = varvert    # int which_vert(ObsIndex)
+    var_obj['varobs']   = varobs     # double observations(ObsIndex, copy)
+    var_obj['vartime']  = vartime     # double observations(ObsIndex, copy)
 
     return make_namespace(var_obj,level=1)
+
+########################################################################
+
+def load_obs_seq(varargs):
+
+    var_obj = {}
+
+    vardat = []
+    varloc = []
+    vartim = []
+    vartyp = []
+    varqc_ = []
+    varver = []
+
+    type_re = re.compile('\d+ [A-Z_]+')
+    type_labels = {}
+    var_labels  = {}
+    qc_labels   = {}
+
+    #expect_time = varargs.time.timestamp()
+    #expt1 = expect_time - 300
+    #expt2 = expect_time + 300
+
+    nobs = 0
+    if os.path.lexists(varargs.obsfile):
+
+        with open(args.obsfile,'r') as fh:
+            while True:
+                line = fh.readline().strip()
+                if not line: break
+                #print(line)
+                if type_re.match(line):
+                    type,label = line.split()
+                    type_labels[type] = label
+                elif line.startswith('num_copies:'):
+                    ncopy,nqc = line.split()[1:4:2]
+                    ncopy = int(ncopy)
+                    nqc   = int(nqc)
+                    #nobslines = 8+ncopy+nqc
+                elif line.startswith('num_obs:'):
+                    nobs = line.split()[1]
+                    label_gen = islice(fh, ncopy)
+                    for i,label in enumerate(label_gen):
+                        var_labels[str(i+1)] = label.strip()
+
+                    label_gen = islice(fh, nqc)
+                    for i,label in enumerate(label_gen):
+                        qc_labels[str(i)] = label.strip()
+
+                elif line.startswith("OBS"):
+                    #obs_gen = islice(fh, nobslines)
+                    obs = decode_obs_seq_OBS(fh,ncopy,nqc)
+                    vardat.append(obs.value)
+                    varloc.append((obs.lon,obs.lat,obs.level))
+                    vartim.append(obs.time)
+                    vartyp.append(obs.type)
+                    varqc_.append(obs.qc)
+                    varver.append(obs.level_type)
+
+    #print(f"nobs = {nobs}")
+
+    var_obj['nobs']     = nobs
+    var_obj['nvarcopy'] = ncopy
+    var_obj['nqccopy']  = nqc
+    var_obj['varobs']   = np.array(vardat)
+    var_obj['varloc']   = np.array(varloc)
+    var_obj['vartime']  = np.array(vartim)
+    var_obj['obstype']  = np.array(vartyp)
+    var_obj['varqc']    = np.array(varqc_)
+    var_obj['varvert']  = np.array(varver)
+
+    #print(var_obj['varqc'])
+    # Meta data
+
+    qclabels = { '0' : 'assim', '1' : 'eval', '2' : 'APFfail',
+                 '3' : 'EPFfail',  '4' : 'PFfail',
+                 '5' : 'NA',   '6' : 'QCrejected', '7' : 'outlier' }
+
+    varlabels={
+                '1' : 'ObsValue',
+                '2' : 'priorMean',
+                '3' : 'postMean',
+                '4' : 'priosSpread',
+                '5' : 'postSpread',
+                '6' : 'priorMem1',
+                '7' : 'postMem1',
+                '8' : 'priorMem2',
+                '9' : 'postMem2',
+                '10': 'priorMem3',
+                '11': 'postMeme3',
+                '12': 'obserrVar'
+            }
+
+    varlabels1={
+                '1' : 'Observation',
+        }
+
+    validqcval = np.unique(var_obj['varqc'])
+
+    validverts = np.unique(var_obj['varvert'])
+
+    obs_pres = np.where(var_obj['varvert'] == 2)[0]     # ISPRESSURE
+    obs_hgts = np.where(var_obj['varvert'] == 3)[0]     # ISHEIGHT
+
+    validpres = None
+    validhgts = None
+    if len(obs_pres) > 0:
+        validpres = var_obj['varloc'][obs_pres,2]
+
+    if len(obs_hgts) > 0:
+        validhgts = var_obj['varloc'][obs_hgts,2]
+
+    var_obj['validqc']    = qc_labels      # QCMetaData
+    var_obj['validtypes'] = type_labels    # ObsTypesMetaData
+    var_obj['validqcval'] = validqcval     # qc, distinguis values
+    var_obj['validverts'] = validverts     # which_vert, distinguis values
+    var_obj['validpres']  = validpres      # location, distinguis values in 3rd dimension of location
+    var_obj['validhgts']  = validhgts      # location, distinguis values in 3rd dimension of location
+    var_obj['copyMeta']   = var_labels     # CopyMetaData
+    if ncopy == 1:
+        var_obj['varlabels']  = varlabels1
+    else:
+        var_obj['varlabels']  = varlabels      # CopyMetaData
+    var_obj['qclabels']   = qclabels       # CopyMetaData
+
+    return make_namespace(var_obj,level=1)
+
+########################################################################
+
+def decode_obs_seq_OBS(fhandle,ncopy,nqc):
+
+    nobslines = 8+ncopy+nqc
+
+    inqc = ncopy+nqc
+    iloc = inqc + 3
+    itype = iloc + 2
+    itime = itype + 1
+    ivar = itime + 1
+
+    values = []
+    qcs    = []
+
+    i = 0
+    while True:
+        line = fhandle.readline()
+        sline = line.strip()
+
+        if sline == "platform":
+            itime = itype + 8
+            ivar  = itime + 1
+            nobslines = 15+ncopy+nqc
+            #print(i,nobslines,itime,sline)
+
+        if i < ncopy:
+            values.append(float(sline))
+
+        elif i < inqc:
+            qc = float(sline)
+            qcs.append(math.floor(qc))
+        elif i == iloc:
+            lon,lat,alt,vert = sline.split()
+
+        elif i == itype:
+            otype = int(sline)
+            if otype >= 124 and otype <= 126:
+              itime = itype + 3
+              ivar  = itime + 1
+              nobslines = 10+ncopy+nqc
+
+        elif i == itime:
+            #print(sline)
+            secs,days = sline.split()
+        elif i == ivar:
+            var=float(line)
+
+        i+=1
+        if i >= nobslines: break
+
+    # 1970 01 01 00:00:00 is 134774 days 00 seconds
+    # one day is 86400 seconds
+
+    obsobj = {'value': values,
+              'qc':    qcs,
+              'lon':   math.degrees(float(lon)),
+              'lat':   math.degrees(float(lat)),
+              'level': float(alt),
+              'level_type': int(vert),
+              'type':  otype,
+              'days':  int(days),
+              'secs':  int(secs),
+              'time':  float(days)+float(secs)/86400,
+              'variance': var
+              }
+
+    return make_namespace(obsobj)
 
 ########################################################################
 
@@ -542,6 +742,8 @@ QCValMeta = { '0' : 'assimilated successfully',
               '8' : 'vertical location conversion failed'
             }
 
+########################################################################
+
 def print_meta(varobj):
     """ Output variable information in the file
     """
@@ -550,6 +752,11 @@ def print_meta(varobj):
 
     #-------------------------------------------------------------------
     # Retrieve QC numbers for each type
+
+    if varobj.nqccopy > 1:
+        iqc = 1
+    else:
+        iqc = 0
 
     validtypeqccount = {}
     for key in varobj.validtypes.keys():
@@ -563,9 +770,9 @@ def print_meta(varobj):
         #
         # Select obs_index by qc flag
         #
-        typeqcs = np.unique(varobj.varqc[obs_index0,1])
+        typeqcs = np.unique(varobj.varqc[obs_index0,iqc])
         for qval in typeqcs:
-            obs_index1 = np.where(varobj.varqc[obs_index0,1] == qval)[0]
+            obs_index1 = np.where(varobj.varqc[obs_index0,iqc] == qval)[0]
 
             typeqcvals[str(qval)] = len(obs_index1)
 
@@ -581,14 +788,17 @@ def print_meta(varobj):
 
     print("Valid Observation Types:")
     for key in sorted(varobj.validtypes.keys(), key=int):
-        print(f"    {key:>3}: {varobj.validtypes[key]} {validtypeqccount[key]}")
+        print(f"    {key:>3}: {varobj.validtypes[key]}\t {validtypeqccount[key]}")
     print("")
 
-    print(f"Valid QC values: {sorted(varobj.validqcval)} and meanings")
-    for key,val in QCValMeta.items():
-        if int(key) in varobj.validqcval:
-            print(f"    {key}: {val}")
-    print()
+    if len(varobj.validqc) == 1:
+        print(f"Valid QC values: {sorted(varobj.validqcval)}")
+    else:
+        print(f"Valid QC values: {sorted(varobj.validqcval)} and meanings")
+        for key,val in QCValMeta.items():
+            if int(key) in varobj.validqcval:
+                print(f"    {key}: {val}")
+    print("")
 
     VertMeta = { '-2' : 'ISUNDEF      ' ,
                  '-1' : 'ISSURFACE    ' ,
@@ -625,28 +835,41 @@ def retrieve_plotvar(varargs,varobj):
     #
     # Select obs_index by type
     #
+    print(f"Select observations of type = {varargs.type} ....",end="")
     obs_index0 = np.where( varobj.obstype == int(varargs.type) )[0]
+    print(f"    Got {len(obs_index0)} observations")
     plot_meta['type_label'] = varobj.validtypes[varargs.type].strip()
 
     #
     # Select obs_index by qc flag
     #
-    if varargs.t_qc == 'ALL':
+    if varobj.nqccopy > 1:
+        iqc = 1
+    else:
+        iqc = 0
+
+    print(f"Select observations of qc value ({iqc}) = {varargs.t_qc} ....",end="")
+    if varargs.t_qc.upper() == 'ALL':
         obs_index1 = obs_index0
         plot_meta['qc_label'] = 'ALLQC'
     else:
-        obs_index1 = np.where( varobj.varqc[:,1] == int(varargs.t_qc) )[0]
+        obs_index1 = np.where( varobj.varqc[obs_index0,iqc] == int(varargs.t_qc) )[0]
+        obs_index1 = obs_index0[obs_index1]    # To keep the original whole observation indices
         plot_meta['qc_label'] = varobj.qclabels[varargs.t_qc]
+    print(f"    Got {len(obs_index1)} observations")
 
     #
     # Select obs_index by vertical levels
     #
     if varargs.t_level == 'ALL':
         plot_meta['level_label'] = 'ALLlevels'
+        print(f"Select observations of levels = {varargs.t_level} ....",end="")
     else:
+        print(varargs.t_level, varargs.t_level_tolr)
         t_level_min = varargs.t_level - varargs.t_level_tolr
         t_level_max = varargs.t_level + varargs.t_level_tolr
         plot_meta['level_label'] = str(varargs.t_level)
+        print(f"Select observations of levels = {t_level_min} - {t_level_max} ....",end="")
 
     obs_index = []
     for n in obs_index1:
@@ -658,6 +881,7 @@ def retrieve_plotvar(varargs,varobj):
             if l_flag == int(varargs.t_level_type):
                 if l_val >= t_level_min and l_val <= t_level_max:
                     obs_index.append(n)
+    print(f"    Got {len(obs_index)} observations")
 
     #
     # Get plotting arrays
@@ -707,7 +931,9 @@ def retrieve_scattervar(cmdargs,varargs,varobj):
     #
     # Select obs_index by type
     #
+    print(f"Select observations of type = {varargs.type} ....",end="")
     obs_index = np.where( varobj.obstype == int(varargs.type) )[0]
+    print(f"    Got {len(obs_index)} observations")
 
     plot_meta['type_label'] = varobj.validtypes[varargs.type].strip()
 
@@ -967,7 +1193,7 @@ def make_plot(cargs,wargs,wobj):
 
     if wargs.t_copy == "0":
         mks = ['o', 'x', '+', '*', 's', 'D', '^', '1']
-        cls = ['r', 'g', 'm', 'c', 'k', 'y', 'b', 'k']
+        cls = ['g', 'r', 'm', 'c', 'k', 'y', 'b', 'k']
         j = 0
         for qc in plot_meta.validqcs:
             lons = glons[vardat == qc]
@@ -1109,7 +1335,7 @@ def make_scatter(cargs,wargs,wobj):
     # Save figure to a file
     #
     if wargs.defaultoutfile:
-        outpng = f"Obs{cargs.scatter.capitalize()}_{plot_meta.type_label}_{dta_s[qc]['time']}.png"
+        outpng = f"Obs{cargs.scatter.capitalize()}_{plot_meta.type_label}_{dta_s[qc]['time'].replace(':','')}.png"
     else:
         root,ext=os.path.splitext(wargs.outfile)
         if ext != ".png":
@@ -1143,7 +1369,10 @@ if __name__ == "__main__":
     #
     time1 = timeit.time()
 
-    obs_obj = load_variables(args)
+    if args.ncfmt:
+        obs_obj = load_variables(args)
+    else:
+        obs_obj = load_obs_seq(args)
 
     if cmd_args.verbose: print("\n Elapsed time of load_variables is:  %f seconds" % (timeit.time() - time1))
 
@@ -1158,10 +1387,13 @@ if __name__ == "__main__":
     else:
         time3 = timeit.time()
 
-        if cmd_args.scatter is not None:
-            make_scatter(cmd_args,args,obs_obj)
-        else:
+        if cmd_args.scatter is None:
             make_plot(cmd_args, args,obs_obj)
+        else:
+            if obs_obj.nvarcopy > 1:
+                make_scatter(cmd_args,args,obs_obj)
+            else:
+                print(f"ERROR: there is no enough ncopy ({obs_obj.nvarcopy}) for scatter plots.")
 
         if cmd_args.verbose: print("\n Elapsed time of make_plot is:  %f seconds" % (timeit.time() - time3))
 

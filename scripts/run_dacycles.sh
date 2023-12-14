@@ -169,6 +169,8 @@ EOF
     template_inputfile=$(head -1 $wrkdir/filter_in.txt)
     ln -sf $template_inputfile init.nc
 
+    echo "$$-${FUNCNAME[0]}: OBS Preprocessing for analysis time: ${anlys_time}, days: ${g_date}, seconds: ${g_sec}"
+
     obsflists=()
     k=1
     #=================================================
@@ -1741,12 +1743,12 @@ function run_add_noise {
     # Return if is running or is done
     #
     if [[ -f $wrkdir/done.add_noise ]]; then
-        echo "$$-${FUNCNAME[0]}: add_noise is already done"
+        #echo "$$-${FUNCNAME[0]}: add_noise is already done"
         return
     fi
 
-    if [[ -f $wrkdir/running.add_noise || -f $wrkdir/queue.add_noise ]]; then
-        echo "$$-${FUNCNAME[0]}: add_noise is running/queued."
+    if [[ -f $wrkdir/running.noise_pert || -f $wrkdir/queue.noise_pert ]]; then
+        #echo "$$-${FUNCNAME[0]}: add_noise is running/queued."
         return
     fi
 
@@ -1802,7 +1804,7 @@ EOF
             echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
         fi
 
-        submit_a_jobscript $wrkdir "noise_mask" "$sedfile" "$TEMPDIR/$jobscript" "$jobscript" "${jobarraystr}"
+        submit_a_jobscript $wrkdir "noise_mask" "$sedfile" "$TEMPDIR/$jobscript" "$jobscript" ""
     fi
 
     #------------------------------------------------------
@@ -2374,7 +2376,6 @@ function da_cycle_driver() {
                     check_and_resubmit "update_bc fcst_" $dawrkdir $ENS_SIZE run_update_bc.${mach} 0
                 fi
             fi
-
             # check and set add_noise status
             if [[ $dorun == true && ${run_addnoise} ]]; then
                 if [[ ! -e done.add_noise ]]; then

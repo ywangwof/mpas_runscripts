@@ -151,6 +151,7 @@ function check_and_resubmit {
         runjobs+=("$line");
     done < <(seq 1 $donenum)
 
+    echo "$$-${FUNCNAME[0]}: Waiting for ensemble jobs of \"${jobname}\" in ${mywrkdir}"
     numtry=0
     done=0; error=0; running=0
     while [[ $numtry -le $numtries ]]; do
