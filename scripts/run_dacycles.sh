@@ -136,8 +136,8 @@ function run_obsmerge {
         exit 1
     fi
 
-    anlys_date=$(date -d @$iseconds  +%Y%m%d)
-    anlys_time=$(date -d @$iseconds  +%H%M)
+    anlys_date=$(date -u -d @$iseconds  +%Y%m%d)
+    anlys_time=$(date -u -d @$iseconds  +%H%M)
 
     if [[ $verb -eq 1 ]]; then
         srunout="1"
@@ -145,11 +145,9 @@ function run_obsmerge {
         srunout="output.srun"
     fi
 
-    # epoch: 1970-01-01 00:00:00 is 134774 days since '1601-01-01'
-    # one day is 86400 seconds
-    g_sec=$(date -d "${anlys_date} ${anlys_time}" +%s)
-    (( g_date=g_sec/86400 + 134774 ))
-    (( g_sec-=86400*(g_sec/86400) ))
+    read -r -a g_dates < <(convertS2days "${iseconds}")
+    g_date=${g_dates[0]}
+    g_sec=${g_dates[1]}
     #echo $g_date, $g_sec
 
     mkwrkdir $wrkdir/OBSDIR 1     # 0: Keep existing directory as is
@@ -379,25 +377,19 @@ function run_obsmerge {
 
     #===================================================================
 
-    g_sec=$(date -d "${anlys_date} ${anlys_time}" +%s)
-    (( gobef_secs=g_sec - 329 ))    # -5m-29s
-    (( goaft_secs=g_sec + 150 ))    # +2m+30s
+    (( gobef_secs=iseconds - 329 ))    # -5m-29s
+    (( goaft_secs=iseconds + 150 ))    # +2m+30s
 
-    (( gobef_days=gobef_secs/86400 + 134774 ))
-    (( gobef_secs-=86400*(gobef_secs/86400) ))
-
-    (( goaft_days=goaft_secs/86400 + 134774 ))
-    (( goaft_secs-=86400*(goaft_secs/86400) ))
-
-    #echo $gobef_days, $gobef_secs, $goaft_days, $goaft_secs
+    read -r -a gobef_dates < <(convertS2days "${gobef_secs}")
+    read -r -a goaft_dates < <(convertS2days "${goaft_secs}")
 
     sedfile=$(mktemp -t input.nml_${eventtime}.sed_XXXX)
 
     cat <<EOF > $sedfile
-/first_obs_days/s/-1/${gobef_days}/
-/first_obs_seconds/s/-1/${gobef_secs}/
-/last_obs_days/s/-1/${goaft_days}/
-/last_obs_seconds/s/-1/${goaft_secs}/
+/first_obs_days/s/-1/${gobef_dates[0]}/
+/first_obs_seconds/s/-1/${gobef_dates[1]}/
+/last_obs_days/s/-1/${goaft_dates[0]}/
+/last_obs_seconds/s/-1/${goaft_dates[1]}/
 EOF
 
     sed -f $sedfile -i input.nml
@@ -471,8 +463,8 @@ function run_filter {
 
     # shellcheck disable=SC2154
     timesec_pre=$((iseconds-intvl_sec))
-    event_pre=$(date -d @${timesec_pre}   +%H%M)
-    timestr_cur=$(date -d @${iseconds}    +%Y%m%d%H%M)
+    event_pre=$(date -u -d @${timesec_pre}   +%H%M)
+    timestr_cur=$(date -u -d @${iseconds}    +%Y%m%d%H%M)
 
     parentdir=$(dirname ${wrkdir})
 
@@ -502,7 +494,7 @@ function run_filter {
     # 1. Update input files to get filter started
     #------------------------------------------------------
 
-    currtime_str=$(date -d @$iseconds +%Y-%m-%d_%H.%M.%S)
+    currtime_str=$(date -u -d @$iseconds +%Y-%m-%d_%H.%M.%S)
 
     rm -f filter_in.txt filter_out.txt
     input_file_list=()
@@ -1598,13 +1590,13 @@ function run_update_bc {
             (( isec_nlbc2+=EXTINVL ))
         done
         # External GRIB file provided file times
-        lbctime_str1=$(date -d @${isec_nlbc1} +%Y-%m-%d_%H.%M.%S)
-        lbctime_str2=$(date -d @${isec_nlbc2} +%Y-%m-%d_%H.%M.%S)
+        lbctime_str1=$(date -u -d @${isec_nlbc1} +%Y-%m-%d_%H.%M.%S)
+        lbctime_str2=$(date -u -d @${isec_nlbc2} +%Y-%m-%d_%H.%M.%S)
 
         # MPAS expected boundary file times
         isec_elbc=$((iseconds+EXTINVL))
-        mpastime_str1=$(date -d @${iseconds}  +%Y-%m-%d_%H.%M.%S)
-        mpastime_str2=$(date -d @${isec_elbc} +%Y-%m-%d_%H.%M.%S)
+        mpastime_str1=$(date -u -d @${iseconds}  +%Y-%m-%d_%H.%M.%S)
+        mpastime_str2=$(date -u -d @${isec_elbc} +%Y-%m-%d_%H.%M.%S)
         if [[ $verb -eq 1 ]]; then
             echo "Member: $iens use lbc files from $rundir/lbc:"
             echo "       ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc";
@@ -1688,7 +1680,7 @@ function run_obs2nc {
 
     cd $wrkdir || return
 
-    timestr_cur=$(date -d @$iseconds    +%Y%m%d%H%M)
+    timestr_cur=$(date -u -d @$iseconds    +%Y%m%d%H%M)
 
     if [[ -e obs_seq.final.${timestr_cur}.nc ]]; then
         return
@@ -1739,8 +1731,10 @@ function run_add_noise {
     #
     cd $wrkdir || return
 
-    timestr_cur=$(date  -d @$iseconds    +%Y%m%d%H%M)
-    mpas_timestr=$(date -d @$iseconds    +%Y-%m-%d_%H.%M.%S)
+    timestr_cur=$(date  -u -d @$iseconds    +%Y%m%d%H%M)
+    mpas_timestr=$(date -u -d @$iseconds    +%Y-%m-%d_%H.%M.%S)
+    read -r -a days_secs < <(convertS2days "${iseconds}")
+
     #
     # Return if is running or is done
     #
@@ -1781,7 +1775,6 @@ function run_add_noise {
         if [[ $verb -eq 1 ]]; then echo ""; echo "    Running grid_refl_obs.py at $timestr_cur"; fi
 
         bkgfile="fcst_01/wofs_mpas_01.restart.${mpas_timestr}.nc"
-
         #
         # Create job script and submit it
         #
@@ -1799,8 +1792,8 @@ s/EXCLSTR/${job_exclusive_str}/
 s/SEQFILE/${seqfile}/g
 s#BKGFILE#${bkgfile}#g
 s#WAN_PATH#${WOFSNOSE_PATH}#g
-s/EVENTDATE/${timestr_cur:0:8}/g
-s/EVENTTIME/${timestr_cur:8:4}/g
+s/EVENTDAYS/${days_secs[0]}/g
+s/EVENTSECS/${days_secs[1]}/g
 EOF
         if [[ "${mach}" == "pbs" ]]; then
             echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
@@ -1841,7 +1834,8 @@ EOF
         cd $memwrkdir  || return
 
         if [[ ! -e done.add_noise_${memstr} && ! -e running.add_noise_${memstr} ]]; then
-            ln -sf ../refl_obs_${timestr_cur:0:8}_${timestr_cur:8:4}.pkl ../wofs_mpas_grid_kdtree.pkl ../mpas_XYZ.pkl .
+            days_str=$(printf "%5.5i_%6.6i" ${days_secs[0]} ${days_secs[1]})
+            ln -sf ../refl_obs_${days_str}.pkl ../wofs_mpas_grid_kdtree.pkl ../mpas_XYZ.pkl .
             jobarrays+=("$iens")
         fi
     done
@@ -1865,8 +1859,8 @@ s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/SEQFILE/${seqfile}/g
 s#WAN_PATH#${WOFSNOSE_PATH}#g
-s/EVENTDATE/${timestr_cur:0:8}/g
-s/EVENTTIME/${timestr_cur:8:4}/g
+s/EVENTDAYS/${days_secs[0]}/g
+s/EVENTSECS/${days_secs[1]}/g
 s/MPASTIME/${mpas_timestr}/g
 EOF
         if [[ "${mach}" == "pbs" ]]; then
@@ -1947,9 +1941,9 @@ function run_mpas {
     intvl_min=$((intvl_sec/60))
 
     fcst_sec=$(( iseconds + intvl_sec ))
-    currtime_str=$(date -d @${iseconds} +%Y-%m-%d_%H:%M:%S)
+    currtime_str=$(date -u -d @${iseconds} +%Y-%m-%d_%H:%M:%S)
     currtime_fil=${currtime_str//:/.}
-    fcsttime_fil=$(date -d @${fcst_sec} +%Y-%m-%d_%H.%M.%S)
+    fcsttime_fil=$(date -u -d @${fcst_sec} +%Y-%m-%d_%H.%M.%S)
 
     #
     # Preparation for each member
@@ -2090,8 +2084,8 @@ function run_mpas {
     config_sst_update                = false
     config_sstdiurn_update           = false
     config_deepsoiltemp_update       = false
-    config_radtlw_interval           = '00:10:00'
-    config_radtsw_interval           = '00:10:00'
+    config_radtlw_interval           = '00:05:00'
+    config_radtsw_interval           = '00:05:00'
     config_bucket_update             = 'none'
     config_lsm_scheme                = '${MPASLSM}'
     num_soil_layers                  = ${MPASNFLS}
@@ -2262,8 +2256,8 @@ function da_cycle_driver() {
     # Time Cylces start here
     #------------------------------------------
     local date_beg date_end intvl_min n_cycles
-    date_beg=$(date -d @$start_sec +%Y%m%d%H%M)
-    date_end=$(date -d @$end_sec +%Y%m%d%H%M)
+    date_beg=$(date -u -d @$start_sec +%Y%m%d%H%M)
+    date_end=$(date -u -d @$end_sec +%Y%m%d%H%M)
     intvl_min=$((intvl_sec/60))
     n_cycles=$(( (end_sec-start_sec)/intvl_sec+1 ))
 
@@ -2271,8 +2265,8 @@ function da_cycle_driver() {
 
     local icyc=$(( (start_sec-init_sec)/intvl_sec ))
     for isec in $(seq $start_sec $intvl_sec $end_sec ); do
-        timestr_curr=$(date -d @$isec +%Y%m%d%H%M)
-        eventtime=$(date    -d @$isec +%H%M)
+        timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
+        eventtime=$(date -u -d @$isec +%H%M)
 
         dawrkdir=${wrkdir}/${eventtime}
         mkwrkdir $dawrkdir 0    # keep original directory
@@ -2287,7 +2281,7 @@ function da_cycle_driver() {
         if [[ $icyc -gt 0 && $dorun == true ]]; then
 
             timesec_pre=$((isec-intvl_sec))
-            event_pre=$(date -d @$timesec_pre  +%H%M)
+            event_pre=$(date -u -d @$timesec_pre  +%H%M)
             wrkdir_pre=${wrkdir}/${event_pre}
             if [[ ! -e ${wrkdir_pre}/done.fcst ]]; then
                 #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
@@ -2427,14 +2421,14 @@ function run_obs_diag {
     # Time Cylces start here
     #------------------------------------------
     local date_beg_str_4obsdiag date_end_str_4obsdiag intvl_min n_cycles
-    date_beg_str_4obsdiag=$(date -d @$start_sec +%Y,%m,%d,%H,%M,%S)
-    date_end_str_4obsdiag=$(date -d @$end_sec +%Y,%m,%d,%H,%M,%S)
+    date_beg_str_4obsdiag=$(date -u -d @$start_sec +%Y,%m,%d,%H,%M,%S)
+    date_end_str_4obsdiag=$(date -u -d @$end_sec +%Y,%m,%d,%H,%M,%S)
     intvl_min=$((intvl_sec/60))
     date_intvl_str_4obsdiag="0, 0, 0,00,${intvl_min},00"
 
     n_cycles=$(( (end_sec-start_sec)/intvl_sec+1 ))
 
-    timestr_end=$(date -d @$end_sec    +%H%M)
+    timestr_end=$(date -u -d @$end_sec    +%H%M)
     #
     # Return if is running or is done
     #
@@ -2539,7 +2533,7 @@ function run_obs_final2nc {
 
     n_cycles=$(( (end_sec-start_sec)/intvl_sec ))
 
-    timestr_end=$(date -d @$end_sec    +%H%M)
+    timestr_end=$(date -u -d @$end_sec    +%H%M)
     #
     # Return if is running or is done
     #
@@ -2621,8 +2615,8 @@ function run_clean {
     wrkdir=$rundir/dacycles
 
     for isec in $(seq $start_sec $intvl_sec $end_sec ); do
-        timestr_curr=$(date -d @$isec +%Y%m%d%H%M)
-        eventtime=$(date    -d @$isec +%H%M)
+        timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
+        eventtime=$(date -u -d @$isec +%H%M)
 
         dawrkdir=$wrkdir/$eventtime
         if [[ -d $dawrkdir ]]; then
@@ -2775,7 +2769,7 @@ while [[ $# -gt 0 ]]; do
                 eventtime=${2:8:4}
                 eventhour=${2:8:2}
                 if [[ $((10#$eventhour)) -lt 12 ]]; then
-                    eventdate=$(date -d "${2:0:8} 1 day ago" +%Y%m%d)
+                    eventdate=$(date -u -d "${2:0:8} 1 day ago" +%Y%m%d)
                 else
                     eventdate=${2:0:8}
                 fi
@@ -2794,9 +2788,9 @@ while [[ $# -gt 0 ]]; do
                 endhrmin=$2
                 endhour=${endhrmin:0:2}
                 if [[ $((10#$endhour)) -lt 12 ]]; then
-                    enddatetime=$(date -d "$eventdate $endhrmin 1 day" +%Y%m%d%H%M)
+                    enddatetime=$(date -u -d "$eventdate $endhrmin 1 day" +%Y%m%d%H%M)
                 else
-                    enddatetime=$(date -d "$eventdate $endhrmin" +%Y%m%d%H%M)
+                    enddatetime=$(date -u -d "$eventdate $endhrmin" +%Y%m%d%H%M)
                 fi
             else
                 echo "ERROR: End time should be in YYYYmmddHHMM or HHMM, got \"$2\"."
@@ -2829,7 +2823,7 @@ while [[ $# -gt 0 ]]; do
                 eventtime=${key:8:4}
                 eventhour=${key:8:2}
                 if [[ $((10#$eventhour)) -lt 12 ]]; then
-                    eventdate=$(date -d "${key:0:8} 1 day ago" +%Y%m%d)
+                    eventdate=$(date -u -d "${key:0:8} 1 day ago" +%Y%m%d)
                 else
                     eventdate=${key:0:8}
                 fi
@@ -2849,7 +2843,7 @@ while [[ $# -gt 0 ]]; do
                     eventtime=${lastdir:8:4}
                     eventhour=${lastdir:8:2}
                     if [[ $eventhour -lt 12 ]]; then
-                        eventdate=$(date -d "$eventdate 1 day ago" +%Y%m%d)
+                        eventdate=$(date -u -d "$eventdate 1 day ago" +%Y%m%d)
                     fi
                 fi
                 #echo $WORKDIR,$eventdate,$eventtime
@@ -2923,12 +2917,12 @@ if [[ "$initdatetime" == "" ]]; then
 fi
 
 if [[ "$enddatetime" == "" ]]; then
-    enddatetime=$(date -d "$eventdate 03:00 1 day" +%Y%m%d%H%M)
+    enddatetime=$(date -u -d "$eventdate 03:00 1 day" +%Y%m%d%H%M)
 fi
 
-inittime_sec=$(date -d "${initdatetime:0:8} ${initdatetime:8:4}" +%s)
-starttime_sec=$(date -d "$eventdate ${eventtime} $startday"      +%s)
-stoptime_sec=$(date -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
+inittime_sec=$(date -u -d "${initdatetime:0:8} ${initdatetime:8:4}" +%s)
+starttime_sec=$(date -u -d "$eventdate ${eventtime} $startday"      +%s)
+stoptime_sec=$(date -u -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
 
 rundir="$WORKDIR/${eventdate}"
 if [[ ! -d $rundir ]]; then

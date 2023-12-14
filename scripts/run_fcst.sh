@@ -162,7 +162,7 @@ function run_mpas {
     mkwrkdir ${wrkdir} 0
     cd ${wrkdir} || return
 
-    timestr=$(date -d @${iseconds} +%H%M)
+    timestr=$(date -u -d @${iseconds} +%H%M)
     dawrkdir=${rundir}/dacycles/${timestr}
     #
     # Waiting for job conditions
@@ -206,7 +206,7 @@ function run_mpas {
         cd $wrkdir || return
     fi
 
-    currtime_str=$(date -d @$iseconds +%Y-%m-%d_%H:%M:%S)
+    currtime_str=$(date -u -d @$iseconds +%Y-%m-%d_%H:%M:%S)
     currtime_fil=${currtime_str//:/.}
 
     #
@@ -247,7 +247,7 @@ function run_mpas {
         jens=$(( (iens-1)%nenslbc+1 ))
         mlbcstr=$(printf "%02d" $jens)
 
-        mpastime_str=$(date -d @$iseconds +%Y-%m-%d_%H.%M.%S)
+        mpastime_str=$(date -u -d @$iseconds +%Y-%m-%d_%H.%M.%S)
         lbc_dafile=${dawrkdir}/fcst_${memstr}/${domname}_${memstr}.lbc.${mpastime_str}.nc
         lbc_myfile=${domname}_${memstr}.lbc.${mpastime_str}.nc
         if [[ $dorun == true ]]; then
@@ -261,8 +261,8 @@ function run_mpas {
         for ((i=EXTINVL;i<=fcst_seconds;i+=EXTINVL)); do
             isec=$(( iseconds+i ))           # MPAS expects time string
             jsec=$(( iseconds/3600*3600+i )) # External GRIB file provided around to whole hour
-            lbctime_str=$(date  -d @$jsec +%Y-%m-%d_%H.%M.%S)
-            mpastime_str=$(date -d @$isec +%Y-%m-%d_%H.%M.%S)
+            lbctime_str=$(date -u -d @$jsec +%Y-%m-%d_%H.%M.%S)
+            mpastime_str=$(date -u -d @$isec +%Y-%m-%d_%H.%M.%S)
             ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str}.nc ${domname}_${memstr}.lbc.${mpastime_str}.nc
         done
 
@@ -750,10 +750,10 @@ function mpassit_wait_create_nml_onetime {
     cd $wrkdir || return
 
     minstr=$(printf "%03d" $((fctseconds/60)))
-    fcst_lauch_time=$(date -d @${iseconds} +%H%M)
+    fcst_lauch_time=$(date -u -d @${iseconds} +%H%M)
 
     isec=$(( iseconds+fctseconds ))
-    fcst_time_str=$(date -d @$isec +%Y-%m-%d_%H.%M.%S)
+    fcst_time_str=$(date -u -d @$isec +%Y-%m-%d_%H.%M.%S)
 
     outdone=false
     jobarrays=()
@@ -873,7 +873,7 @@ function run_upp {
     fixdirs[SpcCoeff]="$FIXDIR/UPP/crtm2_fix/SpcCoeff/Big_Endian"
     fixdirs[TauCoeff]="$FIXDIR/UPP/crtm2_fix/TauCoeff/ODPS/Big_Endian"
 
-    eventtimestr=$(date -d @$iseconds +%Y%m%d%H%M)
+    eventtimestr=$(date -u -d @$iseconds +%Y%m%d%H%M)
 
     for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
         imin=$((i/60))
@@ -922,7 +922,7 @@ function run_upp {
         fi
 
         isec=$(( iseconds+i ))
-        fcst_time_str=$(date -d @$isec +%Y-%m-%d_%H.%M.%S)
+        fcst_time_str=$(date -u -d @$isec +%Y-%m-%d_%H.%M.%S)
 
         jobarrays=()
         for mem in $(seq 1 $ENS_SIZE); do
@@ -1036,18 +1036,18 @@ function fcst_driver() {
     # Time Cylces start here
     #------------------------------------------
     local date_beg date_end
-    date_beg=$(date -d @$start_sec +%Y%m%d%H%M)
-    date_end=$(date -d @$end_sec +%Y%m%d%H%M)
+    date_beg=$(date -u -d @$start_sec +%Y%m%d%H%M)
+    date_end=$(date -u -d @$end_sec +%Y%m%d%H%M)
 
     echo "Forecasting cycles from $date_beg to $date_end ...."
 
     # fcst_length_seconds/fcst_launch_intvl from the config file
     # shellcheck disable=SC2154
     for ilaunch in $(seq $start_sec ${fcst_launch_intvl} $end_sec ); do
-        #timestr_curr=$(date -d @$ilaunch +%Y%m%d%H%M)
-        eventtime=$(date    -d @$ilaunch +%H%M)
+        #timestr_curr=$(date -u -d @$ilaunch +%Y%m%d%H%M)
+        eventtime=$(date -u -d @$ilaunch +%H%M)
 
-        eventMM=$(date    -d @$ilaunch +%M)
+        eventMM=$(date -u -d @$ilaunch +%M)
         fcstindex=1
         if [[ "${eventMM}" == "00" ]]; then fcstindex=0; fi
         fcst_seconds=${fcst_length_seconds[$fcstindex]}
@@ -1145,10 +1145,10 @@ function run_clean {
     wrkdir=$rundir/fcst
 
     for isec in $(seq ${start_sec} ${fcst_launch_intvl} ${end_sec} ); do
-        #timestr_curr=$(date -d @$isec +%Y%m%d%H%M)
-        eventtime=$(date    -d @$isec +%H%M)
+        #timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
+        eventtime=$(date -u -d @$isec +%H%M)
 
-        eventMM=$(date    -d @$isec +%M)
+        eventMM=$(date -u -d @$isec +%M)
         fcstindex=1
         if [[ "${eventMM}" == "00" ]]; then fcstindex=0; fi
         fcst_seconds=${fcst_length_seconds[$fcstindex]}
@@ -1388,7 +1388,7 @@ while [[ $# -gt 0 ]]
                 eventtime=${2:8:4}
                 eventhour=${2:8:2}
                 if [[ $((10#$eventhour)) -lt 12 ]]; then
-                    eventdate=$(date -d "${2:0:8} 1 day ago" +%Y%m%d)
+                    eventdate=$(date -u -d "${2:0:8} 1 day ago" +%Y%m%d)
                 else
                     eventdate=${2:0:8}
                 fi
@@ -1407,9 +1407,9 @@ while [[ $# -gt 0 ]]
                 endhrmin=$2
                 endhour=${endhrmin:0:2}
                 if [[ $((10#$endhour)) -lt 12 ]]; then
-                    enddatetime=$(date -d "$eventdate $endhrmin 1 day" +%Y%m%d%H%M)
+                    enddatetime=$(date -u -d "$eventdate $endhrmin 1 day" +%Y%m%d%H%M)
                 else
-                    enddatetime=$(date -d "$eventdate $endhrmin" +%Y%m%d%H%M)
+                    enddatetime=$(date -u -d "$eventdate $endhrmin" +%Y%m%d%H%M)
                 fi
             else
                 echo "ERROR: End time should be in YYYYmmddHHMM or HHMM, got \"$2\"."
@@ -1442,7 +1442,7 @@ while [[ $# -gt 0 ]]
                 eventtime=${key:8:4}
                 eventhour=${key:8:2}
                 if [[ $((10#$eventhour)) -lt 12 ]]; then
-                    eventdate=$(date -d "${key:0:8} 1 day ago" +%Y%m%d)
+                    eventdate=$(date -u -d "${key:0:8} 1 day ago" +%Y%m%d)
                 else
                     eventdate=${key:0:8}
                 fi
@@ -1462,7 +1462,7 @@ while [[ $# -gt 0 ]]
                     eventtime=${lastdir:8:4}
                     eventhour=${lastdir:8:2}
                     if [[ $eventhour -lt 12 ]]; then
-                        eventdate=$(date -d "$eventdate 1 day ago" +%Y%m%d)
+                        eventdate=$(date -u -d "$eventdate 1 day ago" +%Y%m%d)
                     fi
                 fi
                 #echo $WORKDIR,$eventdate,$eventtime
@@ -1534,12 +1534,12 @@ if [[ "$initdatetime" == "" ]]; then
 fi
 
 if [[ "$enddatetime" == "" ]]; then
-    enddatetime=$(date -d "$eventdate 03:00 1 day" +%Y%m%d%H%M)
+    enddatetime=$(date -u -d "$eventdate 03:00 1 day" +%Y%m%d%H%M)
 fi
 
-#inittime_sec=$(date  -d "${initdatetime:0:8} ${initdatetime:8:4}" +%s)
-starttime_sec=$(date -d "${eventdate} ${eventtime} $startday"     +%s)
-stoptime_sec=$(date  -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
+#inittime_sec=$(date -u -d "${initdatetime:0:8} ${initdatetime:8:4}" +%s)
+starttime_sec=$(date -u -d "${eventdate} ${eventtime} $startday"     +%s)
+stoptime_sec=$(date  -u -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
 
 rundir="$WORKDIR/${eventdate}"
 if [[ ! -d $rundir ]]; then
@@ -1579,7 +1579,7 @@ elif [[ "${jobs[*]}" == @(clean_fcst|clean_mpassit|clean_upp) ]]; then
     )
     cleanjob="${jobs[*]}"
 
-    echo -e "\nWARNING: Clean ${cleanmsg[$cleanjob]} from $(date -d @${starttime_sec} +%Y%m%d_%H:%M:%S) to $(date -d @${stoptime_sec} +%Y%m%d_%H:%M:%S)"
+    echo -e "\nWARNING: Clean ${cleanmsg[$cleanjob]} from $(date -u -d @${starttime_sec} +%Y%m%d_%H:%M:%S) to $(date -u -d @${stoptime_sec} +%Y%m%d_%H:%M:%S)"
     echo -e   "         in ${WORKDIR}/${eventdate}/fcst?\n"
     echo -n "[YES,NO]? "
     read -r doit

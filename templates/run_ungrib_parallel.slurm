@@ -15,8 +15,8 @@ echo " "
 
 fhr=${SLURM_ARRAY_TASK_ID}
 hstr=$(printf "%02d" $fhr)
-time_str=$(date -d "EVENTDATE EVENTTIME:00 $fhr hours" +%Y-%m-%d_%H)
-fulltime_str=$(date -d "EVENTDATE EVENTTIME:00 $fhr hours" +%Y-%m-%d_%H:%M:%S)
+time_str=$(date -u -d "EVENTDATE EVENTTIME:00 $fhr hours" +%Y-%m-%d_%H)
+fulltime_str=$(date -u -d "EVENTDATE EVENTTIME:00 $fhr hours" +%Y-%m-%d_%H:%M:%S)
 
 cd WRKDIR/ungrib_$hstr
 

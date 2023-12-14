@@ -10,6 +10,9 @@
 # o group_jobs_for_pbs       # Group job numbers for PBS job array option "-J X-Y[:Z]%num"
 # o join_by                  # Join array into a string by a separator
 # o readconf                 # Read config file, written from "setup_mpas-wofs_grid.sh"
+# o convert2days             # Convert date/time strings to days/seconds since 1601-01-01
+# o convertS2days            # Convert epoch seconds to days/seconds since 1601-01-01
+# o convert2date             # Convert days/seconds since 1601-01-01 to date/time strings
 # o upnlevels                # get n level parent directory path
 # o link_grib                # Link grib files for ungrib.exe
 # o clean_mem_runfiles
@@ -387,6 +390,84 @@ function readconf {
         fi
 
     done < $configfile
+}
+
+########################################################################
+
+function convert2days {
+    # Usage:
+    #   read -r -a g_date < <(convert2days "${anlys_date}" "${anlys_time}")
+    #   echo "${g_date[0]}, ${g_date[1]}"
+    #         days          seconds since 1601-01-01 00:00:00
+
+    local datestr=$1
+    local timestr=$2
+
+    if [[ $# -ne 2 ]]; then
+        echo "No enough argument for \"${FUNCNAME[0]}:\", get: $*"
+        exit 0
+    fi
+
+    # epoch: 1970-01-01 00:00:00 is 134774 days since '1601-01-01'
+    # one day is 86400 seconds
+
+    local g_sec g_days g_secs
+    g_sec=$(date -u -d "${datestr} ${timestr}" +%s)
+    (( g_days=g_sec/86400 + 134774 ))
+    (( g_secs=g_sec-86400*(g_sec/86400) ))
+
+    echo "$g_days $g_secs"
+}
+
+########################################################################
+
+function convertS2days {
+    # Usage:
+    #   read -r -a g_date < <(convertS2days "${seconds}")
+    #   echo "${g_date[0]}, ${g_date[1]}"
+    #         days          seconds since 1601-01-01 00:00:00
+
+    local g_sec=$1
+
+    if [[ $# -ne 1 ]]; then
+        echo "No enough argument for \"${FUNCNAME[0]}:\", get: $*"
+        exit 0
+    fi
+
+    # epoch: 1970-01-01 00:00:00 is 134774 days since '1601-01-01'
+    # one day is 86400 seconds
+
+    local g_days g_secs
+    (( g_days=g_sec/86400 + 134774 ))
+    (( g_secs=g_sec-86400*(g_sec/86400) ))
+
+    echo "$g_days $g_secs"
+}
+
+########################################################################
+
+function convert2date {
+    # Usage:
+    #   read -r -a e_date < <(convert2date "${days}" "${seconds}")
+    #   echo "${e_date[0]}, ${e_date[1]}"
+    #         %Y%m%d        %H%M
+
+    local days=$1
+    local secs=$2
+
+    if [[ $# -ne 2 ]]; then
+        echo "No enough argument for \"${FUNCNAME[0]}:\", get: $*"
+        exit 0
+    fi
+
+    # epoch: 1970-01-01 00:00:00 is 134774 days since '1601-01-01'
+    # one day is 86400 seconds
+
+    local epoch_sec datestr
+    (( epoch_sec= (days-134774)*86400 + secs ))
+    datestr=$(date -u -d @"${epoch_sec}" +%Y%m%d%H%M)
+
+    echo "${datestr:0:8} ${datestr:8:4}"
 }
 
 ########################################################################

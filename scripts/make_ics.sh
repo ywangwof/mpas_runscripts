@@ -640,8 +640,8 @@ echo "     Working dir: $WORKDIR"
 echo "     Domain name: $domname"
 echo " "
 
-starttime_str=$(date -d "$eventdate ${eventtime}" +%Y-%m-%d_%H:%M:%S)
-stoptime_str=$(date -d "$eventdate  ${eventtime}" +%Y-%m-%d_%H:%M:%S)
+starttime_str=$(date -u -d "$eventdate ${eventtime}" +%Y-%m-%d_%H:%M:%S)
+stoptime_str=$(date -u -d "$eventdate  ${eventtime}" +%Y-%m-%d_%H:%M:%S)
 
 rundir="$WORKDIR/${eventdate}"
 

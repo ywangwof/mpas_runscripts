@@ -416,8 +416,8 @@ function run_static {
 
     # The program needs a time string in file $domname.grid.nc
     #
-    inittime_str=$(date -d "$hrrrdate ${hrrrtime}" +%Y-%m-%d_%H)
-    starttime_str=$(date -d "$hrrrdate ${hrrrtime}" +%Y-%m-%d_%H:%M:%S)
+    inittime_str=$(date -u -d "$hrrrdate ${hrrrtime}" +%Y-%m-%d_%H)
+    starttime_str=$(date -u -d "$hrrrdate ${hrrrtime}" +%Y-%m-%d_%H:%M:%S)
 
     initfile="../ungrib/${EXTHEAD}:$inittime_str"
     if [[ ! -f $initfile ]]; then
@@ -700,7 +700,7 @@ function run_ungrib_hrrr {
         #hrrrtime=${gribtime:8:2}
         #echo $hrrrtime, $hrrrdate, $vtime, $gribtime
     else
-        julday=$(date -d "$hrrrdate ${hrrrtime}" +%y%j%H)
+        julday=$(date -u -d "$hrrrdate ${hrrrtime}" +%y%j%H)
         hrrrbase="${julday}0000"
         hrrrfile="$hrrr_grib_dir/${hrrrbase}$hstr"
     fi
@@ -718,7 +718,7 @@ function run_ungrib_hrrr {
     ln -sf ${hrrrfile} GRIBFILE.AAA
     ln -sf $FIXDIR/WRFV4.0/${hrrrvtable} Vtable
 
-    hrrrtime_str=$(date -d "$hrrrdate ${hrrrtime}" +%Y-%m-%d_%H:%M:%S)
+    hrrrtime_str=$(date -u -d "$hrrrdate ${hrrrtime}" +%Y-%m-%d_%H:%M:%S)
     #echo "$hrrrdate ${hrrrtime}"
     cat << EOF > namelist.wps
 &share
@@ -1490,7 +1490,7 @@ echo "     Root    dir: $rootdir"
 echo "     Working dir: $WORKDIR"
 echo " "
 
-starttime_str=$(date -d "${eventdate} ${eventtime}" +%Y-%m-%d_%H:%M:%S)
+starttime_str=$(date -u -d "${eventdate} ${eventtime}" +%Y-%m-%d_%H:%M:%S)
 
 rundir="$WORKDIR/${eventdate}"
 

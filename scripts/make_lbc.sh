@@ -105,12 +105,12 @@ function run_ungrib {
         memstr=$(printf "%02d" $mem)
         starthr=$(((eventtime-gribtime)/100))
 
-        starts=$(date -d "$eventdate $gribtime" +%s)
-        ends=$(date -d "$eventdate $eventend 1 day" +%s)
+        starts=$(date -u -d "$eventdate $gribtime" +%s)
+        ends=$(date -u -d "$eventdate $eventend 1 day" +%s)
         endhr=$(( (ends-starts)/3600 ))
 
-        gribstart_str=$(date -d "$eventdate $gribtime $starthr hours" +%Y-%m-%d_%H:%M:%S )
-        gribendtm_str=$(date -d "$eventdate $gribtime $endhr hours"   +%Y-%m-%d_%H:%M:%S )
+        gribstart_str=$(date -u -d "$eventdate $gribtime $starthr hours" +%Y-%m-%d_%H:%M:%S )
+        gribendtm_str=$(date -u -d "$eventdate $gribtime $endhr hours"   +%Y-%m-%d_%H:%M:%S )
 
         gribfiles=()
         for (( h=starthr;h<=endhr;h+=$((EXTINVL/3600)) )); do
@@ -658,8 +658,8 @@ echo "     Working dir: $WORKDIR"
 echo "     Domain name: $domname"
 echo " "
 
-starttime_str=$(date -d "$eventdate ${eventtime}"      +%Y-%m-%d_%H:%M:%S)
-stoptime_str=$(date -d "$eventdate  ${eventend} 1 day" +%Y-%m-%d_%H:%M:%S)
+starttime_str=$(date -u -d "$eventdate ${eventtime}"      +%Y-%m-%d_%H:%M:%S)
+stoptime_str=$(date -u -d "$eventdate  ${eventend} 1 day" +%Y-%m-%d_%H:%M:%S)
 
 rundir="$WORKDIR/${eventdate}"
 

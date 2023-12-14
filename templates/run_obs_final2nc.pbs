@@ -23,9 +23,9 @@ touch obs_final2nc.running
 rm -rf error.obs_final2nc queue.obs_final2nc
 
 for((i=START_S;i<=END_S;i+=INTVL_S)); do
-    timestr_cur=$(date -d @$i +%Y%m%d%H%M)
+    timestr_cur=$(date -u -d @$i +%Y%m%d%H%M)
 
-    seqdir=$(date -d @$i +%H%M)
+    seqdir=$(date -u -d @$i +%H%M)
     seqfile=DACYCLEDIR/${seqdir}/obs_seq.final
 
     if [[ ! -e $seqfile ]]; then

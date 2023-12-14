@@ -389,7 +389,7 @@ function run_static {
         fi
     fi
 
-    inittime_str=$(date -d "$eventdate ${eventtime}:00" +%Y-%m-%d_%H)
+    inittime_str=$(date -u -d "$eventdate ${eventtime}:00" +%Y-%m-%d_%H)
     initfile="../$runname/ungrib/${EXTHEAD}:$inittime_str"
     if [[ ! -f $initfile ]]; then
         echo "Initial file (for extracting time): $initfile not found"
@@ -527,7 +527,7 @@ function run_ungrib_hrrr {
     mkwrkdir $wrkdir 0
     cd $wrkdir || return
 
-    julday=$(date -d "$eventdate ${eventtime}:00" +%y%j%H)
+    julday=$(date -u -d "$eventdate ${eventtime}:00" +%y%j%H)
     hrrrbase="${julday}0000"
 
     if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
@@ -697,7 +697,7 @@ function run_ungrib_gfs {
     mkwrkdir $wrkdir 0
     cd $wrkdir || return
 
-    julday=$(date -d "$eventdate ${eventtime}:00" +%y%j%H)
+    julday=$(date -u -d "$eventdate ${eventtime}:00" +%y%j%H)
 
     if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
         return 0                   # skip
@@ -779,13 +779,13 @@ function run_ungrib_rrfsna {
     mkwrkdir $wrkdir 0
     cd $wrkdir || return
 
-    julday=$(date -d "$eventdate ${eventtime}:00" +%y%j%H)
+    julday=$(date -u -d "$eventdate ${eventtime}:00" +%y%j%H)
 
     if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
         :                   # skip
     else
-        currdate=$(date -d "$eventdate ${eventtime}:00" +%Y%m%d)
-        currtime=$(date -d "$eventdate ${eventtime}:00" +%H)
+        currdate=$(date -u -d "$eventdate ${eventtime}:00" +%Y%m%d)
+        currtime=$(date -u -d "$eventdate ${eventtime}:00" +%H)
         if [[ "$rrfs_grib_dir" == "https://noaa-rrfs-pds.s3.amazonaws.com"* ]]; then
             rrfs_url="$rrfs_grib_dir/rrfs_a/rrfs_a.${currdate}/${currtime}/control"
             download_aws=1
@@ -985,13 +985,13 @@ function run_ungrib_rrfs {
     mkwrkdir $wrkdir 0
     cd $wrkdir || return
 
-    julday=$(date -d "$eventdate ${eventtime}:00" +%y%j%H)
+    julday=$(date -u -d "$eventdate ${eventtime}:00" +%y%j%H)
 
     if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
         :                   # skip
     else
-        currdate=$(date -d "$eventdate ${eventtime}:00" +%Y%m%d)
-        currtime=$(date -d "$eventdate ${eventtime}:00" +%H)
+        currdate=$(date -u -d "$eventdate ${eventtime}:00" +%Y%m%d)
+        currtime=$(date -u -d "$eventdate ${eventtime}:00" +%H)
         if [[ "$rrfs_grib_dir" == "https://noaa-rrfs-pds.s3.amazonaws.com"* ]]; then
             rrfs_url="$rrfs_grib_dir/rrfs_a/rrfs_a.${currdate}/${currtime}/control"
             download_aws=1
@@ -1220,13 +1220,13 @@ function run_ungrib_rrfsp {
     mkwrkdir $wrkdir 0
     cd $wrkdir || return
 
-    julday=$(date -d "$eventdate ${eventtime}:00" +%y%j%H)
+    julday=$(date -u -d "$eventdate ${eventtime}:00" +%y%j%H)
 
     if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
         :                   # skip
     else
-        currdate=$(date -d "$eventdate ${eventtime}:00" +%Y%m%d)
-        currtime=$(date -d "$eventdate ${eventtime}:00" +%H)
+        currdate=$(date -u -d "$eventdate ${eventtime}:00" +%Y%m%d)
+        currtime=$(date -u -d "$eventdate ${eventtime}:00" +%H)
         if [[ "$rrfs_grib_dir" == "https://noaa-rrfs-pds.s3.amazonaws.com"* ]]; then
             rrfs_url="${rrfs_grib_dir}/rrfs_a/rrfs_a.${currdate}/${currtime}/control"
             download_aws=1
@@ -1308,7 +1308,7 @@ EOF
     fi
 
     if [[ $dorun == true ]]; then
-        secdtime_str=$(date -d "$eventdate ${eventtime}:00 $EXTINVL hours" +%Y-%m-%d_%H)
+        secdtime_str=$(date -u -d "$eventdate ${eventtime}:00 $EXTINVL hours" +%Y-%m-%d_%H)
         secdfile=$wrkdir/${EXTHEAD}:${secdtime_str}
 
         echo "$$: Checking: $secdfile"
@@ -1977,7 +1977,7 @@ function run_mpassit {
 
     for ((h=0;h<=fcst_hours;h+=OUTINVL)); do
         hstr=$(printf "%02d" $h)
-        fcst_time_str=$(date -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
+        fcst_time_str=$(date -u -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
 
         histfile="$rundir/fcst/${domname}.history.${fcst_time_str}.nc"
         diagfile="$rundir/fcst/${domname}.diag.${fcst_time_str}.nc"
@@ -2100,7 +2100,7 @@ function run_upp {
 
     for ((h=0;h<=fcst_hours;h+=OUTINVL)); do
         hstr=$(printf "%02d" $h)
-        fcst_time_str=$(date -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
+        fcst_time_str=$(date -u -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
 
         if [[  -f $wrkdir/done.upp_$hstr || -f $wrkdir/queue.upp_$hstr ]]; then
             continue      # already done, or is in queue, skip this hour
@@ -2269,7 +2269,7 @@ function run_clean {
             wrkdir="$rundir/mpassit"
             for ((h=0;h<=fcst_hours;h+=OUTINVL)); do
                 hstr=$(printf "%02d" $h)
-                fcst_time_str=$(date -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
+                fcst_time_str=$(date -u -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
                 rm -rf $wrkdir/MPAS-A_out.${fcst_time_str}.nc
                 #rm -rf $wrkdir/done.mpassit$hstr $wrkdir/error.mpassit$hstr
             done
@@ -2301,7 +2301,7 @@ function run_clean {
             upp_dir="$rundir/upp"
             for ((h=0;h<=fcst_hours;h+=OUTINVL)); do
                 hstr=$(printf "%02d" $h)
-                fcst_time_str=$(date -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
+                fcst_time_str=$(date -u -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
                 if [[ -f $upp_dir/done.upp_$hstr ]]; then
                     if [[ $verb -eq 1 ]]; then
                         echo "Cleaning $upp_dir/post_$hstr & $mpassit_dir ......"
@@ -2688,8 +2688,8 @@ else
     mpname="N"
 fi
 
-starttime_str=$(date -d "$eventdate ${eventtime}:00"                     +%Y-%m-%d_%H:%M:%S)
-stoptime_str=$(date -d "$eventdate  ${eventtime}:00 ${fcst_hours} hours" +%Y-%m-%d_%H:%M:%S)
+starttime_str=$(date -u -d "$eventdate ${eventtime}:00"                     +%Y-%m-%d_%H:%M:%S)
+stoptime_str=$(date -u -d "$eventdate  ${eventtime}:00 ${fcst_hours} hours" +%Y-%m-%d_%H:%M:%S)
 
 runname="${eventdate}${eventtime}_${initname}${mpname}"
 rundir="$WORKDIR/${runname}"
