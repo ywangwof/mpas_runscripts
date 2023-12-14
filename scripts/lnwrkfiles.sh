@@ -275,7 +275,7 @@ for cmd in "${cmds[@]}"; do
             echo "===  DART"
             echo "     SRC: ${srcdart}"
             echo "     CWD: ${exedir}"
-            dartprograms=( filter  mpas_dart_obs_preprocess  obs_sequence_tool  update_mpas_states update_bc advance_time obs_seq_to_netcdf obs_diag)
+            dartprograms=( filter  mpas_dart_obs_preprocess  obs_sequence_tool  update_mpas_states update_bc obs_seq_to_netcdf obs_diag)
             if [[ ${runcmd} == "clean" ]]; then
                 #echo "    Deleting ${dartprograms[*]}"
                 rm -f "${dartprograms[@]}"
@@ -286,8 +286,8 @@ for cmd in "${cmds[@]}"; do
                     echo "        $srcdart/models/mpas_atm/work/$prog"
                     ${runcmd} "$srcdart/models/mpas_atm/work/$prog" .
                 done
-                echo "        $srcdart/models/wrf/work/convertdate"
-                ${runcmd} "$srcdart/models/wrf/work/convertdate" .
+                #echo "        $srcdart/models/wrf/work/convertdate"
+                #${runcmd} "$srcdart/models/wrf/work/convertdate" .
             fi
         fi
         ;;

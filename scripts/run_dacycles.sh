@@ -5,7 +5,7 @@
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
 
-eventdateDF=$(date +%Y%m%d)
+eventdateDF=$(date -u +%Y%m%d)
 
 #-----------------------------------------------------------------------
 #
@@ -145,15 +145,11 @@ function run_obsmerge {
         srunout="output.srun"
     fi
 
-    if [[ $verb -eq 1 ]]; then echo "Runing ${exedir}/dart/convertdate"; fi
-    # shellcheck disable=SC2207
-    g_datestr=($(${exedir}/dart/convertdate << EOF
-1
-${anlys_date:0:4} ${anlys_date:4:2} ${anlys_date:6:2} ${anlys_time:0:2} ${anlys_time:2:2} 00
-EOF
-))
-    g_date=${g_datestr[-2]}
-    g_sec=${g_datestr[-1]}
+    # epoch: 1970-01-01 00:00:00 is 134774 days since '1601-01-01'
+    # one day is 86400 seconds
+    g_sec=$(date -d "${anlys_date} ${anlys_time}" +%s)
+    (( g_date=g_sec/86400 + 134774 ))
+    (( g_sec-=86400*(g_sec/86400) ))
     #echo $g_date, $g_sec
 
     mkwrkdir $wrkdir/OBSDIR 1     # 0: Keep existing directory as is
@@ -383,19 +379,25 @@ EOF
 
     #===================================================================
 
-    if [[ $verb -eq 1 ]]; then echo "Runing ${exedir}/dart/advance_time"; fi
-    # shellcheck disable=SC2207
-    gobef=($(echo ${anlys_date}${anlys_time} -5m-29s -g | ${exedir}/dart/advance_time))
-    # shellcheck disable=SC2207
-    goaft=($(echo ${anlys_date}${anlys_time} +2m+30s -g |  ${exedir}/dart/advance_time))
+    g_sec=$(date -d "${anlys_date} ${anlys_time}" +%s)
+    (( gobef_secs=g_sec - 329 ))    # -5m-29s
+    (( goaft_secs=g_sec + 150 ))    # +2m+30s
+
+    (( gobef_days=gobef_secs/86400 + 134774 ))
+    (( gobef_secs-=86400*(gobef_secs/86400) ))
+
+    (( goaft_days=goaft_secs/86400 + 134774 ))
+    (( goaft_secs-=86400*(goaft_secs/86400) ))
+
+    #echo $gobef_days, $gobef_secs, $goaft_days, $goaft_secs
 
     sedfile=$(mktemp -t input.nml_${eventtime}.sed_XXXX)
 
     cat <<EOF > $sedfile
-/first_obs_days/s/-1/${gobef[0]}/
-/first_obs_seconds/s/-1/${gobef[1]}/
-/last_obs_days/s/-1/${goaft[0]}/
-/last_obs_seconds/s/-1/${goaft[1]}/
+/first_obs_days/s/-1/${gobef_days}/
+/first_obs_seconds/s/-1/${gobef_secs}/
+/last_obs_days/s/-1/${goaft_days}/
+/last_obs_seconds/s/-1/${goaft_secs}/
 EOF
 
     sed -f $sedfile -i input.nml

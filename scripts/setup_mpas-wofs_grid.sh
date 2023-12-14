@@ -5,7 +5,7 @@
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "$scpdir")")
 
-eventdateDF=$(date +%Y%m%d)
+eventdateDF=$(date -u +%Y%m%d)
 
 #-----------------------------------------------------------------------
 #
