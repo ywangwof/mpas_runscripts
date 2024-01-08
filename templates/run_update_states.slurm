@@ -1,4 +1,4 @@
-#!/bin/bash -l
+#!/bin/bash
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
@@ -33,15 +33,44 @@ cd WRKDIR/fcst_${memstr}
 touch running.update_states_$memstr
 rm -rf error.update_states_$memstr queue.update_states_$memstr
 
+#-----------------------------------------------------------------------
+# Copy working file
+#-----------------------------------------------------------------------
+
+((iensidx = mem-1))
+
+state_file_names=(STATEFILESSTR)
+
+state_file_name="${state_file_names[$iensidx]}"
+
+fnbase=$(basename ${state_file_name})
+if [[ ! -e $fnbase ]]; then
+    echo "    CPCMD ${state_file_name} ."
+    echo ""
+    CPCMD ${state_file_name} .
+
+    # for diagnostics and add some delays
+    for idx in "${!state_file_names[@]}"; do
+        (( indx = idx+1 ))
+        echo "MEM ${indx}: ${state_file_names[$idx]}"
+    done
+else
+    echo "    $fnbase exists"
+fi
+
+#-----------------------------------------------------------------------
+# Run the job itself
+#-----------------------------------------------------------------------
+
 RUNMPCMD -n NOPART EXEDIR/update_mpas_states
 
 if [[ $? -eq 0 ]]; then
-    touch done.update_states_$memstr
+    touch done.update_states_${memstr}
 else
-    touch error.update_states_$memstr
+    touch error.update_states_${memstr}
 fi
 
-rm -rf running.update_states_$memstr
+rm -rf running.update_states_${memstr}
 
 time2=$(date '+%s')
 

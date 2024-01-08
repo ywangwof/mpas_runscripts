@@ -466,6 +466,17 @@ function run_filter {
     event_pre=$(date -u -d @${timesec_pre}   +%H%M)
     timestr_cur=$(date -u -d @${iseconds}    +%Y%m%d%H%M)
 
+    datestr4obsdiag=$(date -u -d @${iseconds} +%Y,%m,%d,%H,%M,%S)
+    intvl_min=$((intvl_sec/60))
+    dateintvl4obsdiag="0, 0, 0,00,${intvl_min},00"
+
+    (( gobef_secs=iseconds - 329 ))    # -5m-29s
+    (( goaft_secs=iseconds + 150 ))    # +2m+30s
+    (( gobtw_secs=goaft_secs-gobef_secs ))
+    datestr4obsdiag_start=$(date -u -d @${gobef_secs} +%Y,%m,%d,%H,%M,%S)
+    datestr4obsdiag_end=$(date -u -d @${goaft_secs} +%Y,%m,%d,%H,%M,%S)
+
+
     parentdir=$(dirname ${wrkdir})
 
     #------------------------------------------------------
@@ -528,8 +539,8 @@ function run_filter {
 
     firstfile=$(head -1 filter_in.txt)
     ln -sf $firstfile init.nc             # The name of the MPAS analysis file to
-                                         # be read and/or written by the DART
-                                         # programs for the state data.
+                                          # be read and/or written by the DART
+                                          # programs for the state data.
     #------------------------------------------------------
     # 2. Adaptive inflation
     #------------------------------------------------------
@@ -595,15 +606,15 @@ function run_filter {
    first_obs_seconds        = -1
    last_obs_days            = -1
    last_obs_seconds         = -1
-   num_output_state_members = 0
-   num_output_obs_members   = 3
+   num_output_state_members = 36
+   num_output_obs_members   = 36
    output_interval          = 1
    num_groups               = 1
    distributed_state        = .true.
    compute_posterior        = .true.
    output_forward_op_errors = .false.
-   output_timestamps        = .false.
-   trace_execution          = .false.
+   output_timestamps        = .true.
+   trace_execution          = .true.
    silence                  = .false.
 
    stages_to_write          = 'preassim', 'output'
@@ -646,16 +657,16 @@ function run_filter {
   /
 
 &ensemble_manager_nml
-   layout = 1
+   layout = 2
    tasks_per_node = ${ncores_filter}
   /
 
 &assim_tools_nml
    filter_kind                       = 1
    cutoff                            = 0.036,
-   distribute_mean                   = .false.
+   distribute_mean                   = .true.
    convert_all_obs_verticals_first   = .true.
-   convert_all_state_verticals_first = .false.
+   convert_all_state_verticals_first = .true.
    sort_obs_inc                      = .false.
    spread_restoration                = .false.
    sampling_error_correction         = .false.
@@ -844,8 +855,6 @@ function run_filter {
                                 'RADIOSONDE_V_WIND_COMPONENT',
                                 'RADIOSONDE_SPECIFIC_HUMIDITY',
                                 'GPSRO_REFRACTIVITY',
-                                'LAND_SFC_ALTIMETER',
-                                'MARINE_SFC_DEWPOINT',
                                 'AIRCRAFT_U_WIND_COMPONENT',
                                 'AIRCRAFT_V_WIND_COMPONENT',
                                 'AIRCRAFT_TEMPERATURE',
@@ -856,7 +865,8 @@ function run_filter {
                                 'METAR_U_10_METER_WIND',
                                 'METAR_V_10_METER_WIND',
                                 'METAR_TEMPERATURE_2_METER',
-                                'METAR_DEWPOINT_2_METER',
+                                'METAR_SPECIFIC_HUMIDITY_2_METER',
+                                'MARINE_SFC_SPECIFIC_HUMIDITY',
                                 'MARINE_SFC_U_WIND_COMPONENT',
                                 'MARINE_SFC_V_WIND_COMPONENT',
                                 'MARINE_SFC_TEMPERATURE',
@@ -866,7 +876,6 @@ function run_filter {
                                 'LAND_SFC_DEWPOINT',
                                 'LAND_SFC_TEMPERATURE',
                                 'LAND_SFC_SPECIFIC_HUMIDITY',
-                                'LAND_SFC_RELATIVE_HUMIDITY',
                                 'LAND_SFC_U_WIND_COMPONENT',
                                 'LAND_SFC_V_WIND_COMPONENT',
                                 'RADAR_REFLECTIVITY',
@@ -874,7 +883,8 @@ function run_filter {
                                 'DOPPLER_RADIAL_VELOCITY',
                                 'GOES_IWP_PATH',
                                 'GOES_CWP_ZERO',
-                                'GOES_CWP_ZERO_NIGHT',
+                                'GOES_CWP_PATH',
+                                'GOES_LWP_PATH',
                                 'GOES_16_ABI_TB',
    evaluate_these_obs_types = ''
   /
@@ -913,9 +923,9 @@ function run_filter {
    model_perturbation_amplitude = 0.0001
    vert_localization_coord      = 3
    calendar                     = 'Gregorian'
-   highest_obs_pressure_mb      = 1.0
+   highest_obs_pressure_mb      = 20.0
    sfc_elev_max_diff            = 100.
-   log_p_vert_interp            = .false.
+   log_p_vert_interp            = .true.
    debug                        = 0
    use_u_for_wind               = .false.
    use_rbf_option               = 2
@@ -943,8 +953,12 @@ function run_filter {
                           'uReconstructMeridional','QTY_V_WIND_COMPONENT',
                           'u',                     'QTY_EDGE_NORMAL_SPEED',
                           'w',                     'QTY_VERTICAL_VELOCITY',
-                          'qv',                    'QTY_VAPOR_MIXING_RATIO',
+                          'u10',                   'QTY_10M_U_WIND_COMPONENT',
+                          'v10',                   'QTY_10M_V_WIND_COMPONENT',
+                          't2m',                   'QTY_2M_TEMPERATURE',
+                          'q2',                    'QTY_2M_SPECIFIC_HUMIDITY',
                           'surface_pressure',      'QTY_SURFACE_PRESSURE',
+                          'qv',                    'QTY_VAPOR_MIXING_RATIO',
                           'qc',                    'QTY_CLOUDWATER_MIXING_RATIO',
                           'qr',                    'QTY_RAINWATER_MIXING_RATIO',
                           'qi',                    'QTY_ICE_MIXING_RATIO',
@@ -974,7 +988,7 @@ function run_filter {
                           'ni','0.0','NULL','CLAMP',
                           'ns','0.0','NULL','CLAMP',
                           'ng','0.0','NULL','CLAMP',
-                          'ng','0.0','NULL','CLAMP',
+                          'nh','0.0','NULL','CLAMP',
   /
 
 &update_mpas_states_nml
@@ -1067,11 +1081,11 @@ function run_filter {
 
 &schedule_nml
    calendar             = 'Gregorian'
-   first_bin_start      =  1601,  1,  1,  0,  0,  0
-   first_bin_end        =  2999,  1,  1,  0,  0,  0
-   last_bin_end         =  2999,  1,  1,  0,  0,  0
-   bin_interval_days    = 1000000
-   bin_interval_seconds = 0
+   first_bin_start      =  ${datestr4obsdiag_start}
+   first_bin_end        =  ${datestr4obsdiag_end}
+   last_bin_end         =  ${datestr4obsdiag_end}
+   bin_interval_days    = 0
+   bin_interval_seconds = ${gobtw_secs}
    max_num_bins         = 1000
    print_table          = .true.
   /
@@ -1091,10 +1105,10 @@ function run_filter {
 &obs_diag_nml
    obs_sequence_name  = 'obs_seq.final'
    obs_sequence_list  = ''
-   first_bin_center   = 2010,10,23,12,00,00
-   last_bin_center    = 2010,10,23,12,00,00
-   bin_width          =    0, 0, 0,00,15,00
-   bin_separation     =    0, 0, 0,00,15,00
+   first_bin_center   = ${datestr4obsdiag}
+   last_bin_center    = ${datestr4obsdiag}
+   bin_width          = ${dateintvl4obsdiag}
+   bin_separation     = ${dateintvl4obsdiag}
    time_to_skip       =    0, 0, 0,00,00,00
    trusted_obs        = 'null'
    nregions  = 1
@@ -1362,6 +1376,11 @@ s/MACHINE/${machine}/g
 s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/RUNMPCMD/${job_runmpexe_str}/
+s/ISECONDS/${iseconds}/
+s/RUNOBS2NC/${run_obs2nc}/
+s/RUNOBSDIAG/${run_obsdiag}/
+s/RUNADDNOISE/${run_addnoise}/
+s/RUNCMD/${job_runexe_str}/
 EOF
     # shellcheck disable=SC2154
     if [[ "${mach}" == "pbs" ]]; then
@@ -1403,8 +1422,8 @@ function run_update_states {
     if [[ $update_in_place == true ]]; then
         cpcmd="ln -sf"
     else
-        #cpcmd="cp"
-        cpcmd="rsync -a"
+        cpcmd="cp"
+        #cpcmd="rsync -a"
     fi
 
     # Anaysis background file list, for retrieving update_states output file name
@@ -1415,7 +1434,7 @@ function run_update_states {
     update_input_file=$(awk '/update_input_file_list/{print $3}' input.nml)
     readarray -t update_file_array < ${update_input_file:1:${#update_input_file}-2}
 
-    jobarrays=()
+    jobarrays=(); statefiles=()
     for iens in $(seq 1 $ENS_SIZE); do
         (( jindex=iens-1 ))
 
@@ -1425,7 +1444,10 @@ function run_update_states {
         mkwrkdir $memwrkdir 0
         cd $memwrkdir  || return
 
-        cp ../input.nml .
+        #rm -rf input.nml
+        if [[ ! -e input.nml ]]; then
+            cp ../input.nml .
+        fi
 
         update_input_file_name='update_states_in.txt'
         rm -rf ${update_input_file_name}
@@ -1440,18 +1462,15 @@ function run_update_states {
 
         fn="${input_file_array[$jindex]}"
         fnbase=$(basename $fn)
-        if [[ ! -e $fnbase ]]; then
-            echo "    ${cpcmd} $fn ."
-            ${cpcmd} $fn .
-        else
-            echo "    $fnbase exists"
-        fi
         echo "./$fnbase" > ${update_output_file_name}
         sed -i "/update_input_file_list/s/=.*/= '${update_input_file_name}'/" input.nml
         sed -i "/update_output_file_list/s/=.*/= '${update_output_file_name}'/" input.nml
         sed -i "/init_template_filename/s/init.nc/${fnbase}/" input.nml
 
-        jobarrays+=("$iens")
+        if [[ ! -e done.update_states_${memstr} ]]; then
+            jobarrays+=("$iens")
+            statefiles+=("$fn")
+        fi
     done
 
     cd $wrkdir || return
@@ -1496,6 +1515,8 @@ s/MACHINE/${machine}/g
 s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/RUNMPCMD/${job_runexe_str}/
+s#CPCMD#${cpcmd}#g
+s#STATEFILESSTR#${statefiles[*]}#
 EOF
     if [[ "${mach}" == "pbs" ]]; then
         echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
@@ -1541,9 +1562,10 @@ function run_update_bc {
         done
     fi
 
-    if [[ $icycle -gt 0 && $run_updatebc == true ]]; then
-        #cpcmd="cp"
-        cpcmd="rsync -a"
+    # shellcheck disable=SC2154
+    if [[ $icycle -gt 0 && ${run_updatebc} == true ]]; then
+        cpcmd="cp"
+        #cpcmd="rsync -a"
     else
         cpcmd="ln -sf"
     fi
@@ -1554,11 +1576,13 @@ function run_update_bc {
 
     if [[ $icycle -gt 0 && $run_updatebc ]]; then
         # update_states input file list, will be modified for one member only
-        update_input_file=$(awk '/update_analysis_file_list/{print $3}' input.nml)
-        readarray -t anlfile_array < ${update_input_file:1:${#update_input_file}-2}
+        update_analysis_file_list=$(awk '/update_analysis_file_list/{print $3}' input.nml)
+        update_input_file_list=${update_analysis_file_list:1:${#update_analysis_file_list}-2}
+        #anlfile_name=$(awk "NR==${mem}{ print; exit }" ../${update_input_file_list})
+        readarray -t anlfile_array < ${update_input_file_list}
     fi
 
-    jobarrays=()
+    jobarrays=(); lbcfiles_org=(); lbcfiles_mem=()
     for iens in $(seq 1 $ENS_SIZE); do
         (( jindex=iens-1 ))
 
@@ -1570,11 +1594,11 @@ function run_update_bc {
 
         update_output_file_name='update_bc_inout.txt'
         update_anal_file_name='update_bc_in.txt'
+        rm -rf ${update_output_file_name}
+        rm -rf ${update_anal_file_name}
 
         if [[ ! -e input.nml && $icycle -gt 0 && $run_updatebc ]]; then
             cp ../input.nml .
-            rm -rf ${update_output_file_name}
-            rm -rf ${update_anal_file_name}
         fi
 
         #
@@ -1596,7 +1620,7 @@ function run_update_bc {
 
         # MPAS expected boundary file times
         mpastime_str1=$(date -u -d @${iseconds}  +%Y-%m-%d_%H.%M.%S)
-        if $run_updatebc; then
+        if [[ ${run_updatebc} == true ]]; then
             mpastime_str2=${lbctime_str2}
             icycle_lbcgap=$(( isec_nlbc2-iseconds ))
         else
@@ -1613,19 +1637,16 @@ function run_update_bc {
         lbc_file0="$rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc"
         lbc_filem="${domname}_${memstr}.lbc.${mpastime_str1}.nc"
 
-        if [[ -e $lbc_filem ]]; then
-            #echo "    $lbc_filem exists, deleting ..."
-            rm -rf $lbc_filem
-        fi
-        echo "$$-${FUNCNAME[0]}: Using lbc file: $lbc_file0 ..."
-        ${cpcmd} $lbc_file0 $lbc_filem
-
-        if [[ $icycle -gt 0 && $run_updatebc ]]; then
+        if [[ $icycle -gt 0 && ${run_updatebc} == true ]]; then
             echo "$lbc_filem" >> ${update_output_file_name}
             sed -i "/update_boundary_file_list/s/=.*/= '${update_output_file_name}'/" input.nml
             echo "../${anlfile_array[$jindex]}" >> ${update_anal_file_name}
             sed -i "/update_analysis_file_list/s/=.*/= '${update_anal_file_name}'/" input.nml
+
+            lbcfiles_org+=("${lbc_file0}")
+            lbcfiles_mem+=("${lbc_filem}")
         else             # do not need to run update_bc, just link the files
+            ${cpcmd} ${lbc_file0} ${lbc_filem}
             touch "$memwrkdir/done.update_bc_${memstr}"
         fi
 
@@ -1641,7 +1662,7 @@ function run_update_bc {
     # Run update_bc for all ensemble members
     #------------------------------------------------------
 
-    if [[ $icycle -gt 0 && $run_updatebc ]]; then
+    if [[ $icycle -gt 0 && ${run_updatebc} == true ]]; then
         echo "$$-${FUNCNAME[0]}: Running run_update_bc ..."
 
         #------------------------------------------------------
@@ -1666,6 +1687,9 @@ s/MACHINE/${machine}/g
 s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/RUNMPCMD/${job_runexe_str}/
+s#CPCMD#${cpcmd}#g
+s#LBCFILEORGSTR#${lbcfiles_org[*]}#
+s#LBCFILEMEMSTR#${lbcfiles_mem[*]}#
 EOF
         if [[ "${mach}" == "pbs" ]]; then
             echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
@@ -1674,49 +1698,6 @@ EOF
         jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
 
         submit_a_jobscript $wrkdir "update_bc" $sedfile $TEMPDIR/$jobscript $jobscript "${jobarraystr}"
-    fi
-}
-
-########################################################################
-
-function run_obs2nc {
-    # $1        $2
-    # wrkdir    iseconds
-    local wrkdir=$1
-    local iseconds=$2
-
-    cd $wrkdir || return
-
-    timestr_cur=$(date -u -d @$iseconds    +%Y%m%d%H%M)
-
-    if [[ -e obs_seq.final.${timestr_cur}.nc ]]; then
-        return
-    fi
-    #
-    # Waiting for job conditions
-    #
-    conditions=(done.filter)
-
-    if [[ $dorun == true ]]; then
-        for cond in "${conditions[@]}"; do
-            echo "$$-${FUNCNAME[0]}: Checking $cond"
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for file: $cond"
-                fi
-                sleep 10
-            done
-        done
-
-        if [[ $verb -eq 1 ]]; then
-            srunout="1"
-        else
-            srunout="obs_seq_to_netcdf.log"
-        fi
-
-        echo "    Running ${exedir}/dart/obs_seq_to_netcdf"
-        ${runcmd_str} ${exedir}/dart/obs_seq_to_netcdf >& $srunout
-        mv obs_epoch_001.nc obs_seq.final.${timestr_cur}.nc
     fi
 }
 
@@ -1785,8 +1766,8 @@ function run_add_noise {
         #
         # Create job script and submit it
         #
-        mymachine=${machine}
-        runexe_str=${job_runexe_str}
+        mymachine="${machine}"
+        runexe_str="${job_runexe_str} -n 1"
         if [[ -n "${python_machine}" ]]; then
             mymachine=${python_machine}
             runexe_str=""
@@ -1817,6 +1798,7 @@ EOF
         if [[ -n "${python_machine}" ]]; then    # run the job on the submitted machine
             sed -f "$sedfile" "$TEMPDIR/$jobscript" > "$jobscript"
             echo "Running ${jobscript} on ${python_machine} at $(date +%H:%M:%S)..."
+            # shellcheck disable=SC2029
             ssh ${python_machine} "cd ${wrkdir};bash ${jobscript} &> noise_mask.log" &>/dev/null
         else
             submit_a_jobscript $wrkdir "noise_mask" "$sedfile" "$TEMPDIR/$jobscript" "$jobscript" ""
@@ -1870,8 +1852,8 @@ EOF
         jobscript="run_noise_pert.${mach}"
         sedfile=$(mktemp -t pert_${eventtime}.sed_XXXX)
 
-        mymachine=${machine}
-        runexe_str=${job_runexe_str}
+        mymachine="${machine}"
+        runexe_str="${job_runexe_str} -n 1"
         if [[ -n "${python_machine}" ]]; then
             mymachine=${python_machine}
             runexe_str=""
@@ -1901,6 +1883,7 @@ EOF
             sed -f "$sedfile" "$TEMPDIR/$jobscript" > "$jobscript"
             sed -i "s/MEMARRAY/${jobarrays[*]}/" "$jobscript"
             echo "Running ${jobscript} on ${python_machine} at $(date +%H:%M:%S)..."
+            # shellcheck disable=SC2029
             ssh ${python_machine} "cd ${wrkdir};bash ${jobscript} &> noise_pert.log" &>/dev/null
         else
             jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
@@ -2018,7 +2001,7 @@ function run_mpas {
             restartfile="./${domname}_${memstr}.restart.${currtime_fil}.nc"
             if [[ $verb -eq 1 ]]; then echo "Member: $iens use restart file: ${restartfile}"; fi
             #ln -sf  $restartfile .
-            if [[ ! -e ${restartfile} && ${dorun} ]]; then
+            if [[ ! -e ${restartfile} && ${dorun} == true ]]; then
                 echo "ERROR: restart file: ${restartfile} not exists"
                 exit 1              # something wrong should never happen
             fi
@@ -2053,6 +2036,7 @@ function run_mpas {
 
         fcstmin_str=$(printf "%02d" "${intvl_min}")
 
+        # the ratio of radt to dt is 15
         # shellcheck disable=SC2154
         cat << EOF > namelist.atmosphere
 &nhyd_model
@@ -2061,7 +2045,7 @@ function run_mpas {
     config_start_time               = '${currtime_str}'
     config_run_duration             = '00:${fcstmin_str}:00'
     config_split_dynamics_transport = true
-    config_number_of_sub_steps      = 4
+    config_number_of_sub_steps      = 2
     config_dynamics_split_steps     = 3
     config_h_mom_eddy_visc2         = 0.0
     config_h_mom_eddy_visc4         = 0.0
@@ -2120,8 +2104,8 @@ function run_mpas {
     config_sst_update                = false
     config_sstdiurn_update           = false
     config_deepsoiltemp_update       = false
-    config_radtlw_interval           = '00:05:00'
-    config_radtsw_interval           = '00:05:00'
+    config_radtlw_interval           = '00:04:00'
+    config_radtsw_interval           = '00:04:00'
     config_bucket_update             = 'none'
     config_lsm_scheme                = '${MPASLSM}'
     num_soil_layers                  = ${MPASNFLS}
@@ -2309,7 +2293,7 @@ function da_cycle_driver() {
         timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
         eventtime=$(date -u -d @$isec +%H%M)
 
-        if $run_updatebc; then
+        if [[ ${run_updatebc} == true ]]; then
             min_passhr=$(date -u -d @$isec +%M)
             icycle_lbcgap=$(( EXTINVL-(min_passhr*60) ))             # Seconds to next available boundary time
         else
@@ -2371,16 +2355,7 @@ function da_cycle_driver() {
         fi
 
         #------------------------------------------------------
-        # 4. Run obs_seq_to_netcdf
-        #------------------------------------------------------
-        # shellcheck disable=SC2154
-        if [[ $icyc -gt 0 && (${run_obs2nc} || ${run_addnoise}) ]]; then
-            if [[ $verb -eq 1 ]]; then echo ""; echo "    Run obs_seq_to_netcdf at $eventtime"; fi
-            run_obs2nc $dawrkdir $isec
-        fi
-
-        #------------------------------------------------------
-        # 5. Add noise
+        # 4. Add noise
         #------------------------------------------------------
         if [[ $run_addnoise == true ]]; then
 
@@ -2401,7 +2376,7 @@ function da_cycle_driver() {
         fi
 
         #------------------------------------------------------
-        # 6. Advance model for each member
+        # 5. Advance model for each member
         #------------------------------------------------------
         # Run forecast for ensemble members until the next analysis time
         if [[ " ${jobs[*]} " =~ " mpas " ]]; then
@@ -2421,7 +2396,7 @@ function da_cycle_driver() {
                 fi
             fi
             # check and set add_noise status
-            if [[ $dorun == true && ${run_addnoise} ]]; then
+            if [[ $dorun == true && ${run_addnoise} == true ]]; then
                 if [[ ! -e done.add_noise ]]; then
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
                     check_and_resubmit "add_noise fcst_" $dawrkdir $ENS_SIZE run_noise_pert.${mach} 0

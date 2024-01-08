@@ -1,4 +1,4 @@
-#!/bin/sh -l
+#!/bin/bash
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
@@ -39,6 +39,29 @@ else
 fi
 
 rm -rf running.filter
+
+#------------------------------------------------------
+# Run obs_seq_to_netcdf and/or obs_diag
+#------------------------------------------------------
+if [[ -e done.filter ]]; then
+    iseconds=ISECONDS
+    run_obs2nc=RUNOBS2NC
+    run_obsdiag=RUNOBSDIAG
+    run_addnoise=RUNADDNOISE
+
+    timestr_cur=$(date -u -d @$iseconds    +%Y%m%d%H%M)
+
+    if [[ ${run_obs2nc} == true || ${run_addnoise} == true ]]; then
+        echo "    Run EXEDIR/obs_seq_to_netcdf at ${timestr_cur} > obs_seq_to_netcdf.log"
+        RUNCMD -n 1 EXEDIR/obs_seq_to_netcdf >& obs_seq_to_netcdf.log
+        mv obs_epoch_001.nc obs_seq.final.${timestr_cur}.nc
+    fi
+
+    if [[ ${run_obsdiag} == true ]]; then
+        echo "    Run EXEDIR/obs_diag at ${timestr_cur} > obs_diag.log"
+        RUNCMD -n 1 EXEDIR/obs_diag >& obs_diag.log
+    fi
+fi
 
 time2=$(date '+%s')
 

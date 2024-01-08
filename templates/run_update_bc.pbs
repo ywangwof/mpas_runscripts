@@ -1,4 +1,4 @@
-#!/bin/bash -l
+#!/bin/bash
 #PBS -q PARTION
 #PBS -N JOBNAME
 #PBS -l select=NNODES:CPUSPEC:mpiprocs=NCORES:ompthreads=1
@@ -24,6 +24,40 @@ cd WRKDIR/fcst_${memstr}
 
 touch running.update_bc_${memstr}
 rm -rf error.update_bc_${memstr} queue.update_bc_${memstr}
+
+#-----------------------------------------------------------------------
+# Copy working file
+#-----------------------------------------------------------------------
+
+((iensidx = mem-1))
+
+lbcfile_orgs=(LBCFILEORGSTR)
+lbcfile_mems=(LBCFILEMEMSTR)
+
+#
+# lbc files
+#
+lbc_file0="${lbcfile_orgs[$iensidx]}"
+lbc_filem="${lbcfile_mems[$iensidx]}"
+
+if [[ -e $lbc_filem ]]; then
+    echo "    $lbc_filem exists, deleting ..."
+    rm -rf $lbc_filem
+fi
+echo "MEM ${memstr}: Using lbc file: ${lbc_file0}"
+echo "                     as ${lbc_filem} ..."
+echo ""
+CPCMD $lbc_file0 $lbc_filem
+
+# for diagnostics and add some delays
+for idx in "${!lbcfile_orgs[@]}"; do
+    (( indx = idx+1 ))
+    echo "$indx: ${lbcfile_orgs[$idx]} --> ${lbcfile_mems[$idx]}"
+done
+
+#-----------------------------------------------------------------------
+# Run the job itself
+#-----------------------------------------------------------------------
 
 RUNMPCMD -n NOPART EXEDIR/update_bc
 

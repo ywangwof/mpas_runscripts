@@ -302,7 +302,7 @@ function run_mpas {
     config_start_time               = '${currtime_str}'
     config_run_duration             = '${fcsthr_str}'
     config_split_dynamics_transport = true
-    config_number_of_sub_steps      = 4
+    config_number_of_sub_steps      = 2
     config_dynamics_split_steps     = 3
     config_h_mom_eddy_visc2         = 0.0
     config_h_mom_eddy_visc4         = 0.0
@@ -361,8 +361,8 @@ function run_mpas {
     config_sst_update                = false
     config_sstdiurn_update           = false
     config_deepsoiltemp_update       = false
-    config_radtlw_interval           = '00:10:00'
-    config_radtsw_interval           = '00:10:00'
+    config_radtlw_interval           = '00:05:00'    # the ratio of radt to dt is 15
+    config_radtsw_interval           = '00:05:00'
     config_bucket_update             = 'none'
     config_lsm_scheme                = '${MPASLSM}'
     num_soil_layers                  = ${MPASNFLS}
@@ -623,7 +623,7 @@ function run_mpassit_oneAtime {
     for minstr in "${fcsttimes[@]}"; do
 
         (( i=10#${minstr}*60 ))
-        mpassit_wait_create_nml_onetime $wrkdir ${iseconds} $i
+        mpassit_wait_create_nml_onetime $wrkdir ${iseconds} $i 30
         local estatus=$?               # number of missing members
         if [[ ${estatus} -gt 0 ]]; then
             continue
@@ -688,16 +688,16 @@ function run_mpassit_alltimes {
         (( i > maxsec )) && maxsec=$i
         (( i < minsec )) && minsec=$i
 
-        mpassit_wait_create_nml_onetime $wrkdir ${iseconds} $i
+        mpassit_wait_create_nml_onetime $wrkdir ${iseconds} $i 2
         local estatus=$?               # number of missing members
         if [[ ${estatus} -gt 0 ]]; then
+            echo "$$-${FUNCNAME[0]}: ${estatus} files missing"
             missed=true
             continue
         fi
     done
 
-    if [[ ${#fcsttimes[@]} -gt 0 && ! ${missed} ]]; then
-
+    if [[ ${#fcsttimes[@]} -gt 0 && ${missed} == false ]]; then
         #
         # Create job script and submit it
         #
@@ -746,6 +746,7 @@ function mpassit_wait_create_nml_onetime {
     local -r wrkdir=$1
     local -r iseconds=$2
     local -r fctseconds=$3
+    local -r waitseconds=$4   # run all time together, it does not have to wait
 
     cd $wrkdir || return
 
@@ -789,8 +790,9 @@ function mpassit_wait_create_nml_onetime {
                     sleep 10
                 done
                 fileage=$(( $(date +%s) - $(stat -c %Y -- "$fn") ))
-                if [[ $fileage -lt 30 ]]; then
-                    sleep 30
+                if [[ $fileage -lt $waitseconds ]]; then
+                    if [[ $verb -eq 1 ]]; then echo "$$-${FUNCNAME[0]}: Waiting for $fn ..."; fi
+                    sleep "$waitseconds"
                 fi
             done
         fi
@@ -1086,16 +1088,14 @@ function fcst_driver() {
 
             run_mpassit $fcstwrkdir $ilaunch
 
-            if [[ $jobwait -eq 1 ]]; then
-                if [[ $rt_run == true ]]; then
-                    for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
-                        minstr=$(printf "%03d" $((i/60)))
-                        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                        check_and_resubmit "mpassit$minstr mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit_$minstr.${mach} ${num_resubmit}
-                    done
-                else
-                    check_and_resubmit "mpassit mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit.${mach} ${num_resubmit}
-                fi
+            if [[ $rt_run == true ]]; then
+                for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
+                    minstr=$(printf "%03d" $((i/60)))
+                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+                    check_and_resubmit "mpassit$minstr mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit_$minstr.${mach} ${num_resubmit}
+                done
+            else
+                check_and_resubmit "mpassit mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit.${mach} ${num_resubmit}
             fi
         fi
 
