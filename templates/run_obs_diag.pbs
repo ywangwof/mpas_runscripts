@@ -1,4 +1,4 @@
-#!/bin/bash -l
+#!/bin/bash
 #PBS -q PARTION
 #PBS -N JOBNAME
 #PBS -l select=NNODES:CPUSPEC:mpiprocs=NCORES:ompthreads=1

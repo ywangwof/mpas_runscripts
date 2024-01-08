@@ -1060,7 +1060,7 @@ function write_runtimeconfig {
 
     * )    # Vecna at NSSL
 
-        pythonmachine="wof-epyc3"
+        pythonmachine="wof-epyc10"
 
         # ICs
         ncores_ics=96
@@ -1159,13 +1159,14 @@ function write_runtimeconfig {
 
 [dacycles]
     ENS_SIZE=36
-    time_step=20
+    time_step=15
     intvl_sec=900
     ADAPTIVE_INF=true
     update_in_place=false               # update MPAS states in-place or
                                         # making a copy of the restart files
     run_updatebc=true
     run_obs2nc=true
+    run_obsdiag=true
 
     run_addnoise=true
     python_machine="${pythonmachine}"   # if not empty, you should have set up passwordless access on it and the

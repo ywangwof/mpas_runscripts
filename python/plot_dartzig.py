@@ -883,12 +883,16 @@ if __name__ == "__main__":
 
         filelist = []
         for item in os.listdir(wargs.run_dir):
-            rematch1 = re.match(f'obs_seq.final.{wargs.eventdate}([12][0-9][0-5][05]).nc',item)
-            rematch2 = re.match(f'obs_seq.final.{nextdatestr}(0[0-9][0-5][05]).nc',item)
-            if rematch1:
-                filelist.append(os.path.join(wargs.run_dir,rematch1.group(0)))
-            elif rematch2:
-                filelist.append(os.path.join(wargs.run_dir,rematch2.group(0)))
+            dirmatch = re.match('^\d{4,4}$',item)
+            dirtime = os.path.join(wargs.run_dir,item)
+            if dirmatch and os.path.isdir(dirtime):
+                for myf in os.listdir(dirtime):
+                    rematch1 = re.match(f'obs_seq.final.{wargs.eventdate}([12][0-9][0-5][05]).nc',myf)
+                    rematch2 = re.match(f'obs_seq.final.{nextdatestr}(0[0-9][0-5][05]).nc',myf)
+                    if rematch1:
+                        filelist.append(os.path.join(dirtime,rematch1.group(0)))
+                    elif rematch2:
+                        filelist.append(os.path.join(dirtime,rematch2.group(0)))
 
         filelist.sort()
 

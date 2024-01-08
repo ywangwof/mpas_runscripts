@@ -1,4 +1,4 @@
-#!/bin/bash -l
+#!/bin/bash
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
@@ -18,7 +18,7 @@ if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
     module use ROOTDIR/modules
     module load MODULE
 else
-    source ROOTDIR/modules/MODULE_impi
+    source ROOTDIR/modules/MODULE
 fi
 
 nnode=$SLURM_JOB_NUM_NODES

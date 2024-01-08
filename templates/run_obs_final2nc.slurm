@@ -1,4 +1,4 @@
-#!/bin/sh -l
+#!/bin/bash
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC

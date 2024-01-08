@@ -1,4 +1,4 @@
-#!/bin/sh -l
+#!/bin/bash
 #SBATCH -A hpc-wof1
 #SBATCH --partition=sjet,vjet,xjet,kjet
 #SBATCH -J plot

@@ -1,4 +1,4 @@
-#!/bin/sh -l
+#!/bin/bash
 #SBATCH -A hpc-wof1
 #SBATCH --partition=bigmem
 #SBATCH -J create_region

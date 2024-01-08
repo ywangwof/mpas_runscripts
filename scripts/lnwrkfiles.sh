@@ -11,9 +11,10 @@ myhost=$(hostname)
 if [[ "${myhost}" == "ln"* ]]; then
     srcmpassitdir=${srcroot}/MPASSIT
     srcuppdir=${srcroot}/UPP_KATE_kjet
-    srcmodeldir=${srcroot}/MPAS-Model
-    srcwpsdir=/oldscratch/ywang/NEWSVAR/news3dvar.2021/WPS
-    srcwrfdir=/oldscratch/ywang/NEWSVAR/news3dvar.2021/WRFV3.9_WOFS_2021
+    srcmodeldir=${srcroot}/frdd-MPAS-Model
+    srcwpsdir=${srcroot}/WPS_SRC
+    srcwrfdir=${srcroot}/WRFV4.0
+    srcdartdir=${srcroot}/frdd-DART
 elif [[ "${myhost}" == "cheyenne"* || ${myhost} == "derecho"* ]]; then
     rootdir="/glade/work/ywang/mpas_runscripts"
     scpdir="/glade/work/ywang/mpas_runscripts/scripts"

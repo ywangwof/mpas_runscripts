@@ -1,4 +1,4 @@
-#!/bin/sh -l
+#!/bin/sh
 ACCTSTR
 #PBS -q PARTION
 #PBS -N JOBNAME

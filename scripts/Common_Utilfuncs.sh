@@ -209,6 +209,12 @@ function check_and_resubmit {
                 error=0                             # Perform another try
                 #break                              # Stop further try for PBS jobs scheduler
             fi
+
+            for mem in "${runjobs[@]}"; do
+                memstr=$(printf "%02d" $mem)
+                memdir="$mywrkdir/${memname}$memstr"
+                rm -rf "$memdir/error.${jobname}_$memstr"
+            done
         fi
 
     done
