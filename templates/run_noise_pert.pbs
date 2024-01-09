@@ -1,0 +1,59 @@
+#!/bin/bash
+#PBS -q PARTION
+#PBS -N JOBNAME
+#PBS -l select=1:CPUSPEC:mpiprocs=1:ompthreads=1
+#PBS -l walltime=00:30:00
+#PBS -j oe
+#PBS -o WRKDIR/noise_pert.log
+ACCTSTR
+EXCLSTR
+
+time1=$(date '+%s')
+echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
+echo " "
+
+module load conda
+conda activate plot_mpas
+
+# Retrieve command line parameters
+eventdays="EVENTDAYS"
+eventsecs="EVENTSECS"
+time_str="MPASTIME"
+
+export PYTHONPATH="WAN_PATH"
+
+for mem in "${mem_arr[@]}"; do
+    memstr=$(printf "%02d" $mem)
+
+    cd WRKDIR/fcst_${memstr}
+
+    #touch running.add_noise_${memstr}
+    #rm -rf error.add_noise_${memstr} queue.add_noise_${memstr}
+
+    # Run the python programs
+
+    bkg_file="wofs_mpas_${memstr}.restart.${time_str}.nc"
+    RUNCMD python WAN_PATH/add_pert_where_high_refl.py ${bkg_file} 9000.0 3000.0 0.50 0.50 0.0 0.50 0.50 0.0 ${eventsecs} ${eventdays} ${mem} mpas &
+
+    #if [[ $? -eq 0 ]]; then
+    #    touch done.add_noise_${memstr}
+    #else
+    #    touch error.add_noise_${memstr}
+    #fi
+    #
+    #rm -rf running.add_noise_${memstr}
+done
+
+wait
+
+time2=$(date '+%s')
+
+let diff=time2-time1
+let hour=diff/3600
+let diff=diff%3600
+let min=diff/60
+let sec=diff%60
+
+echo -n "Job   Ended: $(date). "
+printf 'Job run time:  %02d:%02d:%02d' $hour $min $sec
+echo " "

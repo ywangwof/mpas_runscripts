@@ -1027,6 +1027,8 @@ function write_runtimeconfig {
         ;;
 
     "Cheyenne" )
+        pythonmachine=""
+        mpas_wofs_python="/glade/work/ywang/wofs_new_noise"
 
         # Derecho node has 128 processors
         # ICs
@@ -1061,6 +1063,7 @@ function write_runtimeconfig {
     * )    # Vecna at NSSL
 
         pythonmachine="wof-epyc10"
+        mpas_wofs_python="/scratch/ywang/MPAS/wofs_new_noise"
 
         # ICs
         ncores_ics=96
@@ -1171,7 +1174,7 @@ function write_runtimeconfig {
     run_addnoise=true
     python_machine="${pythonmachine}"   # if not empty, you should have set up passwordless access on it and the
                                         # Python environment is properly set in run_noise_mask.slurm & run_noise_pert.slurm
-    WOFSAN_PATH="/scratch/ywang/MPAS/wofs_new_noise"
+    WOFSAN_PATH="${mpas_wofs_python}"
 
     OUTIOTYPE="netcdf4"
     OBS_DIR="${OBS_DIR}"

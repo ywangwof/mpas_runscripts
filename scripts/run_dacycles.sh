@@ -1789,7 +1789,7 @@ s#BKGFILE#${bkgfile}#g
 s#WAN_PATH#${WOFSAN_PATH}#g
 s/EVENTDAYS/${days_secs[0]}/g
 s/EVENTSECS/${days_secs[1]}/g
-s/RUNMPCMD/${runexe_str}/
+s/RUNCMD/${runexe_str}/
 EOF
         if [[ "${mach}" == "pbs" ]]; then
             echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
@@ -1873,7 +1873,7 @@ s#WAN_PATH#${WOFSAN_PATH}#g
 s/EVENTDAYS/${days_secs[0]}/g
 s/EVENTSECS/${days_secs[1]}/g
 s/MPASTIME/${mpas_timestr}/g
-s/RUNMPCMD/${runexe_str}/
+s/RUNCMD/${runexe_str}/
 EOF
         if [[ "${mach}" == "pbs" ]]; then
             echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
@@ -2518,7 +2518,7 @@ s#EXEDIR#${exedir}/dart#
 s/MACHINE/${machine}/g
 s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
-s/RUNMPCMD/${job_runexe_str}/
+s/RUNCMD/${job_runexe_str}/
 s/EXENAME/obs_diag/
 s/PRONAME/obs_diag/g
 
@@ -2612,7 +2612,7 @@ s#EXEDIR#${exedir}/dart#
 s/MACHINE/${machine}/g
 s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
-s/RUNMPCMD/${job_runexe_str}/
+s/RUNCMD/${job_runexe_str}/
 s/START_S/${start_sec}/g
 s/END_S/${end_sec}/g
 s/INTVL_S/${intvl_sec}/g

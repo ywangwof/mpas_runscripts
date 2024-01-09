@@ -49,7 +49,7 @@ EOF
     sed -f $sedfile -i input.nml
     rm -f $sedfile
 
-    RUNMPCMD -n NOPART EXEDIR/obs_seq_to_netcdf
+    RUNCMD -n NOPART EXEDIR/obs_seq_to_netcdf
 
     mv obs_epoch_001.nc obs_seq.final.${timestr_cur}.nc
 done

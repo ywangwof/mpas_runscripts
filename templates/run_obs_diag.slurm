@@ -30,7 +30,7 @@ cd WRKDIR
 touch running.PRONAME
 rm -rf error.PRONAME queue.PRONAME
 
-RUNMPCMD -n NOPART EXEDIR/EXENAME
+RUNCMD -n NOPART EXEDIR/EXENAME
 
 if [[ $? -eq 0 ]]; then
     touch done.PRONAME

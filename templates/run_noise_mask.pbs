@@ -1,0 +1,52 @@
+#!/bin/bash
+#PBS -q PARTION
+#PBS -N JOBNAME
+#PBS -l select=1:CPUSPEC:mpiprocs=1:ompthreads=1
+#PBS -l walltime=00:20:00
+#PBS -j oe
+#PBS -o WRKDIR/noise_mask.log
+ACCTSTR
+EXCLSTR
+
+time1=$(date '+%s')
+echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
+echo " "
+
+module load conda
+conda activate plot_mpas
+
+# Retrieve command line parameters
+ncseq_file="SEQFILE"
+bkg_file="BKGFILE"
+eventdays="EVENTDAYS"
+eventsecs="EVENTSECS"
+
+export PYTHONPATH="WAN_PATH"
+
+cd WRKDIR
+
+touch running.noise_mask
+rm -rf error.noise_mask queue.noise_mask
+
+# Run the python programs
+RUNCMD python WAN_PATH/grid_refl_obs.py ${ncseq_file} 35.0 10.0 ${bkg_file} ${eventsecs} ${eventdays} mpas
+
+if [[ $? -eq 0 ]]; then
+    touch done.noise_mask
+else
+    touch error.noise_mask
+fi
+
+rm -rf running.noise_mask
+
+time2=$(date '+%s')
+
+let diff=time2-time1
+let hour=diff/3600
+let diff=diff%3600
+let min=diff/60
+let sec=diff%60
+
+echo -n "Job   Ended: $(date). "
+printf 'Job run time:  %02d:%02d:%02d' $hour $min $sec
+echo " "
