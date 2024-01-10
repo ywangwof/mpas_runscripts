@@ -1,5 +1,6 @@
 #!/bin/bash
 #PBS -q PARTION
+#PBS -l job_priority=economy
 #PBS -N JOBNAME
 #PBS -l select=1:CPUSPEC:mpiprocs=1:ompthreads=1
 #PBS -l walltime=00:20:00

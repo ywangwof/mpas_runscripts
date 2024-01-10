@@ -2,7 +2,7 @@
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
-#SBATCH -t 00:30:00
+#SBATCH -t 00:10:00
 #SBATCH --output=WRKDIR/update_bc_%a_%j.log
 ACCTSTR
 EXCLSTR

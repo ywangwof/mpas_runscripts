@@ -1,5 +1,6 @@
 #!/bin/bash
 #PBS -q PARTION
+#PBS -l job_priority=economy
 #PBS -N JOBNAME
 #PBS -l select=NNODES:CPUSPEC:mpiprocs=NCORES:ompthreads=1
 #PBS -l walltime=CLAIMTIME

@@ -1033,19 +1033,20 @@ function write_runtimeconfig {
         # Derecho node has 128 processors
         # ICs
         ncores_ics=32
-        partition_ics="main"
+        partition_ics="preempt"
         claim_cpu_ics="ncpus=${ncores_ics}"
         claim_cpu_ungrib=""
 
         # LBCs
         ncores_lbc=32
-        partition_lbc="main"
+        partition_lbc="preempt"
         claim_cpu_lbc="ncpus=${ncores_lbc}"
 
         # DA cycles
         ncores_filter=128; ncores_dafcst=128
-        partition_dafcst="main" ; claim_cpu_dafcst="ncpus=${ncores_dafcst}"
-        partition_filter="main" ; claim_cpu_filter="ncpus=${ncores_filter}"
+        # main, preempt, regular
+        partition_dafcst="preempt" ; claim_cpu_dafcst="ncpus=${ncores_dafcst}"
+        partition_filter="preempt" ; claim_cpu_filter="ncpus=${ncores_filter}"
         claim_cpu_update="ncpus=${ncores_filter}"
 
         npefilter=128     ; nnodes_filter=$(( npefilter/ncores_filter   ))
@@ -1053,8 +1054,8 @@ function write_runtimeconfig {
 
         # FCST cycles
         ncores_post=32; ncores_fcst=128
-        partition_fcst="main"   ; claim_cpu_fcst="ncpus=${ncores_fcst}"
-        partition_post="main"   ; claim_cpu_post="ncpus=${ncores_post}"
+        partition_fcst="preempt"   ; claim_cpu_fcst="ncpus=${ncores_fcst}"
+        partition_post="preempt"   ; claim_cpu_post="ncpus=${ncores_post}"
 
         npepost=32      ; nnodes_post=$(( npepost/ncores_post   ))
         npefcst=128     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
@@ -1068,13 +1069,13 @@ function write_runtimeconfig {
         # ICs
         ncores_ics=96
         partition_ics="batch"
-        claim_cpu_ics="--ntasks-per-node=${ncores_ics} --mem-per-cpu=4G"
+        claim_cpu_ics="--ntasks-per-node=${ncores_ics}"
         claim_cpu_ungrib=""
 
         # LBCs
         ncores_lbc=96
         partition_lbc="batch"
-        claim_cpu_lbc="--ntasks-per-node=${ncores_lbc} --mem-per-cpu=4G"
+        claim_cpu_lbc="--ntasks-per-node=${ncores_lbc}"
         claim_cpu_ungrib=""
 
         # DA cycles
@@ -1083,8 +1084,8 @@ function write_runtimeconfig {
         npefilter=768           ; nnodes_filter=$(( npefilter/ncores_filter  ))
         npedafcst=96            ; nnodes_dafcst=$(( npefcst/ncores_dafcst ))
 
-        partition_dafcst="batch"  ; claim_cpu_dafcst="--ntasks-per-node=96 --mem-per-cpu=4G";
-        partition_filter="batch"  ; claim_cpu_filter="--ntasks-per-node=96 --mem-per-cpu=4G"
+        partition_dafcst="batch"  ; claim_cpu_dafcst="--ntasks-per-node=\${ncores_fcst}";
+        partition_filter="batch"  ; claim_cpu_filter="--ntasks-per-node=\${ncores_filter}"
                                     claim_cpu_update="--ntasks-per-node=1"
 
         # FCST cycles
@@ -1179,7 +1180,7 @@ function write_runtimeconfig {
     OUTIOTYPE="netcdf4"
     OBS_DIR="${OBS_DIR}"
 
-    #ncores_fcst="${ncores_dafcst}"
+    ncores_fcst="${ncores_dafcst}"
     ncores_filter="${ncores_filter}"
     partition_fcst="${partition_dafcst}";
     partition_filter="${partition_filter}"
@@ -1444,7 +1445,7 @@ elif [[ $machine == "Cheyenne" ]]; then
 
     mach="pbs"
     job_exclusive_str="#PBS -l job_priority=economy"
-    job_account_str="#PBS -A ${hpcaccount-NMMM0013}"
+    job_account_str="#PBS -A ${hpcaccount-NMMM0021}"
     job_runmpexe_str="mpiexec"
     job_runexe_str="mpiexec"
     runcmd_str=""
