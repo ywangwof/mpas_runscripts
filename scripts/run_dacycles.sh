@@ -154,6 +154,13 @@ function run_obsmerge {
                                   # 1: Remove existing same name directory
     cd $wrkdir/OBSDIR || exit $?
 
+    #-------------------------------------------------------------------
+    #
+    # Run MPAS_DART_OBS_PREPROCESS for each observation type
+    # and get an array "obsflists"
+    #
+    #-------------------------------------------------------------------
+
     rm -fr obsflist.bufr obsflist.meso obsflist.sat obsflist.mrms obsflist.radvr obsflist obs_seq.*
 
     obspreprocess=${exedir}/dart/mpas_dart_obs_preprocess
@@ -173,10 +180,31 @@ function run_obsmerge {
 
     if [[ -e ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2} && "${anlys_time:2:2}" == "00" ]]; then
         echo "    $((k++)): Using PrepBufr observations in ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}"
-        echo "${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}" > obsflist.bufr
-        obsflists+=(obsflist.bufr)
-    #else
-    #    echo "    PrepBufr data not found: ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}"
+        #echo "${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}" > obsflist.bufr
+        #obsflists+=(obsflist.bufr)
+
+        cp ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2} ./obs_seq.old
+
+        if [[ $verb -eq 1 ]]; then
+            echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
+        fi
+        # shellcheck disable=SC2154
+        ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >& ${srunout}_BUFR
+
+        # shellcheck disable=SC2181
+        if [[ $? -eq 0 ]]; then
+            mv ./obs_seq.new ./obs_seq.bufr
+
+            rm ./obs_seq.old
+
+            echo $wrkdir/OBSDIR/obs_seq.bufr > obsflist.bufr
+
+            obsflists+=(obsflist.bufr)
+        else
+            echo "Error with command ${obspreprocess} for PREPBUFR data"
+        fi
+    else
+        echo "    PrepBufr data not found: ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}"
     fi
 
     #=================================================
@@ -185,8 +213,29 @@ function run_obsmerge {
 
     if [[ -e ${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time} ]]; then
         echo "    $((k++)): Using Mesonet observations in ${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time}"
-        echo "${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time}" > obsflist.meso
-        obsflists+=(obsflist.meso)
+        #echo "${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time}" > obsflist.meso
+        #obsflists+=(obsflist.meso)
+
+        cp ${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time} ./obs_seq.old
+
+        if [[ $verb -eq 1 ]]; then
+            echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
+        fi
+        # shellcheck disable=SC2154
+        ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >& ${srunout}_MESO
+
+        # shellcheck disable=SC2181
+        if [[ $? -eq 0 ]]; then
+            mv ./obs_seq.new ./obs_seq.meso
+
+            rm ./obs_seq.old
+
+            echo $wrkdir/OBSDIR/obs_seq.meso > obsflist.meso
+
+            obsflists+=(obsflist.meso)
+        else
+            echo "Error with command ${obspreprocess} for MESONET data"
+        fi
     else
         echo "    Mesonet not found: ${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time}"
     fi
@@ -231,12 +280,14 @@ function run_obsmerge {
 
     channels=("8.4" "10.3")
 
-    cp ${FIXDIR}/rttov_sensor_db.csv .
-
     i=0
     for abifile in "${RAD_DIR}"/obs_seq_abi.G16_C*."${anlys_date}${anlys_time}"; do
         if [[ -e ${abifile} ]]; then
             i=$((i+1))
+
+            if [[ ! -e rttov_sensor_db.csv ]]; then
+                cp ${FIXDIR}/rttov_sensor_db.csv .
+            fi
 
             a=$(basename $abifile)
             chan=${a##obs_seq_abi.G16_C}
@@ -363,7 +414,11 @@ function run_obsmerge {
         echo "    No valid radial velocity data is processed"
     fi
 
-    #===================================================================
+    #-------------------------------------------------------------------
+    #
+    # Run OBS_SEQUENCE_TOOL
+    #
+    #-------------------------------------------------------------------
 
     if [[ ${#obsflists[@]} -gt 0 ]]; then
         if [[ $verb -eq 1 ]]; then
@@ -394,6 +449,8 @@ EOF
 
     sed -f $sedfile -i input.nml
 
+    rm -f $sedfile
+
     #===================================================================
 
     #COMBINE obs-seq FILES HERE
@@ -404,25 +461,13 @@ EOF
     # /
     #
     if [[ $verb -eq 1 ]]; then echo "Runing ${exedir}/dart/obs_sequence_tool"; fi
-    ${runcmd_str} ${exedir}/dart/obs_sequence_tool >& ${srunout}_SEQ
+    ${runcmd_str} ${exedir}/dart/obs_sequence_tool >& ${srunout}_sequence_tool
 
     if [[ $? -eq 0 && -e obs_seq.${anlys_date}${anlys_time} ]]; then
         echo "    Observation file ${wrkdir}/OBSDIR/obs_seq.${anlys_date}${anlys_time} created"
     else
         echo "ERROR: ${runcmd_str} ${exedir}/dart/obs_sequence_tool"
     fi
-
-#    # Recover input.nml to the original state
-#    cat <<EOF > $sedfile
-#/first_obs_days/s/=.*$/= -1/
-#/first_obs_seconds/s/=.*$/= -1/
-#/last_obs_days/s/=.*$/= -1/
-#/last_obs_seconds/s/=.*$/= -1/
-#EOF
-#
-#    sed -f $sedfile -i input.nml
-
-    rm -f $sedfile
 
     #rm -f ./obs_seq.hfmetar ./obs_seq.meso ./obs_seq.cwp ./obs_seq.mrms ./obs_seq.rad ./obs_seq.vr*
 
@@ -720,7 +765,7 @@ function run_filter {
    nlon                            = 283,
    nlat                            = 144,
    output_box_info                 = .false.
-   print_box_level                 = 0,
+   print_box_level                 = 0
    special_vert_normalization_obs_types =  'METAR_ALTIMETER',
                                            'METAR_U_10_METER_WIND',
                                            'METAR_V_10_METER_WIND',
@@ -862,6 +907,7 @@ function run_filter {
                                 'ACARS_V_WIND_COMPONENT',
                                 'ACARS_TEMPERATURE',
                                 'METAR_ALTIMETER',
+                                'METAR_DEWPOINT_2_METER',
                                 'METAR_U_10_METER_WIND',
                                 'METAR_V_10_METER_WIND',
                                 'METAR_TEMPERATURE_2_METER',
@@ -871,6 +917,7 @@ function run_filter {
                                 'MARINE_SFC_V_WIND_COMPONENT',
                                 'MARINE_SFC_TEMPERATURE',
                                 'MARINE_SFC_PRESSURE',
+                                'MARINE_SFC_DEWPOINT',
                                 'LAND_SFC_PRESSURE',
                                 'LAND_SFC_ALTIMETER',
                                 'LAND_SFC_DEWPOINT',
@@ -1000,7 +1047,7 @@ function run_filter {
 &update_bc_nml
   update_analysis_file_list           = 'filter_out.txt'
   update_boundary_file_list           = 'boundary_inout.txt'
-  lbc_update_from_reconstructed_winds = .true.
+  lbc_update_from_reconstructed_winds = .false.
   lbc_update_winds_from_increments    = .false.
   debug = 0
 /
@@ -1304,8 +1351,8 @@ function run_filter {
 &mpas_dart_obs_preprocess_nml
    file_name_input          = 'obs_seq.old'
    file_name_output         = 'obs_seq.new'
-   include_sig_data         = .true.
-   superob_aircraft         = .false.
+   include_sig_data         = .false.
+   superob_aircraft         = .true.
    superob_sat_winds        = .false.
    sfc_elevation_check      = .false.
    overwrite_ncep_sfc_qc    = .false.
@@ -1329,6 +1376,9 @@ function run_filter {
    overwrite_obs_time       = .false.
    windowing_obs_time       = .true.
    windowing_int_hour       = 0.5
+   increase_bdy_error       = .true.
+   maxobsfac                = 2.5
+   obsdistbdy               = 30000.0 ! meters
 /
 EOF
 
@@ -1341,7 +1391,7 @@ EOF
         ln -sf OBSDIR/obs_seq.${timestr_cur} obs_seq.in
     else
         if [[ $verb -eq 1 ]]; then echo "run_obsmerge $wrkdir $iseconds"; fi
-        run_obsmerge $wrkdir $iseconds
+        run_obsmerge $wrkdir $iseconds |& tee ${wrkdir}/observations.log
 
         if [[ -e OBSDIR/obs_seq.${timestr_cur} ]]; then
             ln -sf OBSDIR/obs_seq.${timestr_cur} obs_seq.in
@@ -1430,7 +1480,7 @@ function run_update_states {
     state_input_file=$(awk '/input_state_file_list/{print $3}' input.nml)
     readarray -t input_file_array < ${state_input_file:1:${#state_input_file}-2}
 
-    # update_states input file list, will be modified for one member only
+    # update_states input file list, used as update_states input file names
     update_input_file=$(awk '/update_input_file_list/{print $3}' input.nml)
     readarray -t update_file_array < ${update_input_file:1:${#update_input_file}-2}
 
@@ -1449,22 +1499,18 @@ function run_update_states {
             cp ../input.nml .
         fi
 
-        update_input_file_name='update_states_in.txt'
-        rm -rf ${update_input_file_name}
-        #if [[ ! -e ../${update_file_array[$jindex]} ]]; then
-        #    echo "ERROR: file: ../${update_file_array[$jindex]} not exists"
-        #    exit 1              # something wrong should never happen
-        #fi
-        echo "../${update_file_array[$jindex]}" > ${update_input_file_name}
+        update_input_file_list='update_states_in.txt'
+        rm -rf ${update_input_file_list}
+        echo "../${update_file_array[$jindex]}" > ${update_input_file_list}
 
-        update_output_file_name='update_states_out.txt'
-        rm -rf ${update_output_file_name}
+        update_output_file_list='update_states_out.txt'
+        rm -rf ${update_output_file_list}
 
         fn="${input_file_array[$jindex]}"
         fnbase=$(basename $fn)
-        echo "./$fnbase" > ${update_output_file_name}
-        sed -i "/update_input_file_list/s/=.*/= '${update_input_file_name}'/" input.nml
-        sed -i "/update_output_file_list/s/=.*/= '${update_output_file_name}'/" input.nml
+        echo "./$fnbase" > ${update_output_file_list}
+        sed -i "/update_input_file_list/s/=.*/= '${update_input_file_list}'/" input.nml
+        sed -i "/update_output_file_list/s/=.*/= '${update_output_file_list}'/" input.nml
         sed -i "/init_template_filename/s/init.nc/${fnbase}/" input.nml
 
         if [[ ! -e done.update_states_${memstr} ]]; then
@@ -1548,7 +1594,13 @@ function run_update_bc {
     #
     # Waiting for job conditions
     #
-    conditions=("${rundir}"/lbc/done.lbc done.filter)
+    conditions=("${rundir}"/lbc/done.lbc)
+
+    if [[ $run_addnoise == true ]]; then
+        conditions+=("${wrkdir}/done.add_noise")
+    else
+        conditions+=("${wrkdir}/done.update_states")
+    fi
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
@@ -1575,11 +1627,15 @@ function run_update_bc {
     #------------------------------------------------------
 
     if [[ $icycle -gt 0 && $run_updatebc ]]; then
-        # update_states input file list, will be modified for one member only
-        update_analysis_file_list=$(awk '/update_analysis_file_list/{print $3}' input.nml)
-        update_input_file_list=${update_analysis_file_list:1:${#update_analysis_file_list}-2}
-        #anlfile_name=$(awk "NR==${mem}{ print; exit }" ../${update_input_file_list})
-        readarray -t anlfile_array < ${update_input_file_list}
+        # Filter input file list, will be used for update_bc as input
+        # because update_states should have updated them
+        state_input_file=$(awk '/input_state_file_list/{print $3}' input.nml)
+        readarray -t input_file_array < ${state_input_file:1:${#state_input_file}-2}
+        infile_array=()
+        for fn in "${input_file_array[@]}"; do
+            basefn=$(basename $fn)
+            infile_array+=("$basefn")
+        done
     fi
 
     jobarrays=(); lbcfiles_org=(); lbcfiles_mem=()
@@ -1592,10 +1648,10 @@ function run_update_bc {
         mkwrkdir $memwrkdir 0
         cd $memwrkdir  || return
 
-        update_output_file_name='update_bc_inout.txt'
-        update_anal_file_name='update_bc_in.txt'
-        rm -rf ${update_output_file_name}
-        rm -rf ${update_anal_file_name}
+        update_output_file_list='update_bc_inout.txt'
+        update_input_file_list='update_bc_in.txt'
+        rm -rf ${update_output_file_list}
+        rm -rf ${update_input_file_list}
 
         if [[ ! -e input.nml && $icycle -gt 0 && $run_updatebc ]]; then
             cp ../input.nml .
@@ -1638,10 +1694,10 @@ function run_update_bc {
         lbc_filem="${domname}_${memstr}.lbc.${mpastime_str1}.nc"
 
         if [[ $icycle -gt 0 && ${run_updatebc} == true ]]; then
-            echo "$lbc_filem" >> ${update_output_file_name}
-            sed -i "/update_boundary_file_list/s/=.*/= '${update_output_file_name}'/" input.nml
-            echo "../${anlfile_array[$jindex]}" >> ${update_anal_file_name}
-            sed -i "/update_analysis_file_list/s/=.*/= '${update_anal_file_name}'/" input.nml
+            echo "$lbc_filem" >> ${update_output_file_list}
+            sed -i "/update_boundary_file_list/s/=.*/= '${update_output_file_list}'/" input.nml
+            echo "${infile_array[$jindex]}" >> ${update_input_file_list}
+            sed -i "/update_analysis_file_list/s/=.*/= '${update_input_file_list}'/" input.nml
 
             lbcfiles_org+=("${lbc_file0}")
             lbcfiles_mem+=("${lbc_filem}")
@@ -1659,16 +1715,10 @@ function run_update_bc {
     cd $wrkdir || return
 
     #------------------------------------------------------
-    # Run update_bc for all ensemble members
+    # Run update_bc for all ensemble members as a job array
     #------------------------------------------------------
 
     if [[ $icycle -gt 0 && ${run_updatebc} == true ]]; then
-        echo "$$-${FUNCNAME[0]}: Running run_update_bc ..."
-
-        #------------------------------------------------------
-        # Run update_bc for all ensemble members
-        #------------------------------------------------------
-
         #
         # Create job script and submit it
         #
@@ -1921,11 +1971,7 @@ function run_mpas {
     #
     # Waiting for job conditions
     #
-    conditions=("${wrkdir}/done.update_states" "${wrkdir}/done.update_bc")
-
-    if $run_addnoise; then
-        conditions+=("${wrkdir}/done.add_noise")
-    fi
+    conditions=("${wrkdir}/done.update_bc")
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
@@ -2306,23 +2352,25 @@ function da_cycle_driver() {
 
         echo ""
         echo "- Cycle $icyc at ${timestr_curr}"
+        time1=$(date +%s)
 
         #------------------------------------------------------
         # 0. Check forecast status of the early cycle or inital boundary status
         #------------------------------------------------------
-        if [[ $icyc -gt 0 && $dorun == true ]]; then
-
-            timesec_pre=$((isec-intvl_sec))
-            event_pre=$(date -u -d @$timesec_pre  +%H%M)
-            wrkdir_pre=${wrkdir}/${event_pre}
-            if [[ ! -e ${wrkdir_pre}/done.fcst ]]; then
-                #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                check_and_resubmit "fcst" $wrkdir_pre $ENS_SIZE run_mpas.${mach} 0
-            fi
-        elif [[ $icyc -eq 0 && $dorun == true ]]; then
-            if [[ ! -e $rundir/lbc/done.lbc ]]; then
-                #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                check_and_resubmit "lbc" $rundir/lbc $nenslbc run_lbc.${mach} 0
+        if [[ $dorun == true ]]; then
+            if [[ $icyc -eq 0 ]]; then
+                if [[ ! -e $rundir/lbc/done.lbc ]]; then
+                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+                    check_and_resubmit "lbc" $rundir/lbc $nenslbc run_lbc.${mach} 0
+                fi
+            else   #if [[ $icyc -gt 0 ]]; then
+                timesec_pre=$((isec-intvl_sec))
+                event_pre=$(date -u -d @$timesec_pre  +%H%M)
+                wrkdir_pre=${wrkdir}/${event_pre}
+                if [[ ! -e ${wrkdir_pre}/done.fcst ]]; then
+                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+                    check_and_resubmit "fcst" $wrkdir_pre $ENS_SIZE run_mpas.${mach} 0
+                fi
             fi
         fi
 
@@ -2347,15 +2395,7 @@ function da_cycle_driver() {
         fi
 
         #------------------------------------------------------
-        # 3. Run update_bc for all ensemble members
-        #------------------------------------------------------
-        if [[ " ${jobs[*]} " =~ " update_bc " ]]; then
-            if [[ $verb -eq 1 ]]; then echo ""; echo "    Run update_bc at $eventtime"; fi
-            run_update_bc $dawrkdir $icyc $isec
-        fi
-
-        #------------------------------------------------------
-        # 4. Add noise
+        # 3. Add noise
         #------------------------------------------------------
         if [[ $run_addnoise == true ]]; then
 
@@ -2376,30 +2416,37 @@ function da_cycle_driver() {
         fi
 
         #------------------------------------------------------
+        # 4. Run update_bc for all ensemble members
+        #------------------------------------------------------
+        if [[ " ${jobs[*]} " =~ " update_bc " ]]; then
+            if [[ $dorun == true ]]; then
+                if [[ ${run_addnoise} == true ]]; then   # check and set add_noise status
+                    if [[ ! -e done.add_noise ]]; then
+                        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+                        check_and_resubmit "add_noise fcst_" $dawrkdir $ENS_SIZE run_noise_pert.${mach} 0
+                    fi
+                else                                     # check and set update_states status
+                    if [[ ! -e done.update_states ]]; then
+                        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+                        check_and_resubmit "update_states fcst_" $dawrkdir $ENS_SIZE run_update_states.${mach} 0
+                    fi
+                fi
+            fi
+
+            if [[ $verb -eq 1 ]]; then echo ""; echo "    Run update_bc at $eventtime"; fi
+            run_update_bc $dawrkdir $icyc $isec
+        fi
+
+        #------------------------------------------------------
         # 5. Advance model for each member
         #------------------------------------------------------
         # Run forecast for ensemble members until the next analysis time
         if [[ " ${jobs[*]} " =~ " mpas " ]]; then
-            # check and set update_states status
-            if [[ $dorun == true ]]; then
-                if [[ ! -e done.update_states ]]; then
-                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                    check_and_resubmit "update_states fcst_" $dawrkdir $ENS_SIZE run_update_states.${mach} 0
-                fi
-            fi
-
             # check and set update_bc status
             if [[ $dorun == true ]]; then
                 if [[ ! -e done.update_bc ]]; then
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
                     check_and_resubmit "update_bc fcst_" $dawrkdir $ENS_SIZE run_update_bc.${mach} 0
-                fi
-            fi
-            # check and set add_noise status
-            if [[ $dorun == true && ${run_addnoise} == true ]]; then
-                if [[ ! -e done.add_noise ]]; then
-                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                    check_and_resubmit "add_noise fcst_" $dawrkdir $ENS_SIZE run_noise_pert.${mach} 0
                 fi
             fi
 
@@ -2414,6 +2461,15 @@ function da_cycle_driver() {
                     check_and_resubmit "fcst" $dawrkdir $ENS_SIZE $mpas_jobscript 2
                 fi
             fi
+        fi
+
+        #------------------------------------------------------
+        # This DA cycle is done
+        #------------------------------------------------------
+        time2=$(date +%s)
+        if [[ $time2 -gt $time1 ]]; then
+            (( secoffset = time2-time1 )); (( minoffset = secoffset/60 )); (( secoffset = secoffset%60 ))
+            echo "= Cycle $icyc took ${minoffset}:${secoffset} minutes:seconds."
         fi
 
         (( icyc+=1 ))
