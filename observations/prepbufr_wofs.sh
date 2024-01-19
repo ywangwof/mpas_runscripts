@@ -75,7 +75,7 @@ for((i=timebeg_s;i<=timeend_s;i+=3600)); do
 
     BUFR_dir=/work/rt_obs/SBUFR/${inyear}/${inmonth}/${inday}
 
-    cd ${WORK_dir}/work
+    cd ${WORK_dir}/work || exit 0
 
     # clear any old intermediate (text) files
     #rm -f temp_obs prepqm.in prepqm.out
@@ -116,7 +116,7 @@ EOF
     else
        echo "MISSING INPUT FILE: ${BUFR_in} or ${BUFR_in}.gz"
        echo "Script will abort now."
-       exit -1
+       exit 1
     fi
 
     # byte swapping

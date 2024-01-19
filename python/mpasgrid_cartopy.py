@@ -82,7 +82,10 @@ def read_sfc_station_file(station_file):
 
 ########################################################################
 
-def load_wofs_grid(filename,filext):
+def load_wofs_grid(filename):
+
+    fileroot,filext = os.path.splitext(filename)
+    #print(fileroot, filext)
 
     if filext == ".pts":                       # custom.pts file
         with open(filename, 'r') as csvfile:
@@ -100,7 +103,7 @@ def load_wofs_grid(filename,filext):
 
         mpas_grid = {}
 
-        plot_wofs = "pts"
+        wofs_gridtype = "pts"
     elif filext == ".nc":                       # netcdf grid file
 
         r2d = 57.2957795             # radians to degrees
@@ -130,12 +133,12 @@ def load_wofs_grid(filename,filext):
                      "latVertex"      : latVertex,
                     }
 
-        plot_wofs = "grid"
+        wofs_gridtype = "grid"
     else:
         print("ERROR: need a MPAS grid file or custom pts file.")
         sys.exit(0)
 
-    return plot_wofs,lonlats,make_namespace(mpas_grid)
+    return wofs_gridtype,lonlats,make_namespace(mpas_grid)
 
 ########################################################################
 
@@ -300,10 +303,12 @@ def attach_hrrr_grid(grid, axo):
 
 ########################################################################
 
-def attach_wofs_grid(plt_wofs,axo, lonlats,skipedges,mpas_grid):
-    ''' Plot the WoFS domain '''
+def attach_wofs_grid(wofsgridtype,axo, lonlats,skipedges,mpas_grid):
+    ''' Plot the WoFS domain
+    skipedges:  We do not want to plot all points of MPAS domain for time saving purpose
+    '''
 
-    if plt_wofs == "pts":
+    if wofsgridtype == "pts":
         polygon1 = Polygon( lonlats )
         axo.add_geometries([polygon1], crs=ccrs.Geodetic(), facecolor='blue',
                           edgecolor='navy', linewidth=1.5, alpha=0.2,zorder=1)
@@ -312,7 +317,7 @@ def attach_wofs_grid(plt_wofs,axo, lonlats,skipedges,mpas_grid):
             plt.text(lon, lat, '*', color='r', horizontalalignment='center',
                     verticalalignment='center',transform=carr)
 
-    elif plt_wofs == "grid":
+    elif wofsgridtype == "grid":
         nedges = mpas_grid.nedges
         ecx = np.zeros((nedges,2),dtype=np.double)
         ecy = np.zeros((nedges,2),dtype=np.double)
@@ -335,7 +340,7 @@ def attach_wofs_grid(plt_wofs,axo, lonlats,skipedges,mpas_grid):
                     color='blue', linewidth=0.1, marker='o', markersize=0.2,alpha=.2,
                     transform=carr) # Be explicit about which transform you want
     else:
-        print(f"ERROR: unsupported plt_wofs = {plt_wofs}")
+        print(f"ERROR: unsupported wofs_gridtype = {wofsgridtype}")
         return
 
 ########################################################################
@@ -471,24 +476,16 @@ if __name__ == "__main__":
     lats = None; lons = None; fileroot = None
     if os.path.lexists(args.pts_file):
 
-        fileroot,filext = os.path.splitext(args.pts_file)
-        #print(fileroot, filext)
-
-        if filext in (".pts",".nc"):
-            plt_wofs,lonlats,mpas_edges = load_wofs_grid(args.pts_file,filext)
-        else:
-            print("ERROR: need a MPAS grid file or custom pts file.")
-            sys.exit(0)
+        wofs_gridtype,lonlats,mpas_edges = load_wofs_grid(args.pts_file)
 
         lats = [ l[1] for l in lonlats]
         lons = [ l[0] for l in lonlats]
+        plt_wofs = True
     else:
         plt_wofs = False
-        #print("ERROR: need a WoF grid file.")
-        #sys.exit(0)
 
     #
-    # Set up basempa range or use HRRR grid
+    # Set up basemap range or use HRRR grid
     #
     plt_hrrr = False
     skipedges = 4
@@ -735,8 +732,8 @@ if __name__ == "__main__":
     #
     #-----------------------------------------------------------------------
 
-    if plt_wofs != False:
-        attach_wofs_grid(plt_wofs,ax, lonlats,skipedges,mpas_edges)
+    if plt_wofs:
+        attach_wofs_grid(wofs_gridtype,ax, lonlats,skipedges,mpas_edges)
 
     #-----------------------------------------------------------------------
     #

@@ -71,7 +71,8 @@ def parse_args():
                                      #formatter_class=CustomFormatter)
 
     parser.add_argument('date',    help='MPAS-WoFS event date',type=str, nargs='?',default=None)
-    parser.add_argument('obstype', help='A number denotes the observation type',type=str, nargs='?',default=None)
+    parser.add_argument('obstype', help='An integer number that denotes the observation type or a list of "," seperated numbers, or None to plot all observation in this file',
+                                   type=str, nargs='?',default=None)
 
     parser.add_argument('-v','--verbose',   help='Verbose output',                              action="store_true", default=False)
     parser.add_argument('-r','--rundir',    help='Directory contains obs_seq.final files in netCDF format', type=str,default=os.getcwd())
@@ -124,7 +125,7 @@ def parse_args():
             sys.exit(0)
 
     if len(obstypes) == 1:
-        parsed_args['obstype'] = obstypes[0]
+        parsed_args['obstype'] = obstypes[0].split(',')
     elif len(obstypes) == 0:
         parsed_args['obstype'] = None
     else:
@@ -269,7 +270,7 @@ def load_variables(cargs,wargs, filelist):
         if wargs.obstype is None:
             obstypes = np.unique(varobstypes)
         else:
-            obstypes = [int(wargs.obstype)]
+            obstypes = [int(t) for t in wargs.obstype]
 
         for otype in obstypes:
 
@@ -856,7 +857,7 @@ if __name__ == "__main__":
 
     if cargs.verbose: print("\n Elapsed time of parse_args is:  %f seconds" % (timeit.time() - time0))
 
-    if wargs.obstype == "list":
+    if wargs.obstype[0] == "list":
         time1 = timeit.time()
 
         if cargs.filename is None:

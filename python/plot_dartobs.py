@@ -38,6 +38,8 @@ from netCDF4 import Dataset
 from pyproj import Transformer
 #from scipy.spatial import KDTree
 from scipy.interpolate import griddata
+from shapely.geometry.polygon import Polygon
+import csv
 
 import time as timeit
 from itertools import islice
@@ -207,7 +209,7 @@ def get_var_contours(varname,var2d,cntlevels):
             cmin = minc
             cmax = maxc
 
-    return color_map, normc, cmin, cmax, ticks_list
+    return color_map, normc  #, cmin, cmax, ticks_list
 
 ########################################################################
 
@@ -256,6 +258,106 @@ def setup_hrrr_projection(carr):
 
 ########################################################################
 
+def load_wofs_grid(filename):
+
+    fileroot,filext = os.path.splitext(filename)
+
+    if filext == ".pts":                       # custom.pts file
+        with open(filename, 'r') as csvfile:
+            reader = csv.reader(csvfile)
+            next(reader);next(reader);next(reader);
+            lonlats=[]
+            for row in reader:
+                lonlats.append((float(row[1]),float(row[0])))
+
+        # Note that MPAS requires the order to be clockwise
+        # Python polygon requires anti-clockwise
+        lonlats.reverse()
+        lonlats.append(lonlats[0])
+        #print(lonlats)
+
+        mpas_grid = {}
+
+        wofs_type = "pts"
+
+    elif filext == ".nc":                       # netcdf grid file
+
+        r2d = 57.2957795             # radians to degrees
+
+        with Dataset(filename,'r') as mesh:
+            #xVertex = mesh.variables['xVertex'][:]
+            #yVertex = mesh.variables['yVertex'][:]
+            #zVertex = mesh.variables['zVertex'][:]
+
+            #verticesOnCell = mesh.variables['verticesOnCell'][:,:]
+            #nEdgesOnCell   = mesh.variables['nEdgesOnCell'][:]
+            verticesOnEdge = mesh.variables['verticesOnEdge'][:,:]
+            #lonCell = mesh.variables['lonCell'][:] * r2d
+            #latCell = mesh.variables['latCell'][:] * r2d
+            lonVertex = mesh.variables['lonVertex'][:] * r2d
+            latVertex = mesh.variables['latVertex'][:] * r2d
+            #lonEdge = mesh.variables['lonEdge'][:] * r2d
+            #latEdge = mesh.variables['latEdge'][:] * r2d
+            #hvar     = mesh.variables['areaCell'][:]
+            nedges    = mesh.dimensions['nEdges'].size
+
+        lonlats = [ (lon,lat) for lon,lat in zip(lonVertex,latVertex)]
+
+        mpas_grid = {"nedges"         : nedges,
+                     "verticesOnEdge" : verticesOnEdge,
+                     "lonVertex"      : lonVertex,
+                     "latVertex"      : latVertex,
+                    }
+
+        wofs_type = "grid"
+    else:
+        print("ERROR: need a MPAS grid file or custom pts file.")
+        sys.exit(0)
+
+    return wofs_type,lonlats,make_namespace(mpas_grid)
+
+########################################################################
+
+def attach_wofs_grid(wofs_gridtype,axo,carr,lonlats,skipedges,mpas_grid):
+    ''' Plot the WoFS domain '''
+
+    if wofs_gridtype == "pts":
+        polygon1 = Polygon( lonlats )
+        axo.add_geometries([polygon1], crs=ccrs.Geodetic(), facecolor='white',
+                          edgecolor='navy', linewidth=1.5, alpha=0.2,zorder=1)
+
+        #for lon,lat in lonlats:
+        #    plt.text(lon, lat, '*', color='r', horizontalalignment='center',
+        #            verticalalignment='center',transform=carr)
+
+    elif wofs_gridtype == "grid":
+        nedges = mpas_grid.nedges
+        ecx = np.zeros((nedges,2),dtype=np.double)
+        ecy = np.zeros((nedges,2),dtype=np.double)
+
+        looprange=list(range(0,nedges,skipedges))
+
+        ecy[:,0] = mpas_grid.latVertex[mpas_grid.verticesOnEdge[:,0]-1]
+        ecx[:,0] = mpas_grid.lonVertex[mpas_grid.verticesOnEdge[:,0]-1]
+        ecy[:,1] = mpas_grid.latVertex[mpas_grid.verticesOnEdge[:,1]-1]
+        ecx[:,1] = mpas_grid.lonVertex[mpas_grid.verticesOnEdge[:,1]-1]
+
+        for j in looprange:
+            if abs(ecx[j,0] - ecx[j,1]) > 180.0:
+              if ecx[j,0] > ecx[j,1]:
+                 ecx[j,0] = ecx[j,0] - 360.0
+              else:
+                 ecx[j,1] = ecx[j,1] - 360.0
+
+            plt.plot(ecx[j,:], ecy[j,:],
+                    color='yellow', linewidth=0.1, marker='o', markersize=0.2,alpha=.4,
+                    transform=carr) # Be explicit about which transform you want
+    else:
+        print(f"ERROR: unsupported plt_wofs = {wofs_gridtype}")
+        return
+
+########################################################################
+
 def parse_args():
     """ Parse command line arguments
     """
@@ -265,18 +367,21 @@ def parse_args():
                                      #formatter_class=CustomFormatter)
 
     parser.add_argument('obsfiles',help='DART obs_seq.fial in netCDF format')
-    parser.add_argument('type',    help='Number to denote observation type or "list"', type=str,default=None)
+    parser.add_argument('obstypes',help='Interger number that denotes observation type or a list of "," seperated numbers, or None to plot all observation in this file',
+                        type=str,nargs='?',default=None)
 
     parser.add_argument('-v','--verbose',   help='Verbose output',                              action="store_true", default=False)
     parser.add_argument('-p','--parms',     help='Specify observations copy and quality, [copy,qc_flag]',  type=str, default=None)
     parser.add_argument('-l','--vertLevels',help='Vertical levels to be plotted [level,value,tolerance]',  type=str, default=None)
+    parser.add_argument('-e','--filter_by_obs_error',help='Select observations by minimum observation error',      type=float, default=None)
+    parser.add_argument('-s','--filter_by_rms',      help='Select observations by minimum observation rms',        type=float, default=None)
     parser.add_argument('-c','--cntLevels', help='Contour levels [cmin,cmax,cinc]',                        type=str, default=None)
-    parser.add_argument('--scatter'      ,  help='Scatter plot of assimilated observations',               type=str, default=None)
+    parser.add_argument('--scatter'      ,  help='Scatter plot [mean,spread] of assimilated observations', type=str, default=None)
     parser.add_argument('--fill'         ,  help='Value to fill masked values, apply to the scatter plot only',  type=float, default=None)
     parser.add_argument('-latlon'        ,  help='Base map latlon or lambert',                   action='store_true',default=False)
     parser.add_argument('-range'         ,  help='Map range in degrees [lat1,lon1,lat2,lon2]',             type=str, default=None)
-    #parser.add_argument('--grid'         ,  help='Model file that provide grids',                type=str, default=None)
-    parser.add_argument('-o','--outfile' ,  help='Name of output image or output directory',               type=str, default=None)
+    parser.add_argument('-g','--gridfile',  help='Model file that provide grids',                          type=str, default=None)
+    parser.add_argument('-o','--outfile' ,  help='Name of the output image file or an output directory',   type=str, default=None)
 
     args = parser.parse_args()
 
@@ -301,6 +406,9 @@ def parse_args():
         if len(rlist) > 1:
             parsed_args['t_qc'] = rlist[1]
 
+    #-------------------------------------------------------------------
+    # Set observation file name
+    #-------------------------------------------------------------------
     obsfiles  = []
     types     = []
     obsfile = args.obsfiles
@@ -309,10 +417,11 @@ def parse_args():
     else:
         types.append(obsfile)
 
-    if os.path.lexists(args.type):  # if the two arguments are out-of-order
-        obsfiles.append(args.type)
-    else:
-        types.append(args.type)
+    if args.obstypes is not None:
+        if os.path.lexists(args.obstypes):  # if the two arguments are out-of-order
+            obsfiles.append(args.obstypes)
+        else:
+            types.append(args.obstypes)
 
     if len(obsfiles) == 1:
         parsed_args['obsfile'] = obsfiles[0]
@@ -324,14 +433,22 @@ def parse_args():
     if parsed_args['obsfile'].endswith('.nc'):
         parsed_args['ncfmt'] = True
 
-    if len(types) == 1:
-        type = types[0]
+    #
+    # Set observation type
+    #
+    if len(types) == 0:
+        type = None
+    elif len(types) == 1:
+        type = types[0].split(',')
     else:
         print(f"Variable type can only be one. Got \"{types}\"")
         sys.exit(0)
 
     parsed_args['type']  = type
 
+    #-------------------------------------------------------------------
+    # Map releated parameters
+    #-------------------------------------------------------------------
     parsed_args['ranges'] = None     #[-135.0,-60.0,20.0,55.0]
     if args.range == 'hrrr':
         if args.latlon:
@@ -350,10 +467,13 @@ def parse_args():
         parsed_args['ranges'] = [min(lons),max(lons),min(lats),max(lats)]
 
     # Require t_copy parameter for slice plotting
-    if args.scatter is None and parsed_args['type'] != "list":
-        if parsed_args['t_copy'] is None:
-            print('ERROR: need option "-p" to know which observation copy to be plotted.')
-            sys.exit(1)
+    if args.scatter is None:
+        if parsed_args['type'] is not None and parsed_args['type'][0] == "list":
+            pass
+        else:
+            if parsed_args['t_copy'] is None:
+                print('ERROR: need option "-p" to know which observation copy to be plotted.')
+                sys.exit(1)
 
     #if args.scatter is None and parsed_args['varnames'][0] != "list":
     #    if args.grid is None:
@@ -383,6 +503,7 @@ def parse_args():
     parsed_args['defaultoutfile'] = defaultoutfile
     parsed_args['outdir']         = outdir
     parsed_args['outfile']        = outfile
+    parsed_args['outresolution']  = 100
 
     #
     # decode contour specifications
@@ -393,6 +514,20 @@ def parse_args():
         if len(parsed_args['cntlevel']) != 3:
             print(f"Option -c must be [cmin,cmax,cinc]. Got \"{args.cntLevels}\"")
             sys.exit(0)
+
+    parsed_args['rms_min'] = None
+    if args.filter_by_rms is not None:
+        parsed_args['rms_min'] = args.filter_by_rms
+
+    parsed_args['obs_error_min'] = None
+    if args.filter_by_rms is not None:
+        parsed_args['obs_error_min'] = args.filter_by_rms
+
+    parsed_args['plt_wofs'] = args.gridfile
+    if args.gridfile is not None:
+        if not os.path.lexists(args.gridfile):
+            print(f"ERROR: The grid file {args.gridfile} not exists.")
+            sys.exit(1)
 
     return args, make_namespace(parsed_args)
 
@@ -513,6 +648,8 @@ def load_variables(args):
     var_obj['varlabels']  = varlabels    # CopyMetaData
     var_obj['qclabels']   = qclabels     # CopyMetaData
 
+    var_obj['distypes']   = validtypevals    # distinguished type integer values
+
     var_obj['nobs']     = nobs
     var_obj['nvarcopy'] = ncopy
     var_obj['nqccopy']  = nqc_copy
@@ -538,6 +675,8 @@ def load_obs_seq(varargs):
     varqc_ = []
     varver = []
 
+    validtypevals = []
+
     type_re = re.compile('\d+ [A-Z_]+')
     type_labels = {}
     var_labels  = {}
@@ -558,6 +697,9 @@ def load_obs_seq(varargs):
                 if type_re.match(line):
                     type,label = line.split()
                     type_labels[type] = label
+                    if type not in validtypevals:
+                        validtypevals.append(type)
+
                 elif line.startswith('num_copies:'):
                     ncopy,nqc = line.split()[1:4:2]
                     ncopy = int(ncopy)
@@ -594,6 +736,8 @@ def load_obs_seq(varargs):
     var_obj['obstype']  = np.array(vartyp)
     var_obj['varqc']    = np.array(varqc_)
     var_obj['varvert']  = np.array(varver)
+
+    var_obj['distypes']   = validtypevals    # distinguished type integer values
 
     #print(var_obj['varqc'])
     # Meta data
@@ -828,17 +972,23 @@ def print_meta(varobj):
 
 ########################################################################
 
-def retrieve_plotvar(varargs,varobj):
+def retrieve_plotvar(varargs,vtype,varobj):
     """ Select observation index based on command line arguments"""
 
-    plot_meta = {}
+    varmeta = {}
     #
     # Select obs_index by type
     #
-    print(f"Select observations of type = {varargs.type} ....",end="")
-    obs_index0 = np.where( varobj.obstype == int(varargs.type) )[0]
+    print(f"Select observations of type = {vtype} ....", end="")
+    obs_index0 = np.where( varobj.obstype == int(vtype) )[0]
     print(f"    Got {len(obs_index0)} observations")
-    plot_meta['type_label'] = varobj.validtypes[varargs.type].strip()
+    if len(obs_index0) <= 0:  sys.exit(0)
+    varmeta['type_number'] = vtype
+    varmeta['type_label']  = varobj.validtypes[vtype].strip()
+
+    #obs_index = obs_index0
+    #varmeta['qc_label'] = 'all'
+    #varmeta['level_label'] = 'all'
 
     #
     # Select obs_index by qc flag
@@ -848,28 +998,28 @@ def retrieve_plotvar(varargs,varobj):
     else:
         iqc = 0
 
-    print(f"Select observations of qc value ({iqc}) = {varargs.t_qc} ....",end="")
-    if varargs.t_qc.upper() == 'ALL':
+    print(f"Select observations of (qccopy = {iqc}) qc value = {varargs.t_qc} ....", end="")
+    if varargs.t_qc.upper() == 'All':
         obs_index1 = obs_index0
-        plot_meta['qc_label'] = 'ALLQC'
+        varmeta['qc_label'] = 'AllQC'
     else:
         obs_index1 = np.where( varobj.varqc[obs_index0,iqc] == int(varargs.t_qc) )[0]
         obs_index1 = obs_index0[obs_index1]    # To keep the original whole observation indices
-        plot_meta['qc_label'] = varobj.qclabels[varargs.t_qc]
+        varmeta['qc_label'] = varobj.qclabels[varargs.t_qc]
     print(f"    Got {len(obs_index1)} observations")
 
     #
     # Select obs_index by vertical levels
     #
     if varargs.t_level == 'ALL':
-        plot_meta['level_label'] = 'ALLlevels'
+        varmeta['level_label'] = 'AllLevels'
         print(f"Select observations of levels = {varargs.t_level} ....",end="")
     else:
         print(varargs.t_level, varargs.t_level_tolr)
         t_level_min = varargs.t_level - varargs.t_level_tolr
         t_level_max = varargs.t_level + varargs.t_level_tolr
-        plot_meta['level_label'] = str(varargs.t_level)
-        print(f"Select observations of levels = {t_level_min} - {t_level_max} ....",end="")
+        varmeta['level_label'] = str(varargs.t_level)
+        print(f"Select observations of levels = {t_level_min} - {t_level_max} ....", end="")
 
     obs_index = []
     for n in obs_index1:
@@ -884,6 +1034,43 @@ def retrieve_plotvar(varargs,varobj):
     print(f"    Got {len(obs_index)} observations")
 
     #
+    # Selection obs_index by varargs.obs_error_min
+    #
+    if varargs.obs_error_min is not None:
+        obs_index2 = obs_index
+        obs_index  = []
+
+        print(f"Select observations of obs error >= {varargs.obs_error_min}", end="")
+
+        for n in obs_index2:
+            obs_error      = varobj.varobs[n,-1]           # last one is obs error variance
+            if obs_error >= varargs.obs_error_min:
+                obs_index.append(n)
+        print(f"    Got {len(obs_index)} observations")
+    #
+    # Selection obs_index by varargs.rms_min
+    #
+    if varargs.rms_min is not None:
+        obs_index3 = obs_index
+        obs_index  = []
+
+        print(f"Select observations of obs RMS >= {varargs.rms_min}", end="")
+
+        for i in obs_index3:
+            obs_value      = varobj.varobs[i,0]           # Obs values
+            obs_prior_mean = varobj.varobs[i,1]           # prior_mean
+            rms = (obs_value-obs_prior_mean)**2
+            if rms >= varargs.rms_min:
+                obs_index.append(n)
+        print(f"    Got {len(obs_index)} observations")
+
+    varmeta['number'] = len(obs_index)
+
+    if len(obs_index) <= 0:
+        print(f"ERROR: Number of observations for {vtype} - {varmeta['type_label']} is 0.")
+        return make_namespace(varmeta), None,None,None
+
+    #
     # Get plotting arrays
     #
     obslons = []
@@ -896,13 +1083,13 @@ def retrieve_plotvar(varargs,varobj):
 
     obsdta  = []
     if varargs.t_copy == "0":
-        plot_meta['varlabel'] = "QC"
+        varmeta['varlabel'] = "QC"
         vardat  = varobj.varqc[obs_index,1]
         validqcs = np.unique(vardat)
-        plot_meta['validqcs'] = validqcs
+        varmeta['validqcs'] = validqcs
     else:
         ivar = int(varargs.t_copy)
-        plot_meta['varlabel'] = varobj.varlabels[str(ivar)]
+        varmeta['varlabel'] = varobj.varlabels[str(ivar)]
 
         for i in obs_index:
             vardata = varobj.varobs[i,ivar-1]
@@ -912,16 +1099,25 @@ def retrieve_plotvar(varargs,varobj):
 
     otime = varobj.vartime[obs_index]
     obstime = datetime.strptime('1601-01-01','%Y-%m-%d')+timedelta(days=otime[0])
-    plot_meta['time']  = obstime.strftime('%Y%m%d_%H%M%S')
+    varmeta['time']  = obstime.strftime('%Y%m%d_%H%M%S')
 
     glons = np.array(obslons)
     glats = np.array(obslats)
 
-    return make_namespace(plot_meta), obs_index, glons,glats,vardat
+    #
+    # Sort the return arrays by data values
+    #arrinds = vardat.argsort()
+    #nvardata = vardat[arrinds[::-1]]
+    #nglons   = glons[arrinds[::-1]]
+    #nglats   = glats[arrinds[::-1]]
+
+    #return make_namespace(varmeta), nglons,nglats,nvardata
+
+    return make_namespace(varmeta), glons,glats,vardat
 
 ########################################################################
 
-def retrieve_scattervar(cmdargs,varargs,varobj):
+def retrieve_scattervar(cmdargs,vtype,varobj):
     """ Select observation index based on command line arguments"""
 
     global QCValMeta
@@ -931,11 +1127,11 @@ def retrieve_scattervar(cmdargs,varargs,varobj):
     #
     # Select obs_index by type
     #
-    print(f"Select observations of type = {varargs.type} ....",end="")
-    obs_index = np.where( varobj.obstype == int(varargs.type) )[0]
+    print(f"Select observations of type = {vtype} ....",end="")
+    obs_index = np.where( varobj.obstype == int(vtype) )[0]
     print(f"    Got {len(obs_index)} observations")
 
-    plot_meta['type_label'] = varobj.validtypes[varargs.type].strip()
+    plot_meta['type_label'] = varobj.validtypes[vtype].strip()
 
     #
     # Get plotting arrays
@@ -1093,13 +1289,35 @@ def interpolation2D(obs_obj,mod_obj):
 
 ########################################################################
 
-def make_plot(cargs,wargs,wobj):
-    """ cargs: Command line arguments
-        wargs: Decoded working arguments
+def make_plot(wargs,obstype,wobj):
+    """ wargs: Decoded working arguments
+        obstype: Observation integer type value
         wobj:  Working object
     """
 
     global QCValMeta
+
+    #-----------------------------------------------------------------------
+    #
+    # Process the plot variables
+    #
+    #-----------------------------------------------------------------------
+
+    plot_meta, glons,glats,vardata = retrieve_plotvar(wargs,obstype,wobj)
+    if plot_meta.number <= 0: return       # no valid observation selected
+
+    if wargs.ranges is None:
+        if wargs.plt_wofs is not None:
+            wofs_gridtype,lonlats,mpas_edges = load_wofs_grid(wargs.plt_wofs)
+
+            lats = [ l[1] for l in lonlats]
+            lons = [ l[0] for l in lonlats]
+
+            ranges = [min(lons)-2.0,max(lons)+2.0,min(lats)-2.0,max(lats)+2.0]
+        else:
+            ranges = [glons.min()-2.0,glons.max()+2.0,glats.min()-2.0,glats.max()+2.0]
+    else:
+        ranges = wargs.ranges
 
     #-----------------------------------------------------------------------
     #
@@ -1120,38 +1338,53 @@ def make_plot(cargs,wargs,wobj):
     #
     #-----------------------------------------------------------------------
 
-    style = 'ggplot'
+    #style = 'ggplot'
 
     figure = plt.figure(figsize = (12,12) )
-
-    #-----------------------------------------------------------------------
-    #
-    # Process the plot variables
-    #
-    #-----------------------------------------------------------------------
-
-    plot_meta, obs_index, glons,glats,vardat = retrieve_plotvar(wargs,wobj)
-
-    if wargs.ranges is None:
-        ranges = [glons.min()-2.0,glons.max()+2.0,glats.min()-2.0,glats.max()+2.0]
-    else:
-        ranges = wargs.ranges
-
-    if wargs.type == '120':
-        varname = 'refl'
-    else:
-        varname = plot_meta.varlabel
-
-    color_map, normc,cmin, cmax, ticks_list = get_var_contours(varname,vardat,wargs.cntlevel)
-    #cntlevels = list(np.linspace(cmin,cmax,9))
 
     if wargs.basmap == "latlon":
         #carr._threshold = carr._threshold/10.
         ax = plt.axes(projection=carr)
-        ax.set_extent(ranges,crs=carr)
     else:
         ax = plt.axes(projection=proj_hrrr)
-        ax.set_extent(ranges,crs=carr)        #[-125.0,-70.0,22.0,52.0],crs=carr)
+        #ax.set_extent(ranges,crs=carr)        #[-125.0,-70.0,22.0,52.0],crs=carr)
+
+    ax.set_extent(ranges,crs=carr)
+
+    ax.coastlines(resolution='50m')
+    #ax.stock_img()
+    #ax.add_feature(cfeature.OCEAN)
+    #ax.add_feature(cfeature.LAND, edgecolor='black')
+    #ax.add_feature(cfeature.LAKES, edgecolor='black',facecolor='white')
+    #ax.add_feature(cfeature.RIVERS)
+    ax.add_feature(cfeature.BORDERS)
+    ax.add_feature(cfeature.STATES,linewidth=0.1)
+    #if wargs.basmap == "latlon":
+    lonrange=list(range(-140,-50,10))
+    latrange=list(range(10,60,5))
+    gl = ax.gridlines(draw_labels=True,linewidth=0.2, color='gray', alpha=0.7, linestyle='--')
+    gl.xlocator = mticker.FixedLocator(lonrange)
+    gl.ylocator = mticker.FixedLocator(latrange)
+    gl.top_labels = False
+    gl.left_labels = True       #default already
+    gl.right_labels = False
+    gl.bottom_labels = True
+    #gl.ylabel_style = {'rotation': 45}
+
+    # Create the title as you see fit
+    #ax.set_title(f'{plot_meta.varlabel} for {plot_meta.type_label} on {plot_meta.time} with QC "{plot_meta.qc_label}" on "{plot_meta.level_label}"')
+    plt.title(f'{plot_meta.varlabel} for {plot_meta.type_label} on {plot_meta.time} with QC "{plot_meta.qc_label}" on "{plot_meta.level_label}"')
+    #plt.style.use(style) # Set the style that we choose above
+
+    #-------------------------------------------------------------------
+    # Plot the WoFS domain
+    #-------------------------------------------------------------------
+    if wargs.plt_wofs is not None:
+        attach_wofs_grid(wofs_gridtype, ax, carr,lonlats, 4, mpas_edges)
+
+    #-------------------------------------------------------------------
+    # Plot the field selected
+    #-------------------------------------------------------------------
 
     # Color      Description
     # 'r'        Red               # 'g'        Green
@@ -1196,8 +1429,8 @@ def make_plot(cargs,wargs,wobj):
         cls = ['g', 'r', 'm', 'c', 'k', 'y', 'b', 'k']
         j = 0
         for qc in plot_meta.validqcs:
-            lons = glons[vardat == qc]
-            lats = glats[vardat == qc]
+            lons = glons[vardata == qc]
+            lats = glats[vardata == qc]
             ax.scatter(lons,lats,marker=mks[j], color=cls[j], s=0.4,  alpha=0.6, transform=ccrs.Geodetic(),label=QCValMeta[str(qc)])
             j += 1
 
@@ -1209,10 +1442,26 @@ def make_plot(cargs,wargs,wobj):
         #    plt.text(0.11,  y-0.006, f": {QCValMeta[str(j)]}", color=cls[j], fontsize=14,transform=plt.gcf().transFigure)
 
     else:
-        cntr = ax.scatter(glons,glats,marker='.', c=vardat, alpha=1.0, s=4, cmap=color_map, norm=normc, transform=carr)
+        #print(f"Writing to vr_{plot_meta.time}.txt ....")
+        #with open(f'vr_{plot_meta.time}.txt','w') as vout:
+        #    for i, v in enumerate(vardata):
+        #        vout.write(f"{i}: ({glons[i]},{glats[i]}); {v}\n")
+
+        alphaval = 1.0
+        if 'RADIAL_VELOCITY' in plot_meta.varlabel.upper():             # obstype == '119':
+            alphaval = 0.2
+
+        varname = plot_meta.varlabel
+        if 'REFLECTIVITY' in plot_meta.varlabel.upper():                # obstype == '120':
+            varname = 'refl'
+
+        color_map, normc = get_var_contours(varname,vardata,wargs.cntlevel)
+        #cntlevels = list(np.linspace(cmin,cmax,9))
+
+        cntr = ax.scatter(glons,glats,marker='.', c=vardata, alpha=alphaval, s=4, cmap=color_map, norm=normc, transform=carr)
 
         #mod_obj = read_modgrid(cargs.grid)
-        #mod_obs = interpolation2D({'lon': glons, 'lat': glats, 'value': vardat}, mod_obj)
+        #mod_obs = interpolation2D({'lon': glons, 'lat': glats, 'value': vardata}, mod_obj)
 
         #ny = mod_obj['ny']
         #nx = mod_obj['nx']
@@ -1220,7 +1469,7 @@ def make_plot(cargs,wargs,wobj):
         #cntr = ax.contourf(mod_obj['lonCell'].reshape(ny,nx), mod_obj['latCell'].reshape(ny,nx), mod_obs, cntlevels, cmap=color_map, norm=normc, transform=carr)
         ##cntr = ax.contourf(mod_x.reshape(ny,nx), mod_y.reshape(ny,nx), mod_obs.reshape(ny,nx), cntlevels, cmap=color_map, norm=normc, transform=proj_hrrr)
 
-        ##cntr = ax.tricontourf(glons, glats, vardat, cntlevels, antialiased=False, cmap=color_map, norm=normc, transform=carr)
+        ##cntr = ax.tricontourf(glons, glats, vardata, cntlevels, antialiased=False, cmap=color_map, norm=normc, transform=carr)
 
         # https://matplotlib.org/api/colorbar_api.html
         #
@@ -1228,31 +1477,9 @@ def make_plot(cargs,wargs,wobj):
         cbar = plt.colorbar(cntr, cax=cax)
         cbar.set_label(plot_meta.type_label)
 
-    ax.coastlines(resolution='50m')
-    #ax.stock_img()
-    #ax.add_feature(cfeature.OCEAN)
-    #ax.add_feature(cfeature.LAND, edgecolor='black')
-    #ax.add_feature(cfeature.LAKES, edgecolor='black',facecolor='white')
-    #ax.add_feature(cfeature.RIVERS)
-    ax.add_feature(cfeature.BORDERS)
-    ax.add_feature(cfeature.STATES,linewidth=0.1)
-    if wargs.basmap == "latlon":
-        gl = ax.gridlines(draw_labels=True,linewidth=0.2, color='gray', alpha=0.7, linestyle='--')
-        gl.xlocator = mticker.FixedLocator([-140,-120, -100, -80, -60])
-        gl.ylocator = mticker.FixedLocator([10,20,30,40,50,60])
-        gl.top_labels = False
-        gl.left_labels = True       #default already
-        gl.right_labels = False
-        gl.bottom_labels = True
-        #gl.ylabel_style = {'rotation': 45}
-
-
-    # Create the title as you see fit
-    ax.set_title(f'{plot_meta.varlabel} for {plot_meta.type_label} with QC flag {plot_meta.qc_label} on {plot_meta.level_label}')
-    plt.style.use(style) # Set the style that we choose above
-
-    #
-
+    #-------------------------------------------------------------------
+    # Write out the image file
+    #-------------------------------------------------------------------
     if wargs.defaultoutfile:
         outpng = f"{plot_meta.varlabel}.{plot_meta.type_label}_{plot_meta.level_label}_{plot_meta.qc_label}_{plot_meta.time}.png"
     else:
@@ -1264,7 +1491,7 @@ def make_plot(cargs,wargs,wobj):
 
     figname = os.path.join(wargs.outdir,outpng)
     print(f"Saving figure to {figname} ...")
-    figure.savefig(figname, format='png', dpi=100)
+    figure.savefig(figname, format='png', dpi=wargs.outresolution)
     plt.close(figure)
 
     #plt.show()
@@ -1282,7 +1509,7 @@ def get_array_lenstr(arr):
 
 ########################################################################
 
-def make_scatter(cargs,wargs,wobj):
+def make_scatter(cargs,wargs,obstype,wobj):
     """ cargs: Command line arguments
         wargs: Decoded working arguments
         wobj:  Working object
@@ -1298,7 +1525,7 @@ def make_scatter(cargs,wargs,wobj):
     #
     # Get prior & posterior
     #
-    plot_meta, dta_s = retrieve_scattervar(cargs,wargs,wobj)
+    plot_meta, dta_s = retrieve_scattervar(cargs,obstype,wobj)
 
     if cargs.scatter == "mean":
         # Plot prior points
@@ -1323,7 +1550,7 @@ def make_scatter(cargs,wargs,wobj):
         plt.scatter(dats[xobs_ax], dats['post'], c=colors[i], marker=markers[i], alpha=0.1, label=qclable)
         i += 1
 
-    if wargs.type == '119' and cargs.scatter == "mean":
+    if obstype == '119' and cargs.scatter == "mean":
         plt.ylim(-60, 60)
 
     plt.legend(loc='upper left')
@@ -1345,7 +1572,7 @@ def make_scatter(cargs,wargs,wobj):
 
     figname = os.path.join(wargs.outdir,outpng)
     print(f"Saving figure to {figname} ...")
-    figure.savefig(figname, format='png', dpi=100)
+    figure.savefig(figname, format='png', dpi=wargs.outresolution)
     plt.close(figure)
 
     #plt.show()
@@ -1374,9 +1601,12 @@ if __name__ == "__main__":
     else:
         obs_obj = load_obs_seq(args)
 
+    if args.type is None:
+        args.type = [str(t) for t in obs_obj.distypes]
+
     if cmd_args.verbose: print("\n Elapsed time of load_variables is:  %f seconds" % (timeit.time() - time1))
 
-    if args.type == "list":
+    if args.type[0] == "list":
         time2 = timeit.time()
 
         print_meta(obs_obj)
@@ -1387,13 +1617,16 @@ if __name__ == "__main__":
     else:
         time3 = timeit.time()
 
-        if cmd_args.scatter is None:
-            make_plot(cmd_args, args,obs_obj)
-        else:
-            if obs_obj.nvarcopy > 1:
-                make_scatter(cmd_args,args,obs_obj)
+        for obstype in args.type:
+            #print(obstype)
+            print("")
+            if cmd_args.scatter is None:
+                make_plot(args, obstype, obs_obj)
             else:
-                print(f"ERROR: there is no enough ncopy ({obs_obj.nvarcopy}) for scatter plots.")
+                if obs_obj.nvarcopy > 1:
+                    make_scatter(cmd_args,args,obstype,obs_obj)
+                else:
+                    print(f"ERROR: there is no enough ncopy ({obs_obj.nvarcopy}) for scatter plots.")
 
         if cmd_args.verbose: print("\n Elapsed time of make_plot is:  %f seconds" % (timeit.time() - time3))
 
