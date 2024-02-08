@@ -1,5 +1,8 @@
   Version History
 
+02/08/2024 Version 3.6
+    1. Upgraded to MPAS V8.0.1
+
 11/14/2023 Version 3.5
 
     1. Added support for reservation rtwrfruc on Jet.
