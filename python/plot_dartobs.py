@@ -43,6 +43,7 @@ import csv
 
 import time as timeit
 from itertools import islice
+# Make an iterator that returns selected elements from the iterable
 
 #""" By default matplotlib will try to open a display windows of the plot, even
 #though sometimes we just want to save a plot. Somtimes this can cause the
@@ -370,18 +371,19 @@ def parse_args():
     parser.add_argument('obstypes',help='Interger number that denotes observation type or a list of "," seperated numbers, or None to plot all observation in this file',
                         type=str,nargs='?',default=None)
 
-    parser.add_argument('-v','--verbose',   help='Verbose output',                              action="store_true", default=False)
-    parser.add_argument('-p','--parms',     help='Specify observations copy and quality, [copy,qc_flag]',  type=str, default=None)
-    parser.add_argument('-l','--vertLevels',help='Vertical levels to be plotted [level,value,tolerance]',  type=str, default=None)
+    parser.add_argument('-v','--verbose',   help='Verbose output',                                        action="store_true", default=False)
+    parser.add_argument('-p','--parms',     help='Specify variable copy and quality, [copy,qc_flag] or [copy] only', type=str, default=None)
+    parser.add_argument('-l','--vertLevels',help='Vertical levels to be plotted [level,value,tolerance]',            type=str, default=None)
     parser.add_argument('-e','--filter_by_obs_error',help='Select observations by minimum observation error',      type=float, default=None)
     parser.add_argument('-s','--filter_by_rms',      help='Select observations by minimum observation rms',        type=float, default=None)
-    parser.add_argument('-c','--cntLevels', help='Contour levels [cmin,cmax,cinc]',                        type=str, default=None)
-    parser.add_argument('--scatter'      ,  help='Scatter plot [mean,spread] of assimilated observations', type=str, default=None)
-    parser.add_argument('--fill'         ,  help='Value to fill masked values, apply to the scatter plot only',  type=float, default=None)
-    parser.add_argument('-latlon'        ,  help='Base map latlon or lambert',                   action='store_true',default=False)
-    parser.add_argument('-range'         ,  help='Map range in degrees [lat1,lon1,lat2,lon2]',             type=str, default=None)
-    parser.add_argument('-g','--gridfile',  help='Model file that provide grids',                          type=str, default=None)
-    parser.add_argument('-o','--outfile' ,  help='Name of the output image file or an output directory',   type=str, default=None)
+    parser.add_argument('-c','--cntLevels', help='Contour levels [cmin,cmax,cinc]',                                type=str,   default=None)
+    parser.add_argument('--scatter'      ,  help='Scatter plot [mean,spread] of assimilated observations',         type=str,   default=None)
+    parser.add_argument('--fill'         ,  help='Value to fill masked values, apply to the scatter plot only',    type=float, default=None)
+    parser.add_argument('-latlon'        ,  help='Base map latlon or lambert',                             action='store_true',default=False)
+    parser.add_argument('-range'         ,  help='Map range in degrees [lat1,lon1,lat2,lon2]',                     type=str,   default=None)
+    parser.add_argument('-g','--gridfile',  help='Model file that provide grids',                                  type=str,   default=None)
+    parser.add_argument('-o','--outfile' ,  help='Name of the output image file or an output directory',           type=str,   default=None)
+    parser.add_argument('-r','--resolution',help='Resolution of the output image',                                 type=int,   default=100)
 
     args = parser.parse_args()
 
@@ -503,7 +505,7 @@ def parse_args():
     parsed_args['defaultoutfile'] = defaultoutfile
     parsed_args['outdir']         = outdir
     parsed_args['outfile']        = outfile
-    parsed_args['outresolution']  = 100
+    parsed_args['outresolution']  = args.resolution
 
     #
     # decode contour specifications
@@ -616,24 +618,35 @@ def load_variables(args):
             copyMeta[str(k+1)] = CopyMetaData[k,:].tobytes().decode('utf-8')
 
         varlabels={
-                '1' : 'ObsValue',
-                '2' : 'priorMean',
-                '3' : 'postMean',
-                '4' : 'priosSpread',
-                '5' : 'postSpread',
-                '6' : 'priorMem1',
-                '7' : 'postMem1',
-                '8' : 'priorMem2',
-                '9' : 'postMem2',
-                '10': 'priorMem3',
-                '11': 'postMeme3',
-                '12': 'obserrVar',
-        }
+                '1' : 'ObsValue',            # 1: NCEP BUFR observation
+                '2' : 'priorMean',           # 2: prior ensemble mean
+                '3' : 'postMean',            # 3: posterior ensemble mean
+                '4' : 'priosSpread',         # 4: prior ensemble spread
+                '5' : 'postSpread'           # 5: posterior ensemble spread
+                 }
 
-        qclabels = { '0' : 'assim', '1' : 'eval', '2' : 'APFfail',
-              '3' : 'EPFfail',  '4' : 'PFfail',
-              '5' : 'NA',   '6' : 'QCrejected', '7' : 'outlier' }
+        for k,sv in copyMeta.items():
+            if k not in ('1','2','3','4','5'):
+                s = sv.strip()
+                if s.startswith("prior ensemble member"):
+                    varlabels[k] = f'priorMem{s.split()[-1]}'
+                elif s.startswith("posterior ensemble member"):
+                    varlabels[k] = f'postMem{s.split()[-1]}'
+                elif s == "observation error variance":
+                    varlabels[k] = 'ObsErrVar'
+                else:
+                    print(f"ERROR: unknow variable copy {k} -> {s}.")
+                    sys.exit(0)
 
+        qclabels = {'0' : 'assim',         # 0: assimilated successfully
+                    '1' : 'eval',          # 1: evaluated only, not used in the assimilation
+                    '2' : 'APFfail',       # 2: posterior forward failed
+                    '3' : 'EPFfail',
+                    '4' : 'PFfail',        # 4: prior forward failed, not used
+                    '5' : 'NA',            # 5: not used because not selected in namelist
+                    '6' : 'QCrejected',    # 6: incoming qc value was larger than threshold
+                    '7' : 'outlier'        # 7: Outlier threshold test failed
+                    }
     else:
         print(f"ERROR: file {args.obsfile} not found")
         sys.exit(1)
@@ -1097,9 +1110,10 @@ def retrieve_plotvar(varargs,vtype,varobj):
 
         vardat = np.array(obsdta)
 
-    otime = varobj.vartime[obs_index]
-    obstime = datetime.strptime('1601-01-01','%Y-%m-%d')+timedelta(days=otime[0])
-    varmeta['time']  = obstime.strftime('%Y%m%d_%H%M%S')
+    otime = varobj.vartime[obs_index][0]
+    otime = int(otime * 3600*24)//300*300
+    obstime = datetime.strptime('1601-01-01','%Y-%m-%d')+timedelta(seconds=otime)
+    varmeta['time']  = obstime.strftime('%Y%m%d_%H:%M:%S')
 
     glons = np.array(obslons)
     glats = np.array(obslats)
@@ -1313,7 +1327,7 @@ def make_plot(wargs,obstype,wobj):
             lats = [ l[1] for l in lonlats]
             lons = [ l[0] for l in lonlats]
 
-            ranges = [min(lons)-2.0,max(lons)+2.0,min(lats)-2.0,max(lats)+2.0]
+            ranges = [min(lons)-1.0,max(lons)+1.0,min(lats)-1.0,max(lats)+1.0]
         else:
             ranges = [glons.min()-2.0,glons.max()+2.0,glats.min()-2.0,glats.max()+2.0]
     else:
@@ -1345,9 +1359,11 @@ def make_plot(wargs,obstype,wobj):
     if wargs.basmap == "latlon":
         #carr._threshold = carr._threshold/10.
         ax = plt.axes(projection=carr)
+        y_position = 0.75
     else:
         ax = plt.axes(projection=proj_hrrr)
         #ax.set_extent(ranges,crs=carr)        #[-125.0,-70.0,22.0,52.0],crs=carr)
+        y_position = 0.85
 
     ax.set_extent(ranges,crs=carr)
 
@@ -1431,7 +1447,7 @@ def make_plot(wargs,obstype,wobj):
         for qc in plot_meta.validqcs:
             lons = glons[vardata == qc]
             lats = glats[vardata == qc]
-            ax.scatter(lons,lats,marker=mks[j], color=cls[j], s=0.4,  alpha=0.6, transform=ccrs.Geodetic(),label=QCValMeta[str(qc)])
+            ax.scatter(lons,lats,marker=mks[j], color=cls[j], s=0.6,  alpha=0.6, transform=ccrs.Geodetic(),label=QCValMeta[str(qc)])
             j += 1
 
         plt.legend(loc="upper left")
@@ -1458,7 +1474,9 @@ def make_plot(wargs,obstype,wobj):
         color_map, normc = get_var_contours(varname,vardata,wargs.cntlevel)
         #cntlevels = list(np.linspace(cmin,cmax,9))
 
-        cntr = ax.scatter(glons,glats,marker='.', c=vardata, alpha=alphaval, s=4, cmap=color_map, norm=normc, transform=carr)
+        cntr = ax.scatter(glons,glats,marker='.', c=vardata, alpha=alphaval, s=8.0, cmap=color_map, norm=normc, transform=carr)
+
+        plt.text(0.15,y_position, f'Number of observations: {plot_meta.number}', color='r', horizontalalignment='left', verticalalignment='center',fontsize=14,transform=plt.gcf().transFigure)
 
         #mod_obj = read_modgrid(cargs.grid)
         #mod_obs = interpolation2D({'lon': glons, 'lat': glats, 'value': vardata}, mod_obj)
@@ -1481,7 +1499,7 @@ def make_plot(wargs,obstype,wobj):
     # Write out the image file
     #-------------------------------------------------------------------
     if wargs.defaultoutfile:
-        outpng = f"{plot_meta.varlabel}.{plot_meta.type_label}_{plot_meta.level_label}_{plot_meta.qc_label}_{plot_meta.time}.png"
+        outpng = f"{plot_meta.varlabel}.{plot_meta.type_label}_{plot_meta.level_label}_{plot_meta.qc_label}_{plot_meta.time.replace(':','')}_{wargs.basmap}.png"
     else:
         root,ext=os.path.splitext(wargs.outfile)
         if ext != ".png":

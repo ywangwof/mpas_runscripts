@@ -74,14 +74,15 @@ def parse_args():
     parser.add_argument('obstype', help='An integer number that denotes the observation type or a list of "," seperated numbers, or None to plot all observation in this file',
                                    type=str, nargs='?',default=None)
 
-    parser.add_argument('-v','--verbose',   help='Verbose output',                              action="store_true", default=False)
-    parser.add_argument('-r','--rundir',    help='Directory contains obs_seq.final files in netCDF format', type=str,default=os.getcwd())
-    parser.add_argument('-f','--filename',  help='File name (obs_seq.final) to list its content',    type=str,       default=None)
-    parser.add_argument('-p','--parms',     help='Parameter to limit selections, [dataqc,dartqc]',   type=str,       default='10,0')
-    parser.add_argument('-t','--threshold', help='Threshold for reflectivity',                       type=float,     default=None)
+    parser.add_argument('-v','--verbose',   help='Verbose output',                              action="store_true",    default=False)
+    parser.add_argument('-d','--rundir',    help='Directory contains obs_seq.final files in netCDF format', type=str,   default=os.getcwd())
+    parser.add_argument('-f','--filename',  help='File name (obs_seq.final) to list its content',           type=str,   default=None)
+    parser.add_argument('-p','--parms',     help='Parameter to limit selections, [dataqc,dartqc]',          type=str,   default='10,0')
+    parser.add_argument('-t','--threshold', help='Threshold for reflectivity',                              type=float, default=None)
     parser.add_argument('-s','--spreadtype', help='1: ensemble standard deviation, 2: ensemble standard deviation + ob error ("total spread")',
-                                                                                                     type=int,       default=2)
-    parser.add_argument('-o','--outfile',   help='Name of output image or output directory',         type=str,       default=None)
+                                                                                                            type=int,   default=2)
+    parser.add_argument('-o','--outfile',   help='Name of output image or output directory',                type=str,   default=None)
+    parser.add_argument('-r','--resolution',help='Resolution of the output image',                          type=int,   default=100)
 
     args = parser.parse_args()
 
@@ -167,6 +168,7 @@ def parse_args():
     parsed_args['defaultoutfile'] = defaultoutfile
     parsed_args['outdir']         = outdir
     parsed_args['outfile']        = outfile
+    parsed_args['outresolution']  = args.resolution
 
     return args, make_namespace(parsed_args)
 
@@ -196,9 +198,9 @@ def load_variables(cargs,wargs, filelist):
     #if int(endtime) < 1200:
     #    end_dt = end_dt + timedelta(days=1)
 
-    var_objtmp = { 'times':      [],
-                'rms_prior':  [],
-                'rms_post':   [],
+    var_objtmp = { 'times':    [],
+                'rms_prior':   [],
+                'rms_post':    [],
                 'sprd_prior':  [],
                 'sprd_post':   [],
                 'bias_prior':  [],
@@ -206,9 +208,9 @@ def load_variables(cargs,wargs, filelist):
                 'ratio':       [],
                 'obs_std':     [],
                 'qc_numbers':  {},
-                'type_label': None,
-                'unit_label': None,
-                'numfile':    0
+                'type_label':  None,
+                'unit_label':  None,
+                'numfile':     0
     }
 
     var_objs = {}
@@ -260,8 +262,8 @@ def load_variables(cargs,wargs, filelist):
             if ivariance is None:
                 print(f"ERROR: Cannot find copy for variance.")
                 sys.exit(1)
-            elif cargs.verbose:
-                print(f"observation error variance is the {ivariance}th copy")
+
+            print(f"observation error variance is the {ivariance}th copy")
 
         else:
             print(f"ERROR: file {obsfile} not found")
@@ -279,8 +281,7 @@ def load_variables(cargs,wargs, filelist):
             #
             obs_index = np.where( varobstypes == otype )[0]
 
-            if cargs.verbose:
-                print(f"Obs length after type selection: {len(obs_index)}")
+            print(f"Obs length after type selection: {len(obs_index)}")
 
             i=0
             for ind in obs_index:
@@ -314,8 +315,7 @@ def load_variables(cargs,wargs, filelist):
                         newindex.append(index)
                 obs_index = newindex.copy()
 
-                if cargs.verbose:
-                    print(f"Obs length after threshold >= {wargs.threshold} selection: {len(obs_index)}")
+                print(f"Obs length after threshold >= {wargs.threshold} selection: {len(obs_index)}")
 
             #
             # Check observation numbers based on qc flags, which should be done before the dataqc & dartqc narrowers
@@ -351,8 +351,7 @@ def load_variables(cargs,wargs, filelist):
                         newindex.append(index)
                 obs_index = newindex.copy()
 
-                if cargs.verbose:
-                    print(f"Obs length after dataqc < {wargs.dataqc} selection: {len(obs_index)}")
+                print(f"Obs length after dataqc < {wargs.dataqc} selection: {len(obs_index)}")
 
             if wargs.dartqc is not None:
                 newindex=[]
@@ -361,8 +360,7 @@ def load_variables(cargs,wargs, filelist):
                         newindex.append(index)
                 obs_index = newindex.copy()
 
-                if cargs.verbose:
-                    print(f"Obs length after dartqc == {wargs.dartqc} selection: {len(obs_index)}")
+                print(f"Obs length after dartqc == {wargs.dartqc} selection: {len(obs_index)}")
 
             #
             # Now, fill the derived arrays
@@ -376,8 +374,7 @@ def load_variables(cargs,wargs, filelist):
                 sprd_pst = varobs[obs_index,4]
                 variance = varobs[obs_index,ivariance]
 
-                if cargs.verbose:
-                    print(f"time = {timestr}, number of obs = {nobs_type} for {var_obj['type_label']}")
+                print(f"time = {timestr}, number of obs = {nobs_type} for {var_obj['type_label']}")
 
                 # rms error
                 n1 = prio.count()
@@ -706,7 +703,7 @@ def plot_rms(cargs,wargs,wobj):
 
     figname = os.path.join(wargs.outdir,outpng)
     print(f"    Saving figure to {figname} ...")
-    figure.savefig(figname, format='png', dpi=100)
+    figure.savefig(figname, format='png', dpi=wargs.outresolution)
     plt.close(figure)
 
     #plt.show()
@@ -761,7 +758,7 @@ def plot_qcnumbers(cargs,wargs,wobj):
 
     figname = os.path.join(wargs.outdir,outpng)
     print(f"    Saving figure to {figname} ...")
-    figure.savefig(figname, format='png', dpi=100)
+    figure.savefig(figname, format='png', dpi=wargs.outresolution)
     plt.close(figure)
 
     #plt.show()
@@ -815,7 +812,7 @@ def plot_ratio(cargs,wargs,wobj):
 
     figname = os.path.join(wargs.outdir,outpng)
     print(f"    Saving figure to {figname} ...")
-    figure.savefig(figname, format='png', dpi=100)
+    figure.savefig(figname, format='png', dpi=wargs.outresolution)
     plt.close(figure)
 
     #plt.show()
@@ -857,7 +854,7 @@ if __name__ == "__main__":
 
     if cargs.verbose: print("\n Elapsed time of parse_args is:  %f seconds" % (timeit.time() - time0))
 
-    if wargs.obstype[0] == "list":
+    if wargs.obstype is not None and wargs.obstype[0] == "list":
         time1 = timeit.time()
 
         if cargs.filename is None:
@@ -882,10 +879,11 @@ if __name__ == "__main__":
         dt2 = dt1 + timedelta(days=1)
         nextdatestr = dt2.strftime('%Y%m%d')
 
+        dadir = os.path.join(wargs.run_dir,f"{wargs.eventdate}","dacycles")
         filelist = []
-        for item in os.listdir(wargs.run_dir):
+        for item in os.listdir(dadir):
             dirmatch = re.match('^\d{4,4}$',item)
-            dirtime = os.path.join(wargs.run_dir,item)
+            dirtime = os.path.join(dadir,item)
             if dirmatch and os.path.isdir(dirtime):
                 for myf in os.listdir(dirtime):
                     rematch1 = re.match(f'obs_seq.final.{wargs.eventdate}([12][0-9][0-5][05]).nc',myf)
@@ -898,7 +896,7 @@ if __name__ == "__main__":
         filelist.sort()
 
         if len(filelist) <= 5:
-            print(f"ERROR: found no enough obs_seq.final files in {wargs.run_dir}: {filelist}.")
+            print(f"ERROR: found no enough obs_seq.final files in {dadir}: {filelist}.")
             sys.exit(0)
 
         obs_objs = load_variables(cargs,wargs, filelist)

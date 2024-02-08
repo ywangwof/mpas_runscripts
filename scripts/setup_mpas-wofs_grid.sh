@@ -861,11 +861,6 @@ function run_meshplot_py {
     output_grid="../geo_${domname##*_}/wofs_mpas_output.json"
 
     #
-    # Activate Python environment
-    #
-    source ~/.python wofs_post
-
-    #
     # Run job script and submit it
     #
     jobscript="${rootdir}/python/mpasgrid_cartopy.py"
@@ -1168,11 +1163,11 @@ function write_runtimeconfig {
     ADAPTIVE_INF=true
     update_in_place=false               # update MPAS states in-place or
                                         # making a copy of the restart files
-    run_updatebc=true
-    run_obs2nc=true
-    run_obsdiag=true
-
-    run_addnoise=true
+    run_updatebc=true                   # run mpas_update_bc
+    run_obs2nc=true                     # run obs_seq_to_netcdf after filter
+    run_obsdiag=true                    # run obs_diag after filter for each cycle
+    run_addnoise=true                   # run WoFS add_noise facility (Python)
+    run_trimvr=false                    # Trim NaNs from radial velocity observations (Python)
     python_machine="${pythonmachine}"   # if not empty, you should have set up passwordless access on it and the
                                         # Python environment is properly set in run_noise_mask.slurm & run_noise_pert.slurm
     WOFSAN_PATH="${mpas_wofs_python}"
@@ -1483,6 +1478,12 @@ else    # Vecna at NSSL
     OBS_DIR="/scratch/ywang/MPAS/mpas_scripts/run_dirs/OBSGEN"
 
     hrrr_dir="/scratch/wofuser/MODEL_DATA/HRRRE"
+
+    # Load Python Enviroment if necessary
+    if [[ " ${jobs[*]} " =~ " meshplot_py " ]]; then
+        echo "Enabling Python micromamba environment - wofs_an ...."
+        source /home/yunheng.wang/.pythonrc  || exit $?
+    fi
 fi
 
 source "${scpdir}/Common_Utilfuncs.sh" || exit $?

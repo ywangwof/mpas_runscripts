@@ -36,7 +36,7 @@
 #
 #--------------------------------------------------------------
 
-source /scratch/ywang/MPAS/mpas_scripts/modules/env.mpas_smiol_impi
+source /scratch/ywang/MPAS/mpas_scripts/modules/env.mpas_smiol
 
 daily=no
 
