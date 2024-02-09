@@ -11,7 +11,7 @@
    include_specific_humidity = .false.,
    include_relative_humidity = .false.,
    include_dewpoint = .true.,
-   include_surface_pressure = .true.,
+   include_surface_pressure = .false.,
    ADPUPA = .true., 
    AIRCAR = .true., 
    AIRCFT = .true., 

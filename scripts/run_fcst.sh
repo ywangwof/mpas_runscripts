@@ -361,7 +361,7 @@ function run_mpas {
     config_sst_update                = false
     config_sstdiurn_update           = false
     config_deepsoiltemp_update       = false
-    config_radtlw_interval           = '00:05:00'    # the ratio of radt to dt is 15
+    config_radtlw_interval           = '00:05:00'
     config_radtsw_interval           = '00:05:00'
     config_bucket_update             = 'none'
     config_lsm_scheme                = '${MPASLSM}'
