@@ -371,7 +371,7 @@ function readconf {
 
     readmode=false
     while read -r line; do
-        #echo -n "<$line>"
+        #echo "$line"
         if [[ "$line" =~ \[$sections\] ]]; then
             if [[ $debug -eq 1 ]]; then echo "Found $sections: $line"; fi
             readmode=true
@@ -381,14 +381,16 @@ function readconf {
             readmode=false
             continue
         elif [[ "$line" =~ ^# ]]; then
-            if [[ $debug -eq 1 ]]; then echo "comment: $line"; fi
+            if [[ $debug -eq 1 && ${readmode} == true ]]; then echo "comment: $line"; fi
             continue
         fi
 
         if $readmode; then
             if [[ "$line" =~ "=" ]]; then
                 if [[ $debug -eq 1 ]]; then echo -n "source: $line"; fi
-                eval "export $line"
+                eval "$line"
+            elif [[ "$line" =~ "" ]]; then
+                :
             else
                 if [[ $debug -eq 1 ]]; then echo "skip: $line"; fi
             fi

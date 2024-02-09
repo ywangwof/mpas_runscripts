@@ -1514,20 +1514,6 @@ if [[ $dorun == false ]]; then
     runcmd="echo $runcmd"
 fi
 
-#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-#
-# Perform DA cycles
-#
-#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-#% ENTRY
-
-echo "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
-echo "     Event date : $eventdate ${eventtime} UTC"
-echo "     Root    dir: $rootdir"
-echo "     Working dir: $WORKDIR"
-echo "     Domain name: $domname;  MP scheme: ${mpscheme}"
-echo " "
-
 eventhour=${eventtime:0:2}
 if [[ $((10#$eventhour)) -lt 12 ]]; then
     startday="1 day"
@@ -1561,8 +1547,22 @@ if [[ ! -r $WORKDIR/config.${eventdate} ]]; then
     echo "ERROR: Configuration file $WORKDIR/config.${eventdate} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
     exit 2
 fi
-readconf $WORKDIR/config.${eventdate} COMMON fcst  || exit $?
+readconf $WORKDIR/config.${eventdate} COMMON fcst || exit $?
 # get ENS_SIZE, time_step, EXTINVL, OUTINVL, OUTIOTYPE
+
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#
+# Perform FCST cycles
+#
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#% ENTRY
+
+echo "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
+echo "     Event date : $eventdate ${eventtime} UTC"
+echo "     Root    dir: $rootdir"
+echo "     Working dir: $WORKDIR"
+echo "     Domain name: $domname;  MP scheme: ${mpscheme}"
+echo " "
 
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 OUTINVL_STR=$(printf "00:%02d:00" $((OUTINVL/60)) )
