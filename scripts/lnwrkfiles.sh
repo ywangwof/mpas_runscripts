@@ -292,7 +292,7 @@ for cmd in "${cmds[@]}"; do
             fi
         fi
         ;;
-    "mpasregion" )
+    "MPASREGION" )
         if [[ $run -ne 1 ]]; then
             cd "$(dirname" ${desdir}")" || exit 1
             echo "---  Linking ${srcmpasregion}/MPAS-Limited-Area"
@@ -304,7 +304,7 @@ for cmd in "${cmds[@]}"; do
             fi
         fi
         ;;
-    "mpas" )
+    "MPAS" )
 
         srcmodel=${srcdir-$srcmodeldir}
 

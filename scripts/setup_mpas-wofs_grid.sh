@@ -1110,7 +1110,7 @@ function write_runtimeconfig {
     nenslbc=18
     EXTINVL=3600
 
-    MPASLSM='ruc'
+    MPASLSM='sf_ruc'
     MPASNFLS=9
     # suite,sf_monin_obukhov,sf_mynn,off (default: suite)
     sfclayer_schemes=('sf_monin_obukhov_rev' 'sf_monin_obukhov' 'sf_mynn')

@@ -328,11 +328,11 @@ function run_mpas {
     config_smdiv                    = 0.1
 /
 &damping
-    config_mpas_cam_coef            = 2.0
-    config_rayleigh_damp_u          = true
-    config_zd                       = 16000.0
-    config_xnutr                    = 0.2
-    config_nlevels_cam_damp         = 8
+    config_mpas_cam_coef             = 2.0
+    config_rayleigh_damp_u           = true
+    config_zd                        = 16000.0
+    config_xnutr                     = 0.2
+    config_number_cam_damping_levels = 8
 /
 &limited_area
     config_apply_lbcs                = true
@@ -392,6 +392,12 @@ EOF
 /
 &soundings
     config_sounding_interval         = 'none'
+/
+&assimilation
+    config_jedi_da                   = false
+/
+&development
+    config_halo_exch_method          = 'mpas_halo'
 /
 EOF
 

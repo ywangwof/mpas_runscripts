@@ -92,8 +92,8 @@ function usage {
     echo "               YYYYmmdd:     run all cycles from $eventtime to 0300. Or use options \"-s\" & \"-e\" to specify cycles."
     echo "               YYYYmmddHHMM: run this DA cycle only."
     echo "    WORKDIR  - Run Directory"
-    echo "    JOBS     - One or more jobs from [filter,update_states,mpas,clean,obs_diag,obs_final2nc]"
-    echo "               Default all jobs in a DA cyle"
+    echo "    JOBS     - One or more jobs from [filter,update_states,update_bc,mpas,clean,obs_diag,obs_final2nc]"
+    echo "               Default all jobs in [filter,update_states,update_bc,mpas] for a DA cyle"
     echo " "
     echo "    OPTIONS:"
     echo "              -h                  Display this message"
@@ -167,13 +167,18 @@ function run_obsmerge {
 
     #ln -sf ${wrkdir}/input.nml ./input.nml
     cp ${wrkdir}/input.nml input.nml
-    template_inputfile=$(head -1 $wrkdir/filter_in.txt)
-    ln -sf $template_inputfile init.nc
+    if [[ ${dorun} == true ]]; then
+        template_inputfile=$(head -1 $wrkdir/filter_in.txt)
+        ln -sf $template_inputfile init.nc
+    else
+        ln -sf ../../1515/OBSDIR/init.nc .
+    fi
 
     echo "$$-${FUNCNAME[0]}: OBS Preprocessing for analysis time: ${anlys_time}, days: ${g_date}, seconds: ${g_sec}"
 
     obsflists=()
     k=1
+
     #=================================================
     # PREPROCESS NCEP PrepBufr DATA
     #=================================================
@@ -388,7 +393,11 @@ function run_obsmerge {
                 echo "         Checking VEL data in ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out"
             fi
 
-            cp ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out ./obs_seq.old
+            if [[ ${run_trimvr} == true ]]; then
+                ${rootdir}/observations/VEL/trimvr.py -o ./obs_seq.old ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out
+            else
+                cp ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out ./obs_seq.old
+            fi
 
             if [[ $verb -eq 1 ]]; then
                 echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
@@ -563,7 +572,7 @@ function run_filter {
             input_file="$parentdir/${event_pre}/wofs_mpas_${memstr}.restart.$currtime_str.nc"
         fi
 
-        if [[ ! -f $input_file ]]; then
+        if [[ $dorun == true && ! -f $input_file ]]; then
             echo "File $input_file not exist."
             exit 1
         fi
@@ -592,7 +601,7 @@ function run_filter {
 
     inf_initial=(".false." ".false.")
     if [[ $ADAPTIVE_INF == true && $icycle -gt 1 ]]; then
-        if [[ ! -e ${parentdir}/${event_pre}/output_priorinf_mean.nc ]]; then
+        if [[ $dorun == true && ! -e ${parentdir}/${event_pre}/output_priorinf_mean.nc ]]; then
           echo "File ${parentdir}/${event_pre}/output_priorinf_mean.nc does not exist. Stop."
           exit 2
         fi
@@ -724,11 +733,17 @@ function run_filter {
                                      'METAR_V_10_METER_WIND',
                                      'METAR_TEMPERATURE_2_METER',
                                      'METAR_DEWPOINT_2_METER',
+                                     'MARINE_SFC_U_WIND_COMPONENT',
+                                     'MARINE_SFC_V_WIND_COMPONENT',
+                                     'MARINE_SFC_TEMPERATURE',
+                                     'MARINE_SFC_ALTIMETER',
+                                     'MARINE_SFC_DEWPOINT',
                                      'LAND_SFC_U_WIND_COMPONENT',
                                      'LAND_SFC_V_WIND_COMPONENT',
                                      'LAND_SFC_TEMPERATURE',
                                      'LAND_SFC_DEWPOINT',
                                      'LAND_SFC_ALTIMETER',
+                                     'LAND_SFC_PRESSURE',
                                      'RADAR_REFLECTIVITY',
                                      'RADAR_CLEARAIR_REFLECTIVITY',
                                      'DOPPLER_RADIAL_VELOCITY',
@@ -741,6 +756,12 @@ function run_filter {
                                      0.0094247,
                                      0.0094247,
                                      0.0094247,
+                                     0.0094247,
+                                     0.0094247,
+                                     0.0094247,
+                                     0.0094247,
+                                     0.0094247,
+                                     0.0047123,
                                      0.0047123,
                                      0.0047123,
                                      0.0047123,
@@ -771,11 +792,17 @@ function run_filter {
                                            'METAR_V_10_METER_WIND',
                                            'METAR_TEMPERATURE_2_METER',
                                            'METAR_DEWPOINT_2_METER',
+                                           'MARINE_SFC_U_WIND_COMPONENT',
+                                           'MARINE_SFC_V_WIND_COMPONENT',
+                                           'MARINE_SFC_TEMPERATURE',
+                                           'MARINE_SFC_ALTIMETER',
+                                           'MARINE_SFC_DEWPOINT',
                                            'LAND_SFC_U_WIND_COMPONENT',
                                            'LAND_SFC_V_WIND_COMPONENT',
                                            'LAND_SFC_TEMPERATURE',
                                            'LAND_SFC_DEWPOINT',
                                            'LAND_SFC_ALTIMETER',
+                                           'LAND_SFC_PRESSURE',
                                            'RADAR_REFLECTIVITY',
                                            'RADAR_CLEARAIR_REFLECTIVITY',
                                            'DOPPLER_RADIAL_VELOCITY',
@@ -796,8 +823,13 @@ function run_filter {
                                            100000.0,
                                            100000.0,
                                            100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
+                                           100000.0,
                                          15873016.0,
-                                         12698413.0,
                                          12698413.0,
                                          15873016.0,
                                            100000.0,
@@ -806,6 +838,12 @@ function run_filter {
                                            424416.6,
                                            424416.6,
                                            424416.6,
+                                           424416.6,
+                                           424416.6,
+                                           424416.6,
+                                           424416.6,
+                                           424416.6,
+                                           848842.3,
                                            848842.3,
                                            848842.3,
                                            848842.3,
@@ -816,7 +854,6 @@ function run_filter {
                                            2122090.9,
                                            1587301.0,
                                            1587301.0,
-                                           1587301.3,
                                            1587301.3,
                                            1000000.0,
    special_vert_normalization_levels    =  20.0,
@@ -837,7 +874,17 @@ function run_filter {
                                            20.0,
                                            20.0,
                                            20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
+                                           20.0,
    special_vert_normalization_scale_heights = 5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
+                                              5.0,
                                               5.0,
                                               5.0,
                                               5.0,
@@ -894,13 +941,43 @@ function run_filter {
 !                                'RADAR_CLEARAIR_REFLECTIVITY',
 !                                'DOPPLER_RADIAL_VELOCITY'
 
+! Upper level
+!                                'AIRCRAFT_U_WIND_COMPONENT',
+!                                'AIRCRAFT_V_WIND_COMPONENT',
+!                                'AIRCRAFT_TEMPERATURE',
+!                                'ACARS_U_WIND_COMPONENT',
+!                                'ACARS_V_WIND_COMPONENT',
+!                                'ACARS_TEMPERATURE',
+
+!                                'RADIOSONDE_TEMPERATURE',
+!                                'RADIOSONDE_U_WIND_COMPONENT',
+!                                'RADIOSONDE_V_WIND_COMPONENT',
+!                                'RADIOSONDE_SPECIFIC_HUMIDITY',
+!                                'GPSRO_REFRACTIVITY',
+
+! Surface
+!                                'METAR_ALTIMETER',
+!                                'METAR_DEWPOINT_2_METER',
+!                                'METAR_U_10_METER_WIND',
+!                                'METAR_V_10_METER_WIND',
+!                                'METAR_TEMPERATURE_2_METER',
+!                                'METAR_SPECIFIC_HUMIDITY_2_METER',
+!                                'MARINE_SFC_SPECIFIC_HUMIDITY',
+!                                'MARINE_SFC_U_WIND_COMPONENT',
+!                                'MARINE_SFC_V_WIND_COMPONENT',
+!                                'MARINE_SFC_TEMPERATURE',
+!                                'MARINE_SFC_PRESSURE',
+!                                'MARINE_SFC_DEWPOINT',
+!                                'LAND_SFC_PRESSURE',
+!                                'LAND_SFC_ALTIMETER',
+!                                'LAND_SFC_DEWPOINT',
+!                                'LAND_SFC_TEMPERATURE',
+!                                'LAND_SFC_SPECIFIC_HUMIDITY',
+!                                'LAND_SFC_U_WIND_COMPONENT',
+!                                'LAND_SFC_V_WIND_COMPONENT',
+!
 &obs_kind_nml
-   assimilate_these_obs_types = 'RADIOSONDE_TEMPERATURE',
-                                'RADIOSONDE_U_WIND_COMPONENT',
-                                'RADIOSONDE_V_WIND_COMPONENT',
-                                'RADIOSONDE_SPECIFIC_HUMIDITY',
-                                'GPSRO_REFRACTIVITY',
-                                'AIRCRAFT_U_WIND_COMPONENT',
+   assimilate_these_obs_types = 'AIRCRAFT_U_WIND_COMPONENT',
                                 'AIRCRAFT_V_WIND_COMPONENT',
                                 'AIRCRAFT_TEMPERATURE',
                                 'ACARS_U_WIND_COMPONENT',
@@ -911,18 +988,15 @@ function run_filter {
                                 'METAR_U_10_METER_WIND',
                                 'METAR_V_10_METER_WIND',
                                 'METAR_TEMPERATURE_2_METER',
-                                'METAR_SPECIFIC_HUMIDITY_2_METER',
-                                'MARINE_SFC_SPECIFIC_HUMIDITY',
                                 'MARINE_SFC_U_WIND_COMPONENT',
                                 'MARINE_SFC_V_WIND_COMPONENT',
                                 'MARINE_SFC_TEMPERATURE',
-                                'MARINE_SFC_PRESSURE',
+                                'MARINE_SFC_ALTIMETER',
                                 'MARINE_SFC_DEWPOINT',
                                 'LAND_SFC_PRESSURE',
                                 'LAND_SFC_ALTIMETER',
-                                'LAND_SFC_DEWPOINT',
                                 'LAND_SFC_TEMPERATURE',
-                                'LAND_SFC_SPECIFIC_HUMIDITY',
+                                'LAND_SFC_DEWPOINT',
                                 'LAND_SFC_U_WIND_COMPONENT',
                                 'LAND_SFC_V_WIND_COMPONENT',
                                 'RADAR_REFLECTIVITY',
@@ -1352,7 +1426,7 @@ function run_filter {
    file_name_input          = 'obs_seq.old'
    file_name_output         = 'obs_seq.new'
    include_sig_data         = .false.
-   superob_aircraft         = .true.
+   superob_aircraft         = .false.
    superob_sat_winds        = .false.
    sfc_elevation_check      = .false.
    overwrite_ncep_sfc_qc    = .false.
@@ -1377,8 +1451,9 @@ function run_filter {
    windowing_obs_time       = .true.
    windowing_int_hour       = 0.5
    increase_bdy_error       = .true.
-   maxobsfac                = 2.5
-   obsdistbdy               = 30000.0 ! meters
+   maxobsfac                = 10.
+   obsdistbdy               = 90000.0     ! meters
+   obs_boundary             = 21000.0     ! meters
 /
 EOF
 
@@ -2121,7 +2196,7 @@ function run_mpas {
     config_rayleigh_damp_u          = true
     config_zd                       = 16000.0
     config_xnutr                    = 0.2
-    config_nlevels_cam_damp         = 8
+    config_number_cam_damping_levels = 8
 /
 &limited_area
     config_apply_lbcs                = true
@@ -2181,6 +2256,12 @@ EOF
 /
 &soundings
     config_sounding_interval         = 'none'
+/
+&assimilation
+    config_jedi_da                   = false
+/
+&development
+    config_halo_exch_method          = 'mpas_halo'
 /
 EOF
 
@@ -2469,7 +2550,7 @@ function da_cycle_driver() {
         time2=$(date +%s)
         if [[ $time2 -gt $time1 ]]; then
             (( secoffset = time2-time1 )); (( minoffset = secoffset/60 )); (( secoffset = secoffset%60 ))
-            echo "= Cycle $icyc took ${minoffset}:${secoffset} minutes:seconds."
+            echo "= Cycle ${eventtime} took ${minoffset}:${secoffset} minutes:seconds."
         fi
 
         (( icyc+=1 ))
@@ -2936,6 +3017,35 @@ while [[ $# -gt 0 ]]; do
     shift # past argument or value
 done
 
+eventhour=${eventtime:0:2}
+if [[ $eventhour -lt 12 ]]; then
+    startday="1 day"
+else
+    startday=""
+fi
+
+if [[ "$initdatetime" == "" ]]; then
+    initdatetime="${eventdate}1500"
+fi
+
+if [[ "$enddatetime" == "" ]]; then
+    enddatetime=$(date -u -d "$eventdate 03:00 1 day" +%Y%m%d%H%M)
+fi
+
+inittime_sec=$(date -u -d "${initdatetime:0:8} ${initdatetime:8:4}" +%s)
+starttime_sec=$(date -u -d "$eventdate ${eventtime} $startday"      +%s)
+stoptime_sec=$(date -u -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
+
+#
+# read configurations that is not set from command line
+#
+if [[ ! -r $WORKDIR/config.${eventdate} ]]; then
+    echo "ERROR: Configuration file $WORKDIR/config.${eventdate} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
+    exit 2
+fi
+readconf $WORKDIR/config.${eventdate} COMMON dacycles || exit $?
+# get ENS_SIZE, time_step, EXTINVL, ADAPTIVE_INF, update_in_place
+
 #-----------------------------------------------------------------------
 #
 # Handle machine specific configuraitons
@@ -2964,6 +3074,12 @@ else    # Vecna at NSSL
     modulename="env.mpas_smiol"
     source /usr/share/Modules/init/bash
     source ${rootdir}/modules/${modulename}
+
+    # Load Python Enviroment if necessary
+    if [[ ${run_trimvr} == true || ${run_addnoise} == true ]]; then
+        echo "Enabling Python micromamba environment - wofs_an ...."
+        source /home/yunheng.wang/.pythonrc  || exit $?
+    fi
 fi
 
 if [[ $dorun == false ]]; then
@@ -2977,32 +3093,6 @@ fi
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
 
-echo "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
-echo "     Event date : $eventdate ${eventtime}:00"
-echo "     Root    dir: $rootdir"
-echo "     Working dir: $WORKDIR"
-echo "     Domain name: $domname;  MP scheme: ${mpscheme}"
-echo " "
-
-eventhour=${eventtime:0:2}
-if [[ $eventhour -lt 12 ]]; then
-    startday="1 day"
-else
-    startday=""
-fi
-
-if [[ "$initdatetime" == "" ]]; then
-    initdatetime="${eventdate}1500"
-fi
-
-if [[ "$enddatetime" == "" ]]; then
-    enddatetime=$(date -u -d "$eventdate 03:00 1 day" +%Y%m%d%H%M)
-fi
-
-inittime_sec=$(date -u -d "${initdatetime:0:8} ${initdatetime:8:4}" +%s)
-starttime_sec=$(date -u -d "$eventdate ${eventtime} $startday"      +%s)
-stoptime_sec=$(date -u -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
-
 rundir="$WORKDIR/${eventdate}"
 if [[ ! -d $rundir ]]; then
     mkdir -p $rundir
@@ -3010,19 +3100,16 @@ fi
 
 exedir="$rootdir/exec"
 
-#
-# read configurations that is not set from command line
-#
-if [[ ! -r $WORKDIR/config.${eventdate} ]]; then
-    echo "ERROR: Configuration file $WORKDIR/config.${eventdate} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
-    exit 2
-fi
-readconf $WORKDIR/config.${eventdate} COMMON dacycles || exit $?
-# get ENS_SIZE, time_step, EXTINVL, ADAPTIVE_INF, update_in_place
+echo ""
+echo "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
+echo "     Event date : $eventdate ${eventtime}"
+echo "     Root    dir: $rootdir"
+echo "     Working dir: $WORKDIR"
+echo "     Domain name: $domname;  MP scheme: ${mpscheme}"
+echo " "
 
-#EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 RSTINVL_STR=$(printf "00:%02d:00" $((intvl_sec/60)) )
-OUTINVL_STR="1:00:00"              # turn off history/diag outputs
+OUTINVL_STR="1:00:00"                    # turn off history/diag outputs
 
 #
 # Start the data assimilation cycles
@@ -3032,12 +3119,18 @@ OUTINVL_STR="1:00:00"              # turn off history/diag outputs
 # init start  end
 if [[ " ${jobs[*]} " =~ " "(filter|mpas|update_states|update_bc)" " ]]; then
     da_cycle_driver $inittime_sec $starttime_sec $stoptime_sec
+elif [[ " ${jobs[*]} " =~ " "(obs_diag|obs_final2nc)" " ]]; then
+    if [[ ${starttime_sec} -le ${inittime_sec} ]]; then
+        begin_sec=$((starttime_sec+intvl_sec))
+    else
+        begin_sec=${starttime_sec}
+    fi
+
+    for job in "${jobs[@]}"; do
+        run_${job} ${begin_sec} ${stoptime_sec}
+    done
 elif [[ " ${jobs[*]} " =~ " clean " ]]; then
     run_clean $starttime_sec $stoptime_sec
-elif [[ " ${jobs[*]} " =~ " obs_diag " ]]; then
-    run_obs_diag $((starttime_sec+intvl_sec)) $stoptime_sec
-elif [[ " ${jobs[*]} " =~ " obs_final2nc " ]]; then
-    run_obs_final2nc $((starttime_sec+intvl_sec)) $stoptime_sec
 fi
 
 echo " "
