@@ -2672,7 +2672,6 @@ case $extdm in
         usage 5
         ;;
 esac
-fcst_hours=12
 
 if [[ "${mpscheme}" == "Thompson" ]]; then
     mpname="T"
