@@ -19,7 +19,7 @@ eventdateDF=$(date -u +%Y%m%d)
 #     build_jet_intel18_1.11                # PIO version
 #
 # 1. exec                                   # The executables
-#     atmosphere_model.single
+#     atmosphere_model
 #     filter
 #     update_mpas_states
 #

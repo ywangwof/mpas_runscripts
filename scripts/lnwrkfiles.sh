@@ -11,7 +11,7 @@ if [[ "${myhost}" == "ln"* ]]; then
 
     srcmpassitdir=${srcroot}/MPASSIT
     srcuppdir=${srcroot}/UPP_KATE_kjet
-    srcmodeldir=${srcroot}/frdd-MPAS-Model
+    srcmodeldir=${srcroot}/frdd-MPAS-Model_V8.0
     srcwpsdir=${srcroot}/WPS_SRC
     srcwrfdir=${srcroot}/WRFV4.0
     srcdartdir=${srcroot}/frdd-DART
