@@ -17,7 +17,7 @@ eventdateDF=$(date -u +%Y%m%d)
 #
 # 1. exec                                   # The executables
 #     init_atmosphere_model
-#     atmosphere_model.single
+#     atmosphere_model
 #     mpassit
 #     ungrib.exe
 #     geogrid.exe
