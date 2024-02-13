@@ -1821,6 +1821,7 @@ function run_mpas {
     config_lsm_scheme                = '${MPASLSM}'
     num_soil_layers                  = ${MPASNFLS}
     config_physics_suite             = 'convection_permitting'
+    config_convection_scheme         = 'off'
     config_microp_re                 = true
 EOF
 
