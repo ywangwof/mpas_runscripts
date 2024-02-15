@@ -845,13 +845,12 @@ def decode_obs_seq_OBS(fhandle,ncopy,nqc):
 
         elif i == itype:
             otype = int(sline)
-            if otype >= 124 and otype <= 126:
-              itime = itype + 3
+            if otype >= 124 and otype <= 130:  # GOES observation contains an extra line for cloud base and cloud top heights
+              itime = itype + 3                # and an integer line (?)
               ivar  = itime + 1
               nobslines = 10+ncopy+nqc
 
         elif i == itime:
-            #print(sline)
             secs,days = sline.split()
         elif i == ivar:
             var=float(line)

@@ -61,8 +61,8 @@ def update_progress(job_title, progress):
     msg = "\r{0}: [{1}] {2}%".format(job_title, "#"*block + "-"*(length-block),
                                      round(progress*100, 2))
     if progress >= 1: msg += " DONE\r\n"
-    sys.stdout.write(msg)            # without an implicit newline
-    sys.stdout.flush()               # printing buffer immediately
+    sys.stderr.write(msg)            # without an implicit newline
+    sys.stderr.flush()               # printing buffer immediately
 
 ########################################################################
 
@@ -106,6 +106,10 @@ def load_obs_seq(filename):
                     for i,label in enumerate(label_gen):
                         qc_labels[str(i)] = label.strip()
 
+                elif line.startswith('first:'):
+                    first = int(line.split()[1])
+                    last  = int(line.split()[3])
+
                 elif line.startswith("OBS"):
                     obs = decode_one_obs(fh,ncopy,nqc)
                     obs_list.append(obs)
@@ -119,6 +123,7 @@ def load_obs_seq(filename):
     obs_obj['nvarcopy'] = ncopy; obs_obj['copy_labels'] = var_labels
     obs_obj['nqccopy']  = nqc;   obs_obj['qc_labels']   = qc_labels
     obs_obj['types']    = type_labels
+    obs_obj['first']    = first; obs_obj['last']    = last
     obs_obj['obs']      = obs_list
 
     #print(obs_obj['obs'][42])
@@ -163,8 +168,8 @@ def decode_one_obs(fhandle,ncopy,nqc):
         elif i == itype:              # get kind
             #print(i,itype,sline)
             otype = int(sline)
-            if otype >= 124 and otype <= 130:  # GOES observation contains an extra line for cloud base and cloud top heights
-                itime = itype + 3              # and an integer line (?)
+            if otype >= 124 and otype <= 130: # GOES observation contains an extra line for cloud base and cloud top heights
+                itime = itype + 3             # and an integer line (?)
                 ivar  = itime + 1
                 nobslines = 10+ncopy+nqc
         elif sline == "platform":
@@ -239,26 +244,28 @@ def write_obs_seq(obs, filename ):
     with open(filename, "w") as fi:
 
         fi.write(" obs_sequence\n")
-        fi.write("obs_kind_definitions\n")
+        fi.write("obs_type_definitions\n")
 
         # Deal with case that for reflectivity, 2 types of observations might have been created
 
-        fi.write("       %d\n" % 1)
+        fi.write("          %d\n" % 16)
         for type,label in obs.types.items():
-            fi.write("    %d          %s   \n" % (int(type), label) )
+            fi.write(f"          {int(type):d} {label:31s}\n")
 
         fi.write("  num_copies:            %d  num_qc:            %d\n" % (obs.nvarcopy, obs.nqccopy))
-        fi.write(" num_obs:       %d  max_num_obs:       %d\n" % (obs.nobs, obs.nobs) )
+        fi.write("  num_obs:        %d  max_num_obs:        %d\n" % (obs.nobs, obs.nobs) )
 
         for ivar,label in obs.copy_labels.items():
-            fi.write(f"{label}\n")
+            fi.write(f"{label:65s}\n")
 
         for qc,qc_label in obs.qc_labels.items():
-            fi.write(f"{qc_label}\n")
+            fi.write(f"{qc_label:65s}\n")
 
-        fi.write("  first:            %d  last:       %d\n" % (1, obs.nobs) )
+        #fi.write("  first:            %d  last:       %d\n" % (1, obs.nobs) )
+        fi.write(f"  first:            {obs.first:d}  last:        {obs.last:d}\n")
 
         iobs = 0
+        n = 0
         for it in obs.obs:
 
             if it.mask == True:   # bad values
@@ -266,30 +273,56 @@ def write_obs_seq(obs, filename ):
             else:
                 iobs += 1
 
-                fi.write(" OBS            %d\n" % (iobs) )
+# From Craig on Jan 19, 2024
+#
+# I'm a bit more concerned about your surface observation types having a
+# "which_vert" of -1 (obs_seq.bufr), which is VERTISSURFACE.  When computing
+# distances between two locations defined as "VERTISSURFACE", the vertical
+# difference between these two locations is ignored.  That's arguably not
+# a good thing.  I wonder what would happen if you used VERTISHEIGHT (value is 3)
+# for the prebufr obs.
+#
+# It would be in the fortran code--probably in ascii_to_obs/prepbufr_to_obs.f90.
+#
+                if it.kind == 29 and it.level_type == -1:
+                    level_type = 3
+                    n += 1
+                    print(f"iobs = {iobs}: which_vert changed from -1 to 3")
+                else:
+                    level_type = it.level_type
+
+                fi.write(f" OBS   {iobs:12d}\n")
 
                 for value in it.values:
-                    fi.write("   %20.14f\n" % value  )
+                    value_str = f"{value:20.14f}".strip()
+                    if value < 0:
+                        fi.write(f"  {value_str[:17]:s}     \n")
+                    else:
+                        fi.write(f"   {value_str[:16]:s}     \n")
+                    #fi.write(" %20.14f     \n" % value  )
 
                 # Special QC flag processing so we can use low-reflectivity for additive noise
 
                 for qc in it.qcs:
-                    fi.write("   %20.14f\n" % qc )
+                    qc_str = f"{qc:20.14f}".strip()
+                    fi.write(f"   {qc_str[:16]:s}     \n")
+                    #fi.write(" %20.14f     \n" % qc )
 
-                if iobs == 1:
-                    fi.write(" %d %d %d\n" % (-1, iobs+1, -1) ) # First obs.
-                elif iobs == obs.nobs:
-                    fi.write(" %d %d %d\n" % (iobs-1, -1, -1) ) # Last obs.
-                else:
-                    fi.write(" %d %d %d\n" % (iobs-1, iobs+1, -1) )
+                #if iobs == 1:
+                #    fi.write(" %11d %11d %11d\n" % (-1, iobs+1, -1) ) # First obs.
+                #elif iobs == obs.nobs:
+                #    fi.write(" %11d %11d %11d\n" % (iobs-1, -1, -1) ) # Last obs.
+                #else:
+                #    fi.write(" %11d %11d %11d\n" % (iobs-1, iobs+1, -1) )
+                fi.write(" %11d %11d %11d\n" % (it.links[0],it.links[1],it.links[2]) )
 
                 fi.write("obdef\n")
                 fi.write("loc3d\n")
-                fi.write("    %20.14f          %20.14f          %20.14f     %d\n" %
-                            (it.lon, it.lat, it.level, it.level_type))
+                fi.write("  %20.15f      %20.16f      %20.11f      %d\n" %
+                            (it.lon, it.lat, it.level, level_type))
 
                 fi.write("kind\n")
-                fi.write("     %d     \n" % it.kind )
+                fi.write("          %d\n" % it.kind )
 
                 # Check to see if its radial velocity and add platform informationp...need BETTER CHECK HERE!
                 if it.platform:
@@ -304,11 +337,11 @@ def write_obs_seq(obs, filename ):
                     fi.write("    %d          \n" % it.platform["key"] )
 
                 # Done with special radial velocity obs back to dumping out time, day, error variance info
-                fi.write("    %d          %d     \n" % (it.seconds, it.days) )
+                fi.write("%6d     %6d\n" % (it.seconds, it.days) )
 
                 # Logic for command line override of observational error variances
 
-                fi.write("    %20.14f  \n" % it.variance )
+                fi.write(" %18.14f     \n" % it.variance )
 
                 #if iobs % 10000 == 0: print(" write_DART_ascii:  Processed observation # %d" % iobs)
 

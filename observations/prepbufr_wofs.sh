@@ -85,14 +85,14 @@ for((i=timebeg_s;i<=timeend_s;i+=3600)); do
     ## MODIFY input.nml with correct date
     sedfile=$(mktemp -t sbufr_${timestr}.sed_XXXX)
     cat <<EOF > $sedfile
-s/YEAR/${inyear}/
-s/MON/${inmonth}/
-s/DAY/${inday}/
-s/HOUR/${inhour}/g
 s/ENDYR/${endyear}/g
-s/ENDMON/${endmonth}/
-s/ENDDAY/${endday}/
+s/ENDMON/${endmonth}/g
+s/ENDDAY/${endday}/g
 s/ENDHOUR/${endhour}/g
+s/YEAR/${inyear}/g
+s/MON/${inmonth}/g
+s/DAY/${inday}/g
+s/HOUR/${inhour}/g
 EOF
     sed -f $sedfile ${NML_TEMPLATE} > ./input.nml
     rm -f $sedfile
