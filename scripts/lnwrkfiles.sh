@@ -16,12 +16,12 @@ if [[ "${myhost}" == "ln"* ]]; then
     srcwrfdir=${srcroot}/gnu/WRFV4.0
     srcdartdir=${srcroot}/gnu/frdd-DART
 elif [[ "${myhost}" == "cheyenne"* || ${myhost} == "derecho"* ]]; then
-    rootdir="/glade/work/ywang/mpas_runscripts"
-    scpdir="/glade/work/ywang/mpas_runscripts/scripts"
+    rootdir="/glade/work/ywang/mpas_runscripts_v8.0"
+    scpdir="/glade/work/ywang/mpas_runscripts_v8.0/scripts"
     srcroot="/glade/work/ywang"
     srcmpassitdir=${srcroot}/MPASSIT
     srcuppdir=${srcroot}/UPP_KATE_kjet
-    srcmodeldir=${srcroot}/MPAS-Model
+    srcmodeldir=${srcroot}/MPAS-Model_V8.0
     srcwpsdir=${srcroot}/WPS_SRC
     srcwrfdir=${srcroot}/WRFV4.0
     srcdartdir=${srcroot}/DART
