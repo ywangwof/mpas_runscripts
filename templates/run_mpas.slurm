@@ -49,7 +49,7 @@ sed -i -e "/config_pio_num_iotasks/s/[0-9]\+/NNNODE/;/config_pio_stride/s/[0-9]\
 
 sed -i "s/NNNODE/$nnode/;s/NNCORE/$ncores/;" namelist.atmosphere
 
-RUNMPCMD -n NOPART EXEDIR/atmosphere_model.single
+RUNMPCMD -n NOPART EXEDIR/atmosphere_model
 
 if [[ $? -eq 0 ]]; then
     touch done.fcst

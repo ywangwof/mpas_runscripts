@@ -31,7 +31,7 @@ rm -rf error.fcst queue.fcst
 
 sed -i "s/NNNODE/$nnode/;s/NNCORE/$ncores/;" namelist.atmosphere
 
-RUNMPCMD EXEDIR/atmosphere_model.single
+RUNMPCMD EXEDIR/atmosphere_model
 
 if [[ $? -eq 0 ]]; then
     touch done.mpas
