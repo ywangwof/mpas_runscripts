@@ -14,8 +14,7 @@ eventdateDF=$(date +%Y%m%d)
 # Required files from ROOTDIR
 #
 # 0. module files in modules
-#     build_jet_intel18_1.11_smiol
-#     build_jet_intel18_1.11                # PIO version
+#     build_jet_Rocky8_intel_smiol
 #
 # 1. exec                                   # The executables
 #     init_atmosphere_model
@@ -2013,6 +2012,7 @@ function run_mpassit {
     hist_file_input_grid = "$histfile"
     diag_file_input_grid = "$diagfile"
     file_target_grid     = "$WORKDIR/${domname/*_/geo_}/geo_em.d01.nc"
+    target_grid_type     = "file"
     output_file          = "$wrkdir/MPAS-A_out.${fcst_time_str}.nc"
     interp_diag          = .true.
     interp_hist          = .true.
@@ -2029,6 +2029,7 @@ EOF
         cat <<EOF > $sedfile
 s/PARTION/${partition}/
 s/NOPART/$npepost/
+s/MODULE/${modulename}/g
 s/JOBNAME/intrp_${jobname}_$hstr/
 s/HHHSTR/$hstr/g
 s/CPUSPEC/${claim_cpu}/
@@ -2561,7 +2562,7 @@ if [[ $machine == "Jet" ]]; then
     job_runmpexe_str="srun"
     job_runexe_str="srun"
 
-    modulename="build_jet_intel18_1.11_smiol"
+    modulename="build_jet_Rocky8_intel_smiol"
     WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
 
     source /etc/profile.d/modules.sh

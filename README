@@ -1,5 +1,10 @@
   Version History
 
+03/21/2024 Version 3.7
+    1. Upgraded to Rocky linux OS on Jet
+    2. Note that "atmosphere_model.single" is renamed as "atmosphere_model"
+       in exec.
+
 02/08/2024 Version 3.6
     1. Upgraded to MPAS V8.0.1
 
