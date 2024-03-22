@@ -15,8 +15,7 @@ eventdateDF=$(date -u +%Y%m%d)
 # Required files from ROOTDIR
 #
 # 0. module files in modules
-#     build_jet_intel18_1.11_smiol
-#     build_jet_intel18_1.11                # PIO version
+#     build_jet_Rocky8_intel_smiol
 #
 # 1. exec                                   # The executables
 #     init_atmosphere_model
@@ -619,7 +618,7 @@ fi
 #% PLATFORM
 
 if [[ $machine == "Jet" ]]; then
-    modulename="build_jet_intel18_1.11_smiol"
+    modulename="build_jet_Rocky8_intel_smiol"
 
     source /etc/profile.d/modules.sh
     module purge

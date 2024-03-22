@@ -1,5 +1,11 @@
   Version History
 
+03/21/2024 Version 4.1
+
+    1. Upgraded to MPAS V8.0.1
+    2. Upgraded to Rocky linux OS on Jet
+    3. Note that "atmosphere_model.single" is renamed as "atmosphere_model" in exec
+
 05/12/2023 Version 4.0
 
     a. Added DA cycles scripts for MPAS-WoFS. 

@@ -15,10 +15,9 @@ echo " "
 
 if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
     module use ROOTDIR/modules
-    module load build_jet_intel
-
+    module load MODULE
 else
-    source /scratch/ywang/MPAS/env.mpas
+    source ROOTDIR/modules/MODULE
 fi
 
 ulimit -s unlimited

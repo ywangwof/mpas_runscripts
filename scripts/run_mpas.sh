@@ -12,8 +12,7 @@ eventdateDF=$(date -u +%Y%m%d)
 # Required files from ROOTDIR
 #
 # 0. module files in modules
-#     build_jet_intel18_1.11_smiol
-#     build_jet_intel18_1.11                # PIO version
+#     build_jet_Rocky8_intel_smiol
 #
 # 1. exec                                   # The executables
 #     init_atmosphere_model
@@ -1794,11 +1793,11 @@ function run_mpas {
     config_smdiv                    = 0.1
 /
 &damping
-    config_mpas_cam_coef            = 2.0
-    config_rayleigh_damp_u          = true
-    config_zd                       = 16000.0
-    config_xnutr                    = 0.2
-    config_nlevels_cam_damp         = 8
+    config_mpas_cam_coef             = 2.0
+    config_rayleigh_damp_u           = true
+    config_zd                        = 16000.0
+    config_xnutr                     = 0.2
+    config_number_cam_damping_levels = 8
 /
 &limited_area
     config_apply_lbcs                = true
@@ -1832,6 +1831,7 @@ function run_mpas {
     config_lsm_scheme                = '${MPASLSM}'
     num_soil_layers                  = ${MPASNFLS}
     config_physics_suite             = 'convection_permitting'
+    config_convection_scheme         = 'off'
     config_microp_re                 = true
 EOF
 
@@ -1854,6 +1854,12 @@ EOF
 /
 &soundings
     config_sounding_interval         = 'none'
+/
+&assimilation
+    config_jedi_da                   = false
+/
+&development
+    config_halo_exch_method          = 'mpas_halo'
 /
 EOF
 
@@ -2017,6 +2023,7 @@ function run_mpassit {
     hist_file_input_grid = "$histfile"
     diag_file_input_grid = "$diagfile"
     file_target_grid     = "$WORKDIR/${domname/*_/geo_}/geo_em.d01.nc"
+    target_grid_type     = "file"
     output_file          = "$wrkdir/MPAS-A_out.${fcst_time_str}.nc"
     interp_diag          = .true.
     interp_hist          = .true.
@@ -2033,6 +2040,7 @@ EOF
         cat <<EOF > $sedfile
 s/PARTION/${partition}/
 s/NOPART/$npepost/
+s/MODULE/${modulename}/g
 s/JOBNAME/intrp_${jobname}_$hstr/
 s/HHHSTR/$hstr/g
 s/CPUSPEC/${claim_cpu}/
@@ -2569,7 +2577,7 @@ if [[ $machine == "Jet" ]]; then
     job_runmpexe_str="srun"
     job_runexe_str="srun"
 
-    modulename="build_jet_intel18_1.11_smiol"
+    modulename="build_jet_Rocky8_intel_smiol"
     WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
 
     source /etc/profile.d/modules.sh
@@ -2629,7 +2637,7 @@ else    # Vecna at NSSL
     gpmetis="/scratch/ywang/tools/bin/gpmetis"
 fi
 
-MPASLSM='ruc'
+MPASLSM='sf_ruc'
 MPASNFLS=9
 
 EXTINVL=3

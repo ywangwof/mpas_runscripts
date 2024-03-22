@@ -22,8 +22,7 @@ eventdateDF=$(date -u +%Y%m%d)
 # Required files from ROOTDIR
 #
 # 0. module files in modules
-#     build_jet_intel18_1.11_smiol
-#     build_jet_intel18_1.11                # PIO version
+#     build_jet_Rocky8_intel_smiol
 #
 # 1. exec                                   # The executables
 #     init_atmosphere_model
@@ -1381,7 +1380,7 @@ if [[ $machine == "Jet" ]]; then
     job_runexe_str="srun"
     runcmd_str=""
 
-    modulename="build_jet_intel18_1.11"
+    modulename="build_jet_Rocky8_intel_smiol"
     WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
 
     source /etc/profile.d/modules.sh
