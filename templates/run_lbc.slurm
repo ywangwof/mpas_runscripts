@@ -27,7 +27,7 @@ ulimit -s unlimited
 
 cd WRKDIR
 
-touch lbc.running
+touch running.lbc
 rm -rf error.lbc queue.lbc
 
 RUNMPCMD -n NOPART EXEDIR/init_atmosphere_model
@@ -38,7 +38,7 @@ else
     touch error.lbc
 fi
 
-rm -rf lbc.running
+rm -rf running.lbc
 
 time2=$(date '+%s')
 

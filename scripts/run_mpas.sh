@@ -5,10 +5,8 @@
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath $(dirname $scpdir))
 
-eventdateDF=$(date +%Y%m%d)
+eventdateDF=$(date -u +%Y%m%d)
 
-#-----------------------------------------------------------------------
-#
 #-----------------------------------------------------------------------
 #
 # Required files from ROOTDIR
@@ -262,9 +260,22 @@ function submit_a_jobscript {
 
 ########################################################################
 
-function join_by_comma {
-    local IFS=","
-    echo "$*"
+function get_jobarray_str {
+    local jobschdler=$1
+    local subjobs=("${@:2}")
+    if [[ "${jobschdler,,}" == "slurm" ]]; then  # SLURM
+        local IFS=","
+        echo "--array=${subjobs[*]}"
+    else                                         # PBS
+        local minno=${subjobs[0]}
+        local maxno=${subjobs[-1]}
+
+        for i in "${subjobs[@]}"; do
+            (( i > maxno )) && maxno=$i
+            (( i < minno )) && minno=$i
+        done
+        echo "-J ${minno}-${maxno}:1"
+    fi
 }
 
 ########################################################################
@@ -377,7 +388,7 @@ function run_static {
         fi
     fi
 
-    inittime_str=$(date -d "$eventdate ${eventtime}:00" +%Y-%m-%d_%H)
+    inittime_str=$(date -u -d "$eventdate ${eventtime}:00" +%Y-%m-%d_%H)
     initfile="../$runname/ungrib/${EXTHEAD}:$inittime_str"
     if [[ ! -f $initfile ]]; then
         echo "Initial file (for extracting time): $initfile not found"
@@ -515,10 +526,10 @@ function run_ungrib_hrrr {
     mkwrkdir $wrkdir 0
     cd $wrkdir || return
 
-    julday=$(date -d "$eventdate ${eventtime}:00" +%y%j%H)
+    julday=$(date -u -d "$eventdate ${eventtime}:00" +%y%j%H)
     hrrrbase="${julday}0000"
 
-    if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
+    if [[ -f running.ungrib || -f done.ungrib || -f queue.ungrib ]]; then
         :                   # skip
     else
         myhrrrfiles=(); jobarrays=()
@@ -545,7 +556,7 @@ function run_ungrib_hrrr {
         done
 
         if [[ ${#jobarrays[@]} -gt 0 ]]; then
-            jobarraystr="--array=$(join_by_comma "${jobarrays[@]}")"
+            jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
             jobscript="run_wgrib2_hrrr.${mach}"
 
             sedfile=$(mktemp -t wgrib2_${jobname}.sed_XXXX)
@@ -605,7 +616,7 @@ EOF
         #
         if [[ ${#jobarrays[@]} -gt 0 ]]; then
             jobscript="run_ungrib.${mach}"
-            jobarraystr="--array=$(join_by_comma "${jobarrays[@]}")"
+            jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
             sedfile=$(mktemp -t ungrib_hrrr_${jobname}.sed_XXXX)
             cat <<EOF > $sedfile
@@ -685,9 +696,9 @@ function run_ungrib_gfs {
     mkwrkdir $wrkdir 0
     cd $wrkdir || return
 
-    julday=$(date -d "$eventdate ${eventtime}:00" +%y%j%H)
+    julday=$(date -u -d "$eventdate ${eventtime}:00" +%y%j%H)
 
-    if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
+    if [[ -f running.ungrib || -f done.ungrib || -f queue.ungrib ]]; then
         return 0                   # skip
     else
         gfsfiles=()
@@ -767,13 +778,13 @@ function run_ungrib_rrfsna {
     mkwrkdir $wrkdir 0
     cd $wrkdir || return
 
-    julday=$(date -d "$eventdate ${eventtime}:00" +%y%j%H)
+    julday=$(date -u -d "$eventdate ${eventtime}:00" +%y%j%H)
 
-    if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
+    if [[ -f running.ungrib || -f done.ungrib || -f queue.ungrib ]]; then
         :                   # skip
     else
-        currdate=$(date -d "$eventdate ${eventtime}:00" +%Y%m%d)
-        currtime=$(date -d "$eventdate ${eventtime}:00" +%H)
+        currdate=$(date -u -d "$eventdate ${eventtime}:00" +%Y%m%d)
+        currtime=$(date -u -d "$eventdate ${eventtime}:00" +%H)
         if [[ "$rrfs_grib_dir" == "https://noaa-rrfs-pds.s3.amazonaws.com"* ]]; then
             rrfs_url="$rrfs_grib_dir/rrfs_a/rrfs_a.${currdate}/${currtime}/control"
             download_aws=1
@@ -839,7 +850,7 @@ function run_ungrib_rrfsna {
         done
 
        if [[ ${#jobarrays[@]} -gt 0 ]]; then
-            jobarraystr="--array=$(join_by_comma "${jobarrays[@]}")"
+            jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
             jobscript="run_wgrib2_rrfsna.${mach}"
 
             sedfile=$(mktemp -t wgrib2_${jobname}.sed_XXXX)
@@ -899,7 +910,7 @@ EOF
         #
         if [[ ${#jobarrays[@]} -gt 0 ]]; then
             jobscript="run_ungrib.${mach}"
-            jobarraystr="--array=$(join_by_comma "${jobarrays[@]}")"
+            jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
             sed    "s/PARTION/${partition}/;s/JOBNAME/ungrb_rrfs_${jobname}/" $TEMPDIR/run_ungrib_parallel.${mach} > $jobscript
             sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
             sed -i "s#PREFIX#${EXTHEAD}#g;s#EVENTDATE#${eventdate}#g;s#EVENTTIME#${eventtime}#g;s#EXTINVL#$EXTINVL#g" $jobscript
@@ -973,13 +984,13 @@ function run_ungrib_rrfs {
     mkwrkdir $wrkdir 0
     cd $wrkdir || return
 
-    julday=$(date -d "$eventdate ${eventtime}:00" +%y%j%H)
+    julday=$(date -u -d "$eventdate ${eventtime}:00" +%y%j%H)
 
-    if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
+    if [[ -f running.ungrib || -f done.ungrib || -f queue.ungrib ]]; then
         :                   # skip
     else
-        currdate=$(date -d "$eventdate ${eventtime}:00" +%Y%m%d)
-        currtime=$(date -d "$eventdate ${eventtime}:00" +%H)
+        currdate=$(date -u -d "$eventdate ${eventtime}:00" +%Y%m%d)
+        currtime=$(date -u -d "$eventdate ${eventtime}:00" +%H)
         if [[ "$rrfs_grib_dir" == "https://noaa-rrfs-pds.s3.amazonaws.com"* ]]; then
             rrfs_url="$rrfs_grib_dir/rrfs_a/rrfs_a.${currdate}/${currtime}/control"
             download_aws=1
@@ -1134,7 +1145,7 @@ EOF
         #
         if [[ ${#jobarrays[@]} -gt 0 ]]; then
             jobscript="run_ungrib.${mach}"
-            jobarraystr="--array=$(join_by_comma "${jobarrays[@]}")"
+            jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
             sed    "s/PARTION/${partition}/;s/JOBNAME/ungrb_rrfs_${jobname}/" $TEMPDIR/run_ungrib_parallel.${mach} > $jobscript
             sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
             sed -i "s#PREFIX#${EXTHEAD}#g;s#EVENTDATE#${eventdate}#g;s#EVENTTIME#${eventtime}#g;s#EXTINVL#$EXTINVL#g" $jobscript
@@ -1208,13 +1219,13 @@ function run_ungrib_rrfsp {
     mkwrkdir $wrkdir 0
     cd $wrkdir || return
 
-    julday=$(date -d "$eventdate ${eventtime}:00" +%y%j%H)
+    julday=$(date -u -d "$eventdate ${eventtime}:00" +%y%j%H)
 
-    if [[ -f ungrib.running || -f done.ungrib || -f queue.ungrib ]]; then
+    if [[ -f running.ungrib || -f done.ungrib || -f queue.ungrib ]]; then
         :                   # skip
     else
-        currdate=$(date -d "$eventdate ${eventtime}:00" +%Y%m%d)
-        currtime=$(date -d "$eventdate ${eventtime}:00" +%H)
+        currdate=$(date -u -d "$eventdate ${eventtime}:00" +%Y%m%d)
+        currtime=$(date -u -d "$eventdate ${eventtime}:00" +%H)
         if [[ "$rrfs_grib_dir" == "https://noaa-rrfs-pds.s3.amazonaws.com"* ]]; then
             rrfs_url="${rrfs_grib_dir}/rrfs_a/rrfs_a.${currdate}/${currtime}/control"
             download_aws=1
@@ -1296,7 +1307,7 @@ EOF
     fi
 
     if [[ $dorun == true ]]; then
-        secdtime_str=$(date -d "$eventdate ${eventtime}:00 $EXTINVL hours" +%Y-%m-%d_%H)
+        secdtime_str=$(date -u -d "$eventdate ${eventtime}:00 $EXTINVL hours" +%Y-%m-%d_%H)
         secdfile=$wrkdir/${EXTHEAD}:${secdtime_str}
 
         echo "$$: Checking: $secdfile"
@@ -1372,7 +1383,7 @@ function run_init {
     fi
 
     wrkdir=$rundir/init
-    if [[ -f $wrkdir/ics.running || -f $wrkdir/done.ics || -f $wrkdir/queue.ics ]]; then
+    if [[ -f $wrkdir/running.ics || -f $wrkdir/done.ics || -f $wrkdir/queue.ics ]]; then
         :                   # skip
     else
         mkwrkdir $wrkdir $overwrite
@@ -1550,7 +1561,7 @@ function run_lbc {
     fi
 
     wrkdir=$rundir/lbc
-    if [[ -f $wrkdir/lbc.running || -f $wrkdir/done.lbc || -f $wrkdir/queue.lbc ]]; then
+    if [[ -f $wrkdir/running.lbc || -f $wrkdir/done.lbc || -f $wrkdir/queue.lbc ]]; then
         :                   # skip
     else
         mkwrkdir $wrkdir $overwrite
@@ -1714,7 +1725,7 @@ function run_mpas {
     # Build working directory
     #
     wrkdir=$rundir/fcst
-    if [[ -f $wrkdir/fcst.running || -f $wrkdir/done.fcst || -f $wrkdir/queue.fcst ]]; then
+    if [[ -f $wrkdir/running.fcst || -f $wrkdir/done.fcst || -f $wrkdir/queue.fcst ]]; then
         :                   # skip
     else
         mkwrkdir $wrkdir $overwrite
@@ -1972,7 +1983,7 @@ function run_mpassit {
 
     for ((h=0;h<=fcst_hours;h+=OUTINVL)); do
         hstr=$(printf "%02d" $h)
-        fcst_time_str=$(date -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
+        fcst_time_str=$(date -u -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
 
         histfile="$rundir/fcst/${domname}.history.${fcst_time_str}.nc"
         diagfile="$rundir/fcst/${domname}.diag.${fcst_time_str}.nc"
@@ -2097,7 +2108,7 @@ function run_upp {
 
     for ((h=0;h<=fcst_hours;h+=OUTINVL)); do
         hstr=$(printf "%02d" $h)
-        fcst_time_str=$(date -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
+        fcst_time_str=$(date -u -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
 
         if [[  -f $wrkdir/done.upp_$hstr || -f $wrkdir/queue.upp_$hstr ]]; then
             continue      # already done, or is in queue, skip this hour
@@ -2218,8 +2229,12 @@ function run_pcp {
 
     expectednum=$(( fcst_hours/OUTINVL +1))
 
-    donefiles=($(ls done.upp_??))
-    pcpfiles=($(ls  MPAS-A_PCP_*))
+    donefiles=()
+    pcpfiles=()
+    while IFS='' read -r line; do donefiles+=("$line"); done < <(ls done.upp_??)
+    while IFS='' read -r line; do pcpfiles+=("$line");  done < <(ls MPAS-A_PCP_*)
+    #donefiles=($(ls done.upp_??))
+    #pcpfiles=($(ls  MPAS-A_PCP_*))
 
     if [[ ${#donefiles[@]} -lt $expectednum ]]; then
         echo "WARNING: UPPs are still not all done. Skip run_pcp."
@@ -2262,7 +2277,7 @@ function run_clean {
             wrkdir="$rundir/mpassit"
             for ((h=0;h<=fcst_hours;h+=OUTINVL)); do
                 hstr=$(printf "%02d" $h)
-                fcst_time_str=$(date -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
+                fcst_time_str=$(date -u -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
                 rm -rf $wrkdir/MPAS-A_out.${fcst_time_str}.nc
                 #rm -rf $wrkdir/done.mpassit$hstr $wrkdir/error.mpassit$hstr
             done
@@ -2294,7 +2309,7 @@ function run_clean {
             upp_dir="$rundir/upp"
             for ((h=0;h<=fcst_hours;h+=OUTINVL)); do
                 hstr=$(printf "%02d" $h)
-                fcst_time_str=$(date -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
+                fcst_time_str=$(date -u -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
                 if [[ -f $upp_dir/done.upp_$hstr ]]; then
                     if [[ $verb -eq 1 ]]; then
                         echo "Cleaning $upp_dir/post_$hstr & $mpassit_dir ......"
@@ -2681,8 +2696,8 @@ else
     mpname="N"
 fi
 
-starttime_str=$(date -d "$eventdate ${eventtime}:00"                     +%Y-%m-%d_%H:%M:%S)
-stoptime_str=$(date -d "$eventdate  ${eventtime}:00 ${fcst_hours} hours" +%Y-%m-%d_%H:%M:%S)
+starttime_str=$(date -u -d "$eventdate ${eventtime}:00"                     +%Y-%m-%d_%H:%M:%S)
+stoptime_str=$(date -u -d "$eventdate  ${eventtime}:00 ${fcst_hours} hours" +%Y-%m-%d_%H:%M:%S)
 
 runname="${eventdate}${eventtime}_${initname}${mpname}"
 rundir="$WORKDIR/${runname}"

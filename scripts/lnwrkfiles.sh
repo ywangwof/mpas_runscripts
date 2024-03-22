@@ -9,12 +9,12 @@ myhost=$(hostname)
 if [[ "${myhost}" == "ln"* ]]; then
     srcroot="/scratch/ywang/MPAS"
 
-    srcmpassitdir=${srcroot}/MPASSIT
-    srcuppdir=${srcroot}/UPP_KATE_kjet
-    srcmodeldir=${srcroot}/frdd-MPAS-Model
-    srcwpsdir=${srcroot}/WPS_SRC
-    srcwrfdir=${srcroot}/WRFV4.0
-    srcdartdir=${srcroot}/frdd-DART
+    srcmpassitdir=${srcroot}/gnu/MPASSIT
+    srcuppdir=${srcroot}/gnu/UPP_KATE_kjet
+    srcmodeldir=${srcroot}/gnu/frdd-MPAS-Model
+    srcwpsdir=${srcroot}/gnu/WPS_SRC
+    srcwrfdir=${srcroot}/gnu/WRFV4.0
+    srcdartdir=${srcroot}/gnu/frdd-DART
 elif [[ "${myhost}" == "cheyenne"* || ${myhost} == "derecho"* ]]; then
     rootdir="/glade/work/ywang/mpas_runscripts"
     scpdir="/glade/work/ywang/mpas_runscripts/scripts"
@@ -80,7 +80,7 @@ function usage {
 function run_cmd {
     # use global variable doclean, dorun, verb
 
-    local srcdir=$2
+    local src_dir=$2
     local cmds cmdfns
     local target='./'
 
@@ -95,9 +95,9 @@ function run_cmd {
     else
         for arg in "${cmdfns[@]}"; do
             if [[ $verb -eq 1 ]]; then
-                echo "${cmds[@]}" "$srcdir/$arg" "${target}"
+                echo "${cmds[@]}" "${src_dir}/$arg" "${target}"
             fi
-            $dorun "${cmds[@]}" "$srcdir/$arg" "${target}"
+            $dorun "${cmds[@]}" "${src_dir}/$arg" "${target}"
         done
     fi
 }
@@ -201,12 +201,11 @@ for pkg in "${packages[@]}"; do
     "MPASSIT" )
         srcmpassit=${srcdir-$srcmpassitdir}
 
-
         cd "$exedir" || exit 1
 
         echo "===  MPASSIT"
-        echo "SRC: $srcmpassit"
-        echo "CWD: $exedir"
+        echo "     SRC: $srcmpassit"
+        echo "     CWD: $exedir"
 
         echo "  -- ${cmdnote} mpassit to $(pwd) ...."
         run_cmd "${runcmd}" "$srcmpassit/build" mpassit
@@ -220,8 +219,8 @@ for pkg in "${packages[@]}"; do
 
         echo ""
         echo "===  WRF "
-        echo "SRC: $srcwrf;    $srcwps"
-        echo "CWD: $exedir"
+        echo "     SRC: $srcwrf;    $srcwps"
+        echo "     CWD: $exedir"
 
         echo "  -- ${cmdnote} ungrib.exe to $(pwd) ...."
         run_cmd "${runcmd}" "$srcwps/ungrib/src" ungrib.exe
@@ -234,8 +233,8 @@ for pkg in "${packages[@]}"; do
 
         echo ""
         echo "===  UPP"
-        echo "SRC: $srcupp"
-        echo "CWD: $desdir"
+        echo "     SRC: $srcupp"
+        echo "     CWD: $desdir"
 
         echo "  -- ${cmdnote} crtm2_fix to $(pwd) ...."
 
@@ -243,7 +242,7 @@ for pkg in "${packages[@]}"; do
 
         cd "$exedir" || exit 1
         echo "  --  Executable"
-        echo "CWD: $exedir"
+        echo "     CWD: $exedir"
 
         echo "  -- ${cmdnote} unipost.exe to $(pwd) ...."
         run_cmd "${runcmd}" "${srcupp}/bin" unipost.exe
@@ -285,8 +284,8 @@ for pkg in "${packages[@]}"; do
         cd "$desdir" || exit 1
         echo ""
         echo "===  MPAS Model"
-        echo "SRC: $srcmodel"
-        echo "CWD: $desdir"
+        echo "     SRC: $srcmodel"
+        echo "     CWD: $desdir"
 
         staticfiles=(CAM_ABS_DATA.DBL  CAM_AEROPT_DATA.DBL GENPARM.TBL       LANDUSE.TBL    \
                 OZONE_DAT.TBL     OZONE_LAT.TBL       OZONE_PLEV.TBL    RRTMG_LW_DATA  \
@@ -315,8 +314,8 @@ for pkg in "${packages[@]}"; do
 
             run_cmd "${runcmd}" "$srcmodel" "init_atmosphere_model atmosphere_model"
 
-            srcdir=$(dirname "$srcmodel")
-            run_cmd "${runcmd}" "$srcdir/MPAS-Tools/mesh_tools/grid_rotate" grid_rotate
+            src_dir=$(dirname "$srcmodel")
+            run_cmd "${runcmd}" "$src_dir/MPAS-Tools/mesh_tools/grid_rotate" grid_rotate
 
         fi
 

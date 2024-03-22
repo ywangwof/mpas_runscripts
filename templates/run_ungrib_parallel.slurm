@@ -20,7 +20,7 @@ fulltime_str=$(date -d "EVENTDATE EVENTTIME:00 $fhr hours" +%Y-%m-%d_%H:%M:%S)
 
 cd WRKDIR/ungrib_$hstr
 
-touch ungrib_$hstr.running
+touch running.ungrib_$hstr
 rm -rf error.ungrib_$hstr
 
 cat << EOF > namelist.wps
@@ -51,7 +51,7 @@ else
     touch error.ungrib_$hstr
 fi
 
-#rm -rf ungrib_$hstr.running
+#rm -rf running.ungrib_$hstr
 
 time2=$(date '+%s')
 

@@ -26,7 +26,7 @@ ulimit -s unlimited
 
 cd WRKDIR
 
-touch ics.running
+touch running.ics
 rm -rf error.ics queue.ics
 
 RUNMPCMD -n NOPART EXEDIR/init_atmosphere_model
@@ -37,7 +37,7 @@ else
     touch error.ics
 fi
 
-rm -rf ics.running
+rm -rf running.ics
 
 time2=$(date '+%s')
 
