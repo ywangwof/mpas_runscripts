@@ -166,12 +166,7 @@ function run_obsmerge {
 
     #ln -sf ${wrkdir}/input.nml ./input.nml
     cp ${wrkdir}/input.nml input.nml
-    if [[ ${dorun} == true ]]; then
-        template_inputfile=$(head -1 $wrkdir/filter_in.txt)
-        ln -sf $template_inputfile init.nc
-    else
-        ln -sf ../../1515/OBSDIR/init.nc .
-    fi
+    #ln -sf ${rundir}/dacycles/${inittime_str}/${domname}_01.restart.${frsttime_str}.nc init.nc
 
     echo "$$-${FUNCNAME[0]}: OBS Preprocessing for analysis time: ${anlys_time}, days: ${g_date}, seconds: ${g_sec}"
 
@@ -590,10 +585,11 @@ function run_filter {
         return
     fi
 
-    firstfile=$(head -1 filter_in.txt)
-    ln -sf $firstfile init.nc             # The name of the MPAS analysis file to
-                                          # be read and/or written by the DART
-                                          # programs for the state data.
+    #firstfile=$(head -1 filter_in.txt)
+    #ln -sf $firstfile init.nc             # The name of the MPAS analysis file to be read and/or written by the DART programs for the state data.
+    #ln -sf ${rundir}/dacycles/${inittime_str}/${domname}_01.restart.${frsttime_str}.nc init.nc
+    filename_mesh="${rundir}/init/${domname}_01.init.nc"
+
     #------------------------------------------------------
     # 2. Adaptive inflation
     #------------------------------------------------------
@@ -1037,7 +1033,7 @@ function run_filter {
 /
 
 &model_nml
-   init_template_filename       = 'init.nc'
+   init_template_filename       = '${filename_mesh}'
    assimilation_period_days     = 0
    assimilation_period_seconds  = ${intvl_sec}
    model_perturbation_amplitude = 0.0001
@@ -1585,7 +1581,8 @@ function run_update_states {
         echo "./$fnbase" > ${update_output_file_list}
         sed -i "/update_input_file_list/s/=.*/= '${update_input_file_list}'/" input.nml
         sed -i "/update_output_file_list/s/=.*/= '${update_output_file_list}'/" input.nml
-        sed -i "/init_template_filename/s/init.nc/${fnbase}/" input.nml
+        filename_mesh="${rundir}/init/${domname}_${memstr}.init.nc"
+        sed -i "/init_template_filename/s#=.*#= '${filename_mesh}'#" input.nml
 
         if [[ ! -e done.update_states_${memstr} ]]; then
             jobarrays+=("$iens")
@@ -2130,6 +2127,7 @@ function run_mpas {
         fi
 
         ln -sf $rundir/$domname/$domname.graph.info.part.${npefcst} .
+        ln -sf $rundir/init/${domname}.invariant.nc .
 
         streamlists=(stream_list.atmosphere.diagnostics stream_list.atmosphere.output stream_list.atmosphere.surface)
         for fn in "${streamlists[@]}"; do
@@ -2231,6 +2229,7 @@ function run_mpas {
     num_soil_layers                  = ${MPASNFLS}
     config_microp_re                 = true
     config_physics_suite             = 'convection_permitting'
+    config_convection_scheme         = 'off'
     config_frac_seaice               = false
     config_pbl_scheme                = '${pblscheme}'
     config_sfclayer_scheme           = '${sfcscheme}'
@@ -2274,6 +2273,11 @@ EOF
 <immutable_stream name="input"
                   type="input"
                   filename_template="${domname}_${memstr}.init.nc"
+                  input_interval="initial_only" />
+
+<immutable_stream name="invariant"
+                  type="input"
+                  filename_template="${domname}.invariant.nc"
                   input_interval="initial_only" />
 
 <immutable_stream name="restart"
@@ -3044,6 +3048,10 @@ if [[ ! -r $WORKDIR/config.${eventdate} ]]; then
 fi
 readconf $WORKDIR/config.${eventdate} COMMON dacycles || exit $?
 # get ENS_SIZE, time_step, EXTINVL, ADAPTIVE_INF, update_in_place
+
+#first_cycle_sec=$((inittime_sec+intvl_sec))
+#frsttime_str=$(date -u -d @${first_cycle_sec} +%Y-%m-%d_%H.%M.%S)
+#inittime_str=$(date -u -d @${inittime_sec} +%H%M)
 
 #-----------------------------------------------------------------------
 #

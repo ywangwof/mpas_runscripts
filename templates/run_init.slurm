@@ -33,6 +33,10 @@ RUNMPCMD -n NOPART EXEDIR/init_atmosphere_model
 
 if [[ $? -eq 0 ]]; then
     touch done.ics
+    if [[ "JOBNAME" =~ ^invariant ]]; then
+        mv PREFIX.invariant.nc ..
+        touch ../done.invariant
+    fi
 else
     touch error.ics
 fi

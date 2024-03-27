@@ -18,7 +18,7 @@ echo " "
 if [[ "MACHINE" == "Cheyenne" || "MACHINE" == "Derecho" ]]; then
     ncores=NCORES
 else
-    #source ROOTDIR/modules/MODULE_impi
+    #source ROOTDIR/modules/MODULE
     ncores=NCORES
 fi
 #nnode=$(( NOPART/ncores ))

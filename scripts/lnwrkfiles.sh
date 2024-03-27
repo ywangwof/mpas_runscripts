@@ -306,7 +306,7 @@ for pkg in "${packages[@]}"; do
         else
             cd "$desdir" || exit 1
 
-            ln -sf /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/mesh_3km/x1.65536002.grid.nc .
+            #ln -sf /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/mesh_3km/x1.65536002.grid.nc .
 
             cd "$exedir" || exit 1
             echo ""

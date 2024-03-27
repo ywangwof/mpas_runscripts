@@ -29,7 +29,7 @@ rm -f queue.static error.static
 
 touch running.static
 
-RUNMPCMD -n NOPART EXEDIR/init_atmosphere_model.static
+RUNMPCMD -n NOPART EXEDIR/init_atmosphere_model
 
 if [[ $? -eq 0 ]]; then
     touch done.static

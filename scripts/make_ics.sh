@@ -160,6 +160,8 @@ EOF
 s/PARTION/${partition_ics}/
 s/JOBNAME/ungrb_${jobname}/
 s/CPUSPEC/${claim_cpu_ungrib}/
+s/MODULE/${modulename}/g
+s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
 s#EXEDIR#${exedir}#
 s#PREFIX#${EXTHEAD}#g
@@ -175,6 +177,211 @@ EOF
         #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
         check_and_resubmit "ungrib" "$wrkdir" "$nensics" "$jobscript" 2
     fi
+}
+
+########################################################################
+
+function run_init4invariant {
+
+    if [[ -d $init_dir ]]; then  # link it from somewhere
+
+        if [[ $dorun == true ]]; then
+            donefile="$init_dir/init/done.init"
+            echo "$$: Checking: $donefile"
+            while [[ ! -e $donefile ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    echo "Waiting for file: $donefile"
+                fi
+
+                sleep 10
+            done
+        fi
+
+        cd "$rundir" || return
+        ln -sf "$init_dir/init" .
+        return
+    fi
+
+    # Otherwise, run init normally for invariant stream
+    conditions=()
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+        /*)
+            conditions+=("$1")
+            ;;
+        *)
+            conditions+=("$rundir/$1")
+            ;;
+        esac
+        shift
+    done
+
+    if [[ $dorun == true ]]; then
+        for cond in "${conditions[@]}"; do
+            echo "$$: Checking $cond"
+            while [[ ! -e $cond ]]; do
+                check_and_resubmit "ungrib" "$rundir/init/ungrib" "$nensics"
+                if [[ $verb -eq 1 ]]; then
+                    echo "Waiting for file: $cond"
+                fi
+                sleep 10
+            done
+        done
+    fi
+
+    wrkdir=$rundir/init
+    if [[ -f $wrkdir/running.invariant || -f $wrkdir/done.invariant || -f $wrkdir/queue.invariant ]]; then
+        return 0
+    fi
+
+    mkwrkdir "$wrkdir" "$overwrite"
+    cd "$wrkdir" || return
+
+    mem=1      # use member 1, run once for all members
+    memstr=$(printf "%02d" "$mem")
+    mywrkdir="$wrkdir/invariant"
+
+    mkwrkdir "$mywrkdir" 1
+    cd "$mywrkdir" || return
+
+    ln -sf ../ungrib/"${EXTHEAD}${memstr}:${starttime_str:0:13}" .
+    ln -sf "$rundir/$domname/$domname.static.nc" .
+
+    if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npeics} ]]; then
+        cd "$rundir/$domname" || return
+        # shellcheck disable=SC2154
+        if [[ $verb -eq 1 ]]; then
+            echo "Generating ${domname}.graph.info.part.${npeics} in $rundir/$domname using ${gpmetis}"
+        fi
+        ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npeics} > gpmetis.out$npeics
+        estatus=$?
+        if [[ ${estatus} -ne 0 ]]; then
+            echo "${estatus}: $${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npeics}"
+            exit ${estatus}
+        fi
+        cd $mywrkdir || return
+    fi
+    ln -sf $rundir/$domname/$domname.graph.info.part.${npeics} .
+
+    cat << EOF > namelist.init_atmosphere
+&nhyd_model
+    config_init_case = 7
+    config_start_time = '${starttime_str}'
+    config_stop_time = '${stoptime_str}'
+    config_theta_adv_order = 3
+    config_coef_3rd_order = 0.25
+/
+&dimensions
+    config_nvertlevels   = 59
+    config_nsoillevels   = ${MPASNFLS}
+    config_nfglevels     = ${EXTNFGL}
+    config_nfgsoillevels = ${EXTNFLS}
+    config_nsoilcat      = 16
+/
+&data_sources
+    config_geog_data_path = '${WPSGEOG_PATH}'
+    config_met_prefix = '${EXTHEAD}${memstr}'
+    config_sfc_prefix = 'SST'
+    config_fg_interval = ${EXTINVL}
+    config_landuse_data = 'MODIFIED_IGBP_MODIS_NOAH_15s'
+    config_topo_data = 'GMTED2010'
+    config_vegfrac_data = 'MODIS'
+    config_albedo_data = 'MODIS'
+    config_maxsnowalbedo_data = 'MODIS'
+    config_supersample_factor = 1
+    config_use_spechumd = false
+/
+&vertical_grid
+    config_ztop = 25878.712
+    config_nsmterrain = 1
+    config_smooth_surfaces = true
+    config_dzmin = 0.3
+    config_nsm = 30
+    config_tc_vertical_grid = true
+    config_blend_bdy_terrain = true
+    config_specified_zeta_levels = '${FIXDIR}/L60.txt'
+/
+&interpolation_control
+    config_extrap_airtemp = 'lapse-rate'
+/
+&preproc_stages
+    config_static_interp = false
+    config_native_gwd_static = false
+    config_vertical_grid = true
+    config_met_interp = false
+    config_input_sst = false
+    config_frac_seaice = true
+/
+&io
+    config_pio_num_iotasks = 0
+    config_pio_stride = 1
+/
+&decomposition
+    config_block_decomp_file_prefix = '$domname.graph.info.part.'
+/
+EOF
+
+    cat << EOF > streams.init_atmosphere
+<streams>
+<immutable_stream name="input"
+                  type="input"
+                  filename_template="$domname.static.nc"
+                  input_interval="initial_only" />
+
+<immutable_stream name="output"
+                  type="output"
+                  filename_template="${domname}.invariant.nc"
+                  io_type="${ICSIOTYPE}"
+                  packages="initial_conds"
+                  clobber_mode="replace_files"
+                  output_interval="initial_only" />
+
+<immutable_stream name="surface"
+                  type="output"
+                  filename_template="$domname.sfc_update.nc"
+                  filename_interval="none"
+                  packages="sfc_update"
+                  output_interval="${EXTINVL_STR}" />
+
+<immutable_stream name="lbc"
+                  type="output"
+                  filename_template="$domname.lbc.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+                  filename_interval="output_interval"
+                  packages="lbcs"
+                  clobber_mode="replace_files"
+                  output_interval="${EXTINVL_STR}" />
+
+</streams>
+EOF
+    #
+    # Create job script and submit it
+    #
+    jobscript="run_invariant.${mach}"
+
+    sedfile=$(mktemp -t init_${jobname}.sed_XXXX)
+
+    # shellcheck disable=SC2154
+    cat <<EOF > $sedfile
+s/PARTION/${partition_ics}/
+s/MACHINE/${machine}/g
+s/NOPART/$npeics/
+s/CPUSPEC/${claim_cpu_ics}/
+s/JOBNAME/invariant_${jobname}/
+s/MODULE/${modulename}/g
+s#ROOTDIR#$rootdir#g
+s#WRKDIR#$mywrkdir#g
+s#EXEDIR#${exedir}#
+s#PREFIX#${domname}#
+s/ACCTSTR/${job_account_str}/
+s/EXCLSTR/${job_exclusive_str}/
+s/RUNMPCMD/${job_runmpexe_str}/
+EOF
+    # shellcheck disable=SC2154
+    if [[ "${mach}" == "pbs" ]]; then
+        echo "s/NNODES/${nnodes_ics}/;s/NCORES/${ncores_ics}/" >> $sedfile
+    fi
+
+    submit_a_jobscript $mywrkdir "invariant" $sedfile $TEMPDIR/run_init.${mach} $jobscript ""
 }
 
 ########################################################################
@@ -218,7 +425,7 @@ function run_init {
         for cond in "${conditions[@]}"; do
             echo "$$: Checking $cond"
             while [[ ! -e $cond ]]; do
-                check_and_resubmit "ungrib" "$rundir/init/ungrib" "$nensics"
+                #check_and_resubmit "ungrib" "$rundir/init/ungrib" "$nensics"
                 if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
                 fi
@@ -245,6 +452,7 @@ function run_init {
 
         ln -sf ../ungrib/"${EXTHEAD}${memstr}:${starttime_str:0:13}" .
         ln -sf "$rundir/$domname/$domname.static.nc" .
+        #ln -sf ../${domname}.invariant.nc .
 
         if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npeics} ]]; then
             cd "$rundir/$domname" || return
@@ -324,7 +532,7 @@ EOF
 <streams>
 <immutable_stream name="input"
                   type="input"
-                  filename_template="$domname.static.nc"
+                  filename_template="${domname}.static.nc"
                   input_interval="initial_only" />
 
 <immutable_stream name="output"
@@ -388,7 +596,6 @@ EOF
     fi
 
     if [[ $dorun == true && $jobwait -eq 1 ]]; then
-
         #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
         check_and_resubmit "init" $wrkdir $nensics $jobscript 2
     fi
@@ -433,7 +640,7 @@ function run_cleanungrib {
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #@ MAIN
 
-jobs=(ungrib init clean)
+jobs=(ungrib init init4invariant clean)
 
 WORKDIR="${rootdir}/run_dirs"
 TEMPDIR="${rootdir}/templates"
@@ -518,7 +725,7 @@ while [[ $# -gt 0 ]]
                 machine=Vecna
             elif [[ ${2^^} == "HERCULES" ]]; then
                 machine=Hercules
-            elif [[ ${2^^} == "CHEYENNE" ]]; then
+            elif [[ ${2^^} == "CHEYENNE" || ${2^^} == "DERECHO" ]]; then
                 machine=Cheyenne
             else
                 echo "ERROR: Unsupported machine name, got \"$2\"."
@@ -564,6 +771,7 @@ while [[ $# -gt 0 ]]
         ungrib* | init* | clean* )
             #jobs=(${key//,/ })
             IFS="," read -r -a jobs <<< "$key"
+            jobwait=0
             ;;
         *)
             if [[ $key =~ ^[0-9]{8}$ ]]; then
@@ -616,6 +824,8 @@ elif [[ $machine == "Hercules" ]]; then
 elif [[ $machine == "Cheyenne" ]]; then
     if [[ $dorun == true ]]; then
         runcmd="qsub"
+    else
+        runcmd="echo qsub"
     fi
     modulename="defaults"
 else    # Vecna at NSSL
@@ -668,7 +878,8 @@ EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 # Start to execute each procedue
 #
 declare -A jobargs=([ungrib]="$hrrr_dir $hrrr_time"                     \
-                    [init]="init/ungrib/done.ungrib $domname/done.static" \
+                    [init4invariant]="init/ungrib/done.ungrib $domname/done.static" \
+                    [init]="init/ungrib/done.ungrib $domname/done.static"           \
                     [clean]="ungrib init"                               \
                     [cleanungrib]=""
                    )

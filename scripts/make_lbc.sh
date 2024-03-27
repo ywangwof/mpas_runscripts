@@ -163,6 +163,7 @@ EOF
 
     if [[ ${#jobarrays[@]} -gt 0 ]]; then
         jobscript="run_ungrib.slurm"
+        # shellcheck disable=SC2154
         jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
         sedfile=$(mktemp -t ungrib_${jobname}.sed_XXXX)
@@ -171,6 +172,8 @@ EOF
 s/PARTION/${partition_lbc}/
 s/JOBNAME/ungrb_${jobname}/
 s/CPUSPEC/${claim_cpu_ungrib}/
+s/MODULE/${modulename}/g
+s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
 s#EXEDIR#${exedir}#
 s#PREFIX#${EXTHEAD}#g
@@ -259,6 +262,7 @@ function run_lbc {
 
         ln -sf ../ungrib/${EXTHEAD}${memstr}:* .
         ln -sf $rundir/init/${domname}_${memstr}.init.nc .
+        #ln -sf $rundir/init/${domname}.invariant.nc .
 
         if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npelbc} ]]; then
             cd $rundir/$domname || return

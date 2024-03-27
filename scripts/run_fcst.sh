@@ -239,6 +239,8 @@ function run_mpas {
         do_restart="true"
         do_dacyle="true"
 
+        ln -sf $rundir/init/${domname}.invariant.nc .
+
         #
         # lbc files
         #
@@ -367,6 +369,7 @@ function run_mpas {
     num_soil_layers                  = ${MPASNFLS}
     config_microp_re                 = true
     config_physics_suite             = 'convection_permitting'
+    config_convection_scheme         = 'off'
     config_frac_seaice               = false
     config_pbl_scheme                = '${pblscheme}'
     config_sfclayer_scheme           = '${sfcscheme}'
@@ -405,6 +408,11 @@ EOF
 <immutable_stream name="input"
                   type="input"
                   filename_template="${domname}_${memstr}.init.nc"
+                  input_interval="initial_only" />
+
+<immutable_stream name="invariant"
+                  type="input"
+                  filename_template="${domname}.invariant.nc"
                   input_interval="initial_only" />
 
 <immutable_stream name="restart"
