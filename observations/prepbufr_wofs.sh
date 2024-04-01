@@ -36,7 +36,7 @@
 #
 #--------------------------------------------------------------
 
-source /scratch/ywang/MPAS/mpas_scripts/modules/env.mpas_smiol
+source /scratch/ywang/MPAS/gnu/mpas_scripts/modules/env.mpas_smiol
 
 daily=no
 
@@ -47,13 +47,13 @@ daily=no
 # filenames with the pattern 6Z,12Z,18Z,24Z, so 'no' is right for it.)
 # this variable is ignored completely if
 
-timebeg=${1-2023033115}
-timeend=${2-2023040103}
+timebeg=${1-2023051215}
+timeend=${2-2023051303}
 
-DART_DIR=/scratch/ywang/MPAS/DART
-WORK_dir=/scratch/ywang/MPAS/mpas_scripts/run_dirs/OBS_SEQ/Bufr
+DART_DIR=/scratch/ywang/MPAS/gnu/frdd-DART
+WORK_dir=/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs/OBS_SEQ/Bufr
 DART_exec_dir=${DART_DIR}/observations/obs_converters/NCEP/prep_bufr/exe
-NML_TEMPLATE=/scratch/ywang/MPAS/mpas_scripts/observations/input.nml.bufrobs.template
+NML_TEMPLATE=/scratch/ywang/MPAS/gnu/mpas_scripts/observations/input.nml.bufrobs.template
 convert=yes
 
 timebeg_s=$(date -d "${timebeg:0:8} ${timebeg:8:2}:00:00" +%s)

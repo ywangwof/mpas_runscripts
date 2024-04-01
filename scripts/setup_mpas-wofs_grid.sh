@@ -401,6 +401,14 @@ function run_static {
     mkwrkdir $wrkdir $overwrite
     cd $wrkdir || return
 
+    if [[ -f done.static ]]; then
+        echo "Found file \"done.static\", skipping run_static ...."
+        echo ""
+        return
+    elif [[ -f running.static || -f queue.static ]]; then
+        return                   # skip
+    fi
+
     if [[ ! -f $domname.graph.info.part.${npestatic} ]]; then
         if [[ $verb -eq 1 ]]; then
             echo "Generating ${domname}.graph.info.part.${npestatic} in $wrkdir using ${gpmetis}"
@@ -747,6 +755,8 @@ EOF
     cat <<EOF > $sedfile
 s/PARTION/${partition_wps}/
 s/JOBNAME/ungrb_hrrr_${jobname}/
+s/MODULE/${modulename}/g
+s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
 s#EXEDIR#${exedir}#
 s/ACCTSTR/${job_account_str}/
@@ -1480,7 +1490,9 @@ else    # Vecna at NSSL
 
     # Load Python Enviroment if necessary
     if [[ " ${jobs[*]} " =~ " meshplot_py " ]]; then
+        echo ""
         echo "Enabling Python micromamba environment - wofs_an ...."
+        echo ""
         source /home/yunheng.wang/.pythonrc  || exit $?
     fi
 fi
@@ -1556,7 +1568,7 @@ for job in "${jobs[@]}"; do
         echo "run_$job ${jobargs[$job]}"
     fi
 
-    "run_$job" "${jobargs[$job]}"
+    "run_$job" ${jobargs[$job]}
 done
 
 echo " "

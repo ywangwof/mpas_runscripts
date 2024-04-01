@@ -642,7 +642,7 @@ elif [[ $machine == "Cheyenne" ]]; then
     modulename="defaults"
 else    # Vecna at NSSL
     modulename="env.mpas_smiol"
-    source "${modulename}"
+    source ${rootdir}/modules/${modulename}
 fi
 
 source $scpdir/Common_Utilfuncs.sh || exit $?

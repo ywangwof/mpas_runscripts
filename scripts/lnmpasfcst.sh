@@ -1,7 +1,7 @@
 #!/bin/bash
 
-fcst_root="/scratch/ywang/MPAS/mpas_scripts/run_dirs"
-dest_root="/scratch/ywang/MPAS/mpas_scripts/run_dirs/FCST"
+fcst_root="/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs"
+dest_root="/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs/FCST"
 
 eventdate="${1-20230331}"
 eventimes=(1700 1800 1900 2000 2100 2200 2300 0000 0100 0200 0300)

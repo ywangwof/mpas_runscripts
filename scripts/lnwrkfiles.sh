@@ -8,6 +8,7 @@ desdir=${rootdir}/fix_files
 myhost=$(hostname)
 if [[ "${myhost}" == "ln"* ]]; then
     srcroot="/scratch/ywang/MPAS"
+    tool_dir="/scratch/ywang/tools"
 
     srcmpassitdir=${srcroot}/gnu/MPASSIT
     srcuppdir=${srcroot}/gnu/UPP_KATE_kjet
@@ -19,6 +20,8 @@ elif [[ "${myhost}" == "cheyenne"* || ${myhost} == "derecho"* ]]; then
     rootdir="/glade/work/ywang/mpas_runscripts"
     scpdir="/glade/work/ywang/mpas_runscripts/scripts"
     srcroot="/glade/work/ywang"
+    tool_dir="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS"
+
     srcmpassitdir=${srcroot}/MPASSIT
     srcuppdir=${srcroot}/UPP_KATE_kjet
     srcmodeldir=${srcroot}/MPAS-Model
@@ -27,6 +30,7 @@ elif [[ "${myhost}" == "cheyenne"* || ${myhost} == "derecho"* ]]; then
     srcdartdir=${srcroot}/DART
 else
     srcroot="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS"
+    tool_dir="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS"
 
     srcmpassitdir=${srcroot}/MPASSIT
     srcuppdir=${srcroot}/UPP_KATE_kjet
@@ -194,6 +198,8 @@ done
 #@ MAIN
 
 exedir="$(dirname "${desdir}")/exec"
+cd "$exedir" || exit 1
+ln -sf ${tool_dir}/bin/gpmetis  .
 
 for pkg in "${packages[@]}"; do
     case ${pkg^^} in
@@ -224,6 +230,9 @@ for pkg in "${packages[@]}"; do
 
         echo "  -- ${cmdnote} ungrib.exe to $(pwd) ...."
         run_cmd "${runcmd}" "$srcwps/ungrib/src" ungrib.exe
+
+        echo "  -- ${cmdnote} geogrid.exe to $(pwd) ...."
+        run_cmd "${runcmd}" "$srcwps/geogrid/src" geogrid.exe
         ;;
 
     "UPP" )

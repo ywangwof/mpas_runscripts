@@ -425,7 +425,7 @@ function run_init {
         for cond in "${conditions[@]}"; do
             echo "$$: Checking $cond"
             while [[ ! -e $cond ]]; do
-                #check_and_resubmit "ungrib" "$rundir/init/ungrib" "$nensics"
+                check_and_resubmit "ungrib" "$rundir/init/ungrib" "$nensics"
                 if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
                 fi
@@ -830,7 +830,7 @@ elif [[ $machine == "Cheyenne" ]]; then
     modulename="defaults"
 else    # Vecna at NSSL
     modulename="env.mpas_smiol"
-    source ${modulename}
+    source ${rootdir}/modules/${modulename}
 fi
 
 source $scpdir/Common_Utilfuncs.sh || exit $?

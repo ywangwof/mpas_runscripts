@@ -13,6 +13,13 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
+if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
+    module use ROOTDIR/modules
+    module load MODULE
+else
+    source ROOTDIR/modules/MODULE
+fi
+
 cd WRKDIR
 
 touch running.ungrib
