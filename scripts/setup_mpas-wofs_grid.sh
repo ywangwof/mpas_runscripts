@@ -1067,7 +1067,7 @@ function write_runtimeconfig {
 
     * )    # Vecna at NSSL
 
-        pythonmachine="wof-epyc10"
+        pythonmachine=""
         mpas_wofs_python="/scratch/ywang/MPAS/wofs_new_noise"
 
         # ICs
@@ -1176,7 +1176,7 @@ function write_runtimeconfig {
     run_obs2nc=true                     # run obs_seq_to_netcdf after filter
     run_obsdiag=true                    # run obs_diag after filter for each cycle
     run_addnoise=true                   # run WoFS add_noise facility (Python)
-    run_trimvr=false                    # Trim NaNs from radial velocity observations (Python)
+    run_trimvr=true                     # Trim NaNs from radial velocity observations (Python)
     python_machine="${pythonmachine}"   # if not empty, you should have set up passwordless access on it and the
                                         # Python environment is properly set in run_noise_mask.slurm & run_noise_pert.slurm
     WOFSAN_PATH="${mpas_wofs_python}"
@@ -1484,7 +1484,7 @@ else    # Vecna at NSSL
     export LD_LIBRARY_PATH=/scratch/ywang/MPAS/tools/lib
     nclpath="/scratch/software/miniconda3/bin/ncl"
 
-    OBS_DIR="/scratch/ywang/MPAS/mpas_scripts/run_dirs/OBSGEN"
+    OBS_DIR="/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs/OBS_SEQ"
 
     hrrr_dir="/scratch/wofuser/MODEL_DATA/HRRRE"
 
@@ -1542,7 +1542,8 @@ EXTINVL=10800
 EXTHEAD="HRRRE"
 #hrrrvtable="Vtable.raphrrr"
 hrrrvtable="Vtable.HRRRE.2018"
-hrrrfile="${hrrr_dir}/${eventdate}/1400/mem01/wrfnat_hrrre_newse_mem0001_01.grib2"
+#hrrrfile="${hrrr_dir}/${eventdate}/1400/mem01/wrfnat_hrrre_newse_mem0001_01.grib2"
+hrrrfile="${hrrr_dir}/${eventdate}/1400/postprd_mem0001/wrfnat_hrrre_newse_mem0001_01.grib2"
 hrrrdate="${eventdate}"
 hrrrtime="${eventtime}"
 

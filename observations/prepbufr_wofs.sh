@@ -49,6 +49,7 @@ daily=no
 
 timebeg=${1-2023051215}
 timeend=${2-2023051303}
+cmdarg=${3-NULL}
 
 DART_DIR=/scratch/ywang/MPAS/gnu/frdd-DART
 WORK_dir=/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs/OBS_SEQ/Bufr
@@ -104,6 +105,11 @@ EOF
     # fix the BUFR_in line below to match what you have.  if the file is
     # gzipped, you can leave it and this program will unzip it
     BUFR_in=${BUFR_dir}/rap.${inyear}${mm}${dd}${hh}.prepbufr.tm00
+
+    if [[ "$cmdarg" == "ls" ]]; then
+        ls -l ${BUFR_in}
+        continue
+    fi
 
     if [[ -e ${BUFR_in} ]]; then
        echo "copying ${BUFR_in} into prepqm.in"

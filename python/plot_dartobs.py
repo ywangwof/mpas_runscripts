@@ -994,7 +994,10 @@ def retrieve_plotvar(varargs,vtype,varobj):
     print(f"Select observations of type = {vtype} ....", end="")
     obs_index0 = np.where( varobj.obstype == int(vtype) )[0]
     print(f"    Got {len(obs_index0)} observations")
-    if len(obs_index0) <= 0:  sys.exit(0)
+    if len(obs_index0) <= 0:
+        varmeta['number'] = 0
+        return make_namespace(varmeta), None,None,None
+
     varmeta['type_number'] = vtype
     varmeta['type_label']  = varobj.validtypes[vtype].strip()
 
@@ -1011,7 +1014,7 @@ def retrieve_plotvar(varargs,vtype,varobj):
         iqc = 0
 
     print(f"Select observations of (qccopy = {iqc}) qc value = {varargs.t_qc} ....", end="")
-    if varargs.t_qc.upper() == 'All':
+    if varargs.t_qc.upper() == 'ALL':
         obs_index1 = obs_index0
         varmeta['qc_label'] = 'AllQC'
     else:
@@ -1079,7 +1082,7 @@ def retrieve_plotvar(varargs,vtype,varobj):
     varmeta['number'] = len(obs_index)
 
     if len(obs_index) <= 0:
-        print(f"ERROR: Number of observations for {vtype} - {varmeta['type_label']} is 0.")
+        print(f"WARNING: Number of observations for {vtype} - {varmeta['type_label']} is 0.")
         return make_namespace(varmeta), None,None,None
 
     #

@@ -26,6 +26,7 @@ import os
 import sys
 import time
 import pickle as pkle
+import math
 
 import numpy as np
 import matplotlib.collections as mplcollections
@@ -168,64 +169,71 @@ if __name__ == "__main__":
         pickle_fname = pickle_fname+'.'+str(nCells)+'.'+'patches'
         pickle_fname = os.path.join(outdir,pickle_fname)
 
-    if(os.path.isfile(pickle_fname)):
+    lat_min = math.degrees(latVertex.min())
+    lat_max = math.degrees(latVertex.max())
+    lon_min = math.degrees(lonVertex.min())
+    lon_max = math.degrees(lonVertex.max())
+
+    if os.path.isfile(pickle_fname):
         print("Pickle file (", pickle_fname, ") exists. Skipping")
-        sys.exit(0)
+    else:
 
-    print(f"\nNo pickle file found, creating patches \"{pickle_fname}\" using ({nprocess}) processes ...")
-    print("If this is a large mesh, then this proccess will take a while...")
+        print(f"\nNo pickle file found, creating patches \"{pickle_fname}\" using ({nprocess}) processes ...")
+        print("If this is a large mesh, then this proccess will take a while...")
 
-    baches_queue = mp.Queue(nprocess)                # queue to return processed cell patches
-    connects =[mp.Pipe() for i in range(nprocess)]   # pipe for passing initial arrays
+        baches_queue = mp.Queue(nprocess)                # queue to return processed cell patches
+        connects =[mp.Pipe() for i in range(nprocess)]   # pipe for passing initial arrays
 
-    nsize,nreminder = divmod(nCells,nprocess)
+        nsize,nreminder = divmod(nCells,nprocess)
 
-    arg_tuples = []
-    istart = 0
-    for i in range(nprocess):
-        isize = nsize
-        if i < nreminder:
-            isize += 1
-        arg_tuples.append((istart,isize,connects[i][0],baches_queue))
-        istart += isize
+        arg_tuples = []
+        istart = 0
+        for i in range(nprocess):
+            isize = nsize
+            if i < nreminder:
+                isize += 1
+            arg_tuples.append((istart,isize,connects[i][0],baches_queue))
+            istart += isize
 
-    #print(arg_tuples)
+        #print(arg_tuples)
 
-    processes = [mp.Process(target=get_mpas_patches,args=arg_tuple) for arg_tuple in arg_tuples]
+        processes = [mp.Process(target=get_mpas_patches,args=arg_tuple) for arg_tuple in arg_tuples]
 
-    for process in processes:
-        process.start()
+        for process in processes:
+            process.start()
 
-    for p in range(nprocess):
-        connects[p][1].send(nEdgesOnCell   )
-        connects[p][1].send(verticesOnCell )
-        connects[p][1].send(latVertex      )
-        connects[p][1].send(lonVertex      )
+        for p in range(nprocess):
+            connects[p][1].send(nEdgesOnCell   )
+            connects[p][1].send(verticesOnCell )
+            connects[p][1].send(latVertex      )
+            connects[p][1].send(lonVertex      )
 
-    mesh_patches = [None] * nCells
-    nsize = 0
-    for p in range(nprocess):
-        i,isize,proc_patches    = baches_queue.get()
-        mesh_patches[i:i+isize] = proc_patches
+        mesh_patches = [None] * nCells
+        nsize = 0
+        for p in range(nprocess):
+            i,isize,proc_patches    = baches_queue.get()
+            mesh_patches[i:i+isize] = proc_patches
 
-        nsize += isize
-        update_progress("Creating Patch file: "+pickle_fname, nsize/nCells)
+            nsize += isize
+            update_progress("Creating Patch file: "+pickle_fname, nsize/nCells)
 
-    for process in processes:
-        process.join()
+        for process in processes:
+            process.join()
 
-    # Create patch collection
-    patch_collection = mplcollections.PatchCollection(mesh_patches)
+        # Create patch collection
+        patch_collection = mplcollections.PatchCollection(mesh_patches)
 
-    #
-    # Write out a MPAS patch file
-    #
-    print(f"Writting to pickle file ({pickle_fname}) .... ")
+        #
+        # Write out a MPAS patch file
+        #
+        print(f"Writting to pickle file ({pickle_fname}) .... ")
 
-    # Pickle the patch collection
-    pickle_file = open(pickle_fname, 'wb')
-    pkle.dump(patch_collection, pickle_file)
-    pickle_file.close()
+        # Pickle the patch collection
+        pickle_file = open(pickle_fname, 'wb')
+        pkle.dump(patch_collection, pickle_file)
+        pickle_file.close()
 
-    time2 = time.time()
-    print(f"\nCreated a patch file for mesh: {pickle_fname}. Used ({time2-time0}) seconds.")
+        time2 = time.time()
+        print(f"\nCreated a patch file for mesh: {pickle_fname}. Used ({time2-time0}) seconds.")
+
+    print(f"\nDomain range: {lat_min:0.2f},{lat_max:0.2f},{lon_min:0.2f},{lon_max:0.2f}")

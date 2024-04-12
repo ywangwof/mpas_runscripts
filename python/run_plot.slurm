@@ -13,8 +13,8 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-source $HOME/.python
-conda activate wofs_post
+source $HOME/.pythonrc
+#conda activate wofs_post
 
 ulimit -s unlimited
 

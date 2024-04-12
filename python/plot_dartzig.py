@@ -189,8 +189,27 @@ def load_variables(cargs,wargs, filelist):
 
     #intvlmin = int(timestrlist[1])-int(begtime)
 
-    unitLabels = {'DOPPLER_RADIAL_VELOCITY': 'm/s',
-                  'RADAR_REFLECTIVITY':      'dBZ',
+    unitLabels = {'DOPPLER_RADIAL_VELOCITY'    : 'm/s',
+                  'RADAR_REFLECTIVITY'         : 'dBZ',
+                  'AIRCRAFT_U_WIND_COMPONENT'  : 'm/s',
+                  'AIRCRAFT_V_WIND_COMPONENT'  : 'm/s',
+                  'AIRCRAFT_TEMPERATURE'       : 'K',
+                  'ACARS_U_WIND_COMPONENT'     : 'm/s',
+                  'ACARS_V_WIND_COMPONENT'     : 'm/s',
+                  'ACARS_TEMPERATURE'          : 'K',
+                  'MARINE_SFC_U_WIND_COMPONENT': 'm/s',
+                  'MARINE_SFC_V_WIND_COMPONENT': 'm/s',
+                  'MARINE_SFC_TEMPERATURE'     : 'K',
+                  'MARINE_SFC_ALTIMETER'       : 'meter',
+                  'METAR_ALTIMETER'            : 'meter',
+                  'METAR_U_10_METER_WIND'      : 'm/s',
+                  'METAR_V_10_METER_WIND'      : 'm/s',
+                  'METAR_TEMPERATURE_2_METER'  : 'K',
+                  'METAR_DEWPOINT_2_METER'     : 'K',
+                  'RADAR_CLEARAIR_REFLECTIVITY': 'dBZ',
+                  #'GOES_LWP_PATH'              :
+                  #'GOES_IWP_PATH'              :
+                  #'GOES_CWP_ZERO'              :
                   }
 
     #beg_dt = datetime.strptime(f"{wargs.eventdate} {begtime}",'%Y%m%d %H%M')
@@ -235,6 +254,8 @@ def load_variables(cargs,wargs, filelist):
             #         qc:long_name = "QC values" ;
             #         qc:explanation = "see QCMetaData" ;
 
+            if cargs.verbose: print(f"Reading file: {obsfile} .....")
+
             with Dataset(obsfile, 'r') as fh:
                 varobs  = fh.variables['observations'][:,:]   # (ObsIndex, copy)
                 varqc   = fh.variables['qc'][:,:]             # (ObsIndex, qc_copy)
@@ -263,7 +284,7 @@ def load_variables(cargs,wargs, filelist):
                 print(f"ERROR: Cannot find copy for variance.")
                 sys.exit(1)
 
-            print(f"observation error variance is the {ivariance}th copy")
+            if cargs.verbose: print(f"              observation error variance is the {ivariance}th copy")
 
         else:
             print(f"ERROR: file {obsfile} not found")
@@ -281,7 +302,7 @@ def load_variables(cargs,wargs, filelist):
             #
             obs_index = np.where( varobstypes == otype )[0]
 
-            print(f"Obs length after type selection: {len(obs_index)}")
+            if cargs.verbose: print(f"              Obs length after type selection: {len(obs_index)}")
 
             i=0
             for ind in obs_index:
@@ -315,7 +336,7 @@ def load_variables(cargs,wargs, filelist):
                         newindex.append(index)
                 obs_index = newindex.copy()
 
-                print(f"Obs length after threshold >= {wargs.threshold} selection: {len(obs_index)}")
+                if cargs.verbose: print(f"              Obs length after threshold >= {wargs.threshold} selection: {len(obs_index)}")
 
             #
             # Check observation numbers based on qc flags, which should be done before the dataqc & dartqc narrowers
@@ -351,7 +372,7 @@ def load_variables(cargs,wargs, filelist):
                         newindex.append(index)
                 obs_index = newindex.copy()
 
-                print(f"Obs length after dataqc < {wargs.dataqc} selection: {len(obs_index)}")
+                if cargs.verbose: print(f"              Obs length after dataqc < {wargs.dataqc} selection: {len(obs_index)}")
 
             if wargs.dartqc is not None:
                 newindex=[]
@@ -360,7 +381,7 @@ def load_variables(cargs,wargs, filelist):
                         newindex.append(index)
                 obs_index = newindex.copy()
 
-                print(f"Obs length after dartqc == {wargs.dartqc} selection: {len(obs_index)}")
+                if cargs.verbose: print(f"              Obs length after dartqc == {wargs.dartqc} selection: {len(obs_index)}")
 
             #
             # Now, fill the derived arrays
@@ -375,14 +396,14 @@ def load_variables(cargs,wargs, filelist):
                 variance = varobs[obs_index,ivariance]
 
                 print(f"time = {timestr}, number of obs = {nobs_type} for {var_obj['type_label']}")
+                if cargs.verbose: print(f"              index variance: {ivariance}, value: {variance[0:3]}")
 
                 # rms error
                 n1 = prio.count()
                 rms_prior = np.sqrt(np.sum((prio-obs)**2)/n1)
                 n2 = post.count()
                 rms_post = np.sqrt(np.sum((post-obs)**2)/n2)
-                if cargs.verbose:
-                    print(f"       prior = {n1} - {rms_prior}; post = {n2} - {rms_post}")
+                if cargs.verbose: print(f"              prior = {n1} - {rms_prior}; post = {n2} - {rms_post}")
 
                 var_obj['rms_prior'].append( rms_prior )
                 var_obj['rms_post'].append( rms_post )
@@ -652,6 +673,10 @@ def plot_rms(cargs,wargs,wobj):
     for y1,y2 in zip(wobj.bias_prior,wobj.bias_post):
         y_bias.extend([y1,y2])
 
+    #print(y_sprd)
+    #print(y_bias)
+    #print(wobj.obs_std)
+
     ax.plot(x,y_rms,color='r',label="rmsi")
     ax.plot(x,y_sprd,color='g',label=spread_label)
     ax.plot(x,y_bias,color='b',label="Innov/Residue <obs-guess/analysis>")
@@ -848,17 +873,35 @@ def make_plot(cargs,wargs,wobj):
 
 if __name__ == "__main__":
 
+    date_re     = re.compile(r'[1-2][0-9][0-9][0-9][0-1][0-9][0-3][0-9]')
+
     time0 = timeit.time()
 
     cargs, wargs = parse_args()
 
-    if cargs.verbose: print("\n Elapsed time of parse_args is:  %f seconds" % (timeit.time() - time0))
+    # Retreive a flexible Data Assimilation runtime directory based on
+    # the argument run_dir
+
+    #dadir = os.path.join(wargs.run_dir,f"{wargs.eventdate}","dacycles")
+    lastname = os.path.basename(os.path.normpath(wargs.run_dir))
+    if lastname == "obs_diag":
+        dadir = os.path.dirname(wargs.run_dir)
+    elif 'dacycles' in lastname:
+        dadir = wargs.run_dir
+    else:
+        mobj = date_re.search(wargs.run_dir)
+        if mobj:
+            dadir = os.path.join(wargs.run_dir,"dacycles")
+        else:
+            dadir = os.path.join(wargs.run_dir,f"{wargs.eventdate}","dacycles")
+
+    #if cargs.verbose: print("\n Elapsed time of parse_args is:  %f seconds" % (timeit.time() - time0))
 
     if wargs.obstype is not None and wargs.obstype[0] == "list":
         time1 = timeit.time()
 
         if cargs.filename is None:
-            filename = os.path.join(wargs.run_dir, f"obs_seq.final.{wargs.eventdate}1700.nc")
+            filename = os.path.join(dadir, '1700', f"obs_seq.final.{wargs.eventdate}1700.nc")
         else:
             filename = cargs.filename
 
@@ -879,8 +922,8 @@ if __name__ == "__main__":
         dt2 = dt1 + timedelta(days=1)
         nextdatestr = dt2.strftime('%Y%m%d')
 
-        dadir = os.path.join(wargs.run_dir,f"{wargs.eventdate}","dacycles")
-        filelist = []
+        filelist1 = []; filelist2 = []
+        filelist  = []
         for item in os.listdir(dadir):
             dirmatch = re.match('^\d{4,4}$',item)
             dirtime = os.path.join(dadir,item)
@@ -889,11 +932,12 @@ if __name__ == "__main__":
                     rematch1 = re.match(f'obs_seq.final.{wargs.eventdate}([12][0-9][0-5][05]).nc',myf)
                     rematch2 = re.match(f'obs_seq.final.{nextdatestr}(0[0-9][0-5][05]).nc',myf)
                     if rematch1:
-                        filelist.append(os.path.join(dirtime,rematch1.group(0)))
+                        filelist1.append(os.path.join(dirtime,rematch1.group(0)))
                     elif rematch2:
-                        filelist.append(os.path.join(dirtime,rematch2.group(0)))
-
-        filelist.sort()
+                        filelist2.append(os.path.join(dirtime,rematch2.group(0)))
+        filelist1.sort()
+        filelist2.sort()
+        filelist = filelist1+filelist2
 
         if len(filelist) <= 5:
             print(f"ERROR: found no enough obs_seq.final files in {dadir}: {filelist}.")

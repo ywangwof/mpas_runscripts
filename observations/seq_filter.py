@@ -17,7 +17,7 @@ import argparse
 import decimal
 
 from datetime import datetime, timedelta, timezone
-from copy import copy
+from copy import copy, deepcopy
 
 import numpy as np
 import netCDF4 as ncdf
@@ -62,8 +62,8 @@ def update_progress(job_title, progress):
     msg = "\r{0}: [{1}] {2}%".format(job_title, "#"*block + "-"*(length-block),
                                      round(progress*100, 2))
     if progress >= 1: msg += " DONE\r\n"
-    sys.stdout.write(msg)            # without an implicit newline
-    sys.stdout.flush()               # printing buffer immediately
+    sys.stderr.write(msg)            # without an implicit newline
+    sys.stderr.flush()               # printing buffer immediately
 
 ########################################################################
 
@@ -107,8 +107,13 @@ def load_obs_seq(filename):
                     for i,label in enumerate(label_gen):
                         qc_labels[str(i)] = label.strip()
 
-                elif line.startswith("OBS"):
-                    obs = decode_one_obs(fh,ncopy,nqc)
+                elif line.startswith('first:'):
+                    first = int(line.split()[1])
+                    last  = int(line.split()[3])
+
+                elif line.startswith("OBS "):
+                    iobs = int(line.split()[1])      # number of this obs
+                    obs = decode_one_obs(fh,iobs,ncopy,nqc)
                     obs_list.append(obs)
     else:
         print(f"ERROR: file {filename} not found")
@@ -120,6 +125,7 @@ def load_obs_seq(filename):
     obs_obj['nvarcopy'] = ncopy; obs_obj['copy_labels'] = var_labels
     obs_obj['nqccopy']  = nqc;   obs_obj['qc_labels']   = qc_labels
     obs_obj['types']    = type_labels
+    obs_obj['first']    = first; obs_obj['last']    = last
     obs_obj['obs']      = obs_list
 
     #print(obs_obj['obs'][42])
@@ -129,7 +135,7 @@ def load_obs_seq(filename):
 
 ########################################################################
 
-def decode_one_obs(fhandle,ncopy,nqc):
+def decode_one_obs(fhandle,iobs,ncopy,nqc):
 
     nobslines = 8+ncopy+nqc
 
@@ -143,6 +149,11 @@ def decode_one_obs(fhandle,ncopy,nqc):
     qcs    = []
     platform = {}
     mask   = False
+
+    cloud_GOES  = False
+    cloud_base  = None
+    cloud_top   = None
+    cloud_index = None
 
     i = 0
     while True:
@@ -164,10 +175,23 @@ def decode_one_obs(fhandle,ncopy,nqc):
         elif i == itype:              # get kind
             #print(i,itype,sline)
             otype = int(sline)
-            if otype >= 124 and otype <= 130:  # GOES observation contains an extra line for cloud base and cloud top heights
-                itime = itype + 3              # and an integer line (?)
+            if (otype >= 124 and otype <= 130): # or (otype >= 80 and otype <= 87):
+                cloud_GOES = True
+
+                line = fhandle.readline()
+                sline = line.strip()
+                cloud_base,cloud_top = [decimal.Decimal(x) for x in sline.split()]
+
+                line = fhandle.readline()
+                sline = line.strip()
+                cloud_index = decimal.Decimal(sline)
+
+                # GOES observation contains an extra line for cloud base and cloud top heights
+                itime = itype + 3             # and an integer line (?)
                 ivar  = itime + 1
                 nobslines = 10+ncopy+nqc
+                i = i+2
+
         elif sline == "platform":
             itime = itype + 8
             ivar  = itime + 1
@@ -183,8 +207,6 @@ def decode_one_obs(fhandle,ncopy,nqc):
                     plon,plat,palt,pvert = [decimal.Decimal(x) for x in sline.split()]
                 elif j == 3:        # dir3d
                     x1,x2,x3 = [decimal.Decimal(x) for x in sline.split()]
-                    if math.isnan(x1) or math.isnan(x2):
-                        mask = True
                 elif j == 4:
                     y1 = decimal.Decimal(sline)
                 elif j == 5:
@@ -210,7 +232,8 @@ def decode_one_obs(fhandle,ncopy,nqc):
     # 1970 01 01 00:00:00 is 134774 days 00 seconds
     # one day is 86400 seconds
 
-    obsobj = {'values'    : values,
+    obsobj = {'iobs'      : iobs,
+              'values'    : values,
               'qcs'       : qcs,
               'lon'       : decimal.Decimal(lon),
               'lat'       : decimal.Decimal(lat),
@@ -223,14 +246,16 @@ def decode_one_obs(fhandle,ncopy,nqc):
               'seconds'   : int(secs),
               'time'      : decimal.Decimal(days)+decimal.Decimal(secs)/86400,
               'variance'  : var,
-              'mask'      : mask
+              'mask'      : mask,
+              'GOES'      : cloud_GOES,
+              'clouds'    : (cloud_base, cloud_top, cloud_index)
               }
 
     return make_namespace(obsobj,level=1)
 
 ########################################################################
 
-def write_obs_seq(obs, filename ):
+def write_obs_seq(obs, filename, number=0 ):
     '''
      write_DART_ascii is a program to dump radar data to DART ascii files.
     '''
@@ -240,26 +265,28 @@ def write_obs_seq(obs, filename ):
     with open(filename, "w") as fi:
 
         fi.write(" obs_sequence\n")
+        #fi.write("obs_type_definitions\n")
         fi.write("obs_kind_definitions\n")
 
         # Deal with case that for reflectivity, 2 types of observations might have been created
 
-        fi.write(f"       {1}\n")
+        fi.write(f"          {len(obs.types)}\n")
         for type,label in obs.types.items():
-            fi.write(f"    {int(type)}          {label}   \n" )
+            fi.write(f"          {type} {label:31s}\n")
 
-        fi.write(f"  num_copies:            {obs.nvarcopy}  num_qc:            {obs.nqccopy}\n" )
-        fi.write(f" num_obs:       {obs.nobs}  max_num_obs:       {obs.nobs}\n" )
+        fi.write(f"  num_copies:            {obs.nvarcopy}  num_qc:            {obs.nqccopy}\n")
+        fi.write(f"  num_obs:        {obs.nobs}  max_num_obs:        {obs.nobs}\n" )
 
         for ivar,label in obs.copy_labels.items():
-            fi.write(f"{label}\n")
+            fi.write(f"{label:65s}\n")
 
         for qc,qc_label in obs.qc_labels.items():
-            fi.write(f"{qc_label}\n")
+            fi.write(f"{qc_label:65s}\n")
 
-        fi.write(f"  first:            {1}  last:       {obs.nobs}\n" )
+        fi.write(f"  first:            {max(obs.first,1):d}  last:        {min(obs.last,obs.nobs):d}\n")
 
         iobs = 0
+        n = 0
         for it in obs.obs:
 
             if it.mask == True:   # bad values
@@ -267,53 +294,75 @@ def write_obs_seq(obs, filename ):
             else:
                 iobs += 1
 
-                fi.write(f" OBS            {iobs}\n" )
+                if number > 0 and iobs > number:   break
+
+# From Craig on Jan 19, 2024
+#
+# I'm a bit more concerned about your surface observation types having a
+# "which_vert" of -1 (obs_seq.bufr), which is VERTISSURFACE.  When computing
+# distances between two locations defined as "VERTISSURFACE", the vertical
+# difference between these two locations is ignored.  That's arguably not
+# a good thing.  I wonder what would happen if you used VERTISHEIGHT (value is 3)
+# for the prebufr obs.
+#
+# It would be in the fortran code--probably in ascii_to_obs/prepbufr_to_obs.f90.
+#
+                if it.kind == 29 and it.level_type == -1:
+                    level_type = 3
+                    n += 1
+                    print(f"iobs = {it.iobs}: which_vert changed from -1 to 3")
+                else:
+                    level_type = it.level_type
+
+                fi.write(f" OBS   {it.iobs:12d}\n")
 
                 for value in it.values:
-                    fi.write(f"   {value}\n"  )
+                    fi.write(f" {value:f}     \n"  )
 
                 # Special QC flag processing so we can use low-reflectivity for additive noise
 
                 for qc in it.qcs:
-                    fi.write(f"   {qc}\n" )
+                    fi.write(f" {qc}     \n" )
 
-                #if iobs == 1:
-                #    fi.write(f" {-1} {iobs+1} {-1}\n" ) # First obs.
-                #elif iobs == obs.nobs:
-                #    fi.write(f" {iobs-1} {-1} {-1}\n" ) # Last obs.
-                #else:
-                #    fi.write(f" {iobs-1} {iobs+1} {-1}\n" )
                 fi.write(f" {it.links[0]} {it.links[1]} {it.links[2]}\n" )
 
                 fi.write("obdef\n")
                 fi.write("loc3d\n")
-                fi.write(f"    {it.lon}          {it.lat}          {it.level}     {it.level_type}\n")
+                fi.write(f"  {it.lon}      {it.lat}      {it.level}      {level_type:d}\n")
 
                 fi.write("kind\n")
-                fi.write(f"     {it.kind}     \n" )
+                fi.write(f"          {it.kind}\n")
+
+                # GOES CWP etc. add cloud base/top and an index number
+                if it.GOES:
+                    fi.write(f"    {it.clouds[0]:f}          {it.clouds[1]:f}\n" )
+                    fi.write(f"    {it.clouds[2]:d}                      \n" )
 
                 # Check to see if its radial velocity and add platform informationp...need BETTER CHECK HERE!
                 if it.platform:
                     fi.write("platform\n")
                     fi.write("loc3d\n")
-                    fi.write(f"""    {it.platform["loc3d"][0]}          {it.platform["loc3d"][1]}        {it.platform["loc3d"][2]}    {it.platform["loc3d"][3]}\n""" )
+                    fi.write(f"""    {it.platform["loc3d"][0]:f}          {it.platform["loc3d"][1]:f}        {it.platform["loc3d"][2]:f}    {it.platform["loc3d"][3]:d}\n""" )
 
                     fi.write("dir3d\n")
-                    fi.write(f"""    {it.platform["dir3d"][0]}          {it.platform["dir3d"][1]}        {it.platform["dir3d"][2]}\n""" )
+                    #fi.write("    %20.14f          %20.14f        %20.14f\n" % (it.platform["dir3d"][0],it.platform["dir3d"][1],it.platform["dir3d"][2]) )
+                    fi.write(f"""    {it.platform["dir3d"][0]:f}          {it.platform["dir3d"][1]:f}        {it.platform["dir3d"][2]:f}\n""" )
 
-                    fi.write(f"""    {it.platform["nyquist"]}     \n""" )
-                    fi.write(f"""    {it.platform["key"]}         \n""" )
+                    #fi.write("    %20.14f     \n" % it.platform["nyquist"] )
+                    fi.write(f"""    {it.platform["nyquist"]:f}     \n""" )
+                    fi.write(f"""    {it.platform["key"]}           \n""" )
 
                 # Done with special radial velocity obs back to dumping out time, day, error variance info
-                fi.write(f"    {it.seconds}          {it.days}     \n"  )
+                fi.write(f"{it.seconds}     {it.days}\n" )
 
                 # Logic for command line override of observational error variances
 
-                fi.write(f"    {it.variance}  \n" )
+                #fi.write(" %18.14f     \n" % it.variance )
+                fi.write(f" {it.variance:f}\n"  )
 
                 #if iobs % 10000 == 0: print(" write_DART_ascii:  Processed observation # %d" % iobs)
 
-                update_progress(" write_DART_ascii:  Processed observation ",iobs/obs.nobs)
+                if cargs.verbose: update_progress(" write_DART_ascii:  Processed observation ",iobs/obs.nobs)
     return
 
 
@@ -331,10 +380,17 @@ def parse_args():
 
     parser.add_argument('-v','--verbose', help='Verbose output',                                  action="store_true", default=False)
     parser.add_argument('-o','--outdir' , help='Name of the output file or an output directory',  required=True,       type=str)
+    parser.add_argument('-x','--xtypes' , help='Type Numbers of observation to be removed',       default=None,        type=str)
+    parser.add_argument('-t','--type'   , help='''Type Numbers of observation to be print, for examples,
+                        44                 : Show observaiton value of observation type 44;
+                        44,variance        : Show variance;
+                        44,values,variance : Show value and variance''',         default=None,        type=str)
+    parser.add_argument('-n','--number' , help='Fist N number of observations to be written',     default=0,           type=int)
+    parser.add_argument('-N','--notrim' , help='Do not trim NaN in observations (default: Trim obs_seq for NaNs)', action="store_true", default=False)
 
     args = parser.parse_args()
 
-    rargs = {'outfile': None }
+    rargs = {'outfile': None, 'xtypes' : [], 't_type': None }
     if not os.path.isdir(args.outdir):
         outdir_par = os.path.dirname(args.outdir)
         if os.path.isdir(outdir_par) or outdir_par == "":
@@ -342,6 +398,18 @@ def parse_args():
         else:
             print(f"ERROR: output directory {args.outdir} not exist.")
             sys.exit(1)
+
+
+    if args.xtypes is not None:
+        rargs['xtypes'] = [int(x) for x in args.xtypex.split(',')]
+
+    if args.type is not None:
+        rlist = [item for item in args.type.split(',')]
+        rargs['t_type'] = rlist[0]
+        if len(rlist) > 1:
+            rargs['t_var'] = rlist[1:]              # [value, variance]
+        else:                                       # by default, print the obervation value only
+            rargs['t_var'] = ['values']
 
     return args,make_namespace(rargs)
 
@@ -355,34 +423,102 @@ if __name__ == "__main__":
 
     cargs,rargs = parse_args()
 
-    print("")
     for filename in cargs.files:
-        print(f" load_obs_seq: Reading {filename}\n")
+        if cargs.verbose: print(f" load_obs_seq: Reading {filename}\n")
         obs_in = load_obs_seq(filename)
 
-        #
-        # Filter out bad observations
-        #
-        obs_out = copy(obs_in)
+        if rargs.t_type is not None:  # Show its values
+            #variances = []
+            print(f" {rargs.t_type}: {obs_in.types[rargs.t_type]}")
+            for it in obs_in.obs:
+                # print(f"Available attributes: {vars(it)}")
+                # 'values', 'qcs', 'lon', 'lat', 'level', 'level_type', 'links', 'kind', 'platform', 'days', 'seconds', 'time', 'variance', 'mask', 'GOES', 'clouds'
+                if it.kind == int(rargs.t_type):
+                    print(f"iobs = {it.iobs:6d}, ", end="")
+                    for varname in rargs.t_var:
+                        value = getattr(it,varname)
+                        if isinstance(value,list):
+                            valuestr=','.join([str(x) for x in value])
+                            print(f"{varname} - {valuestr}, ", end="")
+                        else:
+                            #variances.append(value)
+                            print(f"{varname} - {value:f}, ", end="")
+                    print("")
+            #variance = np.array(variances)
+            #print(f"{variance.mean()}, {variance.min()}, {variance.max()}, {np.sqrt(variance.mean())}")
+        else:  # processs the sequence file to get a new one
+            obs_out = copy(obs_in)
+            #obs_out = deepcopy(obs_in)
 
-        obs_out.obs = []
-        #  mask_check = data.mask && numpy.isnan().any()
-        for it in obs_in.obs:
-            if it.mask == False:   # good values
-                obs_out.obs.append(it)
+            #
+            # Mask observations for NaN
+            #
+            if not cargs.notrim:
+                # default, trim all observation contain any NaN
+                for it in obs_out.obs:
+                    if it.platform:
+                        if it.platform["dir3d"][0].is_nan() or it.platform["dir3d"][1].is_nan():
+                            it.mask = True
 
-        obs_out.nobs = len(obs_out.obs)
+            #
+            # Mask observations for unwanted types
+            #
+            if len(rargs.xtypes) > 0:
+                for type,label in obs_out.types:
+                    if int(type) in rargs.xtypes:
+                        del obs_out.types[type]
 
-        print(" Number of good observations:  %d\n" % obs_out.nobs)
+                for it in obs_out.obs:
+                    if it.kind in rargs.xtypes:
+                        it.mask = True
 
-        #
-        # Write out the sequence file again
-        #
-        if rargs.outfile is not None:
-            outfilename = rargs.outfile
-        else:
-            basefilename = os.path.basename(filename)
-            outfilename  = os.path.join(cargs.outdir,basefilename)
+            #
+            # Filter out unwanted observations
+            #
+            obs_records = []
+            masked_obs  = []
+            #  mask_check = data.mask && numpy.isnan().any()
+            for it in obs_out.obs:
+                if it.mask == False:   # good values
+                    obs_records.append(it)
+                else:
+                    masked_obs.append(it.iobs)
 
-        print(f" write_obs_seq: Writing to {outfilename}\n")
-        write_obs_seq(obs_out, outfilename)
+            obs_out.nobs = len(obs_records)
+
+            if cargs.verbose: print(f"INFO: Dropped observations: {masked_obs}")
+
+            # modify the linked list
+            for it in obs_records:
+                for mi in masked_obs:
+                    i = sum(j<mi for j in masked_obs)
+
+                    if it.iobs >= mi-i:
+                        it.iobs -= 1
+
+                    if it.links[0] >= mi-i:
+                        it.links[0] -= 1
+
+                    if it.links[1] > mi-i:
+                        it.links[1] -= 1
+
+            obs_out.obs = obs_records
+            if cargs.verbose: print(" Number of good observations:  %d\n" % obs_out.nobs)
+
+            #
+            # Write out the processed sequence file
+            #
+            if rargs.outfile is not None:
+                outfilename = rargs.outfile
+            else:
+                basefilename = os.path.basename(filename)
+                outfilename  = os.path.join(cargs.outdir,basefilename)
+
+            #print(f" write_obs_seq: Writing to {outfilename+'_in'}\n")
+            #write_obs_seq(obs_in, outfilename+"_in")
+
+            if cargs.verbose:
+                print(f" write_obs_seq: Writing to {outfilename}\n")
+            else:
+                print(f"    {filename} -> {outfilename}, Number of good observations: {obs_out.nobs}")
+            write_obs_seq(obs_out, outfilename)

@@ -2,12 +2,12 @@
 
 ######## CONVERT Pre-Processed CWP Observation Files to DART obs_seq ######
 #    Thomas Jones		May 26 2023
-#    Version:	1.0
+#    Version:	1.1
 #	 Inputs:	Directory where GSI format CWP netcdf files are located
 #               Date to process (yyyymodd)
 #	 Output:	Directory where new DART obs_seq files will be located
 #
-#	 To Do:  Add night-time features to DART forward operator.
+#	 V 1.1:  Added night-time features to DART forward operator.
 ##############
 
 import sys
@@ -32,7 +32,10 @@ indate = options.indate
 infiles = []
 temp_files = os.listdir(cwpdir)
 for f, file in enumerate(temp_files):
-    if (file[0:8] == indate):
+
+    #### YW...change to expected file name convention here to find files
+    # 2115-cwpobs.nc
+    if (file[5:14] == "cwpobs.nc"):
         infiles.append(file)
 
 infiles.sort()
@@ -42,7 +45,7 @@ for ff, file in enumerate(infiles):
     cwpfile = os.path.join(cwpdir,file)
     print(cwpfile)
 
-    fdate = file[0:12]
+    #fdate = file[0:12]
 
     ### READ IN CWP OBSERVATIONS FROM FILE
     cwpin = Dataset(cwpfile, "r")
@@ -69,6 +72,8 @@ for ff, file in enumerate(infiles):
     cwpin.close()
 
     sdate = year+month+day+hour+minute
+    mdate = indate+file[0:4]
+
     numobs=int(numobs[0])
     t_time=t_time[0]
 
@@ -82,17 +87,24 @@ for ff, file in enumerate(infiles):
 # Create local dictionary for observation kind definition - these can include user abbreviations
 #                      user's observation type            kind   DART official name
 
-    dartfile = os.path.join(outdir,'obs_seq_cwp.'+sat+'_V04.'+fdate)
+    dartfile = os.path.join(outdir,'obs_seq_cwp.'+sat+'_V04.'+mdate)
 
-    Look_Up_Table={ "GOES_CWP_PATH":    [80,   "GOES_CWP_PATH"] ,
-                    "GOES_LWP_PATH":    [81,   "GOES_LWP_PATH"] ,
-                    "GOES_IWP_PATH":    [82,   "GOES_IWP_PATH"] ,
-                    "GOES_CWP_ZERO":    [83,   "GOES_IWP_ZERO"],
-                    "GOES_CWP_NIGHT":   [84,   "GOES_CWP_NIGHT"]  }
+    Look_Up_Table={ "GOES_CWP_PATH":                    [80,   "GOES_CWP_PATH"] ,
+                    "GOES_LWP_PATH":                    [81,   "GOES_LWP_PATH"] ,
+                    "GOES_IWP_PATH":                    [82,   "GOES_IWP_PATH"] ,
+                    "GOES_CWP_ZERO":                    [83,   "GOES_IWP_ZERO"],
+                    "GOES_CWP_ZERO_NIGHT":              [84,   "GOES_CWP_ZERO_NIGHT"],
+                    "GOES_LWP_NIGHT":                   [85,   "GOES_LWP_NIGHT"],
+                    "GOES_IWP_NIGHT":                   [86,   "GOES_IWP_NIGHT"],
+                    "GOES_LWP0_PATH":                   [87,   "GOES_LWP0_PATH"]
+                  }
 
 
-    kinds = ['GOES_CWP_PATH','GOES_LWP_PATH','GOES_IWP_PATH','GOES_CWP_ZERO','GOES_CWP_NIGHT']
-    kind_nums = [80,81,82,83,84]
+    kinds = ['GOES_CWP_PATH','GOES_LWP_PATH','GOES_IWP_PATH','GOES_CWP_ZERO','GOES_CWP_ZERO_NIGHT','GOES_LWP_NIGHT','GOES_IWP_NIGHT', 'GOES_LWP0_PATH']
+    kind_nums = [80,81,82,83,84,85,86,87]
+
+#    kinds = ['GOES_LWP_PATH','GOES_IWP_PATH','GOES_CWP_ZERO','GOES_CWP_ZERO_NIGHT']
+#    kind_nums = [81,82,83,84]
     truth      = 1.0  # dummy variable
 
     #DEFINE TIME INFO (Constant for Sat data)
@@ -106,7 +118,7 @@ for ff, file in enumerate(infiles):
     fi = open(dartfile, "w")
 
     #LOOP THROUGH OBS
-    ngt_ct = 0
+    bad_ct = 0
     for i in range(1, numobs):
 
       nobs=i
@@ -131,19 +143,34 @@ for ff, file in enumerate(infiles):
       if phase[i] == 0:		#CLEAR
         vert_coord = -2
         nkind = kind_nums[3]
+ 
       elif phase[i] == 1:		#LWP DAY
         vert_coord = 2
         nkind = kind_nums[1]
+
       elif phase[i] == 2:		#IWP DAY
         vert_coord = 2
         nkind = kind_nums[2]
+
       elif phase[i] == 3:		#CLEAR NGT
         vert_coord = -2
-        nkind = kind_nums[3]
-      else:
-        vert_coord = 2                 #SET POSTIVE NIGHT TO "GOES_CWP_NIGHT", DO NOT ASSIMIATE AT THIS TIME
         nkind = kind_nums[4]
-        ngt_ct = ngt_ct+1
+
+      elif phase[i] == 4:               #LWP NGT
+        vert_coord = 2
+        nkind = kind_nums[5]
+
+      elif phase[i] == 5:               #IWP NGT
+        vert_coord = 2
+        nkind = kind_nums[6]
+
+      elif phase[i] == 6:               #CLEAR ABOVE LWP
+        vert_coord = 2
+        nkind = kind_nums[7]
+      else:
+        vert_coord = -2                #BAD DATA
+        nkind = kind_nums[0]
+        bad_ct = bad_ct+1
 
       rlat = np.radians(lats[i])
       tlon = lons[i]
@@ -159,7 +186,7 @@ for ff, file in enumerate(infiles):
 
       # CTP / CBP / Phase info
       fi.write("    %20.14f          %20.14f  \n" % (cbp[i], ctp[i]) )
-      fi.write("    %20.14f  \n" % (phase[i]) )
+      fi.write("    %d     \n" % (phase[i]) )
 
       fi.write("    %d          %d     \n" % (seconds, days) )
 
@@ -180,13 +207,19 @@ for ff, file in enumerate(infiles):
     fi.write(" obs_sequence\n")
     fi.write("obs_kind_definitions\n")
 
-    if ngt_ct > 0:  fi.write("       %d\n" % 4)
-    if ngt_ct == 0: fi.write("       %d\n" % 3)
+    #if ngt_ct > 0: fi.write("       %d\n" % 4)
+    #if ngt_ct == 0: fi.write("       %d\n" % 3)
+    fi.write("       %d\n" % 8)
 
-    if ngt_ct > 0: fi.write("    %d          %s   \n" % (kind_nums[4], kinds[4]) )
+    #if ngt_ct > 0: fi.write("    %d          %s   \n" % (kind_nums[4], kinds[4]) )
+    fi.write("    %d          %s   \n" % (kind_nums[0], kinds[0]) )
     fi.write("    %d          %s   \n" % (kind_nums[1], kinds[1]) )
     fi.write("    %d          %s   \n" % (kind_nums[2], kinds[2]) )
     fi.write("    %d          %s   \n" % (kind_nums[3], kinds[3]) )
+    fi.write("    %d          %s   \n" % (kind_nums[4], kinds[4]) )
+    fi.write("    %d          %s   \n" % (kind_nums[5], kinds[5]) )
+    fi.write("    %d          %s   \n" % (kind_nums[6], kinds[6]) )
+    fi.write("    %d          %s   \n" % (kind_nums[7], kinds[7]) )
 
     fi.write("  num_copies:            %d  num_qc:            %d\n" % (1, 1))
     fi.write(" num_obs:       %d  max_num_obs:       %d\n" % (nobs, nobs) )
@@ -200,6 +233,5 @@ for ff, file in enumerate(infiles):
     fi.write(f_obs_seq)
     fi.close()
 
-    print("\n write_DART_ascii:  Created ascii DART file, N = %d written" % nobs)
-
+    print(f"\n write_DART_ascii:  Created ascii DART file: {dartfile}, N = {nobs} written" )
 

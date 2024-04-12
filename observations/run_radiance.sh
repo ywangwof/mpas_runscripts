@@ -1,31 +1,28 @@
 #!/bin/bash
 
-# >>> conda initialize >>>
-# !! Contents within this block are managed by 'conda init' !!
-__conda_setup="$('/scratch/software/miniconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
+# >>> mamba initialize >>>
+# !! Contents within this block are managed by 'mamba init' !!
+export MAMBA_EXE='/home/yunheng.wang/tools/micromamba/bin/micromamba';
+export MAMBA_ROOT_PREFIX='/home/yunheng.wang/tools/micromamba';
+__mamba_setup="$("$MAMBA_EXE" shell hook --shell zsh --root-prefix "$MAMBA_ROOT_PREFIX" 2> /dev/null)"
 if [ $? -eq 0 ]; then
-    eval "$__conda_setup"
+    eval "$__mamba_setup"
 else
-    if [ -f "/scratch/software/miniconda3/etc/profile.d/conda.sh" ]; then
-        . "/scratch/software/miniconda3/etc/profile.d/conda.sh"
-    else
-        export PATH="/scratch/software/miniconda3/bin:$PATH"
-    fi
+    alias micromamba="$MAMBA_EXE"  # Fallback on help from mamba activate
 fi
-unset __conda_setup
-# <<< conda initialize <<<
+unset __mamba_setup
+# <<< mamba initialize <<<
+micromamba activate wofs_an
 
-conda activate wofs_post
-
-cd /scratch/ywang/MPAS/mpas_scripts/observations
+cd /scratch/ywang/MPAS/gnu/mpas_scripts/observations
 
 for channel in 5 7; do
     #python abiobs2dart_tb.py -i /work/rt_obs/Satellite/RADIANCE/2022     \
     #            -o /scratch/ywang/MPAS/mpas_scripts/run_dirs/OBS_SEQ/Radiance \
     #            -c $channel                                                   \
     #            -d ${1-20220527}
-    python abiobs2dart_tb.py -i /scratch/ywang/MPAS/mpas_scripts/run_dirs/OBS_SEQ/Radiance.nc   \
-                -o /scratch/ywang/MPAS/mpas_scripts/run_dirs/OBS_SEQ/Radiance \
+    python abiobs2dart_tb.py -i /work2/wof/realtime/OBSGEN/CLOUD_OBS/${1-20240410} \
+                -o /scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs/OBS_SEQ/Radiance \
                 -c $channel                                                   \
                 -d ${1-20230512}
 done

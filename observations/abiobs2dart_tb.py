@@ -38,7 +38,8 @@ platform_id = 4
 infiles = []
 temp_files = os.listdir(abidir)
 for f, file in enumerate(temp_files):
-  if (file[0:8] == indate):
+  # 2015-goes.nc
+  if (file[5:12] == "goes.nc"):
     infiles.append(file)
 
 infiles.sort()
@@ -80,6 +81,8 @@ for ff, file in enumerate(infiles):
     abiin.close()
 
     sdate = year+month+day+hour+minute
+    mdate = indate+file[0:4]
+
     numobs=int(numobs[0])
     t_time=t_time[0]
 
@@ -114,7 +117,7 @@ for ff, file in enumerate(infiles):
 # Create local dictionary for observation kind definition - these can include user abbreviations
 #                      user's observation type            kind   DART official name
 
-    dartfile = os.path.join(outdir,'obs_seq_abi.'+sat+'_C'+outch+'.'+fdate)
+    dartfile = os.path.join(outdir,'obs_seq_abi.'+sat+'_C'+outch+'.'+mdate)
     print(f"dartfile={dartfile}")
 
     Look_Up_Table={ "GOES_16_ABI_TB":  [98,   "GOES_16_ABI_TB"] ,
@@ -231,5 +234,5 @@ for ff, file in enumerate(infiles):
     fi.write(f_obs_seq)
     fi.close()
 
-    print("\n write_DART_ascii:  Created ascii DART file, N = %d written" % nobs)
+    print(f"\n write_DART_ascii:  Created ascii DART file: {dartfile}, N = {nobs} written")
     time.sleep(2)

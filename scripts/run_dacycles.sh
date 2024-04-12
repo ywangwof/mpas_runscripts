@@ -138,11 +138,7 @@ function run_obsmerge {
     anlys_date=$(date -u -d @$iseconds  +%Y%m%d)
     anlys_time=$(date -u -d @$iseconds  +%H%M)
 
-    if [[ $verb -eq 1 ]]; then
-        srunout="1"
-    else
-        srunout="output.srun"
-    fi
+    srunout="output.srun"
 
     read -r -a g_dates < <(convertS2days "${iseconds}")
     g_date=${g_dates[0]}
@@ -187,8 +183,14 @@ function run_obsmerge {
         if [[ $verb -eq 1 ]]; then
             echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
         fi
+
+        { echo "Run command ${obspreprocess} as:";
+          echo "echo  \"${g_date} ${g_sec}\" | ${obspreprocess}";
+          echo "";
+        }                                                          >& ${srunout}_BUFR
+
         # shellcheck disable=SC2154
-        ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >& ${srunout}_BUFR
+        ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >> ${srunout}_BUFR 2>&1
 
         # shellcheck disable=SC2181
         if [[ $? -eq 0 ]]; then
@@ -203,7 +205,9 @@ function run_obsmerge {
             echo "Error with command ${obspreprocess} for PREPBUFR data"
         fi
     else
-        echo "    PrepBufr data not found: ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}"
+        if [[ ! -e ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2} ]]; then
+            echo "    PrepBufr data not found: ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}"
+       fi
     fi
 
     #=================================================
@@ -220,8 +224,13 @@ function run_obsmerge {
         if [[ $verb -eq 1 ]]; then
             echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
         fi
+        { echo "Run command ${obspreprocess} as:";
+          echo "echo  \"${g_date} ${g_sec}\" | ${obspreprocess}";
+          echo "";
+        }                                                          >& ${srunout}_MESO
+
         # shellcheck disable=SC2154
-        ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >& ${srunout}_MESO
+        ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >> ${srunout}_MESO 2>&1
 
         # shellcheck disable=SC2181
         if [[ $? -eq 0 ]]; then
@@ -252,8 +261,12 @@ function run_obsmerge {
         if [[ $verb -eq 1 ]]; then
             echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
         fi
+        { echo "Run command ${obspreprocess} as:";
+          echo "echo  \"${g_date} ${g_sec}\" | ${obspreprocess}";
+          echo "";
+        }                                               >& ${srunout}_CWP
         # shellcheck disable=SC2154
-        ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >& ${srunout}_CWP
+        ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >> ${srunout}_CWP 2>&1
 
         # shellcheck disable=SC2181
         if [[ $? -eq 0 ]]; then
@@ -284,6 +297,13 @@ function run_obsmerge {
         if [[ -e ${abifile} ]]; then
             i=$((i+1))
 
+            if [[ ! -e ${srunout}_RAD ]]; then
+                { echo "Run command ${obspreprocess} as:";
+                  echo "echo  \"${g_date} ${g_sec}\" | ${obspreprocess}";
+                  echo "";
+                }                                            >& ${srunout}_RAD
+            fi
+
             if [[ ! -e rttov_sensor_db.csv ]]; then
                 cp ${FIXDIR}/rttov_sensor_db.csv .
             fi
@@ -298,7 +318,7 @@ function run_obsmerge {
                 if [[ $verb -eq 1 ]]; then
                     echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
                 fi
-                ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >& ${srunout}_RAD
+                ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >> ${srunout}_RAD 2>&1
 
                 # shellcheck disable=SC2181
                 if [[ $? -eq 0 ]]; then
@@ -341,7 +361,12 @@ function run_obsmerge {
         if [[ $verb -eq 1 ]]; then
             echo "    Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
         fi
-        ${runcmd_str} echo "$g_date $g_sec" | ${obspreprocess} >& ${srunout}_REF
+        { echo "Run command ${obspreprocess} as:";
+          echo "echo  \"${g_date} ${g_sec}\" | ${obspreprocess}";
+          echo "";
+        }                                                      >& ${srunout}_REF
+
+        ${runcmd_str} echo "$g_date $g_sec" | ${obspreprocess} >> ${srunout}_REF 2>&1
 
         # shellcheck disable=SC2181
         if [[ $? -eq 0 ]]; then
@@ -381,14 +406,18 @@ function run_obsmerge {
     # shellcheck disable=SC2154
     while [[ ${j} -lt ${num_rad} ]]; do
 
+        if [[ $verb -eq 1 ]]; then
+            echo "         Checking VEL data in ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out"
+        fi
+
         if [[ -e ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out ]]; then
 
-            if [[ $verb -eq 1 ]]; then
-                echo "         Checking VEL data in ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out"
-            fi
+            echo "    $k-$n: Using VEL data in ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out"
 
             if [[ ${run_trimvr} == true ]]; then
-                ${rootdir}/observations/VEL/trimvr.py -o ./obs_seq.old ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out
+                trimvr_cmd="${rootdir}/observations/seq_filter.py -o ./obs_seq.old ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out"
+                echo "          ${trimvr_cmd}"
+                ${trimvr_cmd}
             else
                 cp ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out ./obs_seq.old
             fi
@@ -396,10 +425,15 @@ function run_obsmerge {
             if [[ $verb -eq 1 ]]; then
                 echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
             fi
-            ${runcmd_str} echo "$g_date $g_sec" | ${obspreprocess} >& ${srunout}_VR_${rad_name[$j]}
+            { echo "Run command ${obspreprocess} as:";
+              echo "echo  \"${g_date} ${g_sec}\" | ${obspreprocess}";
+              echo "";
+            }                                                      >& ${srunout}_VR_${rad_name[$j]}
+
+            ${runcmd_str} echo "$g_date $g_sec" | ${obspreprocess} >> ${srunout}_VR_${rad_name[$j]} 2>&1
 
             if [[ -e ./obs_seq.new ]]; then
-                echo "    $k-$n: Using VEL data in ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out"
+                #echo "    $k-$n: Using VEL data in ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out"
                 mv ./obs_seq.new ./obs_seq.vr${j}
                 rm ./obs_seq.old
                 echo $wrkdir/OBSDIR/obs_seq.vr${j} >> obsflist.radvr
@@ -760,7 +794,7 @@ function run_filter {
                                      0.0047123,
                                      0.0047123,
                                      0.0047123,
-                                     0.0047123,
+                                     0.0094247,
                                      0.0047123,
                                      0.0014137,
                                      0.0014137,
@@ -1883,7 +1917,7 @@ function run_add_noise {
     if [[ ! -e done.noise_mask && ! -e running.noise_mask && ! -e queue.noise_mask ]]; then
         if [[ $verb -eq 1 ]]; then echo ""; echo "    Running grid_refl_obs.py at $timestr_cur"; fi
 
-        bkgfile="fcst_01/wofs_mpas_01.restart.${mpas_timestr}.nc"
+        invfile="$rundir/init/${domname}.invariant.nc"
         #
         # Create job script and submit it
         #
@@ -1906,7 +1940,7 @@ s/MACHINE/${mymachine}/g
 s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/SEQFILE/${seqfile}/g
-s#BKGFILE#${bkgfile}#g
+s#INVFILE#${invfile}#g
 s#WAN_PATH#${WOFSAN_PATH}#g
 s/EVENTDAYS/${days_secs[0]}/g
 s/EVENTSECS/${days_secs[1]}/g
@@ -1949,6 +1983,8 @@ EOF
 
     if [[ $verb -eq 1 ]]; then echo ""; echo "    Running add_pert_where_high_refl.py at $timestr_cur"; fi
 
+    invfile="$rundir/init/${domname}.invariant.nc"
+
     jobarrays=()
     for iens in $(seq 1 $ENS_SIZE); do
         memstr=$(printf "%02d" $iens)
@@ -1986,6 +2022,7 @@ s/NOPART/1/
 s/JOBNAME/noist_pert_${eventtime}/
 s/CPUSPEC/${claim_cpu_update}/g
 s#WRKDIR#$wrkdir#g
+s#INVFILE#${invfile}#g
 s/MACHINE/${mymachine}/g
 s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/

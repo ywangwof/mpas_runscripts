@@ -16,14 +16,14 @@ timebeg=${1-2023033115}
 timeend=${2-2023033115}
 
 MESO_DIR=/work/rt_obs/Mesonet
-WORK_dir=/scratch/ywang/MPAS/mpas_scripts/run_dirs/OBS_SEQ/Mesonet
+WORK_dir=/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs/OBS_SEQ/Mesonet
 
-TEMPLATE_FILE=/scratch/ywang/MPAS/mpas_scripts/observations/input.nml.mesonet
-MESOINFO_FILE=/scratch/ywang/MPAS/mpas_scripts/observations/geoinfo.csv
-MPASWoFS_DIR=/scratch/ywang/MPAS/mpas_scripts/run_dirs
-convert_okmeso=/scratch/ywang/MPAS/DART/observations/obs_converters/ok_mesonet/work/convert_ok_mesonet
-obs_preprocess=/scratch/ywang/MPAS/DART/models/mpas_atm/work/mpas_dart_obs_preprocess
-convert_date=/scratch/ywang/MPAS/DART/models/wrf/work/convertdate
+TEMPLATE_FILE=/scratch/ywang/MPAS/gnu/mpas_scripts/observations/input.nml.mesonet
+MESOINFO_FILE=/scratch/ywang/MPAS/gnu/mpas_scripts/observations/geoinfo.csv
+MPASWoFS_DIR=/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs
+convert_okmeso=/scratch/ywang/MPAS/gnu/frdd-DART/observations/obs_converters/ok_mesonet/work/convert_ok_mesonet
+obs_preprocess=/scratch/ywang/MPAS/gnu/frdd-DART/models/mpas_atm/work/mpas_dart_obs_preprocess
+convert_date=/scratch/ywang/MPAS/gnu/frdd-DART/models/wrf/work/convertdate
 
 if [[ ! -d ${WORK_dir}/work ]]; then
     mkdir -p ${WORK_dir}/work
@@ -33,7 +33,7 @@ cd ${WORK_dir}/work
 cp ${MESOINFO_FILE} .
 cp ${TEMPLATE_FILE} ./input.nml
 
-source /scratch/ywang/MPAS/mpas_scripts/modules/env.mpas_smiol_impi
+source /scratch/ywang/MPAS/gnu/mpas_scripts/modules/env.mpas_smiol
 
 ########################################################################
 #######   PROCESS OKMESO DATA ##########################################
@@ -69,13 +69,14 @@ for((i=timebeg_s;i<=timeend_s;i+=900)); do
     #pyyyy=${timepre:0:4}
     #pmm=${timepre:4:2}
     #pdd=${timepre:6:2}
-    phh="15"  #${timepre:8:2}
-    pmin="00" #${timepre:10:2}
+    #phh="15"  #${timepre:8:2}
+    #pmin="00" #${timepre:10:2}
 
     #mpas_timestr="${yyyy}-${mm}-${dd}_${hh}.${anl_min}.00"
-    mpas_timestr="${evty}-${evtm}-${evtd}_15.15.00"
+    #mpas_timestr="${evty}-${evtm}-${evtd}_15.15.00"
 
-    MPAS_INITFILE=${MPASWoFS_DIR}/${evty}${evtm}${evtd}/dacycles/${phh}${pmin}/wofs_mpas_01.restart.${mpas_timestr}.nc
+    #MPAS_INITFILE=${MPASWoFS_DIR}/${evty}${evtm}${evtd}/dacycles/${phh}${pmin}/wofs_mpas_01.restart.${mpas_timestr}.nc
+    MPAS_INITFILE=${MPASWoFS_DIR}/${evty}${evtm}${evtd}/init/wofs_mpas.invariant.nc
     if [[ ! -e ${MPAS_INITFILE} ]]; then
         echo "MPAS restart file: ${MPAS_INITFILE} not exist"
         exit 0

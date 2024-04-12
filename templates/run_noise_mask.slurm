@@ -47,7 +47,7 @@ fi
 
 # Retrieve command line parameters
 ncseq_file="SEQFILE"
-bkg_file="BKGFILE"
+inv_file="INVFILE"
 eventdays="EVENTDAYS"
 eventsecs="EVENTSECS"
 
@@ -59,7 +59,7 @@ touch running.noise_mask
 rm -rf error.noise_mask queue.noise_mask
 
 # Run the python programs
-RUNCMD python WAN_PATH/grid_refl_obs.py ${ncseq_file} 35.0 10.0 ${bkg_file} ${eventsecs} ${eventdays} mpas
+RUNCMD python WAN_PATH/grid_refl_obs.py ${ncseq_file} 35.0 10.0 ${inv_file} ${eventsecs} ${eventdays} mpas
 
 if [[ $? -eq 0 ]]; then
     touch done.noise_mask

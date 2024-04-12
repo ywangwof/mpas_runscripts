@@ -114,7 +114,8 @@ function run_ungrib {
         gribfiles=()
         for (( h=starthr;h<=endhr;h+=$((EXTINVL/3600)) )); do
             hstr=$(printf "%02d" $h)
-            gribfile=$grib_dir/$eventdate/${gribtime}/mem${memstr}/wrfnat_pert_hrrr_mem00${memstr}_${hstr}.grib2
+            #gribfile=$grib_dir/$eventdate/${gribtime}/mem${memstr}/wrfnat_pert_hrrr_mem00${memstr}_${hstr}.grib2
+            gribfile=$grib_dir/$eventdate/${gribtime}/postprd_mem00${memstr}/wrfnat_pert_hrrr_mem00${memstr}_${hstr}.grib2
 
             echo "GRIB file: $gribfile"
             while [[ ! -f $gribfile ]]; do
@@ -242,6 +243,8 @@ function run_lbc {
                 sleep 10
             done
         done
+        cd $rundir/init || return
+        ln -sf ${domname}_01.init.nc ${domname}.invariant.nc
     fi
 
     wrkdir=$rundir/lbc

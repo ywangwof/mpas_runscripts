@@ -105,7 +105,8 @@ function run_ungrib {
         # shellcheck disable=SC2154
         for mem in $(seq 1 "$nensics"); do
             memstr=$(printf "%02d" "$mem")
-            gribfile=$grib_dir/$eventdate/${gribtime}/mem${memstr}/wrfnat_hrrre_newse_mem00${memstr}_${hstr}.grib2
+            #gribfile=$grib_dir/$eventdate/${gribtime}/mem${memstr}/wrfnat_hrrre_newse_mem00${memstr}_${hstr}.grib2
+            gribfile=$grib_dir/$eventdate/${gribtime}/postprd_mem00${memstr}/wrfnat_hrrre_newse_mem00${memstr}_${hstr}.grib2
 
             echo "GRIB file: $gribfile"
             while [[ ! -f $gribfile ]]; do
@@ -640,7 +641,7 @@ function run_cleanungrib {
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #@ MAIN
 
-jobs=(ungrib init init4invariant clean)
+jobs=(ungrib init clean)
 
 WORKDIR="${rootdir}/run_dirs"
 TEMPDIR="${rootdir}/templates"
