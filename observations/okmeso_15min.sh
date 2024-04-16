@@ -12,6 +12,7 @@
 #
 #--------------------------------------------------------------
 
+
 timebeg=${1-2023033115}
 timeend=${2-2023033115}
 
@@ -23,17 +24,19 @@ MESOINFO_FILE=/scratch/ywang/MPAS/gnu/mpas_scripts/observations/geoinfo.csv
 MPASWoFS_DIR=/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs
 convert_okmeso=/scratch/ywang/MPAS/gnu/frdd-DART/observations/obs_converters/ok_mesonet/work/convert_ok_mesonet
 obs_preprocess=/scratch/ywang/MPAS/gnu/frdd-DART/models/mpas_atm/work/mpas_dart_obs_preprocess
-convert_date=/scratch/ywang/MPAS/gnu/frdd-DART/models/wrf/work/convertdate
+#convert_date=/scratch/ywang/MPAS/gnu/frdd-DART/models/wrf/work/convertdate
 
 if [[ ! -d ${WORK_dir}/work ]]; then
     mkdir -p ${WORK_dir}/work
 fi
-cd ${WORK_dir}/work
+cd ${WORK_dir}/work || exit 1
 
 cp ${MESOINFO_FILE} .
 cp ${TEMPLATE_FILE} ./input.nml
 
 source /scratch/ywang/MPAS/gnu/mpas_scripts/modules/env.mpas_smiol
+
+source /scratch/ywang/MPAS/gnu/mpas_scripts/scripts/Common_Utilfuncs.sh
 
 ########################################################################
 #######   PROCESS OKMESO DATA ##########################################
@@ -81,45 +84,62 @@ for((i=timebeg_s;i<=timeend_s;i+=900)); do
         echo "MPAS restart file: ${MPAS_INITFILE} not exist"
         exit 0
     fi
-    echo "Using ${MPAS_INITFILE} as init.nc ...."
-    ln -sf ${MPAS_INITFILE} init.nc
 
-    mesonet_obs_file="${MESO_DIR}/${yyyy}/${mm}/${dd}/mesonet.realtime.${yyyy}${mm}${dd}${hh}${anl_min}.mdf"
+    if [[ ! -e ${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min} ]]; then
 
-    cp ${mesonet_obs_file} okmeso_mdf.in
+        echo "Using ${MPAS_INITFILE} as init.nc ...."
+        ln -sf ${MPAS_INITFILE} init.nc
 
-    # run convert_okmeso
-    echo "=== Processing ${mesonet_obs_file}"
-    echo "Running srun -n 1 ${convert_okmeso} ..."
-    srun ${convert_okmeso}
+        mesonet_obs_file="${MESO_DIR}/${yyyy}/${mm}/${dd}/mesonet.realtime.${yyyy}${mm}${dd}${hh}${anl_min}.mdf"
 
-    # run mpas_dart_obs_preprocess
-    g_datestr=($(${convert_date} << EOF
-1
-$yyyy $mm $dd $hh ${anl_min} 00
-EOF
-))
-    g_date=${g_datestr[-2]}
-    g_sec=${g_datestr[-1]}
+        if [[ ! -e ${mesonet_obs_file} ]]; then
+            echo "File: ${mesonet_obs_file} not found."
+            exit 1
+        fi
 
-    mv obs_seq.okmeso obs_seq.old
+        wait_for_file_age "${mesonet_obs_file}" 60
 
-    echo "${g_date} ${g_sec}" | srun ${obs_preprocess}
+        cp "${mesonet_obs_file}" okmeso_mdf.in
 
-    # Check and Save the result file
-    num_obs_kind=$(head -3 obs_seq.new | tail -1)
+        # run convert_okmeso
+        echo "=== Processing ${mesonet_obs_file}"
+        echo "Running srun -n 1 ${convert_okmeso} ..."
+        srun ${convert_okmeso}
 
-    if [[ ${num_obs_kind} -gt 0 ]]; then
-        echo "Saving ${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min}"
-        mv obs_seq.new ${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min}
+        # run mpas_dart_obs_preprocess
+#        g_datestr=($(${convert_date} << EOF
+#1
+#$yyyy $mm $dd $hh ${anl_min} 00
+#EOF
+#))
+#        g_date=${g_datestr[-2]}
+#        g_sec=${g_datestr[-1]}
+
+        read -r -a g_dates < <(convert2days "$yyyy$mm$dd" "$hh:${anl_min}:00")
+        g_date=${g_dates[0]}
+        g_sec=${g_dates[1]}
+
+        mv obs_seq.okmeso obs_seq.old
+
+        echo "${g_date} ${g_sec}" | srun ${obs_preprocess}
+
+        # Check and Save the result file
+        num_obs_kind=$(head -3 obs_seq.new | tail -1)
+
+        if [[ ${num_obs_kind} -gt 0 ]]; then
+            echo "Saving ${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min}"
+            mv obs_seq.new ${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min}
+        else
+            echo "O observations in ${WORK_dir}"
+            rm obs_seq.new
+        fi
+
+        # clear old intermediate (text) files
+        rm obs_seq.old okmeso_mdf.in dart_log.out dart_log.nml
+        echo ""
     else
-        echo "O observations in ${WORK_dir}"
-        rm obs_seq.new
+        echo "${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min} exists"
     fi
-
-    # clear old intermediate (text) files
-    rm obs_seq.old okmeso_mdf.in dart_log.out dart_log.nml
-    echo ""
 done
 
 exit 0

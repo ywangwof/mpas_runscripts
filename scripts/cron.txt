@@ -13,27 +13,28 @@ MAILTO=Yunheng.Wang@noaa.gov
 
 # use UTC
 
-scriptdir=/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/mpas_scripts/scripts
-rundirs=/lfs1/NAGAPE/wof/MPAS/run_dirs
+rootdir=/scratch/ywang/MPAS/gnu/mpas_scripts
+scriptdir=$rootdir/scripts
+rundirs=$rootdir/run_dirs
 PATH=/usr/bin:/bin:/apps-local/slurm/default/bin
 
 curdate="date +%Y%m%d"
+fultime="date +%Y%m%d%H"
+fulnext="date -d '1 hour' +%Y%m%d%H"
 
 SHELL=/bin/bash
 
 ########################################################################
-###          MPAS CONUS forecasts & post-processing                  ###
+###          MPAS-WoFS Data Assimilation and Forecasts               ###
 ########################################################################
-# HT
-30    4      * * * $scriptdir/run_mpas.sh -i hrrr -p thompson rundirs ungrib,init,lbc,mpas   >> $rundirs/fcstHT$($curdate).log 2>&1
-15,45 6-18   * * * $scriptdir/run_mpas.sh -i hrrr -p thompson rundirs mpassit,upp,clean      >> $rundirs/postHT$($curdate).log 2>&1
+# Observations
+10,25,40,55 *  * * * $rootdir/observations/okmeso_15min.sh    $($fultime) $($fulnext) >> $rundirs/okmeso.$($curdate) 2>&1
+10          *  * * * $scriptdir/observations/prepbufr_wofs.sh $($fultime) $($fulnext) >> $rundirs/prbufr.$($curdate) 2>&1
+10,25,40,55 *  * * * $rootdir/observations/run_cwpobs.sh      $($curdate)             >> $rundirs/wofcwp.$($curdate) 2>&1
+10,25,40,55 *  * * * $rootdir/observations/run_radiance.sh    $($curdate)             >> $rundirs/wofrad.$($curdate) 2>&1
 
-# HN, Use HT processed ungrib
-20    5      * * * $scriptdir/run_mpas.sh -i hrrr -p nssl -s $rundirs/$($curdate)00_HT rundirs init,lbc,mpas >> $rundirs/fcstHN$($curdate).log 2>&1
-# HN, Process ungrib independently
-#20    5      * * * $scriptdir/run_mpas.sh -i hrrr -p nssl    $rundirs ungrib,init,lbc,mpas   >> $rundirs/fcstHN$($curdate).log 2>&1
-17,47 6-18   * * * $scriptdir/run_mpas.sh -i hrrr -p nssl     $rundirs mpassit,upp,clean      >> $rundirs/postHN$($curdate).log 2>&1
+# DA cycles
+10    18      * * * $scriptdir/run_dacycles.sh $($curdate) >> $rundirs/da.$($curdate) 2>&1
 
-# RT
-50    4      * * * $scriptdir/run_mpas.sh -i rrfsna -p thompson $rundirs ungrib,init,lbc,mpas   >> $rundirs/fcstRT$($curdate).log 2>&1
-19,49 6-18   * * * $scriptdir/run_mpas.sh -i rrfsna -p thompson $rundirs mpassit,upp,clean      >> $rundirs/postRT$($curdate).log 2>&1
+# Fcst
+20    19      * * * $scriptdir/run_fcst.sh $($curdate)     >> $rundirs/fcst.$($curdate) 2>&1

@@ -493,6 +493,54 @@ function upnlevels {
 
 ########################################################################
 
+function wait_for_file_age {
+    local file_name=$1
+    local min_age=$2   # in seconds
+
+    local file_path
+    file_path=$(realpath ${file_name})
+
+    if [[ ! -f ${file_path} ]]; then
+        echo "File: $file_path not exists."
+        return 1
+    fi
+
+    fileage=$(( $(date +%s) - $(stat -c %Y "${file_path}") ))
+    while [[ $fileage -lt ${min_age} ]]; do
+        #echo "Waiting for ${file_path} (age: $fileage seconds) ...."
+        sleep 10
+        fileage=$(( $(date +%s) - $(stat -c %Y "${file_path}") ))
+    done
+
+    return 0
+}
+
+########################################################################
+
+function wait_for_file_size {
+    local file_name=$1
+    local min_size=$2    # in bytes
+
+    local file_path
+    file_path=$(realpath ${file_name})
+
+    if [[ ! -f ${file_path} ]]; then
+        echo "File: $file_path not exists."
+        return 1
+    fi
+
+    filesize=$(stat -c %s ${file_path})
+    while [[ $filesize -lt ${min_size} ]]; do
+        #echo "Waiting for ${file_path} (size: $filesize bytes) ...."
+        sleep 10
+        filesize=$(stat -c %s ${file_path})
+    done
+
+    return 0
+}
+
+########################################################################
+
 function link_grib {
     alpha=( A B C D E F G H I J K L M N O P Q R S T U V W X Y Z )
     i1=0

@@ -1172,6 +1172,11 @@ function write_runtimeconfig {
     ADAPTIVE_INF=true
     update_in_place=false               # update MPAS states in-place or
                                         # making a copy of the restart files
+    use_BUFR=true                       # Whether we should wait for PrepBufr data file
+    use_MESO=true                       # for a realtime run
+    use_CWP=true
+    use_RAD=true
+
     run_updatebc=true                   # run mpas_update_bc
     run_obs2nc=true                     # run obs_seq_to_netcdf after filter
     run_obsdiag=true                    # run obs_diag after filter for each cycle

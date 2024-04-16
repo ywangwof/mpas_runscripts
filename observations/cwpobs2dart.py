@@ -10,13 +10,29 @@
 #	 V 1.1:  Added night-time features to DART forward operator.
 ##############
 
-import sys
+import sys, time
 import os
-from datetime import *
+import datetime
 from netCDF4 import Dataset
 import numpy as np
 from optparse import OptionParser
 
+def wait_for_file_age(file_path,min_age):
+
+    if not os.path.lexists(file_path):
+       return False
+
+    currsecs = time.time()
+    last     = os.path.getmtime(file_path)
+    fileage  = currsecs-last
+    while fileage < min_age:  # only wait for newer file
+        print(f"Waiting for {file_path} (age: {fileage} seconds) ....")
+        time.sleep(10)
+        currsecs = time.time()
+        last     = os.path.getmtime(file_path)
+        fileage  = currsecs-last
+
+    return True
 
 parser = OptionParser()
 parser.add_option("-i", dest="cwpdir", type="string", default= None, help="Input CWP netcdf directory")
@@ -47,35 +63,36 @@ for ff, file in enumerate(infiles):
 
     #fdate = file[0:12]
 
-    ### READ IN CWP OBSERVATIONS FROM FILE
-    cwpin = Dataset(cwpfile, "r")
+    if wait_for_file_age(cwpfile,120):
+        ### READ IN CWP OBSERVATIONS FROM FILE
+        cwpin = Dataset(cwpfile, "r")
 
-    sat = cwpin.getncattr('satellite')
-    year = cwpin.getncattr('year')
-    month = cwpin.getncattr('month')
-    day = cwpin.getncattr('day')
-    hour = cwpin.getncattr('hour')
-    minute = cwpin.getncattr('minute')
-    jday = cwpin.getncattr('jday')
+        sat = cwpin.getncattr('satellite')
+        year = cwpin.getncattr('year')
+        month = cwpin.getncattr('month')
+        day = cwpin.getncattr('day')
+        hour = cwpin.getncattr('hour')
+        minute = cwpin.getncattr('minute')
+        jday = cwpin.getncattr('jday')
 
-    numobs = cwpin.variables['numobs'][:]
-    t_time = cwpin.variables['time'][:] #seconds since 1970-01-01 00:00:00
-    lats = cwpin.variables['lat'][:]
-    lons = cwpin.variables['lon'][:]
-    pressure = cwpin.variables['pressure'][:]*100.0  #convert to PA
-    cwp = cwpin.variables['cwp'][:]
-    ctp = cwpin.variables['ctp'][:]*100.0
-    cbp = cwpin.variables['cbp'][:]*100.0
-    phase = cwpin.variables['phase'][:]
-    cwp_err = cwpin.variables['cwp_err'][:]
+        numobs = cwpin.variables['numobs'][:]
+        t_time = cwpin.variables['time'][:] #seconds since 1970-01-01 00:00:00
+        lats = cwpin.variables['lat'][:]
+        lons = cwpin.variables['lon'][:]
+        pressure = cwpin.variables['pressure'][:]*100.0  #convert to PA
+        cwp = cwpin.variables['cwp'][:]
+        ctp = cwpin.variables['ctp'][:]*100.0
+        cbp = cwpin.variables['cbp'][:]*100.0
+        phase = cwpin.variables['phase'][:]
+        cwp_err = cwpin.variables['cwp_err'][:]
 
-    cwpin.close()
+        cwpin.close()
 
-    sdate = year+month+day+hour+minute
-    mdate = indate+file[0:4]
+        sdate = year+month+day+hour+minute
+        mdate = indate+file[0:4]
 
-    numobs=int(numobs[0])
-    t_time=t_time[0]
+        numobs=int(numobs[0])
+        t_time=t_time[0]
 
 ### SET UP DART STURCTURE
 #
@@ -87,151 +104,154 @@ for ff, file in enumerate(infiles):
 # Create local dictionary for observation kind definition - these can include user abbreviations
 #                      user's observation type            kind   DART official name
 
-    dartfile = os.path.join(outdir,'obs_seq_cwp.'+sat+'_V04.'+mdate)
+        dartfile = os.path.join(outdir,'obs_seq_cwp.'+sat+'_V04.'+mdate)
 
-    Look_Up_Table={ "GOES_CWP_PATH":                    [80,   "GOES_CWP_PATH"] ,
-                    "GOES_LWP_PATH":                    [81,   "GOES_LWP_PATH"] ,
-                    "GOES_IWP_PATH":                    [82,   "GOES_IWP_PATH"] ,
-                    "GOES_CWP_ZERO":                    [83,   "GOES_IWP_ZERO"],
-                    "GOES_CWP_ZERO_NIGHT":              [84,   "GOES_CWP_ZERO_NIGHT"],
-                    "GOES_LWP_NIGHT":                   [85,   "GOES_LWP_NIGHT"],
-                    "GOES_IWP_NIGHT":                   [86,   "GOES_IWP_NIGHT"],
-                    "GOES_LWP0_PATH":                   [87,   "GOES_LWP0_PATH"]
-                  }
+        Look_Up_Table={ "GOES_CWP_PATH":                    [80,   "GOES_CWP_PATH"] ,
+                        "GOES_LWP_PATH":                    [81,   "GOES_LWP_PATH"] ,
+                        "GOES_IWP_PATH":                    [82,   "GOES_IWP_PATH"] ,
+                        "GOES_CWP_ZERO":                    [83,   "GOES_IWP_ZERO"],
+                        "GOES_CWP_ZERO_NIGHT":              [84,   "GOES_CWP_ZERO_NIGHT"],
+                        "GOES_LWP_NIGHT":                   [85,   "GOES_LWP_NIGHT"],
+                        "GOES_IWP_NIGHT":                   [86,   "GOES_IWP_NIGHT"],
+                        "GOES_LWP0_PATH":                   [87,   "GOES_LWP0_PATH"]
+                      }
 
 
-    kinds = ['GOES_CWP_PATH','GOES_LWP_PATH','GOES_IWP_PATH','GOES_CWP_ZERO','GOES_CWP_ZERO_NIGHT','GOES_LWP_NIGHT','GOES_IWP_NIGHT', 'GOES_LWP0_PATH']
-    kind_nums = [80,81,82,83,84,85,86,87]
+        kinds = ['GOES_CWP_PATH','GOES_LWP_PATH','GOES_IWP_PATH','GOES_CWP_ZERO','GOES_CWP_ZERO_NIGHT','GOES_LWP_NIGHT','GOES_IWP_NIGHT', 'GOES_LWP0_PATH']
+        kind_nums = [80,81,82,83,84,85,86,87]
 
 #    kinds = ['GOES_LWP_PATH','GOES_IWP_PATH','GOES_CWP_ZERO','GOES_CWP_ZERO_NIGHT']
 #    kind_nums = [81,82,83,84]
-    truth      = 1.0  # dummy variable
+        truth      = 1.0  # dummy variable
 
-    #DEFINE TIME INFO (Constant for Sat data)
-    obs_time = datetime.strptime('1970-01-01 00:00:00', '%Y-%m-%d %H:%M:%S') + timedelta(seconds=t_time)
-    dt_time  = obs_time - datetime(1601,1,1,0,0,0)
+        #DEFINE TIME INFO (Constant for Sat data)
+        obs_time = datetime.datetime.strptime('1970-01-01 00:00:00', '%Y-%m-%d %H:%M:%S') + datetime.timedelta(seconds=t_time)
+        dt_time  = obs_time - datetime.datetime(1601,1,1,0,0,0)
 
-    days    = dt_time.days
-    seconds = dt_time.seconds
+        days    = dt_time.days
+        seconds = dt_time.seconds
 
-    # Open ASCII file for DART obs to be written into.  We will add header info afterward
-    fi = open(dartfile, "w")
+        if not os.path.lexists(dartfile):
 
-    #LOOP THROUGH OBS
-    bad_ct = 0
-    for i in range(1, numobs):
+            # Open ASCII file for DART obs to be written into.  We will add header info afterward
+            fi = open(dartfile, "w")
 
-      nobs=i
+            #LOOP THROUGH OBS
+            bad_ct = 0
+            for i in range(1, numobs):
 
-      fi.write(" OBS            %d\n" % (nobs) )
+                nobs=i
 
-      fi.write("   %20.14f\n" % cwp[i]  )
-      fi.write("   %20.14f\n" % truth )
+                fi.write(" OBS            %d\n" % (nobs) )
 
-      if nobs == 1:
-        fi.write(" %d %d %d\n" % (-1, nobs+1, -1) ) # First obs.
-        print("first ob")
-      elif nobs == (numobs-1):
-        fi.write(" %d %d %d\n" % (nobs-1, -1, -1) ) # Last obs.
-        print("last ob")
-      else:
-        fi.write(" %d %d %d\n" % (nobs-1, nobs+1, -1) )
+                fi.write("   %20.14f\n" % cwp[i]  )
+                fi.write("   %20.14f\n" % truth )
 
-      fi.write("obdef\n")
-      fi.write("loc3d\n")
+                if nobs == 1:
+                    fi.write(" %d %d %d\n" % (-1, nobs+1, -1) ) # First obs.
+                    print("first ob")
+                elif nobs == (numobs-1):
+                    fi.write(" %d %d %d\n" % (nobs-1, -1, -1) ) # Last obs.
+                    print("last ob")
+                else:
+                    fi.write(" %d %d %d\n" % (nobs-1, nobs+1, -1) )
 
-      if phase[i] == 0:		#CLEAR
-        vert_coord = -2
-        nkind = kind_nums[3]
- 
-      elif phase[i] == 1:		#LWP DAY
-        vert_coord = 2
-        nkind = kind_nums[1]
+                fi.write("obdef\n")
+                fi.write("loc3d\n")
 
-      elif phase[i] == 2:		#IWP DAY
-        vert_coord = 2
-        nkind = kind_nums[2]
+                if phase[i] == 0:		#CLEAR
+                    vert_coord = -2
+                    nkind = kind_nums[3]
 
-      elif phase[i] == 3:		#CLEAR NGT
-        vert_coord = -2
-        nkind = kind_nums[4]
+                elif phase[i] == 1:		#LWP DAY
+                    vert_coord = 2
+                    nkind = kind_nums[1]
 
-      elif phase[i] == 4:               #LWP NGT
-        vert_coord = 2
-        nkind = kind_nums[5]
+                elif phase[i] == 2:		#IWP DAY
+                    vert_coord = 2
+                    nkind = kind_nums[2]
 
-      elif phase[i] == 5:               #IWP NGT
-        vert_coord = 2
-        nkind = kind_nums[6]
+                elif phase[i] == 3:		#CLEAR NGT
+                    vert_coord = -2
+                    nkind = kind_nums[4]
 
-      elif phase[i] == 6:               #CLEAR ABOVE LWP
-        vert_coord = 2
-        nkind = kind_nums[7]
-      else:
-        vert_coord = -2                #BAD DATA
-        nkind = kind_nums[0]
-        bad_ct = bad_ct+1
+                elif phase[i] == 4:               #LWP NGT
+                    vert_coord = 2
+                    nkind = kind_nums[5]
 
-      rlat = np.radians(lats[i])
-      tlon = lons[i]
-      if tlon < 0:
-        tlon = tlon + 360.0
-      rlon = np.radians(tlon)
+                elif phase[i] == 5:               #IWP NGT
+                    vert_coord = 2
+                    nkind = kind_nums[6]
 
-      fi.write("    %20.14f          %20.14f          %20.14f     %d\n" %
-                  (rlon, rlat, pressure[i], vert_coord))
+                elif phase[i] == 6:               #CLEAR ABOVE LWP
+                    vert_coord = 2
+                    nkind = kind_nums[7]
+                else:
+                    vert_coord = -2                #BAD DATA
+                    nkind = kind_nums[0]
+                    bad_ct = bad_ct+1
 
-      fi.write("kind\n")
-      fi.write("     %d     \n" % nkind )
+                rlat = np.radians(lats[i])
+                tlon = lons[i]
+                if tlon < 0:
+                    tlon = tlon + 360.0
+                rlon = np.radians(tlon)
 
-      # CTP / CBP / Phase info
-      fi.write("    %20.14f          %20.14f  \n" % (cbp[i], ctp[i]) )
-      fi.write("    %d     \n" % (phase[i]) )
+                fi.write("    %20.14f          %20.14f          %20.14f     %d\n" %
+                            (rlon, rlat, pressure[i], vert_coord))
 
-      fi.write("    %d          %d     \n" % (seconds, days) )
+                fi.write("kind\n")
+                fi.write("     %d     \n" % nkind )
 
-      if phase[i] < 4:
-        fi.write("    %20.14f  \n" % cwp_err[i]**2 )
-      else:
-        fi.write("    %20.14f  \n" % -99.9 )
+                # CTP / CBP / Phase info
+                fi.write("    %20.14f          %20.14f  \n" % (cbp[i], ctp[i]) )
+                fi.write("    %d     \n" % (phase[i]) )
 
-      if nobs % 1000 == 0: print(" write_DART_CWP:  Processed observation # %d" % nobs)
+                fi.write("    %d          %d     \n" % (seconds, days) )
 
-    fi.close()
+                if phase[i] < 4:
+                    fi.write("    %20.14f  \n" % cwp_err[i]**2 )
+                else:
+                    fi.write("    %20.14f  \n" % -99.9 )
 
-    # write header info
-    with open(dartfile, 'r') as f: f_obs_seq = f.read()
+                if nobs % 1000 == 0: print(" write_DART_CWP:  Processed observation # %d" % nobs)
 
-    fi = open(dartfile, "w")
+            fi.close()
 
-    fi.write(" obs_sequence\n")
-    fi.write("obs_kind_definitions\n")
+            # write header info
+            with open(dartfile, 'r') as f: f_obs_seq = f.read()
 
-    #if ngt_ct > 0: fi.write("       %d\n" % 4)
-    #if ngt_ct == 0: fi.write("       %d\n" % 3)
-    fi.write("       %d\n" % 8)
+            fi = open(dartfile, "w")
 
-    #if ngt_ct > 0: fi.write("    %d          %s   \n" % (kind_nums[4], kinds[4]) )
-    fi.write("    %d          %s   \n" % (kind_nums[0], kinds[0]) )
-    fi.write("    %d          %s   \n" % (kind_nums[1], kinds[1]) )
-    fi.write("    %d          %s   \n" % (kind_nums[2], kinds[2]) )
-    fi.write("    %d          %s   \n" % (kind_nums[3], kinds[3]) )
-    fi.write("    %d          %s   \n" % (kind_nums[4], kinds[4]) )
-    fi.write("    %d          %s   \n" % (kind_nums[5], kinds[5]) )
-    fi.write("    %d          %s   \n" % (kind_nums[6], kinds[6]) )
-    fi.write("    %d          %s   \n" % (kind_nums[7], kinds[7]) )
+            fi.write(" obs_sequence\n")
+            fi.write("obs_kind_definitions\n")
 
-    fi.write("  num_copies:            %d  num_qc:            %d\n" % (1, 1))
-    fi.write(" num_obs:       %d  max_num_obs:       %d\n" % (nobs, nobs) )
+            #if ngt_ct > 0: fi.write("       %d\n" % 4)
+            #if ngt_ct == 0: fi.write("       %d\n" % 3)
+            fi.write("       %d\n" % 8)
 
-    fi.write("observations\n")
-    fi.write("QC CWP\n")
+            #if ngt_ct > 0: fi.write("    %d          %s   \n" % (kind_nums[4], kinds[4]) )
+            fi.write("    %d          %s   \n" % (kind_nums[0], kinds[0]) )
+            fi.write("    %d          %s   \n" % (kind_nums[1], kinds[1]) )
+            fi.write("    %d          %s   \n" % (kind_nums[2], kinds[2]) )
+            fi.write("    %d          %s   \n" % (kind_nums[3], kinds[3]) )
+            fi.write("    %d          %s   \n" % (kind_nums[4], kinds[4]) )
+            fi.write("    %d          %s   \n" % (kind_nums[5], kinds[5]) )
+            fi.write("    %d          %s   \n" % (kind_nums[6], kinds[6]) )
+            fi.write("    %d          %s   \n" % (kind_nums[7], kinds[7]) )
 
-    fi.write("  first:            %d  last:       %d\n" % (1, nobs) )
+            fi.write("  num_copies:            %d  num_qc:            %d\n" % (1, 1))
+            fi.write(" num_obs:       %d  max_num_obs:       %d\n" % (nobs, nobs) )
 
-    # Now write back in all the actual DART obs data
-    fi.write(f_obs_seq)
-    fi.close()
+            fi.write("observations\n")
+            fi.write("QC CWP\n")
 
-    print(f"\n write_DART_ascii:  Created ascii DART file: {dartfile}, N = {nobs} written" )
+            fi.write("  first:            %d  last:       %d\n" % (1, nobs) )
 
+            # Now write back in all the actual DART obs data
+            fi.write(f_obs_seq)
+            fi.close()
+
+            print(f"\n write_DART_ascii:  Created ascii DART file: {dartfile}, N = {nobs} written" )
+        #else:
+        #    print(f"dartfile={dartfile} exists")

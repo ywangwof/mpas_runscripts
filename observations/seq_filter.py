@@ -379,7 +379,7 @@ def parse_args():
     parser.add_argument('files',nargs='+',help='DART obs_seq files')
 
     parser.add_argument('-v','--verbose', help='Verbose output',                                  action="store_true", default=False)
-    parser.add_argument('-o','--outdir' , help='Name of the output file or an output directory',  required=True,       type=str)
+    parser.add_argument('-o','--outdir' , help='Name of the output file or an output directory',  default='./',        type=str)
     parser.add_argument('-x','--xtypes' , help='Type Numbers of observation to be removed',       default=None,        type=str)
     parser.add_argument('-t','--type'   , help='''Type Numbers of observation to be print, for examples,
                         44                 : Show observaiton value of observation type 44;
@@ -391,14 +391,6 @@ def parse_args():
     args = parser.parse_args()
 
     rargs = {'outfile': None, 'xtypes' : [], 't_type': None }
-    if not os.path.isdir(args.outdir):
-        outdir_par = os.path.dirname(args.outdir)
-        if os.path.isdir(outdir_par) or outdir_par == "":
-            rargs['outfile'] = args.outdir
-        else:
-            print(f"ERROR: output directory {args.outdir} not exist.")
-            sys.exit(1)
-
 
     if args.xtypes is not None:
         rargs['xtypes'] = [int(x) for x in args.xtypex.split(',')]
@@ -410,6 +402,14 @@ def parse_args():
             rargs['t_var'] = rlist[1:]              # [value, variance]
         else:                                       # by default, print the obervation value only
             rargs['t_var'] = ['values']
+    else:
+        if not os.path.isdir(args.outdir):
+            outdir_par = os.path.dirname(args.outdir)
+            if os.path.isdir(outdir_par) or outdir_par == "":
+                rargs['outfile'] = args.outdir
+            else:
+                print(f"ERROR: output directory {args.outdir} not exist.")
+                sys.exit(1)
 
     return args,make_namespace(rargs)
 
@@ -516,6 +516,10 @@ if __name__ == "__main__":
 
             #print(f" write_obs_seq: Writing to {outfilename+'_in'}\n")
             #write_obs_seq(obs_in, outfilename+"_in")
+
+            if os.path.lexists(outfilename):
+                print(f" write_obs_seq: file {outfilename} exists. Aborting ...\n")
+                sys.exit(0)
 
             if cargs.verbose:
                 print(f" write_obs_seq: Writing to {outfilename}\n")

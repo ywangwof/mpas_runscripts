@@ -38,6 +38,8 @@
 
 source /scratch/ywang/MPAS/gnu/mpas_scripts/modules/env.mpas_smiol
 
+source /scratch/ywang/MPAS/gnu/mpas_scripts/scripts/Common_Utilfuncs.sh
+
 daily=no
 
 # if daily is 'no' and zeroZ is 'yes', input files at 0Z will be translated
@@ -74,18 +76,20 @@ for((i=timebeg_s;i<=timeend_s;i+=3600)); do
     endday=${inday}
     endhour=${inhour}
 
-    BUFR_dir=/work/rt_obs/SBUFR/${inyear}/${inmonth}/${inday}
+    if [[ ! -e ${WORK_dir}/obs_seq_bufr.${inyear}${inmonth}${inday}${inhour} ]]; then
 
-    cd ${WORK_dir}/work || exit 0
+        BUFR_dir=/work/rt_obs/SBUFR/${inyear}/${inmonth}/${inday}
 
-    # clear any old intermediate (text) files
-    #rm -f temp_obs prepqm.in prepqm.out
-    #rm -f dart_log*
-    rm -rf *
+        cd ${WORK_dir}/work || exit 0
 
-    ## MODIFY input.nml with correct date
-    sedfile=$(mktemp -t sbufr_${timestr}.sed_XXXX)
-    cat <<EOF > $sedfile
+        # clear any old intermediate (text) files
+        #rm -f temp_obs prepqm.in prepqm.out
+        #rm -f dart_log*
+        rm -rf *
+
+        ## MODIFY input.nml with correct date
+        sedfile=$(mktemp -t sbufr_${timestr}.sed_XXXX)
+        cat <<EOF > $sedfile
 s/ENDYR/${endyear}/g
 s/ENDMON/${endmonth}/g
 s/ENDDAY/${endday}/g
@@ -95,51 +99,54 @@ s/MON/${inmonth}/g
 s/DAY/${inday}/g
 s/HOUR/${inhour}/g
 EOF
-    sed -f $sedfile ${NML_TEMPLATE} > ./input.nml
-    rm -f $sedfile
+        sed -f $sedfile ${NML_TEMPLATE} > ./input.nml
+        rm -f $sedfile
 
-    mm=$inmonth
-    dd=$inday
-    hh=$inhour
+        mm=$inmonth
+        dd=$inday
+        hh=$inhour
 
-    # fix the BUFR_in line below to match what you have.  if the file is
-    # gzipped, you can leave it and this program will unzip it
-    BUFR_in=${BUFR_dir}/rap.${inyear}${mm}${dd}${hh}.prepbufr.tm00
+        # fix the BUFR_in line below to match what you have.  if the file is
+        # gzipped, you can leave it and this program will unzip it
+        BUFR_in=${BUFR_dir}/rap.${inyear}${mm}${dd}${hh}.prepbufr.tm00
 
-    if [[ "$cmdarg" == "ls" ]]; then
-        ls -l ${BUFR_in}
-        continue
+        if [[ "$cmdarg" == "ls" ]]; then
+            ls -l ${BUFR_in}
+            continue
+        fi
+
+        if [[ -e ${BUFR_in} ]]; then
+            wait_for_file_age "${BUFR_in}" 120
+            echo "copying ${BUFR_in} into prepqm.in"
+            rm -f prepqm.in
+            cp -f ${BUFR_in} prepqm.in
+        elif [[ -e ${BUFR_in}.gz ]]; then
+            wait_for_file_age "${BUFR_in}.gz" 120
+            echo "unzipping ${BUFR_in}.gz into prepqm.in"
+            rm -f prepqm.in
+            gunzip -c -f ${BUFR_in}.gz >! prepqm.in
+        else
+            echo "INPUT FILE: ${BUFR_in} or ${BUFR_in}.gz not found"
+            #echo "Script will abort now."
+            exit 1
+        fi
+
+        # byte swapping
+        if [[ $convert == 'yes' ]]; then
+           echo "byteswapping bigendian to littleendian prepqm.in"
+           mv -f prepqm.in prepqm.bigendian
+           ${DART_exec_dir}/grabbufr.x prepqm.bigendian prepqm.littleendian
+           mv -f prepqm.littleendian prepqm.in
+           rm -f prepqm.bigendian
+        fi
+
+        ${DART_exec_dir}/prepbufr.x
+        mv prepqm.out temp_obs
+
+        #### NOW DO CONVERSION TO obs_seq file
+        ${DART_exec_dir}/create_real_obs
+        mv obs_seq.bufr  ${WORK_dir}/obs_seq_bufr.${inyear}${inmonth}${inday}${inhour}
     fi
-
-    if [[ -e ${BUFR_in} ]]; then
-       echo "copying ${BUFR_in} into prepqm.in"
-       rm -f prepqm.in
-       cp -f ${BUFR_in} prepqm.in
-    elif [[ -e ${BUFR_in}.gz ]]; then
-       echo "unzipping ${BUFR_in}.gz into prepqm.in"
-       rm -f prepqm.in
-       gunzip -c -f ${BUFR_in}.gz >! prepqm.in
-    else
-       echo "MISSING INPUT FILE: ${BUFR_in} or ${BUFR_in}.gz"
-       echo "Script will abort now."
-       exit 1
-    fi
-
-    # byte swapping
-    if [[ $convert == 'yes' ]]; then
-       echo "byteswapping bigendian to littleendian prepqm.in"
-       mv -f prepqm.in prepqm.bigendian
-       ${DART_exec_dir}/grabbufr.x prepqm.bigendian prepqm.littleendian
-       mv -f prepqm.littleendian prepqm.in
-       rm -f prepqm.bigendian
-    fi
-
-    ${DART_exec_dir}/prepbufr.x
-    mv prepqm.out temp_obs
-
-    #### NOW DO CONVERSION TO obs_seq file
-    ${DART_exec_dir}/create_real_obs
-    mv obs_seq.bufr  ${WORK_dir}/obs_seq_bufr.${inyear}${inmonth}${inday}${inhour}
 done
 
 exit 0

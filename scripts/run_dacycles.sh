@@ -109,6 +109,7 @@ function usage {
     echo "              -e  YYYYmmddHHMM    End date & time of the DA cycles"
     echo "                  HHMM            End time of the DA cycles"
     echo "              -p  nssl            MP scheme, [nssl, thompson], default: nssl"
+    echo "              -r                  Realtime run, will wait for observations, default: retrospective run"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt = $eventdateDF"
@@ -173,12 +174,22 @@ function run_obsmerge {
     # PREPROCESS NCEP PrepBufr DATA
     #=================================================
 
-    if [[ -e ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2} && "${anlys_time:2:2}" == "00" ]]; then
-        echo "    $((k++)): Using PrepBufr observations in ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}"
-        #echo "${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}" > obsflist.bufr
+    bufr_file="${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}"
+    if [[ $rt_run == true && ${use_BUFR} == true && "${anlys_time:2:2}" == "00" ]]; then
+        if [[ ! -e ${bufr_file} ]]; then
+            echo "    Waiting for ${bufr_file} ...."
+        fi
+        while [[ ! -e ${bufr_file} ]]; do
+            sleep 10
+        done
+    fi
+
+    if [[ -e ${bufr_file} ]]; then
+        echo "    $((k++)): Using PrepBufr observations in ${bufr_file}"
+        #echo "${bufr_file}" > obsflist.bufr
         #obsflists+=(obsflist.bufr)
 
-        cp ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2} ./obs_seq.old
+        cp ${bufr_file} ./obs_seq.old
 
         if [[ $verb -eq 1 ]]; then
             echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
@@ -205,21 +216,31 @@ function run_obsmerge {
             echo "Error with command ${obspreprocess} for PREPBUFR data"
         fi
     else
-        if [[ ! -e ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2} ]]; then
-            echo "    PrepBufr data not found: ${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}"
-       fi
+        if [[ "${anlys_time:2:2}" == "00" ]]; then
+            echo "    PrepBufr data not found: ${bufr_file}"
+        fi
     fi
 
     #=================================================
     # PREPROCESS OK MESONET DATA
     #=================================================
 
-    if [[ -e ${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time} ]]; then
-        echo "    $((k++)): Using Mesonet observations in ${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time}"
-        #echo "${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time}" > obsflist.meso
+    meso_file="${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time}"
+    if [[ $rt_run == true && ${use_MESO} == true ]]; then
+        if [[ ! -e ${meso_file} ]]; then
+            echo "    Waiting for ${meso_file} ...."
+        fi
+        while [[ ! -e ${meso_file} ]]; do
+            sleep 10
+        done
+    fi
+
+    if [[ -e ${meso_file} ]]; then
+        echo "    $((k++)): Using Mesonet observations in ${meso_file}"
+        #echo "${meso_file}" > obsflist.meso
         #obsflists+=(obsflist.meso)
 
-        cp ${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time} ./obs_seq.old
+        cp ${meso_file} ./obs_seq.old
 
         if [[ $verb -eq 1 ]]; then
             echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
@@ -245,7 +266,9 @@ function run_obsmerge {
             echo "Error with command ${obspreprocess} for MESONET data"
         fi
     else
-        echo "    Mesonet not found: ${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time}"
+        if [[ ${use_MESO} == true ]]; then
+            echo "    Mesonet not found: ${meso_file}"
+        fi
     fi
 
     #=================================================
@@ -253,10 +276,22 @@ function run_obsmerge {
     #=================================================
 
     CWP_DIR=${OBS_DIR}/CWP
-    if [[ -e ${CWP_DIR}/obs_seq_cwp.G16_V04.${anlys_date}${anlys_time} ]]; then
-        echo "    $((k++)): Using CWP data in ${CWP_DIR}/obs_seq_cwp.G16_V04.${anlys_date}${anlys_time}"
 
-        cp ${CWP_DIR}/obs_seq_cwp.G16_V04.${anlys_date}${anlys_time} ./obs_seq.old
+    cwp_file="${CWP_DIR}/obs_seq_cwp.G16_V04.${anlys_date}${anlys_time}"
+
+    if [[ $rt_run == true && ${use_CWP} == true ]]; then
+        if [[ ! -e ${cwp_file} ]]; then
+            echo "    Waiting for ${cwp_file} ...."
+        fi
+        while [[ ! -e ${cwp_file} ]]; do
+            sleep 10
+        done
+    fi
+
+    if [[ -e ${cwp_file} ]]; then
+        echo "    $((k++)): Using CWP data in ${cwp_file}"
+
+        cp ${cwp_file} ./obs_seq.old
 
         if [[ $verb -eq 1 ]]; then
             echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
@@ -281,16 +316,32 @@ function run_obsmerge {
             echo "Error with command ${obspreprocess} for CWP data"
         fi
     else
-        echo "    CWP not found: ${CWP_DIR}/obs_seq_cwp.G16_V04.${anlys_date}${anlys_time}"
+        if [[ ${use_CWP} == true && "${anlys_time:3:1}" == "0" ]]; then
+            echo "    CWP not found: ${cwp_file}"
+        fi
     fi
 
     #=================================================
     # PREPROCESS GOES SATELLITE Radiance DATA
     #=================================================
 
+    channels=("8.4" "10.3")
+
     RAD_DIR=${OBS_DIR}/Radiance
 
-    channels=("8.4" "10.3")
+    rad_files="obs_seq_abi.G16_C*.${anlys_date}${anlys_time}"
+
+    if [[ $rt_run == true && ${use_RAD} == true ]]; then
+
+        numrad=$(find ${RAD_DIR}/ -name "${rad_files}" | wc -l)
+        if [[ $numrad -ne ${#channels[@]} ]]; then
+            echo "    Waiting for ${RAD_DIR}/${rad_files} ...."
+        fi
+        while [[ $numrad -ne ${#channels[@]} ]]; do
+            sleep 10
+            numrad=$(find ${RAD_DIR}/ -name "${rad_files}" | wc -l)
+        done
+    fi
 
     i=0
     for abifile in "${RAD_DIR}"/obs_seq_abi.G16_C*."${anlys_date}${anlys_time}"; do
@@ -352,11 +403,24 @@ function run_obsmerge {
     ########################
 
     DBZ_DIR=${OBS_DIR}/REF
-    if [[ -e ${DBZ_DIR}/${eventdate}/obs_seq_RF_${anlys_date}_${anlys_time}.out ]]; then
 
-        echo "    $((k++)): Using REF data in ${DBZ_DIR}/${eventdate}/obs_seq_RF_${anlys_date}_${anlys_time}.out"
+    dbz_file="${DBZ_DIR}/${eventdate}/obs_seq_RF_${anlys_date}_${anlys_time}.out"
 
-        cp ${DBZ_DIR}/${eventdate}/obs_seq_RF_${anlys_date}_${anlys_time}.out ./obs_seq.old
+    if [[ $rt_run == true ]]; then
+        if [[ ! -e ${dbz_file} ]]; then
+            echo "    Waiting for ${dbz_file} ...."
+        fi
+        while [[ ! -e ${dbz_file} ]]; do
+            sleep 10
+        done
+        wait_for_file_age ${dbz_file} 30
+    fi
+
+    if [[ -e ${dbz_file} ]]; then
+
+        echo "    $((k++)): Using REF data in ${dbz_file}"
+
+        cp ${dbz_file} ./obs_seq.old
 
         if [[ $verb -eq 1 ]]; then
             echo "    Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
@@ -381,13 +445,15 @@ function run_obsmerge {
             echo "Error with command ${obspreprocess} for REF data"
         fi
     else
-        echo "    REF data not found: ${DBZ_DIR}/${eventdate}/obs_seq_RF_${anlys_date}_${anlys_time}.out"
+        echo "    REF data not found: ${dbz_file}"
     fi
     echo "    "
 
     ########################
     ### Radial Velocity  ###
     ########################
+
+    wait_seconds=$((iseconds+600))
 
     #
     # Source environment for radars
@@ -402,24 +468,45 @@ function run_obsmerge {
 
     VR_DIR=${OBS_DIR}/VEL
 
+    if [[ $rt_run == true ]]; then
+
+        numrad=$(find ${VR_DIR}/${eventdate} -name "obs_seq_????_VR_${anlys_date}_${anlys_time}.out" | wc -l)
+
+        if [[ $numrad -lt ${num_rad} ]]; then
+            echo "    Waiting for ${VR_DIR}/${eventdate}/obs_seq_????_VR_${anlys_date}_${anlys_time}.out ...."
+        fi
+
+        currsecs=$(date -u +%s)
+        while [[ $numrad -lt ${num_rad} && $currsecs -lt ${wait_seconds} ]]; do
+            # do not wait more than 10 minute outside the current assimilation cycle
+            sleep 10
+            numrad=$(find ${VR_DIR}/${eventdate} -name "obs_seq_????_VR_${anlys_date}_${anlys_time}.out" | wc -l)
+            currsecs=$(date -u +%s)
+        done
+    fi
+
     j=0; n=1
     # shellcheck disable=SC2154
     while [[ ${j} -lt ${num_rad} ]]; do
 
+        vrj_file=${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out
+
         if [[ $verb -eq 1 ]]; then
-            echo "         Checking VEL data in ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out"
+            echo "         Checking VEL data in ${vrj_file}"
         fi
 
-        if [[ -e ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out ]]; then
+        if [[ -e ${vrj_file} ]]; then
 
-            echo "    $k-$n: Using VEL data in ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out"
+            echo "    $k-$n: Using VEL data in ${vrj_file}"
+
+            wait_for_file_age ${vrj_file} 30
 
             if [[ ${run_trimvr} == true ]]; then
-                trimvr_cmd="${rootdir}/observations/seq_filter.py -o ./obs_seq.old ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out"
+                trimvr_cmd="${rootdir}/observations/seq_filter.py -o ./obs_seq.old ${vrj_file}"
                 echo "          ${trimvr_cmd}"
                 ${trimvr_cmd}
             else
-                cp ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out ./obs_seq.old
+                cp ${vrj_file} ./obs_seq.old
             fi
 
             if [[ $verb -eq 1 ]]; then
@@ -433,7 +520,7 @@ function run_obsmerge {
             ${runcmd_str} echo "$g_date $g_sec" | ${obspreprocess} >> ${srunout}_VR_${rad_name[$j]} 2>&1
 
             if [[ -e ./obs_seq.new ]]; then
-                #echo "    $k-$n: Using VEL data in ${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out"
+                #echo "    $k-$n: Using VEL data in ${vrj_file}"
                 mv ./obs_seq.new ./obs_seq.vr${j}
                 rm ./obs_seq.old
                 echo $wrkdir/OBSDIR/obs_seq.vr${j} >> obsflist.radvr
@@ -2880,6 +2967,7 @@ verb=0
 overwrite=0
 runcmd="sbatch"
 dorun=true
+rt_run=false            # realtime run?
 
 machine="Jet"
 
@@ -2917,6 +3005,9 @@ while [[ $# -gt 0 ]]; do
             ;;
         -v)
             verb=1
+            ;;
+        -r)
+            rt_run=true
             ;;
         -k)
             if [[ $2 =~ [012] ]]; then
