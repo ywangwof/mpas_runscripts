@@ -173,6 +173,7 @@ function run_obsmerge {
     #=================================================
     # PREPROCESS NCEP PrepBufr DATA
     #=================================================
+    #1. PrepBufr
 
     bufr_file="${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}"
     if [[ $rt_run == true && ${use_BUFR} == true && "${anlys_time:2:2}" == "00" ]]; then
@@ -224,6 +225,7 @@ function run_obsmerge {
     #=================================================
     # PREPROCESS OK MESONET DATA
     #=================================================
+    #2. MESONET
 
     meso_file="${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time}"
     if [[ $rt_run == true && ${use_MESO} == true ]]; then
@@ -274,6 +276,7 @@ function run_obsmerge {
     #=================================================
     # PREPROCESS GOES SATELLITE CWP DATA
     #=================================================
+    #3. CWP
 
     CWP_DIR=${OBS_DIR}/CWP
 
@@ -324,6 +327,7 @@ function run_obsmerge {
     #=================================================
     # PREPROCESS GOES SATELLITE Radiance DATA
     #=================================================
+    #4. Radiance
 
     channels=("8.4" "10.3")
 
@@ -401,6 +405,7 @@ function run_obsmerge {
     ########################
     ### MRMS             ###
     ########################
+    #5. REF
 
     DBZ_DIR=${OBS_DIR}/REF
 
@@ -452,6 +457,7 @@ function run_obsmerge {
     ########################
     ### Radial Velocity  ###
     ########################
+    #6. VEL
 
     wait_seconds=$((iseconds+600))
 
@@ -497,17 +503,22 @@ function run_obsmerge {
 
         if [[ -e ${vrj_file} ]]; then
 
-            echo "    $k-$n: Using VEL data in ${vrj_file}"
-
             wait_for_file_age ${vrj_file} 30
 
             if [[ ${run_trimvr} == true ]]; then
                 trimvr_cmd="${rootdir}/observations/seq_filter.py -o ./obs_seq.old ${vrj_file}"
-                echo "          ${trimvr_cmd}"
-                ${trimvr_cmd}
+                echo "    --- ${trimvr_cmd}"
+
+                if ! ${trimvr_cmd}; then
+                    #echo "        Failed. Ignore ${vrj_file}"
+                    (( j++ ))
+                    continue
+                fi
             else
                 cp ${vrj_file} ./obs_seq.old
             fi
+
+            #echo "    $k-$n: Using VEL data in ${vrj_file}"
 
             if [[ $verb -eq 1 ]]; then
                 echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
@@ -519,10 +530,11 @@ function run_obsmerge {
 
             ${runcmd_str} echo "$g_date $g_sec" | ${obspreprocess} >> ${srunout}_VR_${rad_name[$j]} 2>&1
 
+            rm ./obs_seq.old
+
             if [[ -e ./obs_seq.new ]]; then
-                #echo "    $k-$n: Using VEL data in ${vrj_file}"
+                echo "    $k-$n: Using VEL data in ${vrj_file}"
                 mv ./obs_seq.new ./obs_seq.vr${j}
-                rm ./obs_seq.old
                 echo $wrkdir/OBSDIR/obs_seq.vr${j} >> obsflist.radvr
                 (( n++ ))
             fi

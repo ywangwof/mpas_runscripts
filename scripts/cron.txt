@@ -18,9 +18,8 @@ scriptdir=$rootdir/scripts
 rundirs=$rootdir/run_dirs
 PATH=/usr/bin:/bin:/apps-local/slurm/default/bin
 
-curdate="date +%Y%m%d"
-fultime="date +%Y%m%d%H"
-fulnext="date -d '1 hour' +%Y%m%d%H"
+evtdat="date +%Y%m%d"
+utc_hr="date -u +%Y%m%d%H"
 
 SHELL=/bin/bash
 
@@ -28,13 +27,14 @@ SHELL=/bin/bash
 ###          MPAS-WoFS Data Assimilation and Forecasts               ###
 ########################################################################
 # Observations
-10,25,40,55 *  * * * $rootdir/observations/okmeso_15min.sh    $($fultime) $($fulnext) >> $rundirs/okmeso.$($curdate) 2>&1
-10          *  * * * $scriptdir/observations/prepbufr_wofs.sh $($fultime) $($fulnext) >> $rundirs/prbufr.$($curdate) 2>&1
-10,25,40,55 *  * * * $rootdir/observations/run_cwpobs.sh      $($curdate)             >> $rundirs/wofcwp.$($curdate) 2>&1
-10,25,40,55 *  * * * $rootdir/observations/run_radiance.sh    $($curdate)             >> $rundirs/wofrad.$($curdate) 2>&1
+20      12-23  * * * $rootdir/observations/link_radar.sh      $($evtdat)15 $($utc_hr) >> $rundirs/radaro.$($evtdat) 2>&1
+25      12-23  * * * $rootdir/observations/okmeso_15min.sh    $($evtdat)15 $($utc_hr) >> $rundirs/okmeso.$($evtdat) 2>&1
+30      12-23  * * * $rootdir/observations/run_cwpobs.sh      $($evtdat)              >> $rundirs/wofcwp.$($evtdat) 2>&1
+30      12-23  * * * $rootdir/observations/run_radiance.sh    $($evtdat)              >> $rundirs/wofrad.$($evtdat) 2>&1
+40      12-23  * * * $scriptdir/observations/prepbufr_wofs.sh $($evtdat)15 $($utc_hr) >> $rundirs/prbufr.$($evtdat) 2>&1
 
 # DA cycles
-10    18      * * * $scriptdir/run_dacycles.sh $($curdate) >> $rundirs/da.$($curdate) 2>&1
+#10    18      * * * $scriptdir/run_dacycles.sh $($evtdat) >> $rundirs/da.$($evtdat) 2>&1
 
 # Fcst
-20    19      * * * $scriptdir/run_fcst.sh $($curdate)     >> $rundirs/fcst.$($curdate) 2>&1
+#20    19      * * * $scriptdir/run_fcst.sh $($evtdat)     >> $rundirs/fcst.$($evtdat) 2>&1

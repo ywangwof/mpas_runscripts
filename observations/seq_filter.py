@@ -505,6 +505,14 @@ if __name__ == "__main__":
             obs_out.obs = obs_records
             if cargs.verbose: print(" Number of good observations:  %d\n" % obs_out.nobs)
 
+            if obs_out.nobs == 1:       # fix the link for next obs
+                for it in obs_out.obs:
+                    it.links[1] = -1
+
+            if obs_out.nobs < 1:
+                print(f"        Number of good observations: {obs_out.nobs}, skip {filename}")
+                sys.exit(1)
+
             #
             # Write out the processed sequence file
             #
@@ -514,15 +522,17 @@ if __name__ == "__main__":
                 basefilename = os.path.basename(filename)
                 outfilename  = os.path.join(cargs.outdir,basefilename)
 
+                if os.path.lexists(outfilename):
+                    print(f"        write_obs_seq: file {outfilename} exists. Aborting ...\n")
+                    sys.exit(2)
+
+
             #print(f" write_obs_seq: Writing to {outfilename+'_in'}\n")
             #write_obs_seq(obs_in, outfilename+"_in")
-
-            if os.path.lexists(outfilename):
-                print(f" write_obs_seq: file {outfilename} exists. Aborting ...\n")
-                sys.exit(0)
 
             if cargs.verbose:
                 print(f" write_obs_seq: Writing to {outfilename}\n")
             else:
-                print(f"    {filename} -> {outfilename}, Number of good observations: {obs_out.nobs}")
+                print(f"        {filename} -> {outfilename}\n        Number of good observations: {obs_out.nobs}")
+
             write_obs_seq(obs_out, outfilename)

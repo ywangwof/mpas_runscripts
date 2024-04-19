@@ -10,7 +10,7 @@ fcstlength=$((6*3600))
 fcstintvl=300
 fcstmems=18
 
-for evtime in ${eventimes[@]}; do
+for evtime in "${eventimes[@]}"; do
     if [[ $evtime -lt 1200 ]]; then
         nextday="1 day"
     else
@@ -24,9 +24,9 @@ for evtime in ${eventimes[@]}; do
 
         desdir="${dest_root}/${eventdate}/${evtime}/ENS_MEM_${memstr}"
         if [[ ! -d $desdir ]]; then
-            mkdir -p $desdir
+            mkdir -p "${desdir}"
         fi
-        cd $desdir
+        cd "${desdir}" || exit 0
 
         for ((i=$fcstintvl;i<=$fcstlength;i+=$fcstintvl)); do
             fcsttimestr=$(date -u -d "${eventdate} ${evtime} $nextday $i seconds" +%Y-%m-%d_%H.%M.%S)
