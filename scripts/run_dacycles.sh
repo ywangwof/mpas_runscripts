@@ -181,6 +181,10 @@ function run_obsmerge {
             echo "    Waiting for ${bufr_file} ...."
         fi
         while [[ ! -e ${bufr_file} ]]; do
+            if [[ -e "${bufr_file}.missed" ]]; then
+                echo "    Not found. Skip ${bufr_file} ...."
+                break
+            fi
             sleep 10
         done
     fi
@@ -233,6 +237,10 @@ function run_obsmerge {
             echo "    Waiting for ${meso_file} ...."
         fi
         while [[ ! -e ${meso_file} ]]; do
+            if [[ -e "${meso_file}.missed" ]]; then
+                echo "    Not found. Skip ${meso_file} ...."
+                break
+            fi
             sleep 10
         done
     fi
@@ -287,6 +295,10 @@ function run_obsmerge {
             echo "    Waiting for ${cwp_file} ...."
         fi
         while [[ ! -e ${cwp_file} ]]; do
+            if [[ -e "${cwp_file}.missed" ]]; then
+                echo "    Not found. Skip ${cwp_file} ...."
+                break
+            fi
             sleep 10
         done
     fi
@@ -344,6 +356,10 @@ function run_obsmerge {
         while [[ $numrad -ne ${#channels[@]} ]]; do
             sleep 10
             numrad=$(find ${RAD_DIR}/ -name "${rad_files}" | wc -l)
+            if [[ -e "${RAD_DIR}/${rad_files}.missed" ]]; then
+                echo "    Not found. Skip ${rad_files} ...."
+                break
+            fi
         done
     fi
 
@@ -416,12 +432,16 @@ function run_obsmerge {
             echo "    Waiting for ${dbz_file} ...."
         fi
         while [[ ! -e ${dbz_file} ]]; do
+            if [[ -e "${dbz_file}.missed" ]]; then
+                echo "    Not found. Skip ${dbz_file} ...."
+                break
+            fi
             sleep 10
         done
-        wait_for_file_age ${dbz_file} 30
     fi
 
     if [[ -e ${dbz_file} ]]; then
+        wait_for_file_age ${dbz_file} 30
 
         echo "    $((k++)): Using REF data in ${dbz_file}"
 
@@ -479,7 +499,11 @@ function run_obsmerge {
         numrad=$(find ${VR_DIR}/${eventdate} -name "obs_seq_????_VR_${anlys_date}_${anlys_time}.out" | wc -l)
 
         if [[ $numrad -lt ${num_rad} ]]; then
-            echo "    Waiting for ${VR_DIR}/${eventdate}/obs_seq_????_VR_${anlys_date}_${anlys_time}.out ...."
+            if [[ $currsecs -lt ${wait_seconds} ]]; then
+                echo "    Waiting for ${VR_DIR}/${eventdate}/obs_seq_????_VR_${anlys_date}_${anlys_time}.out ...."
+            else
+                echo "    Not found. Skip ${VR_DIR}/${eventdate}/obs_seq_????_VR_${anlys_date}_${anlys_time}.out ...."
+            fi
         fi
 
         currsecs=$(date -u +%s)
@@ -491,7 +515,7 @@ function run_obsmerge {
         done
     fi
 
-    j=0; n=1
+    j=0; n=0
     # shellcheck disable=SC2154
     while [[ ${j} -lt ${num_rad} ]]; do
 
@@ -533,10 +557,10 @@ function run_obsmerge {
             rm ./obs_seq.old
 
             if [[ -e ./obs_seq.new ]]; then
+                (( n++ ))
                 echo "    $k-$n: Using VEL data in ${vrj_file}"
                 mv ./obs_seq.new ./obs_seq.vr${j}
                 echo $wrkdir/OBSDIR/obs_seq.vr${j} >> obsflist.radvr
-                (( n++ ))
             fi
 
         fi
@@ -1580,8 +1604,8 @@ function run_filter {
    windowing_int_hour       = 0.5
    increase_bdy_error       = .true.
    maxobsfac                = 10.
-   obsdistbdy               = 90000.0     ! meters
-   obs_boundary             = 21000.0     ! meters
+   obsdistbdy               = 15000.0     ! meters
+   obs_boundary             =  5000.0     ! meters
 /
 EOF
 
@@ -2309,7 +2333,7 @@ function run_mpas {
     config_v_theta_eddy_visc2       = 0.0
     config_horiz_mixing             = '2d_smagorinsky'
     config_len_disp                 = 3000.0
-    config_visc4_2dsmag             = 0.05
+    config_visc4_2dsmag             = 0.10
     config_w_adv_order              = 3
     config_theta_adv_order          = 3
     config_scalar_adv_order         = 3

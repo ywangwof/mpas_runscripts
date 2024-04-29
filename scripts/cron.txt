@@ -11,15 +11,14 @@ MAILTO=Yunheng.Wang@noaa.gov
 # |  |  |  |  |
 # *  *  *  *  * command to be executed
 
-# use UTC
-
 rootdir=/scratch/ywang/MPAS/gnu/mpas_scripts
-scriptdir=$rootdir/scripts
 rundirs=$rootdir/run_dirs
 PATH=/usr/bin:/bin:/apps-local/slurm/default/bin
 
-evtdat="date +%Y%m%d"
-utc_hr="date -u +%Y%m%d%H"
+# use UTC
+
+evtdatstr="date +%Y%m%d"
+utchrstr="date -u +%Y%m%d%H"
 
 SHELL=/bin/bash
 
@@ -27,14 +26,14 @@ SHELL=/bin/bash
 ###          MPAS-WoFS Data Assimilation and Forecasts               ###
 ########################################################################
 # Observations
-20      12-23  * * * $rootdir/observations/link_radar.sh      $($evtdat)15 $($utc_hr) >> $rundirs/radaro.$($evtdat) 2>&1
-25      12-23  * * * $rootdir/observations/okmeso_15min.sh    $($evtdat)15 $($utc_hr) >> $rundirs/okmeso.$($evtdat) 2>&1
-30      12-23  * * * $rootdir/observations/run_cwpobs.sh      $($evtdat)              >> $rundirs/wofcwp.$($evtdat) 2>&1
-30      12-23  * * * $rootdir/observations/run_radiance.sh    $($evtdat)              >> $rundirs/wofrad.$($evtdat) 2>&1
-40      12-23  * * * $scriptdir/observations/prepbufr_wofs.sh $($evtdat)15 $($utc_hr) >> $rundirs/prbufr.$($evtdat) 2>&1
+20      12-23  * * * $rootdir/observations/link_radar.sh
+25      12-23  * * * $rootdir/observations/okmeso_15min.sh
+30      12-23  * * * $rootdir/observations/run_cwpobs.sh
+35      12-23  * * * $rootdir/observations/run_radiance.sh
+40      12-23  * * * $rootdir/observations/prepbufr_wofs.sh
 
 # DA cycles
-#10    18      * * * $scriptdir/run_dacycles.sh $($evtdat) >> $rundirs/da.$($evtdat) 2>&1
+27      23      * * * $rootdir/scripts/runmpas.sh dacycles
 
 # Fcst
-#20    19      * * * $scriptdir/run_fcst.sh $($evtdat)     >> $rundirs/fcst.$($evtdat) 2>&1
+55      23      * * * $rootdir/scripts/runmpas.sh fcst

@@ -28,16 +28,25 @@ for evtime in "${eventimes[@]}"; do
         fi
         cd "${desdir}" || exit 0
 
-        for ((i=$fcstintvl;i<=$fcstlength;i+=$fcstintvl)); do
+        #echo "Linking member $memstr from $memdir to $desdir ...."
+        for ((i=fcstintvl;i<=fcstlength;i+=fcstintvl)); do
             fcsttimestr=$(date -u -d "${eventdate} ${evtime} $nextday $i seconds" +%Y-%m-%d_%H.%M.%S)
             wrftimestr=$(date -u -d "${eventdate} ${evtime} $nextday $i seconds" +%Y-%m-%d_%H:%M:%S)
             memfile="MPASSIT_${memstr}.${fcsttimestr}.nc"
             desfile="wrfwof_d01_${wrftimestr}"
-            if [[ ! -e ${memdir}/${memfile} ]]; then
-                echo "File: ${memdir}/${memfile} not exist."
-                exit 1
+            if [[ ! -f ${desfile} ]]; then
+                if [[ ! -e ${memdir}/${memfile} ]]; then
+                    echo "Waiting for ${memdir}/${memfile} ...."
+                    #exit 1
+                    while [[ ! -e ${memdir}/${memfile} ]]; do
+                        sleep 10
+                    done
+                fi
+                ln -sf ${memdir}/${memfile} ${desfile}
+            else
+                :
+                #echo "${desfile} exists"
             fi
-            ln -sf ${memdir}/${memfile} ${desfile}
         done
 
         wrftimestr0=$(date -u -d "${eventdate} ${evtime} $nextday" +%Y-%m-%d_%H:%M:%S)

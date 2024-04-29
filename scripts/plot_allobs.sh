@@ -93,10 +93,7 @@ if [[ ! -d ${rundir}/${eventdate}/${dadir} ]]; then
     exit 1
 fi
 
-#if [[ $- != *i* ]]; then
-if [ -t 1 ]; then # "interactive"
-    echo "$0 $eventdate in $(pwd)"
-else              # "at job", load Python environment
+if [[ -z ${MAMBA_EXE} ]]; then   # not set micromamba
     # >>> mamba initialize >>>
     # !! Contents within this block are managed by 'mamba init' !!
     export MAMBA_EXE='/home/yunheng.wang/y/micromamba';
@@ -114,6 +111,15 @@ fi
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
+log_dir="${rundir}/${eventdate}"
+
+if [[ ! -d ${log_dir} ]]; then
+    echo "ERROR: ${log_dir} not exists."
+    exit 1
+fi
+
+grid_file="${rundir}/${eventdate}/wofs_mpas/wofs_mpas.grid.nc"
+
 if [[ ! -d ${rundir}/${eventdate}/${dadir}/obs_diag ]]; then
     mkdir -p "${rundir}/${eventdate}/${dadir}/obs_diag"
 fi
@@ -126,14 +132,30 @@ for ((s=start_s;s<=end_s;s+=900)); do
     timestr=$(date -d @$s +%H%M)
     datestr=$(date -d @$s +%Y%m%d%H%M)
 
-    echo ""
-    echo "Plotting Observation at ${timestr} ..."
-    ${show} ${rootdir}/python/plot_dartobs.py -p 1,0 -g ${rundir}/${eventdate}/wofs_mpas/wofs_mpas.grid.nc -r 300 -latlon \
-                                     "${rundir}/${eventdate}/${dadir}/${timestr}/obs_seq.final.${datestr}.nc" 2>/dev/null | tee -a "${rundir}/diag.${eventdate}"
-    ${show} ${rootdir}/python/plot_dartobs.py -p 78,0 -g ${rundir}/${eventdate}/wofs_mpas/wofs_mpas.grid.nc -r 300 -latlon \
-                                     "${rundir}/${eventdate}/${dadir}/${timestr}/obs_seq.final.${datestr}.nc" 2>/dev/null | tee -a "${rundir}/diag.${eventdate}"
+    seq_file="${rundir}/${eventdate}/${dadir}/${timestr}/obs_seq.final.${datestr}.nc"
+
+    if [[ ! -f ${seq_file} ]]; then
+        echo "Waiting for ${seq_file} ...."
+        while [[ ! -e ${seq_file} ]]; do
+            sleep 10
+        done
+    fi
+
+    #if [[ ! -e "done.${timestr}" ]]; then
+    #    echo ""
+    #    echo "Plotting Observation at ${timestr} ..."
+    #    ${show} ${rootdir}/python/plot_dartobs.py -p 1,0  -g ${grid_file} -r 300 -latlon "${seq_file}" 2>/dev/null 
+    #    ${show} ${rootdir}/python/plot_dartobs.py -p 78,0 -g ${grid_file} -r 300 -latlon "${seq_file}" 2>/dev/null 
+
+    #    touch "done.${timestr}"
+    #else
+    #    echo "done.${timestr} exist. Skipped."
+    #fi
 done
 
-${show} ${rootdir}/python/plot_dartzig.py ${eventdate} -d ${rundir} -r 300 2>/dev/null | tee -a "${rundir}/diag.${eventdate}"
+if [[ ! -e done.zigzag ]]; then
+    ${show} ${rootdir}/python/plot_dartzig.py ${eventdate} -d ${rundir} -r 300 2>/dev/null 
+    touch "done.zigzag"
+fi
 
 exit 0

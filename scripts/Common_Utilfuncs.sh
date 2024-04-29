@@ -15,7 +15,9 @@
 # o convert2date             # Convert days/seconds since 1601-01-01 to date/time strings
 # o upnlevels                # get n level parent directory path
 # o link_grib                # Link grib files for ungrib.exe
-# o clean_mem_runfiles
+# o clean_mem_runfiles       # Clean the runtime files of an ensemble task
+# o wait_for_file_size       # Hold the task until the file size exceeds the give number of bytes
+# o wait_for_file_age        # Hold the task until the file age is older than the give number of seconds
 #
 
 ########################################################################
@@ -371,30 +373,45 @@ function readconf {
 
     readmode=false
     while read -r line; do
-        #echo "$line"
+        if [[ $debug -eq 1 ]]; then
+            if [[ "$line" == "" ]]; then
+                echo "$line"
+                continue
+            else
+                echo -ne "$line \t\t\t ### \t"
+            fi
+        fi
+
+        # remove leading whitespace from a string
+        line=${line##+([[:space:]])}
+        # remove trailing whitespace from a string
+        line=${line%%+([[:space:]])}
+
         if [[ "$line" =~ \[$sections\] ]]; then
-            if [[ $debug -eq 1 ]]; then echo "Found $sections: $line"; fi
+            if [[ $debug -eq 1 ]]; then echo "Found $sections"; fi
             readmode=true
             continue
         elif [[ "$line" == \[*\] ]]; then
-            if [[ $debug -eq 1 ]]; then echo "Another section: $line"; fi
+            if [[ $debug -eq 1 ]]; then echo "Another Section"; fi
             readmode=false
             continue
-        elif [[ "$line" =~ ^# ]]; then
-            if [[ $debug -eq 1 && ${readmode} == true ]]; then echo "comment: $line"; fi
+        elif [[ "$line" =~ ^#.* ]]; then
+            if [[ $debug -eq 1 ]]; then echo "Comment"; fi
             continue
         fi
 
         if $readmode; then
+            # remove comment starting with "# "
+            line=${line%%# *}
+
             if [[ "$line" =~ "=" ]]; then
-                if [[ $debug -eq 1 ]]; then echo -n "source: $line"; fi
+                if [[ $debug -eq 1 ]]; then echo "source: $line"; fi
                 eval "$line"
-            elif [[ "$line" =~ "" ]]; then
-                :
             else
                 if [[ $debug -eq 1 ]]; then echo "skip: $line"; fi
             fi
-            if [[ $debug -eq 1 ]]; then echo; fi
+        else
+            if [[ $debug -eq 1 ]]; then echo "ignored"; fi
         fi
 
     done < $configfile

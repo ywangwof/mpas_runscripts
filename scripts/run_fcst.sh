@@ -313,7 +313,7 @@ function run_mpas {
     config_v_theta_eddy_visc2       = 0.0
     config_horiz_mixing             = '2d_smagorinsky'
     config_len_disp                 = 3000.0
-    config_visc4_2dsmag             = 0.05
+    config_visc4_2dsmag             = 0.10
     config_w_adv_order              = 3
     config_theta_adv_order          = 3
     config_scalar_adv_order         = 3
@@ -1516,7 +1516,7 @@ elif [[ $machine == "Cheyenne" ]]; then
     modulename="defaults"
 else    # Vecna at NSSL
     modulename="env.mpas_smiol"
-    source ${modulename}
+    source ${rootdir}/modules/${modulename}
 fi
 
 if [[ $dorun == false ]]; then
@@ -1542,13 +1542,6 @@ fi
 starttime_sec=$(date -u -d "${eventdate} ${eventtime} $startday"     +%s)
 stoptime_sec=$(date  -u -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
 
-rundir="$WORKDIR/${eventdate}"
-if [[ ! -d $rundir ]]; then
-    mkdir -p $rundir
-fi
-
-exedir="$rootdir/exec"
-
 #
 # read configurations that is not set from command line
 #
@@ -1565,6 +1558,13 @@ readconf $WORKDIR/config.${eventdate} COMMON fcst || exit $?
 #
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
+
+rundir="$WORKDIR/${eventdate}"
+if [[ ! -d $rundir ]]; then
+    mkdir -p $rundir
+fi
+
+exedir="$rootdir/exec"
 
 echo "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
 echo "     Event date : $eventdate ${eventtime} UTC"

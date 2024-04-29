@@ -82,7 +82,7 @@ function usage {
     echo " "
     echo "    DATETIME - Case date and time in YYYYmmddHHMM, Default for today"
     echo "    WORKDIR  - Run Directory"
-    echo "    JOBS     - One or more jobs from [geogrid,ungrib_hrrr,rotate,meshplot_py,static,createWOFS,meshplot_ncl,clean] or \"setup\" "
+    echo "    JOBS     - One or more jobs from [geogrid,ungrib_hrrr,rotate,meshplot_py,static,createWOFS,meshplot_ncl,clean] or [check,setup]."
     echo "               setup - just write set up configuration file"
     echo "               Default all jobs in sequence"
     echo " "
@@ -1086,11 +1086,11 @@ function write_runtimeconfig {
         ncores_filter=96; ncores_dafcst=96
 
         npefilter=768           ; nnodes_filter=$(( npefilter/ncores_filter  ))
-        npedafcst=96            ; nnodes_dafcst=$(( npefcst/ncores_dafcst ))
+        npedafcst=56            ; nnodes_dafcst=$(( npefcst/ncores_dafcst ))
 
-        partition_dafcst="batch"  ; claim_cpu_dafcst="--ntasks-per-node=\${ncores_fcst}";
+        partition_dafcst="batch"  ; claim_cpu_dafcst="";
         partition_filter="batch"  ; claim_cpu_filter="--ntasks-per-node=\${ncores_filter}"
-                                    claim_cpu_update="--ntasks-per-node=1"
+                                    claim_cpu_update="--ntasks-per-node=1 --mem-per-cpu=120G"   # 4 jobs each node
 
         # FCST cycles
         ncores_post=24; ncores_fcst=96
@@ -1098,7 +1098,7 @@ function write_runtimeconfig {
         partition_post="batch"      ; claim_cpu_post=""
 
         npepost=24      ; nnodes_post=$(( npepost/ncores_post  ))
-        npefcst=96      ; nnodes_fcst=$(( npefcst/ncores_fcst ))
+        npefcst=80      ; nnodes_fcst=$(( npefcst/ncores_fcst ))
         ;;
     esac
 
@@ -1111,7 +1111,10 @@ function write_runtimeconfig {
 #
 # This file contains settings specifically for case $eventdate
 # It does NOT contain anything that is configurable from the command line
-# for each task. Use optin "-h" to check command line options
+# for each task. Use optin "-h" to check command line options.
+#
+# Except for comments which must start with "# " in this file, the syntax
+# will be the same as a Bash shell script.
 #
 
 [COMMON]
@@ -1189,19 +1192,18 @@ function write_runtimeconfig {
     OUTIOTYPE="netcdf4"
     OBS_DIR="${OBS_DIR}"
 
-    ncores_fcst="${ncores_dafcst}"
-    ncores_filter="${ncores_filter}"
     partition_fcst="${partition_dafcst}";
     partition_filter="${partition_filter}"
+    npefcst="${npedafcst}";   ncores_fcst="${ncores_dafcst}"
+    npefilter="${npefilter}"; ncores_filter="${ncores_filter}"
+    nnodes_filter="${nnodes_filter}"    # on Cheyenne only
+    nnodes_fcst="${nnodes_dafcst}"      # on Cheyenne only
     claim_cpu_fcst="${claim_cpu_dafcst}"
     claim_cpu_filter="${claim_cpu_filter}"
     claim_cpu_update="${claim_cpu_update}"
-    npefcst="${npedafcst}"
-    npefilter="${npefilter}"
-    nnodes_filter="${nnodes_filter}"    # on Cheyenne only
-    nnodes_fcst="${nnodes_dafcst}"      # on Cheyenne only
     claim_time_fcst="00:20:00"
 
+    job_exclusive_str=""
 [fcst]
     ENS_SIZE=18
     time_step=20
@@ -1210,20 +1212,20 @@ function write_runtimeconfig {
     OUTINVL=300
     OUTIOTYPE="netcdf4"
 
-    ncores_fcst="${ncores_fcst}"
-    ncores_post="${ncores_post}"
+    ncores_fcst="${ncores_fcst}";  npefcst="${npefcst}"
+    ncores_post="${ncores_post}";  npepost="${npepost}"
     partition_fcst="${partition_fcst}"
     partition_post="${partition_post}"
     claim_cpu_fcst="${claim_cpu_fcst}"
     claim_cpu_post="${claim_cpu_post}"
 
-    npefcst="${npefcst}"
-    npepost="${npepost}"
     nnodes_fcst="${nnodes_fcst}"        # on Cheyenne only
     nnodes_post="${nnodes_post}"        # on Cheyenne only
     claim_time_fcst="01:20:00"
     claim_time_mpassit_alltimes="03:30:00"
-    claim_time_mpassit_onetime="00:30:00"
+    claim_time_mpassit_onetime="00:50:00"
+
+    job_exclusive_str=""
 
 EOF
 
@@ -1345,7 +1347,7 @@ while [[ $# -gt 0 ]]
             echo "Unknown option: $key"
             usage 2
             ;;
-        static* | geogrid* | createWOFS | meshplot* | clean* | setup )
+        static* | geogrid* | createWOFS | meshplot* | clean* | setup | check)
             #jobs=(${key//,/ })
             IFS="," read -r -a jobs <<< "$key"
             ;;
@@ -1512,6 +1514,34 @@ source "${scpdir}/Common_Utilfuncs.sh" || exit $?
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
 
+#
+# configurations that is not set from command line
+#
+#[static]
+STATICIOTYPE="pnetcdf,cdf5"
+EXTINVL=10800
+EXTHEAD="HRRRE"
+#hrrrvtable="Vtable.raphrrr"
+hrrrvtable="Vtable.HRRRE.2018"
+#hrrrfile="${hrrr_dir}/${eventdate}/1400/mem01/wrfnat_hrrre_newse_mem0001_01.grib2"
+hrrrfile="${hrrr_dir}/${eventdate}/1400/postprd_mem0001/wrfnat_hrrre_newse_mem0001_01.grib2"
+hrrrdate="${eventdate}"
+hrrrtime="${eventtime}"
+
+EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
+
+if [[ " ${jobs[*]} " == " check " ]]; then
+    echo "Checking $hrrrfile ..."
+    ls -l --color $hrrrfile
+    echo ""
+    echo "Checking ${hrrr_dir}/${eventdate}/1400 ...."
+    ls -lF --color -I "HRRRE_mem*" -I "HRRR*" ${hrrr_dir}/${eventdate}/1400
+    echo ""
+    echo "Checking ${hrrr_dir}/${eventdate}/1200 ...."
+    ls -lF --color -I "HRRRE_mem*" -I "HRRR*" ${hrrr_dir}/${eventdate}/1200
+    exit 0
+fi
+
 echo "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
 echo "     Event date : ${eventdate} ${eventtime}"
 echo "     Root    dir: $rootdir"
@@ -1536,23 +1566,6 @@ caseconfig="$WORKDIR/config.${eventdate}"
 write_runtimeconfig "$caseconfig"
 
 if [[ " ${jobs[*]} " == " setup " ]]; then exit 0; fi
-#
-# read configurations that is not set from command line
-#
-#readconf $caseconfig COMMON static
-
-#[static]
-STATICIOTYPE="pnetcdf,cdf5"
-EXTINVL=10800
-EXTHEAD="HRRRE"
-#hrrrvtable="Vtable.raphrrr"
-hrrrvtable="Vtable.HRRRE.2018"
-#hrrrfile="${hrrr_dir}/${eventdate}/1400/mem01/wrfnat_hrrre_newse_mem0001_01.grib2"
-hrrrfile="${hrrr_dir}/${eventdate}/1400/postprd_mem0001/wrfnat_hrrre_newse_mem0001_01.grib2"
-hrrrdate="${eventdate}"
-hrrrtime="${eventtime}"
-
-EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 
 #
 # Start the forecast driver

@@ -26,7 +26,12 @@ README.md
     lnmpasrun        # Link MPAS run-time time for users to run the program by themselves
     lnmpasfcst       # Link MPASSIT processed MPAS forecasts to a directory that simulates
                      # the WRF-WoFS forecasts, the purpose is to use WoFS-post directly
-                     # without further changes
+                     # without modification
     tarmpas          # tar a MPAS CONUS run directory for seeking support from NCAR,
                      # not ncessary now since we got an account on Cheyenne.
 
+    plot_allobs.sh   # Plot Data assimilation diagnostic figures
+    runmpas.sh       # Higher level script to run the MPAS-WoFS workflow interactively
+                     # or using Linux at/cronb facility for 2024 NSSL near-realtime experiments
+                     # 1. DA;   2. FCST;   on Vecna    
+                     # 3. post; 4. plot    on wof-epyc8

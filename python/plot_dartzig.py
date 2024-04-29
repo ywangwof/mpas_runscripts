@@ -79,7 +79,8 @@ def parse_args():
     parser.add_argument('-f','--filename',  help='File name (obs_seq.final) to list its content',           type=str,   default=None)
     parser.add_argument('-p','--parms',     help='Parameter to limit selections, [dataqc,dartqc]',          type=str,   default='10,0')
     parser.add_argument('-t','--threshold', help='Threshold for reflectivity',                              type=float, default=None)
-    parser.add_argument('-s','--spreadtype', help='1: ensemble standard deviation, 2: ensemble standard deviation + ob error ("total spread")',
+    parser.add_argument('-s','--spreadtype', help='''1: ensemble standard deviation, 2: ensemble standard deviation + ob error ("total spread")''',
+                                                     #3: ensemble standard deviation + ob error (use average value)''',
                                                                                                             type=int,   default=2)
     parser.add_argument('-o','--outfile',   help='Name of output image or output directory',                type=str,   default=None)
     parser.add_argument('-r','--resolution',help='Resolution of the output image',                          type=int,   default=100)
@@ -398,6 +399,8 @@ def load_variables(cargs,wargs, filelist):
                 print(f"time = {timestr}, number of obs = {nobs_type} for {var_obj['type_label']}")
                 if cargs.verbose: print(f"              index variance: {ivariance}, value: {variance[0:3]}")
 
+                variance = np.min(variance)   # use minimum to exclude the boundary effects
+
                 # rms error
                 n1 = prio.count()
                 rms_prior = np.sqrt(np.sum((prio-obs)**2)/n1)
@@ -411,7 +414,7 @@ def load_variables(cargs,wargs, filelist):
                 # rms ensemble spread
                 n3 = sprd_pri.count()
                 n4 = sprd_pst.count()
-                if cargs.spreadtype == 2:
+                if cargs.spreadtype in (2,3):
                     #total spread: (modified to account for non-constant obs error)
                     #sprd_prior = np.sqrt( variance[0] + np.sum( sprd_pri*sprd_pri )/n3 )
                     #sprd_post  = np.sqrt( variance[0] + np.sum( sprd_pst*sprd_pst )/n4 )
@@ -435,8 +438,12 @@ def load_variables(cargs,wargs, filelist):
                 var_obj['ratio'].append(  (np.sum( variance+(sprd_pri*sprd_pri) )/ n3 ) /(np.sum((obs-prio)**2)/n1) )
 
                 #var_obj['obs_std'].append( np.sqrt(variance[0]) )
-                #Output mean value
-                var_obj['obs_std'].append( np.sqrt(np.mean(variance)) )
+                #if cargs.spreadtype in (1, 2) :
+                #Output minimum value
+                var_obj['obs_std'].append( np.sqrt(variance) )
+                #elif cargs.spreadtype == 3 :
+                #    #Output mean value
+                #    var_obj['obs_std'].append( np.sqrt(np.mean(variance)) )
 
                 var_obj['times'].append( timestr )
 

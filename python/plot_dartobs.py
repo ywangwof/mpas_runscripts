@@ -671,7 +671,13 @@ def load_variables(args):
     var_obj['varloc']   = varloc     # double location(ObsIndex, locdim)
     var_obj['varvert']  = varvert    # int which_vert(ObsIndex)
     var_obj['varobs']   = varobs     # double observations(ObsIndex, copy)
-    var_obj['vartime']  = vartime     # double observations(ObsIndex, copy)
+    var_obj['vartime']  = vartime    # double observations(ObsIndex, copy)
+
+    var_obj['timeda']   = None
+    time_re = re.compile('(\d{8})(\d{4})')
+    time_match = time_re.search(args.obsfile)
+    if time_match:
+        var_obj['timeda'] = time_match.group(1)+'_'+time_match.group(2)
 
     return make_namespace(var_obj,level=1)
 
@@ -804,7 +810,9 @@ def load_obs_seq(varargs):
         var_obj['varlabels']  = varlabels1
     else:
         var_obj['varlabels']  = varlabels      # CopyMetaData
-    var_obj['qclabels']   = qclabels       # CopyMetaData
+    var_obj['qclabels']   = qclabels           # CopyMetaData
+
+    var_obj['timeda']  = None
 
     return make_namespace(var_obj,level=1)
 
@@ -1112,10 +1120,13 @@ def retrieve_plotvar(varargs,vtype,varobj):
 
         vardat = np.array(obsdta)
 
-    otime = varobj.vartime[obs_index][0]
-    otime = int(otime * 3600*24)//300*300
-    obstime = datetime.strptime('1601-01-01','%Y-%m-%d')+timedelta(seconds=otime)
-    varmeta['time']  = obstime.strftime('%Y%m%d_%H:%M:%S')
+    if varobj.timeda is not None:
+        varmeta['time']  = varobj.timeda
+    else:
+        otime = varobj.vartime[obs_index][0]
+        otime = int(otime * 3600*24)//300*300
+        obstime = datetime.strptime('1601-01-01','%Y-%m-%d')+timedelta(seconds=otime)
+        varmeta['time']  = obstime.strftime('%Y%m%d_%H:%M:%S')
 
     glons = np.array(obslons)
     glats = np.array(obslats)
@@ -1181,9 +1192,12 @@ def retrieve_scattervar(cmdargs,vtype,varobj):
         sdata[qcstr]['post']  = postdta[qindex]
         #sdata[qcstr]['count'] = postdta[qindex].count()
 
-        otime = timedta[qindex]
-        obstime = datetime.strptime('1601-01-01','%Y-%m-%d')+timedelta(days=otime[0])
-        sdata[qcstr]['time']  = obstime.strftime('%Y%m%d_%H:%M:%S')
+        if varobj.timedat is not None:
+            sdata[qcstr]['time']  = varobj.timeda
+        else:
+            otime = timedta[qindex]
+            obstime = datetime.strptime('1601-01-01','%Y-%m-%d')+timedelta(days=otime[0])
+            sdata[qcstr]['time']  = obstime.strftime('%Y%m%d_%H:%M:%S')
 
         plot_meta['qc_label'][qcstr] = QCValMeta[qcstr]
 
@@ -1479,6 +1493,8 @@ def make_plot(wargs,obstype,wobj):
         cntr = ax.scatter(glons,glats,marker='.', c=vardata, alpha=alphaval, s=8.0, cmap=color_map, norm=normc, transform=carr)
 
         plt.text(0.15,y_position, f'Number of observations: {plot_meta.number}', color='r', horizontalalignment='left', verticalalignment='center',fontsize=14,transform=plt.gcf().transFigure)
+        if plot_meta.varlabel == "ObsErrVar":
+            plt.text(0.15,y_position-0.02, f'Min Value: {np.min(vardata)} ({np.count_nonzero(vardata == np.min(vardata))}), Max Value: {np.max(vardata)} ({np.count_nonzero(vardata == np.max(vardata))})', color='k', horizontalalignment='left', verticalalignment='center',fontsize=14,transform=plt.gcf().transFigure)
 
         #mod_obj = read_modgrid(cargs.grid)
         #mod_obs = interpolation2D({'lon': glons, 'lat': glats, 'value': vardata}, mod_obj)
