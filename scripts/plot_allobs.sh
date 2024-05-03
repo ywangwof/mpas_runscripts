@@ -25,6 +25,11 @@ function usage {
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
     echo "              -d dacycles         DA cycles subdirectory name"
+    echo "              -m machine          Default: wof-epyc"
+    echo "              -obs value          Plot observation value or variance. Default: none"
+    echo "                                  This option can repeat multiple times for plot several variables"
+    echo "              -s starttime        in HHMM. Default: 1500"
+    echo "              -e endtime          in HHMM. Default: 0300"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt    = $eventdateDF"
@@ -47,7 +52,13 @@ show=""
 verb=false
 
 eventdate=${eventdateDF}
+starttime="1500"
+endtime="0300"
 dadir="dacycles"
+machine="wof-epyc"
+obsvalues=()
+
+declare -rA obstypes=(["value"]="1" ["variance"]="78")
 
 while [[ $# -gt 0 ]]; do
     key="$1"
@@ -66,6 +77,38 @@ while [[ $# -gt 0 ]]; do
             dadir="$2"
             shift
             ;;
+        -m)
+            machine="$2"
+            shift
+            ;;
+        -obs)
+            if [[ "${2,,}" == "value" || "${2,,}" == "variance" ]]; then
+                obsvalues+=("${2,,}")
+            else
+                echo "ERROR: unknown obsvalue: $2."
+                usage 1
+            fi
+            shift
+            ;;
+        -s )
+            if [[ $2 =~ ^[0-9]{4}$ ]]; then
+                starttime="${2}"
+            else
+                echo "ERROR: Start time should be in HHMM, got \"$2\"."
+                usage 1
+            fi
+            shift
+            ;;
+        -e )
+            if [[ $2 =~ ^[0-9]{4}$ ]]; then
+                endtime=$2
+            else
+                echo "ERROR: End time should be in HHMM, got \"$2\"."
+                usage 1
+            fi
+            shift
+            ;;
+
         -*)
             echo "Unknown option: $key"
             usage 2
@@ -83,50 +126,76 @@ while [[ $# -gt 0 ]]; do
     shift # past argument or value
 done
 
-if [[ ! "$host" =~ ^wof-epyc.*$ ]]; then
-    echo "ERROR: Please run $0 on wof-epyc8 only".
-    exit 1
-fi
-
 if [[ ! -d ${rundir}/${eventdate}/${dadir} ]]; then
     echo "ERROR: DA cycles directory: ${rundir}/${eventdate}/${dadir} not exist."
     exit 1
 fi
 
+if [[ ! "$host" =~ ^${machine}.*$ ]]; then
+    echo "ERROR: Please run $0 on ${machine} only".
+    exit 1
+fi
+
 if [[ -z ${MAMBA_EXE} ]]; then   # not set micromamba
+    if [[ ! "$host" =~ ^vecna.*$ ]]; then
+        micromamba_dir='/home/yunheng.wang/tools/micromamba'
+        myenv="wofs_an"
+    else
+        micromamba_dir='/home/yunheng.wang/y'
+        myenv="myenv"
+    fi
+
     # >>> mamba initialize >>>
     # !! Contents within this block are managed by 'mamba init' !!
-    export MAMBA_EXE='/home/yunheng.wang/y/micromamba';
-    export MAMBA_ROOT_PREFIX='/home/yunheng.wang/y';
-    __mamba_setup="$("$MAMBA_EXE" shell hook --shell bash --root-prefix "$MAMBA_ROOT_PREFIX" 2> /dev/null)"
-    if [ $? -eq 0 ]; then
+    export MAMBA_EXE="${micromamba_dir}/bin/micromamba"
+    export MAMBA_ROOT_PREFIX="${micromamba_dir}"
+    #__mamba_setup="$("$MAMBA_EXE" shell hook --shell bash --root-prefix "$MAMBA_ROOT_PREFIX" 2> /dev/null)"
+    #if [ $? -eq 0 ]; then
+    if __mamba_setup="$("$MAMBA_EXE" shell hook --shell bash --root-prefix "$MAMBA_ROOT_PREFIX" 2> /dev/null)"; then
         eval "$__mamba_setup"
     else
         micromamba() { "$MAMBA_EXE"; }  # Fallback on help from mamba activate
     fi
     unset __mamba_setup
+
     # <<< mamba initialize <<<
-    micromamba activate "/home/brian.matilla/micromamba/envs/wofs-func"
+    micromamba activate "${myenv}"
+
+    echo "Activated Python environment \"${myenv}\" on ${machine} ..."
 fi
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-log_dir="${rundir}/${eventdate}"
-
-if [[ ! -d ${log_dir} ]]; then
-    echo "ERROR: ${log_dir} not exists."
-    exit 1
-fi
-
-grid_file="${rundir}/${eventdate}/wofs_mpas/wofs_mpas.grid.nc"
+#log_dir="${rundir}/${eventdate}"
+#
+#if [[ ! -d ${log_dir} ]]; then
+#    echo "ERROR: ${log_dir} not exists."
+#    exit 1
+#fi
 
 if [[ ! -d ${rundir}/${eventdate}/${dadir}/obs_diag ]]; then
     mkdir -p "${rundir}/${eventdate}/${dadir}/obs_diag"
 fi
 cd "${rundir}/${eventdate}/${dadir}/obs_diag" || exit
 
-start_s=$(date -d "${eventdate} 1515" +%s)
-end_s=$(date -d "${eventdate} 0300 1 day" +%s)
+starthour=${starttime:0:2}
+if [[ $((10#$starthour)) -lt 12 ]]; then
+    startdatetime=$(date -u -d "$eventdate $starttime 1 day" "+%Y%m%d %H%M")
+else
+    startdatetime=$(date -u -d "$eventdate $starttime" "+%Y%m%d %H%M")
+fi
+
+endhour=${endtime:0:2}
+if [[ $((10#$endhour)) -lt 12 ]]; then
+    enddatetime=$(date -u -d "$eventdate $endtime 1 day" "+%Y%m%d %H%M")
+else
+    enddatetime=$(date -u -d "$eventdate $endtime" "+%Y%m%d %H%M")
+fi
+
+start_s=$(date -d "${startdatetime}" +%s)
+end_s=$(date -d "${enddatetime}" +%s)
+
+grid_file="${rundir}/${eventdate}/wofs_mpas/wofs_mpas.grid.nc"
 
 for ((s=start_s;s<=end_s;s+=900)); do
     timestr=$(date -d @$s +%H%M)
@@ -141,21 +210,27 @@ for ((s=start_s;s<=end_s;s+=900)); do
         done
     fi
 
-    #if [[ ! -e "done.${timestr}" ]]; then
-    #    echo ""
-    #    echo "Plotting Observation at ${timestr} ..."
-    #    ${show} ${rootdir}/python/plot_dartobs.py -p 1,0  -g ${grid_file} -r 300 -latlon "${seq_file}" 2>/dev/null 
-    #    ${show} ${rootdir}/python/plot_dartobs.py -p 78,0 -g ${grid_file} -r 300 -latlon "${seq_file}" 2>/dev/null 
+    if [[ ! -e "done.${timestr}" ]]; then
 
-    #    touch "done.${timestr}"
-    #else
-    #    echo "done.${timestr} exist. Skipped."
-    #fi
+        for ovalue in "${obsvalues[@]}"; do
+            echo -e "\nPlotting ${ovalue} at ${timestr} ..."
+            xtype="${obstypes[$ovalue]},0"
+            ${show} ${rootdir}/python/plot_dartobs.py -p ${xtype}  -g ${grid_file} -r 300 -latlon "${seq_file}" 2>/dev/null
+            if [[ $? -eq 0 ]]; then
+                ${show} touch "done.${timestr}"
+            fi
+        done
+
+    else
+        echo "done.${timestr} exist. Skipped."
+    fi
 done
 
 if [[ ! -e done.zigzag ]]; then
-    ${show} ${rootdir}/python/plot_dartzig.py ${eventdate} -d ${rundir} -r 300 2>/dev/null 
-    touch "done.zigzag"
+    ${show} ${rootdir}/python/plot_dartzig.py ${eventdate} -d ${rundir}/${eventdate}/${dadir} -r 300 2>/dev/null
+    if [[ $? -eq 0 ]]; then
+        ${show} touch "done.zigzag"
+    fi
 fi
 
 exit 0

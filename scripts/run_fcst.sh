@@ -111,23 +111,25 @@ function usage {
     echo "               Default all jobs in sequence"
     echo " "
     echo "    OPTIONS:"
-    echo "              -h              Display this message"
-    echo "              -n              Show command to be run and generate job scripts only"
-    echo "              -v              Verbose mode"
-    echo "              -k  [0,1,2]     Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
-    echo "                              Default is 0 for ungrib, mpassit, upp and 1 for others"
-    echo "              -t  DIR         Template directory for runtime files"
-    echo "              -w              Hold script to wait for all job conditions are satified and submitted (for mpassit & upp)."
-    echo "                              By default, the script will exit after submitting all possible jobs."
-    echo "              -m  Machine     Machine name to run on, [Jet, Cheyenne, Vecna]."
-    echo "              -d  wofs_mpas   Domain name to be used"
+    echo "              -h                  Display this message"
+    echo "              -n                  Show command to be run and generate job scripts only"
+    echo "              -v                  Verbose mode"
+    echo "              -k  [0,1,2]         Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
+    echo "                                  Default is 0 for ungrib, mpassit, upp and 1 for others"
+    echo "              -t  DIR             Template directory for runtime files"
+    echo "              -w                  Hold script to wait for all job conditions are satified and submitted (for mpassit & upp)."
+    echo "                                  By default, the script will exit after submitting all possible jobs."
+    echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
+    echo "              -d  wofs_mpas       Domain name to be used"
     echo "              -i  YYYYmmddHHMM    Initial time, default: same as start time from the command line argument"
     echo "              -s  YYYYmmddHHMM    Start date & time of the forecast cycles"
     echo "                  HHMM            Start time of the forecast cycles"
     echo "              -e  YYYYmmddHHMM    End date & time of the forecast cycles"
     echo "                  HHMM            End time of the forecast cycles"
-    echo "              -p  nssl        MP scheme, [nssl, thompson], default: nssl"
-    echo "              -r              Realtime run, default: retrospective run"
+    echo "              -p  nssl            MP scheme, [nssl, thompson], default: nssl"
+    echo "              -r                  Realtime run, default: a retrospective run"
+    echo "              -damode restart     DA cycles mode, either init or restart. default: restart"
+    echo "              -affix              Affix attached to the run directory \"fcst\". Default: null"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt = $eventdateDF"
@@ -162,7 +164,7 @@ function run_mpas {
     cd ${wrkdir} || return
 
     timestr=$(date -u -d @${iseconds} +%H%M)
-    dawrkdir=${rundir}/dacycles/${timestr}
+    dawrkdir=${rundir}/dacycles${affix}/${timestr}
     #
     # Waiting for job conditions
     #
@@ -235,9 +237,13 @@ function run_mpas {
         #
         # init files
         #
-        ln -sf $dawrkdir/fcst_${memstr}/${domname}_${memstr}.restart.${currtime_fil}.nc .
-        do_restart="true"
-        do_dacyle="true"
+        do_restart="false"
+        do_dacyle="false"
+        if [[ ${damode} == "restart" ]]; then
+            do_restart="true"
+            do_dacyle="true"
+        fi
+        ln -sf $dawrkdir/fcst_${memstr}/${domname}_${memstr}.${damode}.${currtime_fil}.nc .
 
         ln -sf $rundir/init/${domname}.invariant.nc .
 
@@ -324,7 +330,7 @@ function run_mpas {
     config_scalar_advection         = true
     config_positive_definite        = false
     config_monotonic                = true
-    config_coef_3rd_order           = 0.25
+    config_coef_3rd_order           = 1.0
     config_epssm                    = 0.1
     config_smdiv                    = 0.1
 /
@@ -407,7 +413,7 @@ EOF
 <streams>
 <immutable_stream name="input"
                   type="input"
-                  filename_template="${domname}_${memstr}.init.nc"
+                  filename_template="${domname}_${memstr}.init.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
                   input_interval="initial_only" />
 
 <immutable_stream name="invariant"
@@ -496,7 +502,6 @@ s/MACHINE/${machine}/g
 s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/RUNMPCMD/${job_runmpexe_str}/
-s/SAVETAG/nothing_xxx/
 EOF
     # shellcheck disable=SC2154
     if [[ "${mach}" == "pbs" ]]; then
@@ -540,7 +545,7 @@ function run_mpassit {
     fi
 
     n=0; fcst_minutes=()
-    for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
+    for ((i=diag_start;i<=fcst_seconds;i+=OUTINVL)); do
         minstr=$(printf "%03d" $((i/60)))
 
         if [[ -f done.mpassit$minstr ]]; then
@@ -562,7 +567,7 @@ function run_mpassit {
         fcst_minutes+=("${minstr}")
     done
 
-    n_fcst=$((fcst_seconds/OUTINVL))
+    n_fcst=$(( (fcst_seconds-diag_start)/OUTINVL+1 ))
     if [[ $n -eq $n_fcst ]]; then
         touch done.mpassit
         rm -rf done.mpassit???
@@ -892,7 +897,7 @@ function run_upp {
 
     eventtimestr=$(date -u -d @$iseconds +%Y%m%d%H%M)
 
-    for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
+    for ((i=diag_start;i<=fcst_seconds;i+=OUTINVL)); do
         imin=$((i/60))
         minstr=$(printf "%03d" $imin)
         ihour=$((imin/60))
@@ -1045,7 +1050,7 @@ function fcst_driver() {
     #
     # Build working directory
     #
-    wrkdir=$rundir/fcst
+    wrkdir=$rundir/fcst${affix}
     mkwrkdir $wrkdir $overwrite
     cd $wrkdir || return
 
@@ -1104,7 +1109,7 @@ function fcst_driver() {
             run_mpassit $fcstwrkdir $ilaunch
 
             if [[ $rt_run == true ]]; then
-                for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
+                for ((i=diag_start;i<=fcst_seconds;i+=OUTINVL)); do
                     minstr=$(printf "%03d" $((i/60)))
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
                     check_and_resubmit "mpassit$minstr mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit_$minstr.${mach} ${num_resubmit}
@@ -1120,7 +1125,7 @@ function fcst_driver() {
             #------------------------------------------------------
             if [[ $dorun == true ]]; then
                 if [[ $rt_run == true ]]; then
-                    for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
+                    for ((i=diag_start;i<=fcst_seconds;i+=OUTINVL)); do
                         minstr=$(printf "%03d" $((i/60)))
                         if [[ ! -e $fcstwrkdir/mpassit/done.mpassit$minstr ]]; then
                             #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
@@ -1137,7 +1142,7 @@ function fcst_driver() {
             run_upp $fcstwrkdir $ilaunch
 
             if [[ $dorun == true && $jobwait -eq 1 ]]; then
-                for ((i=OUTINVL;i<=fcst_seconds;i+=OUTINVL)); do
+                for ((i=diag_start;i<=fcst_seconds;i+=OUTINVL)); do
                     minstr=$(printf "%03d" $((i/60)))
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
                     check_and_resubmit "upp$minstr mem" $fcstwrkdir/upp $ENS_SIZE run_upp_$minstr.slurm  2
@@ -1157,7 +1162,7 @@ function run_clean {
     local end_sec=$2
     local what=$3
 
-    wrkdir=$rundir/fcst
+    wrkdir=$rundir/fcst${affix}
 
     for isec in $(seq ${start_sec} ${fcst_launch_intvl} ${end_sec} ); do
         #timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
@@ -1212,7 +1217,7 @@ function run_clean {
                     mywrkdir=$fcstwrkdir/mpassit
                     if [[ -d $mywrkdir ]]; then
                         cd $mywrkdir || return
-                        for ((i=0;i<=fcst_seconds;i+=OUTINVL)); do
+                        for ((i=diag_start;i<=fcst_seconds;i+=OUTINVL)); do
                             minstr=$(printf "%03d" $((i/60)))
 
                             done=0
@@ -1246,7 +1251,7 @@ function run_clean {
                     mywrkdir=$fcstwrkdir/upp
                     if [[ -r $mywrkdir ]]; then
                         cd $mywrkdir || return
-                        for ((i=0;i<=fcst_seconds;i+=OUTINVL)); do
+                        for ((i=diag_start;i<=fcst_seconds;i+=OUTINVL)); do
                             minstr=$(printf "%03d" $((i/60)))
 
                             done=0
@@ -1309,6 +1314,8 @@ jobwait=0
 runcmd="sbatch"
 dorun=true
 rt_run=false            # realtime run?
+damode="restart"
+affix=""
 
 myhostname=$(hostname)
 if [[ "${myhostname}" == ln? ]]; then
@@ -1441,6 +1448,19 @@ while [[ $# -gt 0 ]]
                 echo "ERROR: Unsupported MP scheme name, got \"$2\"."
                 usage 1
             fi
+            shift
+            ;;
+        -damode)
+            if [[ ${2,,} == "init" || ${2,,} == "restart" ]]; then
+                damode="${2,,}"
+            else
+                echo "ERROR: unknow argument. Expect: \"init\" or \"restart\". Got: ${2,,}"
+                usage 1
+            fi
+            shift
+            ;;
+        -affix)
+            affix="_$2"
             shift
             ;;
         -*)
@@ -1577,6 +1597,11 @@ EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 OUTINVL_STR=$(printf "00:%02d:00" $((OUTINVL/60)) )
 RSTINVL_STR="10:00:00"         # turn off restart file output
 
+if [[ "${damode}" == "restart" ]]; then
+    diag_start=OUTINVL
+else
+    diag_start=0
+fi
 #
 # Start the forecast driver
 #

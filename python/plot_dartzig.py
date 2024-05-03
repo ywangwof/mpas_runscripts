@@ -891,6 +891,7 @@ if __name__ == "__main__":
 
     #dadir = os.path.join(wargs.run_dir,f"{wargs.eventdate}","dacycles")
     lastname = os.path.basename(os.path.normpath(wargs.run_dir))
+    #print(f"lastname = {lastname}")
     if lastname == "obs_diag":
         dadir = os.path.dirname(wargs.run_dir)
     elif 'dacycles' in lastname:

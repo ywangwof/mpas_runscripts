@@ -45,12 +45,6 @@ RUNMPCMD -n NOPART EXEDIR/atmosphere_model
 
 if [[ $? -eq 0 ]]; then
     touch done.fcst_$memstr
-    for fn in SAVETAG; do
-       if [[ -e $fn ]]; then
-          echo "Saving file: $fn to .."
-          mv ${fn} ..
-       fi
-    done
 else
     touch error.fcst_$memstr
 fi

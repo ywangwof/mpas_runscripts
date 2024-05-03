@@ -383,6 +383,39 @@ def attach_radar_rings(grid,radars,axo):
 
 ########################################################################
 
+def cal_grid_stat(mpas_grid, out_grid):
+    '''
+        mpas_grid = {"nedges"         : nedges,
+                     "verticesOnEdge" : verticesOnEdge,
+                     "lonVertex"      : lonVertex,
+                     "latVertex"      : latVertex,
+                    }
+        grid_out['glons_corners']     # 0-4, from ll, ul, ur, lr, ll
+        grid_out['glats_corners']
+    '''
+
+    delta = 0.05
+    # distance to west to east
+    mpas_lons = np.where(mpas_grid.lonVertex> 180.,mpas_grid.lonVertex-360.0,mpas_grid.lonVertex)
+    mpas_lats = mpas_grid.latVertex
+
+    wlon_edges = mpas_lons[(mpas_lats < out_grid.ctrlat+delta) & (mpas_lats > out_grid.ctrlat-delta)]
+    wlat_edges = mpas_lats[(mpas_lats < out_grid.ctrlat+delta) & (mpas_lats > out_grid.ctrlat-delta)]
+
+    print(wlat_edges.shape, wlat_edges.min(), wlat_edges.max(), wlon_edges.min(), wlon_edges.max(),wlat_edges.mean())
+    wofdomsize = np.deg2rad(wlon_edges.max()-wlon_edges.min())*np.cos(np.deg2rad(wlat_edges.mean()))*__r_earth*0.001
+    print(f"West to East: {wofdomsize} km")
+
+    # distance to south to north
+    slon_edges = mpas_lons[(mpas_lons < out_grid.ctrlon+delta) & (mpas_lons > out_grid.ctrlon-delta)]
+    slat_edges = mpas_lats[(mpas_lons < out_grid.ctrlon+delta) & (mpas_lons > out_grid.ctrlon-delta)]
+
+    print(slat_edges.shape, slat_edges.min(), slat_edges.max(), slon_edges.min(), slon_edges.max(),slat_edges.mean())
+    wofdomsize = np.deg2rad(slat_edges.max()-slat_edges.min())*__r_earth*0.001
+    print(f"South to North: {wofdomsize} km")
+
+########################################################################
+
 def write_envfile(outfilename,outradars,grid):
 
     rad_names = []
@@ -672,6 +705,8 @@ if __name__ == "__main__":
         # Create Lambert conformal map based on width and height of domain and center point
         grid_out = setup_out_projection(make_namespace(ogrid))
 
+    #cal_grid_stat(mpas_edges, grid_out)
+
     #-----------------------------------------------------------------------
     #
     # Plot background map
@@ -716,7 +751,7 @@ if __name__ == "__main__":
         gl.right_labels  = True
         gl.bottom_labels = True
 
-    plt.title(f"{args.name} Domain")
+    plt.title(f"{args.name} Domain on {args.event}")
 
     #-----------------------------------------------------------------------
     #

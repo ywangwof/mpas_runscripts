@@ -76,6 +76,7 @@ while [[ $# -gt 0 ]]; do
         *)
             if [[ $key =~ ^[0-9]{8}$ ]]; then
                 eventdate=${key}
+                nextday=true
             else
                 echo ""
                 echo "ERROR: unknown argument, get [$key]."

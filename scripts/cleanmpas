@@ -88,6 +88,7 @@ while [[ $# -gt 0 ]]; do
         #    ;;
         -r)
             run_dir=$2
+            shift
             ;;
         -*)
             echo "Unknown option: $key"
@@ -138,7 +139,7 @@ mpas )
     fi
 
     cd "${run_dir}" || usage 1
-    ${show} rm -rf log.atmosphere.*.err log.atmosphere.*.out log.init_atmosphere.*.err log.init_atmosphere.*.out core*
+    ${show} rm -rf log.atmosphere.*.err log.atmosphere.*.out log.init_atmosphere.*.err log.init_atmosphere.*.out namelist.output core*
     ${show} #rm -rf ${runname}.diag.* ${runname}.restart.* ${runname}.history.*
     ${show} rm -rf ./*.diag.* ./*.history.*  # *.restart.*
     ${show} rm -rf error.*

@@ -110,6 +110,8 @@ function usage {
     echo "                  HHMM            End time of the DA cycles"
     echo "              -p  nssl            MP scheme, [nssl, thompson], default: nssl"
     echo "              -r                  Realtime run, will wait for observations, default: retrospective run"
+    echo "              -damode restart     DA cycles mode, either init or restart. default: restart"
+    echo "              -affix              Affix attached to the run directory \"dacycles\". Default: null"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt = $eventdateDF"
@@ -161,9 +163,7 @@ function run_obsmerge {
 
     obspreprocess=${exedir}/dart/mpas_dart_obs_preprocess
 
-    #ln -sf ${wrkdir}/input.nml ./input.nml
     cp ${wrkdir}/input.nml input.nml
-    #ln -sf ${rundir}/dacycles/${inittime_str}/${domname}_01.restart.${frsttime_str}.nc init.nc
 
     echo "$$-${FUNCNAME[0]}: OBS Preprocessing for analysis time: ${anlys_time}, days: ${g_date}, seconds: ${g_sec}"
 
@@ -720,7 +720,7 @@ function run_filter {
         if [[ $icycle -eq 0 ]]; then
             input_file="$rundir/init/wofs_mpas_${memstr}.init.nc"
         else
-            input_file="$parentdir/${event_pre}/wofs_mpas_${memstr}.restart.$currtime_str.nc"
+            input_file="$parentdir/${event_pre}/fcst_${memstr}/wofs_mpas_${memstr}.restart.$currtime_str.nc"
         fi
 
         if [[ $dorun == true && ! -f $input_file ]]; then
@@ -736,15 +736,6 @@ function run_filter {
         output_file_list+=("$output_file")
     done
 
-    if [[ $icycle -eq 0 ]]; then
-        # Skip filter at cycle 0 temporarily
-        touch done.filter
-        return
-    fi
-
-    #firstfile=$(head -1 filter_in.txt)
-    #ln -sf $firstfile init.nc             # The name of the MPAS analysis file to be read and/or written by the DART programs for the state data.
-    #ln -sf ${rundir}/dacycles/${inittime_str}/${domname}_01.restart.${frsttime_str}.nc init.nc
     filename_mesh="${rundir}/init/${domname}_01.init.nc"
 
     #------------------------------------------------------
@@ -752,15 +743,17 @@ function run_filter {
     #------------------------------------------------------
 
     inf_initial=(".false." ".false.")
-    if [[ $ADAPTIVE_INF == true && $icycle -gt 1 ]]; then
-        if [[ $dorun == true && ! -e ${parentdir}/${event_pre}/output_priorinf_mean.nc ]]; then
-          echo "File ${parentdir}/${event_pre}/output_priorinf_mean.nc does not exist. Stop."
-          exit 2
-        fi
-        ln -sf ${parentdir}/${event_pre}/output_priorinf_mean.nc input_priorinf_mean.nc
-        ln -sf ${parentdir}/${event_pre}/output_priorinf_sd.nc   input_priorinf_sd.nc
+    if [[ $ADAPTIVE_INF == true ]]; then
+        if [[ -e ${parentdir}/${event_pre}/output_priorinf_mean.nc ]]; then
+            ln -sf ${parentdir}/${event_pre}/output_priorinf_mean.nc input_priorinf_mean.nc
+            ln -sf ${parentdir}/${event_pre}/output_priorinf_sd.nc   input_priorinf_sd.nc
 
-        inf_initial=(".true." ".true.")
+            inf_initial=(".true." ".true.")
+        else
+            echo "File ${parentdir}/${event_pre}/output_priorinf_mean.nc does not exist."
+            echo "$$-${FUNCNAME[0]} WARNING: Do not use adaptive inflation for this cycle."
+            #exit 2
+        fi
     fi
 
     #------------------------------------------------------
@@ -1224,7 +1217,6 @@ function run_filter {
                           'rho',                   'QTY_DENSITY',
                           'uReconstructZonal',     'QTY_U_WIND_COMPONENT',
                           'uReconstructMeridional','QTY_V_WIND_COMPONENT',
-                          'u',                     'QTY_EDGE_NORMAL_SPEED',
                           'w',                     'QTY_VERTICAL_VELOCITY',
                           'u10',                   'QTY_10M_U_WIND_COMPONENT',
                           'v10',                   'QTY_10M_V_WIND_COMPONENT',
@@ -1623,8 +1615,10 @@ EOF
         if [[ -e OBSDIR/obs_seq.${timestr_cur} ]]; then
             ln -sf OBSDIR/obs_seq.${timestr_cur} obs_seq.in
         else
-            echo "ERROR: Observation file \"${wrkdir}/OBSDIR/obs_seq.${timestr_cur}\" not found"
-            exit 3
+            echo "$$-${FUNCNAME[0]}: WARNING: Observation file \"OBSDIR/obs_seq.${timestr_cur}\" not found"
+            touch done.filter
+            no_observation=true
+            return
         fi
     fi
 
@@ -1692,6 +1686,8 @@ function run_update_states {
         return
     fi
 
+    currtime_fil=$(date -u -d @${iseconds} +%Y-%m-%d_%H.%M.%S)
+
     #------------------------------------------------------
     # Prepare update_mpas_states by copying/linking the background files
     #------------------------------------------------------
@@ -1711,7 +1707,7 @@ function run_update_states {
     update_input_file=$(awk '/update_input_file_list/{print $3}' input.nml)
     readarray -t update_file_array < ${update_input_file:1:${#update_input_file}-2}
 
-    jobarrays=(); statefiles=()
+    jobarrays=(); stateinfiles=(); stateoutfiles=()
     for iens in $(seq 1 $ENS_SIZE); do
         (( jindex=iens-1 ))
 
@@ -1735,7 +1731,11 @@ function run_update_states {
 
         fn="${input_file_array[$jindex]}"
         fnbase=$(basename $fn)
-        echo "./$fnbase" > ${update_output_file_list}
+        srcfn=${fnbase/.restart./.${damode}.}
+        if [[ "$srcfn" =~ ^${domname}_[0-9]{2}.init.nc$ ]]; then     # insert time to init.nc
+            srcfn="${srcfn//.nc}.${currtime_fil}.nc"
+        fi
+        echo "./${srcfn}" > ${update_output_file_list}
         sed -i "/update_input_file_list/s/=.*/= '${update_input_file_list}'/" input.nml
         sed -i "/update_output_file_list/s/=.*/= '${update_output_file_list}'/" input.nml
         filename_mesh="${rundir}/init/${domname}_${memstr}.init.nc"
@@ -1743,11 +1743,23 @@ function run_update_states {
 
         if [[ ! -e done.update_states_${memstr} ]]; then
             jobarrays+=("$iens")
-            statefiles+=("$fn")
+            stateinfiles+=("$fn")
+            stateoutfiles+=("./$srcfn")
+            if [[ $no_observation == true ]]; then
+                $cpcmd $fn $srcfn
+                touch done.update_states_${memstr}
+            fi
         fi
+
     done
 
     cd $wrkdir || return
+
+    if [[ $no_observation == true ]]; then
+        echo "$$-${FUNCNAME[0]}:WARNING no observation skipping ...."
+        touch done.update_states
+        return
+    fi
 
     #
     # Waiting for job conditions
@@ -1790,7 +1802,8 @@ s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/RUNMPCMD/${job_runexe_str}/
 s#CPCMD#${cpcmd}#g
-s#STATEFILESSTR#${statefiles[*]}#
+s#STATEINFILESSTR#${stateinfiles[*]}#
+s#STATEOUTFILESSTR#${stateoutfiles[*]}#
 EOF
     if [[ "${mach}" == "pbs" ]]; then
         echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
@@ -1843,7 +1856,7 @@ function run_update_bc {
     fi
 
     # shellcheck disable=SC2154
-    if [[ $icycle -gt 0 && ${run_updatebc} == true ]]; then
+    if [[ $icycle -ge 0 && ${run_updatebc} == true ]]; then
         cpcmd="cp"
         #cpcmd="rsync -a"
     else
@@ -1854,21 +1867,9 @@ function run_update_bc {
     # Prepare update_bc by copying/linking the background files
     #------------------------------------------------------
 
-    if [[ $icycle -gt 0 && $run_updatebc ]]; then
-        # Filter input file list, will be used for update_bc as input
-        # because update_states should have updated them
-        state_input_file=$(awk '/input_state_file_list/{print $3}' input.nml)
-        readarray -t input_file_array < ${state_input_file:1:${#state_input_file}-2}
-        infile_array=()
-        for fn in "${input_file_array[@]}"; do
-            basefn=$(basename $fn)
-            infile_array+=("$basefn")
-        done
-    fi
-
     jobarrays=(); lbcfiles_org=(); lbcfiles_mem=()
     for iens in $(seq 1 $ENS_SIZE); do
-        (( jindex=iens-1 ))
+        #(( jindex=iens-1 ))
 
         memstr=$(printf "%02d" $iens)
 
@@ -1881,8 +1882,11 @@ function run_update_bc {
         rm -rf ${update_output_file_list}
         rm -rf ${update_input_file_list}
 
-        if [[ ! -e input.nml && $icycle -gt 0 && $run_updatebc ]]; then
-            cp ../input.nml .
+        if [[ ! -e input.nml ]]; then
+            echo "ERROR: ${FUNCNAME[0]} should have run mpas_update_states first."
+        else
+            state_output_file=$(awk '/update_output_file_list/{print $3}' input.nml)
+            readarray -t input_file_array < ${state_output_file:1:${#state_output_file}-2}
         fi
 
         #
@@ -1921,10 +1925,10 @@ function run_update_bc {
         lbc_file0="$rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc"
         lbc_filem="${domname}_${memstr}.lbc.${mpastime_str1}.nc"
 
-        if [[ $icycle -gt 0 && ${run_updatebc} == true ]]; then
+        if [[ ${run_updatebc} == true && ${no_observation} == false ]]; then
             echo "$lbc_filem" >> ${update_output_file_list}
             sed -i "/update_boundary_file_list/s/=.*/= '${update_output_file_list}'/" input.nml
-            echo "${infile_array[$jindex]}" >> ${update_input_file_list}
+            echo "${input_file_array[0]}" >> ${update_input_file_list}
             sed -i "/update_analysis_file_list/s/=.*/= '${update_input_file_list}'/" input.nml
 
             lbcfiles_org+=("${lbc_file0}")
@@ -1942,11 +1946,17 @@ function run_update_bc {
 
     cd $wrkdir || return
 
+    if [[ ${no_observation} == true ]]; then
+        echo "$$-${FUNCNAME[0]}:WARNING no observation skipping ...."
+        touch done.update_bc
+        return
+    fi
+
     #------------------------------------------------------
     # Run update_bc for all ensemble members as a job array
     #------------------------------------------------------
 
-    if [[ $icycle -gt 0 && ${run_updatebc} == true ]]; then
+    if [[ ${run_updatebc} == true ]]; then
         #
         # Create job script and submit it
         #
@@ -2019,6 +2029,12 @@ function run_add_noise {
     #------------------------------------------------------
     # Run grid_refl_obs.py for noise mask files
     #------------------------------------------------------
+
+    if [[ ${no_observation} == true ]]; then
+        echo "$$-${FUNCNAME[0]}:WARNING no observation skipping ...."
+        touch done.add_noise done.noise_mask
+        return
+    fi
 
     #
     # Waiting for done.update_states
@@ -2267,23 +2283,20 @@ function run_mpas {
         #
         # init files
         #
-        if [[ $icycle -eq 0 ]]; then
-            #ln -sf ../${domname}_${memstr}.init.nc .
-            initfile=$(sed -n "$iens{p;q}" ../filter_in.txt)            # print $iens line only
-            if [[ $verb -eq 1 ]]; then echo "Member: $iens use init file: $initfile"; fi
-            ln -sf $initfile .
+        if [[ $icycle -eq 0 || ${damode} == "init" ]]; then
             do_restart="false"
             do_dacyle="false"
+            mpas_inputfile_template="${domname}_${memstr}.init.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
         else
-            restartfile="./${domname}_${memstr}.restart.${currtime_fil}.nc"
-            if [[ $verb -eq 1 ]]; then echo "Member: $iens use restart file: ${restartfile}"; fi
-            #ln -sf  $restartfile .
-            if [[ ! -e ${restartfile} && ${dorun} == true ]]; then
-                echo "ERROR: restart file: ${restartfile} not exists"
-                exit 1              # something wrong should never happen
-            fi
+            mpas_inputfile_template="${domname}_${memstr}.init.nc"
             do_restart="true"
             do_dacyle="true"
+        fi
+        initfile="./${domname}_${memstr}.${damode}.${currtime_fil}.nc"
+        if [[ $verb -eq 1 ]]; then echo "Member: $iens use init file: ${initfile}"; fi
+        if [[ ! -e ${initfile} && ${dorun} == true ]]; then
+            echo "ERROR: ${damode} file: ${initfile} not exists"
+            exit 1              # something wrong should never happen
         fi
 
         ln -sf $rundir/$domname/$domname.graph.info.part.${npefcst} .
@@ -2344,7 +2357,7 @@ function run_mpas {
     config_scalar_advection         = true
     config_positive_definite        = false
     config_monotonic                = true
-    config_coef_3rd_order           = 0.25
+    config_coef_3rd_order           = 1.0
     config_epssm                    = 0.1
     config_smdiv                    = 0.1
 /
@@ -2432,7 +2445,7 @@ EOF
 <streams>
 <immutable_stream name="input"
                   type="input"
-                  filename_template="${domname}_${memstr}.init.nc"
+                  filename_template="${mpas_inputfile_template}"
                   input_interval="initial_only" />
 
 <immutable_stream name="invariant"
@@ -2517,7 +2530,6 @@ s/MACHINE/${machine}/g
 s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/RUNMPCMD/${job_runmpexe_str}/
-s/SAVETAG/${domname}_??.restart.${fcsttime_fil}.nc/
 EOF
     #mpas_jobscript="run_mpas.${mach}"
     jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
@@ -2563,7 +2575,7 @@ function da_cycle_driver() {
     #
     # Build working directory
     #
-    wrkdir=$rundir/dacycles
+    wrkdir="$rundir/dacycles${affix}"
     mkwrkdir $wrkdir $overwrite
     cd $wrkdir || return
 
@@ -2598,6 +2610,8 @@ function da_cycle_driver() {
         echo "- Cycle $icyc at ${timestr_curr}"
         time1=$(date +%s)
 
+        no_observation=false
+
         #------------------------------------------------------
         # 0. Check forecast status of the early cycle or inital boundary status
         #------------------------------------------------------
@@ -2630,33 +2644,24 @@ function da_cycle_driver() {
         # 2. Run update_states for all ensemble members
         #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " update_states " ]]; then
-            if [[ $icyc -eq 0 ]]; then
-                touch $dawrkdir/done.update_states
-            else
-                if [[ $verb -eq 1 ]]; then echo ""; echo "    Run update_mpas_state at $eventtime"; fi
-                run_update_states $dawrkdir $isec
-            fi
+            if [[ $verb -eq 1 ]]; then echo ""; echo "    Run update_mpas_state at $eventtime"; fi
+            run_update_states $dawrkdir $isec
         fi
 
         #------------------------------------------------------
         # 3. Add noise
         #------------------------------------------------------
         if [[ $run_addnoise == true ]]; then
-
-            if [[ $icyc -eq 0 ]]; then
-                touch $dawrkdir/done.add_noise
-            else
-                # check and set update_states status
-                if [[ $dorun == true ]]; then
-                    if [[ ! -e done.update_states ]]; then
-                        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                        check_and_resubmit "update_states fcst_" $dawrkdir $ENS_SIZE run_update_states.${mach} 1
-                    fi
+            # check and set update_states status
+            if [[ $dorun == true ]]; then
+                if [[ ! -e done.update_states ]]; then
+                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+                    check_and_resubmit "update_states fcst_" $dawrkdir $ENS_SIZE run_update_states.${mach} 1
                 fi
-
-                if [[ $verb -eq 1 ]]; then echo ""; echo "    Run add_noise at $eventtime"; fi
-                run_add_noise $dawrkdir $isec
             fi
+
+            if [[ $verb -eq 1 ]]; then echo ""; echo "    Run add_noise at $eventtime"; fi
+            run_add_noise $dawrkdir $isec
         fi
 
         #------------------------------------------------------
@@ -2703,6 +2708,9 @@ function da_cycle_driver() {
                 if [[ ! -e done.fcst ]]; then
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
                     check_and_resubmit "fcst" $dawrkdir $ENS_SIZE $mpas_jobscript 2
+                    # Clean not needed files in each member's forecast directory after
+                    # the MPAS forward forecast
+                    rm -rf ${dawrkdir}/fcst_??/${domname}_??.{diag,history}.*
                 fi
             fi
         fi
@@ -2731,7 +2739,7 @@ function run_obs_diag {
     #
     # Build working directory
     #
-    dawrkdir=$rundir/dacycles
+    dawrkdir="$rundir/dacycles${affix}"
     if [[ ! -d $dawrkdir ]]; then
         echo "ERROR: $dawrkdir not exsit."
         exit 1
@@ -2841,7 +2849,7 @@ function run_obs_final2nc {
     #
     # Build working directory
     #
-    dawrkdir=$rundir/dacycles
+    dawrkdir="$rundir/dacycles${affix}"
     if [[ ! -d $dawrkdir ]]; then
         echo "ERROR: $dawrkdir not exsit."
         exit 1
@@ -2927,6 +2935,21 @@ EOF
 
 ########################################################################
 
+function cleanmpas {
+    # Clean not needed files in each member's forecast directory after
+    # the MPAS forward forecast
+
+    wrkdir=$1
+
+   if [[ $verb -eq 1 ]]; then
+        echo "Remove MPAS run-time files in ${wrkdir} ..."
+    fi
+
+    rm -rf ${wrkdir}/fcst_??/${domname}_??.diag.* ${wrkdir}/fcst_??/${domname}_??.history.*
+}
+
+########################################################################
+
 function run_clean {
     # $1    $2    $3
     # start  end
@@ -2935,7 +2958,7 @@ function run_clean {
 
     local isec
 
-    wrkdir=$rundir/dacycles
+    wrkdir="$rundir/dacycles${affix}"
 
     for isec in $(seq $start_sec $intvl_sec $end_sec ); do
         timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
@@ -3004,6 +3027,8 @@ overwrite=0
 runcmd="sbatch"
 dorun=true
 rt_run=false            # realtime run?
+damode="restart"
+affix=""
 
 machine="Jet"
 
@@ -3080,6 +3105,19 @@ while [[ $# -gt 0 ]]; do
             ;;
         -d)
             domname=$2
+            shift
+            ;;
+        -damode)
+            if [[ ${2,,} == "init" || ${2,,} == "restart" ]]; then
+                damode="${2,,}"
+            else
+                echo "ERROR: unknow argument. Expect: \"init\" or \"restart\". Got: ${2,,}"
+                usage 1
+            fi
+            shift
+            ;;
+        -affix)
+            affix="_$2"
             shift
             ;;
         -i)
@@ -3304,8 +3342,6 @@ elif [[ " ${jobs[*]} " =~ " clean " ]]; then
     run_clean $starttime_sec $stoptime_sec
 fi
 
-echo " "
-echo "==== Jobs done $(date +%m-%d_%H:%M:%S) ===="
-echo " "
+echo -e "\n==== Jobs done $(date +%m-%d_%H:%M:%S) ====\n"
 
 exit 0
