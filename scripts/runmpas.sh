@@ -122,7 +122,7 @@ post | plot | diag )
     if [[ -z ${MAMBA_EXE} ]]; then   # not set micromamba, load Python environment
         # >>> mamba initialize >>>
         # !! Contents within this block are managed by 'mamba init' !!
-        export MAMBA_EXE='/home/yunheng.wang/y/micromamba';
+        export MAMBA_EXE='/home/yunheng.wang/y/bin/micromamba';
         export MAMBA_ROOT_PREFIX='/home/yunheng.wang/y';
         __mamba_setup="$("$MAMBA_EXE" shell hook --shell bash --root-prefix "$MAMBA_ROOT_PREFIX" 2> /dev/null)"
         if [ $? -eq 0 ]; then

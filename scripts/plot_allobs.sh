@@ -192,14 +192,14 @@ else
     enddatetime=$(date -u -d "$eventdate $endtime" "+%Y%m%d %H%M")
 fi
 
-start_s=$(date -d "${startdatetime}" +%s)
-end_s=$(date -d "${enddatetime}" +%s)
+start_s=$(date -u -d "${startdatetime}" +%s)
+end_s=$(date -u -d "${enddatetime}" +%s)
 
 grid_file="${rundir}/${eventdate}/wofs_mpas/wofs_mpas.grid.nc"
 
 for ((s=start_s;s<=end_s;s+=900)); do
-    timestr=$(date -d @$s +%H%M)
-    datestr=$(date -d @$s +%Y%m%d%H%M)
+    timestr=$(date -u -d @$s +%H%M)
+    datestr=$(date -u -d @$s +%Y%m%d%H%M)
 
     seq_file="${rundir}/${eventdate}/${dadir}/${timestr}/obs_seq.final.${datestr}.nc"
 

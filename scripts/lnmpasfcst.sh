@@ -26,7 +26,7 @@ function usage {
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
     echo "              -fcst fcst          FCST cycles subdirectory name. Default: fcst"
-    echo "              -s starttime        in HHMM. Default: 1500"
+    echo "              -s starttime        in HHMM. Default: 1700"
     echo "              -e endtime          in HHMM. Default: 0300"
     echo "              -b 5                Forecast first available time in minutes. Default: 5 minutes"
     echo " "
@@ -50,7 +50,7 @@ show=""
 verb=false
 
 eventdate=${eventdateDF}
-starttime="1500"
+starttime="1700"
 endtime="0300"
 fcstdir="fcst"
 fcstbeg="5"
@@ -72,6 +72,14 @@ while [[ $# -gt 0 ]]; do
             fcstdir="$2"
             if [[ ! -d ${fcst_root}/${eventdate}/${fcstdir} ]]; then
                 echo "ERROR: ${fcst_root}/${eventdate}/${fcstdir} not exist."
+                usage 1
+            fi
+            shift
+            ;;
+        -b)
+            fcstbeg="$2"
+            if [[ ! ${fcstbeg} =~ ^[0-9]+$ ]]; then
+                echo "ERROR: ${fcstbeg} is not digits."
                 usage 1
             fi
             shift
@@ -128,11 +136,11 @@ else
     enddatetime=$(date -u -d "$eventdate $endtime" "+%Y%m%d %H%M")
 fi
 
-start_s=$(date -d "${startdatetime}" +%s)
-end_s=$(date -d "${enddatetime}" +%s)
+start_s=$(date -u -d "${startdatetime}" +%s)
+end_s=$(date -u -d "${enddatetime}" +%s)
 
 for ((s=start_s;s<=end_s;s+=3600)); do
-    evtime=$(date -d @$s +%H%M)
+    evtime=$(date -u -d @$s +%H%M)
     evttime_str=$(date -u -d @$s +%Y%m%d%H%M)
 
     evttime_dir="${fcst_root}/${eventdate}/${fcstdir}/${evtime}/mpassit"
