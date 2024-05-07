@@ -130,6 +130,7 @@ function usage {
     echo "              -r                  Realtime run, default: a retrospective run"
     echo "              -damode restart     DA cycles mode, either init or restart. default: restart"
     echo "              -affix              Affix attached to the run directory \"fcst\". Default: null"
+    echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt = $eventdateDF"
@@ -1460,7 +1461,11 @@ while [[ $# -gt 0 ]]
             shift
             ;;
         -affix)
-            affix="_$2"
+            affix=".$2"
+            shift
+            ;;
+        -f)
+            config_file="$2"
             shift
             ;;
         -*)
@@ -1565,11 +1570,24 @@ stoptime_sec=$(date  -u -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
 #
 # read configurations that is not set from command line
 #
-if [[ ! -r $WORKDIR/config.${eventdate} ]]; then
-    echo "ERROR: Configuration file $WORKDIR/config.${eventdate} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
+if [[ -z $config_file ]]; then
+    config_file="$WORKDIR/config.${eventdate}"
+else
+    if [[ ! -e ${config_file} ]]; then
+        if [[ -e ${WORKDIR}/${config_file} ]]; then
+            config_file="${WORKDIR}/${config_file}"
+        else
+            echo "ERROR: file ${config_file} not exist."
+            usage 1
+        fi
+    fi
+fi
+
+if [[ ! -r ${config_file} ]]; then
+    echo "ERROR: Configuration file ${config_file} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
     exit 2
 fi
-readconf $WORKDIR/config.${eventdate} COMMON fcst || exit $?
+readconf ${config_file} COMMON fcst || exit $?
 # get ENS_SIZE, time_step, EXTINVL, OUTINVL, OUTIOTYPE
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@

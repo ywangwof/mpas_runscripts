@@ -20,10 +20,11 @@ function usage {
     echo "    DATETIME - Case date and time in YYYYmmdd/YYYYmmddHHMM."
     echo "               YYYYmmdd:     run the task for this event date."
     echo "               YYYYmmddHHMM: run task DA/FCST for one cycle only."
-    echo "    TASK     - One of [dacycles,fcst,post,mpas]"
+    echo "    TASK     - One of [dacycles,fcst,post,mpas,mpasm]"
     echo "               mpas:     Delete run-time file in a MPAS run direcotry"
+    echo "               mpasm:    Delete MPAS run-time files for all ensemble members in \"fcst_??\""
     echo "               dacycles: Delete wofs_mpas_??.restart.* at all DA cycles except for the top hour (00)"
-    echo "               fcst:     Delete wofs_mpas_??.[history|diag].* at all forecast cycles"
+    echo "               fcst:     Delete wofs_mpas_??.{history,diag}.* at all forecast cycles"
     echo "               post:     Delate all summary files for this time"
     echo " "
     echo "    OPTIONS:"
@@ -94,7 +95,7 @@ while [[ $# -gt 0 ]]; do
             echo "Unknown option: $key"
             usage 2
             ;;
-        dacycles | fcst | post | mpas )
+        dacycles | fcst | post | mpas | mpasm )
             taskname=$key
             ;;
         *)
@@ -139,11 +140,22 @@ mpas )
     fi
 
     cd "${run_dir}" || usage 1
-    ${show} rm -rf log.atmosphere.*.err log.atmosphere.*.out log.init_atmosphere.*.err log.init_atmosphere.*.out namelist.output core*
-    ${show} #rm -rf ${runname}.diag.* ${runname}.restart.* ${runname}.history.*
-    ${show} rm -rf ./*.diag.* ./*.history.*  # *.restart.*
-    ${show} rm -rf error.*
+    ${show} rm -rf log.{atmosphere,init_atmosphere}.*.{err,out} namelist.output core*
+    ${show} rm -rf ./wofs_mpas_??.{diag,history}.*.nc  # *.restart.*
+    ${show} rm -rf error.* done.fcst_?? dart_log.{nml,out}
+    echo ""
     ;;
+mpasm )
+    if [[ $verb == true ]]; then
+        echo "Remove all MPAS ensemble run-time files in ${run_dir} ..."
+    fi
+
+    cd "${run_dir}" || usage 1
+    for mdir in fcst_??; do
+        $0 -r ${run_dir}/${mdir} mpas
+    done
+    ;;
+
 dacycles )
     if [[ $verb == true ]]; then
         echo "Remove MPAS restart files in ${run_dir}/${eventdate}/dacycles/${wrksubdir} ${jobsubstr} ..."
@@ -168,8 +180,7 @@ fcst )
     fi
 
     cd "${run_dir}/${eventdate}/fcst/${wrksubdir}" || usage 1
-    $show find . -name "wofs_mpas_??.history.*" -exec rm {} \;
-    $show find . -name "wofs_mpas_??.diag.*" -exec rm {} \;
+    $show find . -name "wofs_mpas_??.{history,diag}.*" -exec rm {} \;
     ;;
 post )
     if [[ $verb == true ]]; then
@@ -180,7 +191,7 @@ post )
     $show rm -rf ./*
     ;;
 * )
-    echo "ERROR: unsupoorted task: \"${taskname}\"."
+    echo "ERROR: unsuported task: \"${taskname}\"."
     usage 2
     ;;
 esac

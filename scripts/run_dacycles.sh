@@ -112,6 +112,7 @@ function usage {
     echo "              -r                  Realtime run, will wait for observations, default: retrospective run"
     echo "              -damode restart     DA cycles mode, either init or restart. default: restart"
     echo "              -affix              Affix attached to the run directory \"dacycles\". Default: null"
+    echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt = $eventdateDF"
@@ -163,7 +164,7 @@ function run_obsmerge {
 
     obspreprocess=${exedir}/dart/mpas_dart_obs_preprocess
 
-    cp ${wrkdir}/input.nml input.nml
+    input_base="${wrkdir}/input.nml"
 
     echo "$$-${FUNCNAME[0]}: OBS Preprocessing for analysis time: ${anlys_time}, days: ${g_date}, seconds: ${g_sec}"
 
@@ -196,6 +197,8 @@ function run_obsmerge {
 
         cp ${bufr_file} ./obs_seq.old
 
+        sed "/obsdistbdy/s/=.*/= 90000/;/obs_boundary/s/=.*/= 21000/" ${input_base} > input.nml
+
         if [[ $verb -eq 1 ]]; then
             echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
         fi
@@ -213,6 +216,7 @@ function run_obsmerge {
             mv ./obs_seq.new ./obs_seq.bufr
 
             rm ./obs_seq.old
+            mv input.nml input.nml.BUFR
 
             echo $wrkdir/OBSDIR/obs_seq.bufr > obsflist.bufr
 
@@ -252,6 +256,8 @@ function run_obsmerge {
 
         cp ${meso_file} ./obs_seq.old
 
+        sed "/obsdistbdy/s/=.*/= 15000/;/obs_boundary/s/=.*/= 5000/" ${input_base} > input.nml
+
         if [[ $verb -eq 1 ]]; then
             echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
         fi
@@ -266,7 +272,7 @@ function run_obsmerge {
         # shellcheck disable=SC2181
         if [[ $? -eq 0 ]]; then
             mv ./obs_seq.new ./obs_seq.meso
-
+            mv input.nml input.nml.MESO
             rm ./obs_seq.old
 
             echo $wrkdir/OBSDIR/obs_seq.meso > obsflist.meso
@@ -308,6 +314,8 @@ function run_obsmerge {
 
         cp ${cwp_file} ./obs_seq.old
 
+        sed "/obsdistbdy/s/=.*/= 15000/;/obs_boundary/s/=.*/= 5000/" ${input_base} > input.nml
+
         if [[ $verb -eq 1 ]]; then
             echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
         fi
@@ -321,7 +329,7 @@ function run_obsmerge {
         # shellcheck disable=SC2181
         if [[ $? -eq 0 ]]; then
             mv ./obs_seq.new ./obs_seq.cwp
-
+            mv input.nml input.nml.CWP
             rm ./obs_seq.old
 
             echo $wrkdir/OBSDIR/obs_seq.cwp > obsflist.cwp
@@ -386,14 +394,17 @@ function run_obsmerge {
                 echo "    $k-$i: Using Radiance data in ${abifile}"
                 cp ${abifile} ./obs_seq.old
 
+                sed "/obsdistbdy/s/=.*/= 15000/;/obs_boundary/s/=.*/= 5000/" ${input_base} > input.nml
+
                 if [[ $verb -eq 1 ]]; then
                     echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
                 fi
-                ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >> ${srunout}_RAD 2>&1
+                ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >> ${srunout}_ABI 2>&1
 
                 # shellcheck disable=SC2181
                 if [[ $? -eq 0 ]]; then
                     mv ./obs_seq.new ./obs_seq.abiC$chan
+                    mv input.nml input.nml.ABI$chan
                     rm ./obs_seq.old
                     echo $wrkdir/OBSDIR/obs_seq.abiC$chan >> obsflist.abi
                 else
@@ -447,6 +458,8 @@ function run_obsmerge {
 
         cp ${dbz_file} ./obs_seq.old
 
+        sed "/obsdistbdy/s/=.*/= 15000/;/obs_boundary/s/=.*/= 5000/" ${input_base} > input.nml
+
         if [[ $verb -eq 1 ]]; then
             echo "    Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
         fi
@@ -460,7 +473,7 @@ function run_obsmerge {
         # shellcheck disable=SC2181
         if [[ $? -eq 0 ]]; then
             mv ./obs_seq.new ./obs_seq.mrms
-
+            mv input.nml input.nml.REF
             rm ./obs_seq.old
 
             echo $wrkdir/OBSDIR/obs_seq.mrms > obsflist.mrms
@@ -530,7 +543,7 @@ function run_obsmerge {
             wait_for_file_age ${vrj_file} 30
 
             if [[ ${run_trimvr} == true ]]; then
-                trimvr_cmd="${rootdir}/observations/seq_filter.py -o ./obs_seq.old ${vrj_file}"
+                trimvr_cmd="${scpdir}/seq_filter.py -o ./obs_seq.old ${vrj_file}"
                 echo "    --- ${trimvr_cmd}"
 
                 if ! ${trimvr_cmd}; then
@@ -541,6 +554,8 @@ function run_obsmerge {
             else
                 cp ${vrj_file} ./obs_seq.old
             fi
+
+            sed "/obsdistbdy/s/=.*/= 15000/;/obs_boundary/s/=.*/= 5000/" ${input_base} > input.nml
 
             #echo "    $k-$n: Using VEL data in ${vrj_file}"
 
@@ -560,6 +575,7 @@ function run_obsmerge {
                 (( n++ ))
                 echo "    $k-$n: Using VEL data in ${vrj_file}"
                 mv ./obs_seq.new ./obs_seq.vr${j}
+                mv input.nml input.nml.VR_${rad_name[$j]}
                 echo $wrkdir/OBSDIR/obs_seq.vr${j} >> obsflist.radvr
             fi
 
@@ -607,7 +623,7 @@ function run_obsmerge {
 /last_obs_seconds/s/-1/${goaft_dates[1]}/
 EOF
 
-    sed -f $sedfile -i input.nml
+    sed -f $sedfile ${input_base} > input.nml
 
     rm -f $sedfile
 
@@ -625,6 +641,7 @@ EOF
 
     if [[ $? -eq 0 && -e obs_seq.${anlys_date}${anlys_time} ]]; then
         echo "    Observation file ${wrkdir}/OBSDIR/obs_seq.${anlys_date}${anlys_time} created"
+        mv input.nml input.nml.sequence_tool
     else
         echo "ERROR: ${runcmd_str} ${exedir}/dart/obs_sequence_tool"
     fi
@@ -742,17 +759,17 @@ function run_filter {
     # 2. Adaptive inflation
     #------------------------------------------------------
 
-    inf_initial=(".false." ".false.")
+    inf_initial_restart=(".false." ".false.")
     if [[ $ADAPTIVE_INF == true ]]; then
         if [[ -e ${parentdir}/${event_pre}/output_priorinf_mean.nc ]]; then
             ln -sf ${parentdir}/${event_pre}/output_priorinf_mean.nc input_priorinf_mean.nc
             ln -sf ${parentdir}/${event_pre}/output_priorinf_sd.nc   input_priorinf_sd.nc
 
-            inf_initial=(".true." ".true.")
-        else
-            echo "File ${parentdir}/${event_pre}/output_priorinf_mean.nc does not exist."
-            echo "$$-${FUNCNAME[0]} WARNING: Do not use adaptive inflation for this cycle."
-            #exit 2
+           inf_initial_restart=(".true." ".false.")
+        #else
+        #    echo "File ${parentdir}/${event_pre}/output_priorinf_mean.nc does not exist."
+        #    echo "$$-${FUNCNAME[0]} WARNING: Do not use adaptive inflation for this cycle."
+        #    #exit 2
         fi
     fi
 
@@ -822,8 +839,8 @@ function run_filter {
    write_all_stages_at_end  = .false.
 
    inf_flavor                  = 2,                       0,
-   inf_initial_from_restart    = $(join_by ',' "${inf_initial[@]}"),
-   inf_sd_initial_from_restart = $(join_by ',' "${inf_initial[@]}"),
+   inf_initial_from_restart    = $(join_by ',' "${inf_initial_restart[@]}"),
+   inf_sd_initial_from_restart = $(join_by ',' "${inf_initial_restart[@]}"),
    inf_deterministic           = .true.,                  .true.,
    inf_initial                 = 1.0,                     1.0
    inf_sd_initial              = 0.6,                     0.0
@@ -1746,7 +1763,7 @@ function run_update_states {
             stateinfiles+=("$fn")
             stateoutfiles+=("./$srcfn")
             if [[ $no_observation == true ]]; then
-                $cpcmd $fn $srcfn
+                ln -sf $fn $srcfn
                 touch done.update_states_${memstr}
             fi
         fi
@@ -1934,7 +1951,7 @@ function run_update_bc {
             lbcfiles_org+=("${lbc_file0}")
             lbcfiles_mem+=("${lbc_filem}")
         else             # do not need to run update_bc, just link the files
-            ${cpcmd} ${lbc_file0} ${lbc_filem}
+            ln -sf ${lbc_file0} ${lbc_filem}
             touch "$memwrkdir/done.update_bc_${memstr}"
         fi
 
@@ -2287,12 +2304,13 @@ function run_mpas {
             do_restart="false"
             do_dacyle="false"
             mpas_inputfile_template="${domname}_${memstr}.init.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+            initfile="./${domname}_${memstr}.init.${currtime_fil}.nc"
         else
-            mpas_inputfile_template="${domname}_${memstr}.init.nc"
             do_restart="true"
             do_dacyle="true"
+            mpas_inputfile_template="${domname}_${memstr}.init.nc"
+            initfile="./${domname}_${memstr}.restart.${currtime_fil}.nc"
         fi
-        initfile="./${domname}_${memstr}.${damode}.${currtime_fil}.nc"
         if [[ $verb -eq 1 ]]; then echo "Member: $iens use init file: ${initfile}"; fi
         if [[ ! -e ${initfile} && ${dorun} == true ]]; then
             echo "ERROR: ${damode} file: ${initfile} not exists"
@@ -3117,7 +3135,11 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -affix)
-            affix="_$2"
+            affix=".$2"
+            shift
+            ;;
+        -f)
+            config_file="$2"
             shift
             ;;
         -i)
@@ -3244,11 +3266,26 @@ stoptime_sec=$(date -u -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
 #
 # read configurations that is not set from command line
 #
-if [[ ! -r $WORKDIR/config.${eventdate} ]]; then
-    echo "ERROR: Configuration file $WORKDIR/config.${eventdate} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
-    exit 2
+if [[ -z $config_file ]]; then
+    config_file="$WORKDIR/config.${eventdate}"
+else
+    if [[ ! -e ${config_file} ]]; then
+        if [[ -e ${WORKDIR}/${config_file} ]]; then
+            config_file="${WORKDIR}/${config_file}"
+        else
+            echo "ERROR: file ${config_file} not exist."
+            usage 1
+        fi
+    fi
 fi
-readconf $WORKDIR/config.${eventdate} COMMON dacycles || exit $?
+
+if [[ ! -r ${config_file} ]]; then
+    echo "ERROR: Configuration file ${config_file} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
+    exit 2
+else
+    echo "Reading case (${eventdate}) configuration file: ${config_file} ...."
+fi
+readconf ${config_file} COMMON dacycles || exit $?
 # get ENS_SIZE, time_step, EXTINVL, ADAPTIVE_INF, update_in_place
 
 #first_cycle_sec=$((inittime_sec+intvl_sec))

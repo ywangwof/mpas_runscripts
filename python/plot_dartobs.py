@@ -839,8 +839,12 @@ def decode_obs_seq_OBS(fhandle,ncopy,nqc):
         if sline == "platform":
             itime = itype + 8
             ivar  = itime + 1
-            nobslines = 15+ncopy+nqc
+            nobslines += 7
             #print(i,nobslines,itime,sline)
+        elif sline == "visir":
+            itime = itype + 7
+            ivar  = itime + 1
+            nobslines += 6
 
         if i < ncopy:
             values.append(float(sline))
@@ -859,6 +863,7 @@ def decode_obs_seq_OBS(fhandle,ncopy,nqc):
               nobslines = 10+ncopy+nqc
 
         elif i == itime:
+            #print(sline)
             secs,days = sline.split()
         elif i == ivar:
             var=float(line)
