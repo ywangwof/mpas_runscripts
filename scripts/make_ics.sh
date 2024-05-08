@@ -58,20 +58,23 @@ function usage {
     echo "               Default all jobs in sequence"
     echo " "
     echo "    OPTIONS:"
-    echo "              -h              Display this message"
-    echo "              -n              Show command to be run and generate job scripts only"
-    echo "              -v              Verbose mode"
-    echo "              -k  [0,1,2]     Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
-    echo "                              Default is 0 for ungrib, mpassit, upp and 1 for others"
-    echo "              -t  DIR         Template directory for runtime files"
-    echo "              -w              Hold script to wait for all job conditions are satified and submitted (for mpassit & upp)."
-    echo "                              By default, the script will exit after submitting all possible jobs."
-    echo "              -m  Machine     Machine name to run on, [Jet, Cheyenne, Vecna]."
-    echo "              -d  wofs_mpas   Domain name, default: wofs_mpas"
-    echo "              -s  init_dir    Directory name from which init & lbc subdirectories are used to initialize this run"
-    echo "                              which avoids runing duplicated preprocessing jobs (ungrib, init/lbc) again. default: false"
-    echo "              -p  npeics      Number of MPI parts for ICs/LBCs, default: 24"
-    echo "              -a              Clean \"ungrib\" subdirectory"
+    echo "              -h                  Display this message"
+    echo "              -n                  Show command to be run and generate job scripts only"
+    echo "              -v                  Verbose mode"
+    echo "              -k  [0,1,2]         Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
+    echo "                                  Default is 0 for ungrib, mpassit, upp and 1 for others"
+    echo "              -t  DIR             Template directory for runtime files"
+    echo "              -w                  Hold script to wait for all job conditions are satified and submitted (for mpassit & upp)."
+    echo "                                  By default, the script will exit after submitting all possible jobs."
+    echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
+    echo "              -d  wofs_mpas       Domain name, default: wofs_mpas"
+    echo "              -s  init_dir        Directory name from which init & lbc subdirectories are used to initialize this run"
+    echo "                                  which avoids runing duplicated preprocessing jobs (ungrib, init/lbc) again. default: false"
+    echo "              -p  npeics          Number of MPI parts for ICs/LBCs, default: 24"
+    echo "              -a                  Clean \"ungrib\" subdirectory"
+    echo "              -affix              Affix attached to the run directory \"dacycles\". Default: null"
+    echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
+    echo "              -l  L60.txt         Vertical level file"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt = $eventdateDF"
@@ -91,7 +94,7 @@ function run_ungrib {
     grib_dir=$1
     gribtime=$2
 
-    wrkdir=$rundir/init/ungrib
+    wrkdir=$rundir/init${affix}/ungrib
     mkwrkdir "$wrkdir" 0
     cd "$wrkdir" || return
 
@@ -221,7 +224,7 @@ function run_init4invariant {
         for cond in "${conditions[@]}"; do
             echo "$$: Checking $cond"
             while [[ ! -e $cond ]]; do
-                check_and_resubmit "ungrib" "$rundir/init/ungrib" "$nensics"
+                check_and_resubmit "ungrib" "$rundir/init${affix}/ungrib" "$nensics"
                 if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
                 fi
@@ -230,7 +233,7 @@ function run_init4invariant {
         done
     fi
 
-    wrkdir=$rundir/init
+    wrkdir=$rundir/init${affix}
     if [[ -f $wrkdir/running.invariant || -f $wrkdir/done.invariant || -f $wrkdir/queue.invariant ]]; then
         return 0
     fi
@@ -273,7 +276,7 @@ function run_init4invariant {
     config_coef_3rd_order = 0.25
 /
 &dimensions
-    config_nvertlevels   = 59
+    config_nvertlevels   = ${nvertlevels}
     config_nsoillevels   = ${MPASNFLS}
     config_nfglevels     = ${EXTNFGL}
     config_nfgsoillevels = ${EXTNFLS}
@@ -300,7 +303,7 @@ function run_init4invariant {
     config_nsm = 30
     config_tc_vertical_grid = true
     config_blend_bdy_terrain = true
-    config_specified_zeta_levels = '${FIXDIR}/L60.txt'
+    config_specified_zeta_levels = '${fixed_level}'
 /
 &interpolation_control
     config_extrap_airtemp = 'lapse-rate'
@@ -426,7 +429,7 @@ function run_init {
         for cond in "${conditions[@]}"; do
             echo "$$: Checking $cond"
             while [[ ! -e $cond ]]; do
-                check_and_resubmit "ungrib" "$rundir/init/ungrib" "$nensics"
+                check_and_resubmit "ungrib" "$rundir/init${affix}/ungrib" "$nensics"
                 if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
                 fi
@@ -435,7 +438,7 @@ function run_init {
         done
     fi
 
-    wrkdir=$rundir/init
+    wrkdir=$rundir/init${affix}
     if [[ -f $wrkdir/running.init || -f $wrkdir/done.init || -f $wrkdir/queue.init ]]; then
         return 0
     fi
@@ -480,7 +483,7 @@ function run_init {
     config_coef_3rd_order = 0.25
 /
 &dimensions
-    config_nvertlevels   = 59
+    config_nvertlevels   = ${nvertlevels}
     config_nsoillevels   = ${MPASNFLS}
     config_nfglevels     = ${EXTNFGL}
     config_nfgsoillevels = ${EXTNFLS}
@@ -507,7 +510,7 @@ function run_init {
     config_nsm = 30
     config_tc_vertical_grid = true
     config_blend_bdy_terrain = true
-    config_specified_zeta_levels = '${FIXDIR}/L60.txt'
+    config_specified_zeta_levels = '${fixed_level}'
 /
 &interpolation_control
     config_extrap_airtemp = 'lapse-rate'
@@ -610,18 +613,18 @@ function run_clean {
         case $dirname in
         ungrib )
             if "$cleanall"; then
-                cd "$rundir/init"  || return
+                cd "$rundir/init${affix}"  || return
                 rm -rf ungrib
             else
-                cd "$rundir/init/ungrib"  || return
+                cd "$rundir/init${affix}/ungrib"  || return
                 #jobname=$1 mywrkdir=$2 nummem=$3
-                clean_mem_runfiles "ungrib" "$rundir/init/ungrib" "$nensics"
+                clean_mem_runfiles "ungrib" "$rundir/init${affix}/ungrib" "$nensics"
             fi
             ;;
         init )
-            cd "$rundir/init"  || return
+            cd "$rundir/init${affix}"  || return
             #jobname=$1 mywrkdir=$2 nummem=$3
-            clean_mem_runfiles "init" "$rundir/init" "$nensics"
+            clean_mem_runfiles "init" "$rundir/init${affix}" "$nensics"
             ;;
         esac
     done
@@ -630,7 +633,7 @@ function run_clean {
 ########################################################################
 
 function run_cleanungrib {
-    cd "$rundir/init"  || return
+    cd "$rundir/init${affix}"  || return
     rm -rf ungrib
 }
 
@@ -650,6 +653,7 @@ eventdate="$eventdateDF"
 eventtime="1500"
 
 domname="wofs_mpas"
+affix=""
 
 npeics=24
 init_dir=false
@@ -672,6 +676,9 @@ elif [[ "${myhostname}" == cheyenne* || "${myhostname}" == derecho* ]]; then
 else
     machine="Jet"
 fi
+
+fixed_level="${FIXDIR}/L60.txt"
+nvertlevels=59
 
 #-----------------------------------------------------------------------
 #
@@ -736,6 +743,23 @@ while [[ $# -gt 0 ]]
             ;;
         -d)
             domname=$2
+            shift
+            ;;
+        -affix)
+            affix=".$2"
+            shift
+            ;;
+        -f)
+            config_file="$2"
+            shift
+            ;;
+       -l)
+            fixed_level="${FIXDIR}/$2"
+            if [[ ! -e ${fixed_level} ]]; then
+                echo "ERROR: ${fixed_level} not exist."
+                usage 1
+            fi
+            nvertlevels=50
             shift
             ;;
         -s )
@@ -866,11 +890,24 @@ exedir="$rootdir/exec"
 #
 # read configurations that is not set from command line
 #
-if [[ ! -r $WORKDIR/config.${eventdate} ]]; then
-    echo "ERROR: Configuration file $WORKDIR/config.${eventdate} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
+if [[ -z $config_file ]]; then
+    config_file="$WORKDIR/config.${eventdate}"
+else
+    if [[ ! -e ${config_file} ]]; then
+        if [[ -e ${WORKDIR}/${config_file} ]]; then
+            config_file="${WORKDIR}/${config_file}"
+        else
+            echo "ERROR: file ${config_file} not exist."
+            usage 1
+        fi
+    fi
+fi
+
+if [[ ! -r ${config_file} ]]; then
+    echo "ERROR: Configuration file ${config_file} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
     exit 2
 fi
-readconf $WORKDIR/config.${eventdate} COMMON init || exit $?
+readconf ${config_file} COMMON init || exit $?
 # get ENS_SIZE, time_step, EXTINVL, OUTINVL, OUTIOTYPE
 
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )

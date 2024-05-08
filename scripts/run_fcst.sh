@@ -129,8 +129,9 @@ function usage {
     echo "              -p  nssl            MP scheme, [nssl, thompson], default: nssl"
     echo "              -r                  Realtime run, default: a retrospective run"
     echo "              -damode restart     DA cycles mode, either init or restart. default: restart"
-    echo "              -affix              Affix attached to the run directory \"fcst\". Default: null"
+    echo "              -affix affix        Affix attached to the run directory \"fcst\". Default: null"
     echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
+    echo "              -outpsfc            An extra streams for PSFC output every 5 minutes"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt = $eventdateDF"
@@ -473,8 +474,29 @@ EOF
                   packages="limited_area"
                   input_interval="${EXTINVL_STR}" />
 
-</streams>
 EOF
+        if [[ ${outpsfc} == true ]]; then
+            cat << EOF >> streams.atmosphere
+<stream name="psfc"
+        type="output"
+        filename_template="psfc_${memstr}.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+        clobber_mode="replace_files"
+        precision="single"
+        io_type="pnetcdf,cdf5"
+        output_interval="00:05:00">
+
+        <var name="surface_pressure"/>
+        <var name="tend_sfc_pressure"/>
+        <var name="latCell"/>
+        <var name="lonCell"/>
+        <var name="xtime"/>
+</stream>
+
+EOF
+        fi
+
+        echo "</streams>" >> streams.atmosphere
+
         jobarrays+=("$iens")
     done
 
@@ -1303,8 +1325,6 @@ FIXDIR="${rootdir}/fix_files"
 
 eventdate="$eventdateDF"
 eventtime="1700"
-initdatetime=""
-enddatetime=""
 
 domname="wofs_mpas"
 mpscheme="mp_nssl2m"
@@ -1339,6 +1359,8 @@ source $scpdir/Common_Utilfuncs.sh || exit $?
 #
 #-----------------------------------------------------------------------
 #% ARGS
+
+outpsfc=false
 
 while [[ $# -gt 0 ]]
     do
@@ -1428,12 +1450,6 @@ while [[ $# -gt 0 ]]
                 enddatetime=$2
             elif [[ $2 =~ ^[0-9]{4}$ ]]; then
                 endhrmin=$2
-                endhour=${endhrmin:0:2}
-                if [[ $((10#$endhour)) -lt 12 ]]; then
-                    enddatetime=$(date -u -d "$eventdate $endhrmin 1 day" +%Y%m%d%H%M)
-                else
-                    enddatetime=$(date -u -d "$eventdate $endhrmin" +%Y%m%d%H%M)
-                fi
             else
                 echo "ERROR: End time should be in YYYYmmddHHMM or HHMM, got \"$2\"."
                 usage 1
@@ -1467,6 +1483,9 @@ while [[ $# -gt 0 ]]
         -f)
             config_file="$2"
             shift
+            ;;
+        -outpsfc)
+            outpsfc=true
             ;;
         -*)
             echo "Unknown option: $key"
@@ -1555,11 +1574,18 @@ else
     startday=""
 fi
 
-if [[ "$initdatetime" == "" ]]; then
+if [[ -z ${initdatetime} ]]; then
     initdatetime="${eventdate}1500"
 fi
 
-if [[ "$enddatetime" == "" ]]; then
+if [[ -n ${endhrmin} ]]; then
+    endhour=${endhrmin:0:2}
+    if [[ $((10#$endhour)) -lt 12 ]]; then
+        enddatetime=$(date -u -d "$eventdate $endhrmin 1 day" +%Y%m%d%H%M)
+    else
+        enddatetime=$(date -u -d "$eventdate $endhrmin" +%Y%m%d%H%M)
+    fi
+elif [[ -z ${enddatetime} ]]; then
     enddatetime=$(date -u -d "$eventdate 03:00 1 day" +%Y%m%d%H%M)
 fi
 

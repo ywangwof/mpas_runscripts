@@ -628,7 +628,8 @@ def variable_validation(cargs, varobj):
         fcsttime  = ':'.join(fnamelist).replace('_',' ')
     else:
         fcstfname = 'init'
-        fcsttime  = varobj.vartime.strip().replace(':','.')
+    fcsttime  = varobj.vartime.strip().replace(':','.')
+    #print(f"validtimestring={fcsttime}, {varobj.vartime}")
 
     need_levels = False
     if varobj.varndim == 1:

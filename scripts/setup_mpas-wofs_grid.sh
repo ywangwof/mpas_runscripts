@@ -97,6 +97,7 @@ function usage {
     echo "              -m  Machine     Machine name to run on, [Jet, Cheyenne, Vecna]."
     echo "              -a  wof         Account name for job submission."
     echo "              -c  lat,lon     Domain central lat/lon, for example, 43.33296,-84.24593"
+    echo "              -l  L60.txt     Vertical level file"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt = $eventdateDF"
@@ -472,7 +473,7 @@ function run_static {
     config_nsm = 30
     config_tc_vertical_grid = false
     config_blend_bdy_terrain = false
-    config_specified_zeta_levels = '${FIXDIR}/L60.txt'
+    config_specified_zeta_levels = '${fixed_level}'
 /
 &interpolation_control
     config_extrap_airtemp = 'linear'
@@ -1266,6 +1267,7 @@ else
     machine="Jet"
 fi
 
+fixed_level="${FIXDIR}/L60.txt"
 #-----------------------------------------------------------------------
 #
 # Handle command line arguments
@@ -1310,7 +1312,14 @@ while [[ $# -gt 0 ]]
             domname=$2
             shift
             ;;
-
+        -l)
+            fixed_level="${FIXDIR}/$2"
+            if [[ ! -e ${fixed_level} ]]; then
+                echo "ERROR: ${fixed_level} not exist."
+                usage 1
+            fi
+            shift
+            ;;
         -c)
             if [[ $2 =~ ^[0-9.]+,[0-9.-]+$ ]]; then
                 #latlons=(${2//,/ })

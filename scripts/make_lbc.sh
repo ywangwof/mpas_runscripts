@@ -58,19 +58,22 @@ function usage {
     echo "               Default all jobs in sequence"
     echo " "
     echo "    OPTIONS:"
-    echo "              -h              Display this message"
-    echo "              -n              Show command to be run and generate job scripts only"
-    echo "              -v              Verbose mode"
-    echo "              -k  [0,1,2]     Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
-    echo "                              Default is 0 for ungrib, mpassit, upp and 1 for others"
-    echo "              -t  DIR         Template directory for runtime files"
-    echo "              -w              Hold script to wait for all job conditions are satified and submitted (for mpassit & upp)."
-    echo "                              By default, the script will exit after submitting all possible jobs."
-    echo "              -m  Machine     Machine name to run on, [Jet, Cheyenne, Vecna]."
-    echo "              -d  wofs_mpas   Domain name, default: wofs_mpas"
-    echo "              -s  init_dir    Directory name from which init & lbc subdirectories are used to initialize this run"
-    echo "                              which avoids runing duplicated preprocessing jobs (ungrib, init/lbc) again. default: false"
-    echo "              -p  npelbc      Number of MPI parts for ICs/LBCs, default: 24"
+    echo "              -h                  Display this message"
+    echo "              -n                  Show command to be run and generate job scripts only"
+    echo "              -v                  Verbose mode"
+    echo "              -k  [0,1,2]         Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
+    echo "                                  Default is 0 for ungrib, mpassit, upp and 1 for others"
+    echo "              -t  DIR             Template directory for runtime files"
+    echo "              -w                  Hold script to wait for all job conditions are satified and submitted (for mpassit & upp)."
+    echo "                                  By default, the script will exit after submitting all possible jobs."
+    echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
+    echo "              -d  wofs_mpas       Domain name, default: wofs_mpas"
+    echo "              -s  init_dir        Directory name from which init & lbc subdirectories are used to initialize this run"
+    echo "                                  which avoids runing duplicated preprocessing jobs (ungrib, init/lbc) again. default: false"
+    echo "              -p  npelbc          Number of MPI parts for ICs/LBCs, default: 24"
+    echo "              -affix              Affix attached to the run directory \"dacycles\". Default: null"
+    echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
+    echo "              -l  L60.txt         Vertical level file"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt = $eventdateDF"
@@ -90,7 +93,7 @@ function run_ungrib {
     grib_dir=$1
     gribtime=$2
 
-    wrkdir=$rundir/lbc/ungrib
+    wrkdir=$rundir/lbc${affix}/ungrib
     mkwrkdir $wrkdir 0
     cd $wrkdir || return
 
@@ -238,8 +241,8 @@ function run_lbc {
                 fi
 
                 # shellcheck disable=SC2154
-                check_and_resubmit "init" $rundir/init $nensics
-                check_and_resubmit "ungrib" $rundir/lbc/ungrib $nenslbc
+                check_and_resubmit "init" $rundir/init${affix} $nensics
+                check_and_resubmit "ungrib" $rundir/lbc${affix}/ungrib $nenslbc
                 sleep 10
             done
         done
@@ -247,7 +250,7 @@ function run_lbc {
         ln -sf ${domname}_01.init.nc ${domname}.invariant.nc
     fi
 
-    wrkdir=$rundir/lbc
+    wrkdir=$rundir/lbc${affix}
     if [[ -f $wrkdir/running.lbc || -f $wrkdir/done.lbc || -f $wrkdir/queue.lbc ]]; then
         return 0
     fi
@@ -292,7 +295,7 @@ function run_lbc {
     config_coef_3rd_order = 0.25
 /
 &dimensions
-    config_nvertlevels   = 59
+    config_nvertlevels   = ${nvertlevels}
     config_nsoillevels   = ${MPASNFLS}
     config_nfglevels     = ${EXTNFGL}
     config_nfgsoillevels = ${EXTNFLS}
@@ -319,7 +322,7 @@ function run_lbc {
     config_nsm = 30
     config_tc_vertical_grid = true
     config_blend_bdy_terrain = true
-    config_specified_zeta_levels = '${FIXDIR}/L60.txt'
+    config_specified_zeta_levels = '${fixed_level}'
 /
 &interpolation_control
     config_extrap_airtemp = 'lapse-rate'
@@ -426,18 +429,18 @@ function run_clean {
         case $dirname in
         ungrib )
             if "${cleanall}"; then
-                cd "$rundir/lbc" || return
+                cd "$rundir/lbc${affix}" || return
                 rm -rf ungrib
             else
-                cd "$rundir/lbc/ungrib" || return
+                cd "$rundir/lbc${affix}/ungrib" || return
                 #jobname=$1 mywrkdir=$2 nummem=$3
                 clean_mem_runfiles "ungrib" "$rundir/lbc/ungrib" "$nenslbc"
             fi
             ;;
         lbc )
-            cd "$rundir/lbc" || return
+            cd "$rundir/lbc${affix}" || return
             #jobname=$1 mywrkdir=$2 nummem=$3
-            clean_mem_runfiles "lbc" "$rundir/lbc" "$nenslbc"
+            clean_mem_runfiles "lbc" "$rundir/lbc${affix}" "$nenslbc"
             ;;
         esac
     done
@@ -446,7 +449,7 @@ function run_clean {
 ########################################################################
 
 function run_cleanungrib {
-    cd $rundir/lbc || return
+    cd $rundir/lbc${affix} || return
     rm -rf ungrib
 }
 
@@ -467,6 +470,8 @@ eventtime="1500"
 eventend="0900"
 
 domname="wofs_mpas"
+affix=""
+
 npelbc=24
 init_dir=false
 runcmd="sbatch"
@@ -490,6 +495,8 @@ else
     machine="Jet"
 fi
 
+fixed_level="${FIXDIR}/L60.txt"
+nvertlevels=59
 #-----------------------------------------------------------------------
 #
 # Handle command line arguments
@@ -553,6 +560,23 @@ while [[ $# -gt 0 ]]
             ;;
         -d)
             domname=$2
+            shift
+            ;;
+        -affix)
+            affix=".$2"
+            shift
+            ;;
+        -f)
+            config_file="$2"
+            shift
+            ;;
+        -l)
+            fixed_level="${FIXDIR}/$2"
+            if [[ ! -e ${fixed_level} ]]; then
+                echo "ERROR: ${fixed_level} not exist."
+                usage 1
+            fi
+            nvertlevels=50
             shift
             ;;
         -s )
@@ -680,11 +704,24 @@ exedir="$rootdir/exec"
 #
 # read configurations that is not set from command line
 #
-if [[ ! -r $WORKDIR/config.${eventdate} ]]; then
-    echo "ERROR: Configuration file $WORKDIR/config.${eventdate} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
+if [[ -z $config_file ]]; then
+    config_file="$WORKDIR/config.${eventdate}"
+else
+    if [[ ! -e ${config_file} ]]; then
+        if [[ -e ${WORKDIR}/${config_file} ]]; then
+            config_file="${WORKDIR}/${config_file}"
+        else
+            echo "ERROR: file ${config_file} not exist."
+            usage 1
+        fi
+    fi
+fi
+
+if [[ ! -r ${config_file} ]]; then
+    echo "ERROR: Configuration file ${config_file} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
     exit 2
 fi
-readconf $WORKDIR/config.${eventdate} COMMON lbc || exit $?
+readconf ${config_file} COMMON lbc || exit $?
 # get ENS_SIZE, EXTINVL, LBCIOTYPE
 
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )

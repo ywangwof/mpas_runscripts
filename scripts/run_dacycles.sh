@@ -111,7 +111,7 @@ function usage {
     echo "              -p  nssl            MP scheme, [nssl, thompson], default: nssl"
     echo "              -r                  Realtime run, will wait for observations, default: retrospective run"
     echo "              -damode restart     DA cycles mode, either init or restart. default: restart"
-    echo "              -affix              Affix attached to the run directory \"dacycles\". Default: null"
+    echo "              -affix affix        Affix attached to the run directory \"dacycles\". Default: null"
     echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
     echo " "
     echo "   DEFAULTS:"
@@ -167,6 +167,7 @@ function run_obsmerge {
     input_base="${wrkdir}/input.nml"
 
     echo "$$-${FUNCNAME[0]}: OBS Preprocessing for analysis time: ${anlys_time}, days: ${g_date}, seconds: ${g_sec}"
+    echo "$$-${FUNCNAME[0]}: OBS_DIR=${OBS_DIR}"
 
     obsflists=()
     k=1
@@ -2708,7 +2709,7 @@ function da_cycle_driver() {
         # 5. Advance model for each member
         #------------------------------------------------------
         # Run forecast for ensemble members until the next analysis time
-        if [[ " ${jobs[*]} " =~ " mpas " ]]; then
+        if [[ " ${jobs[*]} " =~ " mpas " && "${eventtime}" != "0300" ]]; then
             # check and set update_bc status
             if [[ $dorun == true ]]; then
                 if [[ ! -e done.update_bc ]]; then
@@ -3034,8 +3035,6 @@ FIXDIR="${rootdir}/fix_files"
 
 eventdate="$eventdateDF"
 eventtime="1500"
-initdatetime=""
-enddatetime=""
 
 domname="wofs_mpas"
 mpscheme="mp_nssl2m"
@@ -3173,12 +3172,6 @@ while [[ $# -gt 0 ]]; do
                 enddatetime=$2
             elif [[ $2 =~ ^[0-9]{4}$ ]]; then
                 endhrmin=$2
-                endhour=${endhrmin:0:2}
-                if [[ $((10#$endhour)) -lt 12 ]]; then
-                    enddatetime=$(date -u -d "$eventdate $endhrmin 1 day" +%Y%m%d%H%M)
-                else
-                    enddatetime=$(date -u -d "$eventdate $endhrmin" +%Y%m%d%H%M)
-                fi
             else
                 echo "ERROR: End time should be in YYYYmmddHHMM or HHMM, got \"$2\"."
                 usage 1
@@ -3251,11 +3244,18 @@ else
     startday=""
 fi
 
-if [[ "$initdatetime" == "" ]]; then
+if [[ -z ${initdatetime} ]]; then
     initdatetime="${eventdate}1500"
 fi
 
-if [[ "$enddatetime" == "" ]]; then
+if [[ -n ${endhrmin} ]]; then
+    endhour=${endhrmin:0:2}
+    if [[ $((10#$endhour)) -lt 12 ]]; then
+        enddatetime=$(date -u -d "$eventdate $endhrmin 1 day" +%Y%m%d%H%M)
+    else
+        enddatetime=$(date -u -d "$eventdate $endhrmin" +%Y%m%d%H%M)
+    fi
+elif [[ -z ${enddatetime} ]]; then
     enddatetime=$(date -u -d "$eventdate 03:00 1 day" +%Y%m%d%H%M)
 fi
 

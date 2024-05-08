@@ -157,6 +157,7 @@ function usage {
     echo "              -s  init_dir    Directory name from which init & lbc subdirectories are used to initialize this run"
     echo "                              which avoids runing duplicated preprocessing jobs (ungrib, init/lbc) again. default: false"
     echo "              -p  nssl        MP scheme, [nssl, thompson], default: nssl"
+    echo "              -l  L60.txt     Vertical level file"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt = $eventdateDF"
@@ -435,7 +436,7 @@ function run_static {
     config_nsm = 30
     config_tc_vertical_grid = false
     config_blend_bdy_terrain = false
-    config_specified_zeta_levels = '${FIXDIR}/L60.txt'
+    config_specified_zeta_levels = '${fixed_level}'
 /
 &interpolation_control
     config_extrap_airtemp = 'linear'
@@ -1402,7 +1403,7 @@ function run_init {
     config_coef_3rd_order = 0.25
 /
 &dimensions
-    config_nvertlevels   = 59
+    config_nvertlevels   = ${nvertlevels}
     config_nsoillevels   = ${MPASNFLS}
     config_nfglevels     = ${EXTNFGL}
     config_nfgsoillevels = ${EXTNFLS}
@@ -1429,7 +1430,7 @@ function run_init {
     config_nsm = 30
     config_tc_vertical_grid = true
     config_blend_bdy_terrain = true
-    config_specified_zeta_levels = '${FIXDIR}/L60.txt'
+    config_specified_zeta_levels = '${fixed_level}'
 /
 &interpolation_control
     config_extrap_airtemp = 'lapse-rate'
@@ -1580,7 +1581,7 @@ function run_lbc {
     config_coef_3rd_order = 0.25
 /
 &dimensions
-    config_nvertlevels   = 59
+    config_nvertlevels   = ${nvertlevels}
     config_nsoillevels   = ${MPASNFLS}
     config_nfglevels     = ${EXTNFGL}
     config_nfgsoillevels = ${EXTNFLS}
@@ -1607,7 +1608,7 @@ function run_lbc {
     config_nsm = 30
     config_tc_vertical_grid = true
     config_blend_bdy_terrain = true
-    config_specified_zeta_levels = '${FIXDIR}/L60.txt'
+    config_specified_zeta_levels = '${fixed_level}'
 /
 &interpolation_control
     config_extrap_airtemp = 'lapse-rate'
@@ -2355,6 +2356,8 @@ elif [[ "$(hostname)" == cheyenne* ]]; then
     machine="Cheyenne"
 fi
 
+fixed_level="${FIXDIR}/L60.txt"
+nvertlevels=59
 #-----------------------------------------------------------------------
 #
 # Handle command line arguments
@@ -2424,6 +2427,15 @@ while [[ $# -gt 0 ]]
                 echo "ERROR: domain name \"$2\" not supported."
                 usage 1
             esac
+            shift
+            ;;
+       -l)
+            fixed_level="${FIXDIR}/$2"
+            if [[ ! -e ${fixed_level} ]]; then
+                echo "ERROR: ${fixed_level} not exist."
+                usage 1
+            fi
+            nvertlevels=50
             shift
             ;;
         -i)

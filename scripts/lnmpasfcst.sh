@@ -70,10 +70,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         -fcst)
             fcstdir="$2"
-            if [[ ! -d ${fcst_root}/${eventdate}/${fcstdir} ]]; then
-                echo "ERROR: ${fcst_root}/${eventdate}/${fcstdir} not exist."
-                usage 1
-            fi
             shift
             ;;
         -b)
@@ -120,6 +116,11 @@ while [[ $# -gt 0 ]]; do
     shift # past argument or value
 done
 
+if [[ ! -d ${fcst_root}/${eventdate}/${fcstdir} ]]; then
+    echo "ERROR: ${fcst_root}/${eventdate}/${fcstdir} not exist."
+    usage 1
+fi
+
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 starthour=${starttime:0:2}
@@ -155,7 +156,7 @@ for ((s=start_s;s<=end_s;s+=3600)); do
         cd "${desdir}" || exit 0
 
         #echo "Linking member $memstr from $memdir to $desdir ...."
-        for ((i=fcstbeg;i<=fcstlength;i+=fcstintvl)); do
+        for ((i=fcstbeg*60;i<=fcstlength;i+=fcstintvl)); do
             (( fcsttime = s+i ))
             fcsttimestr=$(date -u -d @$fcsttime +%Y-%m-%d_%H.%M.%S)
             wrftimestr=$(date -u -d @$fcsttime  +%Y-%m-%d_%H:%M:%S)
