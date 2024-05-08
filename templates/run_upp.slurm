@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --partition=PARTION
-#SBATCH -q batch
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
 #SBATCH -t 00:05:00
 #SBATCH --output=WRKDIR/upp_HHHSTR_%j.log
 ACCTSTR
+EXCLSTR
 #SBATCH -D .
 #...Automatically change the directory to where
 #   the job was launched
