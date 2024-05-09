@@ -113,6 +113,7 @@ function usage {
     echo "              -damode restart     DA cycles mode, either init or restart. default: restart"
     echo "              -affix affix        Affix attached to the run directory \"dacycles\". Default: null"
     echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
+    echo "              -outwrf             Run MPASSIT"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt = $eventdateDF"
@@ -760,13 +761,15 @@ function run_filter {
     # 2. Adaptive inflation
     #------------------------------------------------------
 
+    inf_flavors=(0 0)
     inf_initial_restart=(".false." ".false.")
     if [[ $ADAPTIVE_INF == true ]]; then
         if [[ -e ${parentdir}/${event_pre}/output_priorinf_mean.nc ]]; then
             ln -sf ${parentdir}/${event_pre}/output_priorinf_mean.nc input_priorinf_mean.nc
             ln -sf ${parentdir}/${event_pre}/output_priorinf_sd.nc   input_priorinf_sd.nc
 
-           inf_initial_restart=(".true." ".false.")
+            inf_initial_restart=(".true." ".false.")
+            inf_flavors=(2 0)
         #else
         #    echo "File ${parentdir}/${event_pre}/output_priorinf_mean.nc does not exist."
         #    echo "$$-${FUNCNAME[0]} WARNING: Do not use adaptive inflation for this cycle."
@@ -839,7 +842,7 @@ function run_filter {
    output_sd                = .true.
    write_all_stages_at_end  = .false.
 
-   inf_flavor                  = 2,                       0,
+   inf_flavor                  = $(join_by ',' "${inf_flavors[@]}"),
    inf_initial_from_restart    = $(join_by ',' "${inf_initial_restart[@]}"),
    inf_sd_initial_from_restart = $(join_by ',' "${inf_initial_restart[@]}"),
    inf_deterministic           = .true.,                  .true.,
@@ -2609,6 +2612,12 @@ function da_cycle_driver() {
 
     echo "Total ${n_cycles} cycles from $date_beg to $date_end will be run every $intvl_min minutes."
 
+    if [[ $dorun == true ]]; then
+        num_resubmit=2               # resubmit failed jobs
+    else
+        num_resubmit=-1              # Just check job status
+    fi
+
     local icyc=$(( (start_sec-init_sec)/intvl_sec ))
     for isec in $(seq $start_sec $intvl_sec $end_sec ); do
         timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
@@ -2729,8 +2738,22 @@ function da_cycle_driver() {
                     check_and_resubmit "fcst" $dawrkdir $ENS_SIZE $mpas_jobscript 2
                     # Clean not needed files in each member's forecast directory after
                     # the MPAS forward forecast
-                    rm -rf ${dawrkdir}/fcst_??/${domname}_??.{diag,history}.*
+                    #rm -rf ${dawrkdir}/fcst_??/${domname}_??.{diag,history}.*
                 fi
+            fi
+        fi
+        #------------------------------------------------------
+        # 6. MPASSIT for each member, diagnostic purpose
+        #------------------------------------------------------
+        # Interpolate the forecast datasets to a virtual WRF grid
+
+        if [[ " ${jobs[*]} " =~ " mpassit " ]]; then
+            if [[ $verb -eq 1 ]]; then echo "    Run MPASSIT at $eventtime"; fi
+
+            run_mpassit $dawrkdir ${isec}
+
+            if [[ $dorun == true ]]; then
+                check_and_resubmit "mpassit mem" $dawrkdir/mpassit $ENS_SIZE run_mpassit.${mach} ${num_resubmit}
             fi
         fi
 
@@ -2954,6 +2977,225 @@ EOF
 
 ########################################################################
 
+function run_mpassit {
+    # $1        $2
+    # wrkdir    iseconds
+    local wrkdir=$1
+    local iseconds=$2
+
+    #
+    # Build working directory
+    #
+    wrkdir=$wrkdir/mpassit
+    mkwrkdir $wrkdir 0
+    cd $wrkdir || return
+
+    #
+    # Check MPASSIT status
+    #
+    if [[ -f done.mpassit ]]; then
+        echo "$$-${FUNCNAME[0]}: MPASSIT done for all forecast minutes"
+        return
+    fi
+
+    if [[ -f running.mpassit || -f queue.mpassit ]]; then
+        echo "$$-${FUNCNAME[0]}: MPASSIT is running/queued for all forecast minutes"
+        return
+    fi
+
+    if [[ -f error.mpassit ]]; then
+        echo "$$-${FUNCNAME[0]}: MPASSIT failed for all forecast minutes "
+        return
+    fi
+
+    minstr=$(printf "%02d" $((intvl_sec/60)) )
+    fcst_minutes+=("${minstr}")
+
+    #
+    # Prepare MPASSIT working files
+    #
+    if [[ ${#fcst_minutes[@]} -gt 0 ]]; then
+        if [[ "${mpscheme}" == "Thompson" ]]; then
+            fileappend="THOM"
+        else
+            fileappend="NSSL"
+        fi
+
+        jobarrays=()
+        for mem in $(seq 1 $ENS_SIZE); do
+            memstr=$(printf "%02d" $mem)
+            memdir=$wrkdir/mem$memstr
+            mkwrkdir $memdir 0
+            cd $memdir || return
+
+            rm -f core.*           # Maybe core-dumped, resubmission will solves the problem if the machine is unstable.
+
+            # Linking working file for this member
+            parmfiles=(diaglist histlist_2d histlist_3d histlist_soil)
+            for fn in "${parmfiles[@]}"; do
+                if [[ ! -e $fn ]]; then
+                    #if [[ $verb -eq 1 ]]; then echo "Linking $fn ..."; fi
+                    if [[ -e $FIXDIR/MPASSIT/${fn}.${fileappend} ]]; then
+                        ln -sf $FIXDIR/MPASSIT/${fn}.${fileappend} $fn
+                    elif [[ -e $FIXDIR/MPASSIT/${fn} ]]; then
+                        ln -sf $FIXDIR/MPASSIT/$fn .
+                    else
+                        echo "ERROR: file \"$FIXDIR/MPASSIT/${fn}\" not exist."
+                        return
+                    fi
+                fi
+            done
+            jobarrays+=("$mem")
+        done
+
+        jobarrays_str=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
+
+        cd $wrkdir || return
+
+        run_mpassit_alltimes "${wrkdir}" "${iseconds}" "${minstr}" "${jobarrays_str}"
+    fi
+}
+
+########################################################################
+
+function run_mpassit_alltimes {
+    # $1        $2
+    # wrkdir    iseconds
+    local -r wrkdir=$1
+    local -r iseconds=$2
+    local -r minstr=$3
+    local -r jobarraystr=$4
+
+    cd $wrkdir || return
+
+    # Loop over forecast minutes
+
+    minsec=$(( 10#${minstr}*60 ))
+
+    mpassit_wait_create_nml_onetime $wrkdir ${iseconds} $minsec 5
+    local estatus=$?               # number of missing members
+    if [[ ${estatus} -gt 0 ]]; then
+        echo "$$-${FUNCNAME[0]}: ${estatus} files missing"
+        exit 1
+    fi
+
+    #
+    # Create job script and submit it
+    #
+    cd $wrkdir || return
+    jobscript="run_mpassit.${mach}"
+
+    sedfile=$(mktemp -t mpassit_${eventtime}.sed_XXXX)
+    # shellcheck disable=SC2154
+    cat <<EOF > $sedfile
+s/PARTION/${partition_filter}/
+s/NOPART/$npepost/
+s/MODULE/${modulename}/g
+s/JOBNAME/mpassit_${eventtime}/
+s/CPUSPEC/${claim_cpu_post}/
+s/CLAIMTIME/${claim_time_mpassit_alltimes}/
+s/HHMINSTR//g
+s/FCST_START/${minsec}/
+s/FCST_END/${minsec}/
+s/FCST_INTVL/${intvl_sec}/
+s#ROOTDIR#$rootdir#g
+s#WRKDIR#$wrkdir#g
+s#EXEDIR#${exedir}#
+s/MACHINE/${machine}/g
+s/ACCTSTR/${job_account_str}/
+s/EXCLSTR/${job_exclusive_str}/
+s/RUNMPCMD/${job_runmpexe_str}/
+EOF
+
+    # shellcheck disable=SC2154
+    if [[ "${mach}" == "pbs" ]]; then
+        echo "s/NNODES/${nnodes_post}/;s/NCORES/${ncores_post}/" >> $sedfile
+    fi
+
+    submit_a_jobscript "$wrkdir" "mpassit" "$sedfile" "$TEMPDIR/run_mpassit_array.${mach}" "$jobscript" "$jobarraystr"
+}
+
+########################################################################
+
+function mpassit_wait_create_nml_onetime {
+    # Work for one forecast time and all ensemble members
+    # 1. Wait for the history/diag files
+    # 2. Create namelist files
+
+    # $1        $2
+    # wrkdir    iseconds
+    local -r wrkdir=$1
+    local -r iseconds=$2
+    local -r fctseconds=$3
+    local -r waitseconds=$4   # run all time together, it does not have to wait
+
+    cd $wrkdir || return
+
+    fminstr=$(printf "%03d" $((fctseconds/60)))
+    fcst_lauch_time=$(date -u -d @${iseconds} +%H%M)
+
+    isec=$(( iseconds+fctseconds ))
+    fcst_time_str=$(date -u -d @$isec +%Y-%m-%d_%H.%M.%S)
+
+    outdone=false
+    jobarrays=()
+    for mem in $(seq 1 $ENS_SIZE); do
+        memstr=$(printf "%02d" $mem)
+        memdir=$wrkdir/mem$memstr
+        mkwrkdir $memdir 0
+        cd $memdir || return
+
+        rm -f core.*           # Maybe core-dumped, resubmission will solves the problem if the machine is unstable.
+
+        fcstmemdir=$(upnlevels $memdir 2)
+        histfile="$fcstmemdir/fcst_$memstr/${domname}_${memstr}.history.${fcst_time_str}.nc"
+        diagfile="$fcstmemdir/fcst_$memstr/${domname}_${memstr}.diag.${fcst_time_str}.nc"
+
+        if [[ $dorun == true ]]; then
+            for fn in $histfile $diagfile; do
+                if [[ $outdone == false ]]; then
+                    #echo "$$-${FUNCNAME[0]}: Checking ${fn##$rundir/} ..."
+                    echo "$$-${FUNCNAME[0]}: Checking forecast files at $fminstr for all $ENS_SIZE memebers from dacycles/${fcst_lauch_time} ..."
+                    outdone=true
+                fi
+                while [[ ! -f $fn ]]; do
+                    if [[ $verb -eq 1 ]]; then
+                        echo "Waiting for $fn ..."
+                    fi
+                    sleep 10
+                done
+                fileage=$(( $(date +%s) - $(stat -c %Y -- "$fn") ))
+                if [[ $fileage -lt $waitseconds ]]; then
+                    if [[ $verb -eq 1 ]]; then echo "$$-${FUNCNAME[0]}: Waiting for $fn ..."; fi
+                    sleep "$waitseconds"
+                fi
+            done
+        fi
+
+        nmlfile="namelist.fcst_$fminstr"
+        cat << EOF > $nmlfile
+&config
+    grid_file_input_grid = "$rundir/init/${domname}_${memstr}.init.nc"
+    hist_file_input_grid = "$histfile"
+    diag_file_input_grid = "$diagfile"
+    file_target_grid     = "$rundir/${domname/*_/geo_}/geo_em.d01.nc"
+    target_grid_type     = "file"
+    output_file          = "$memdir/MPASSIT_${memstr}.${fcst_time_str}.nc"
+    interp_diag          = .true.
+    interp_hist          = .true.
+    wrf_mod_vars         = .true.
+    esmf_log             = .false.
+/
+EOF
+    done
+
+    cd $wrkdir || return
+
+    return 0
+}
+
+########################################################################
+
 function cleanmpas {
     # Clean not needed files in each member's forecast directory after
     # the MPAS forward forecast
@@ -3046,6 +3288,7 @@ dorun=true
 rt_run=false            # realtime run?
 damode="restart"
 affix=""
+outwrf=false
 
 machine="Jet"
 
@@ -3188,6 +3431,10 @@ while [[ $# -gt 0 ]]; do
                 usage 1
             fi
             shift
+            ;;
+        -outwrf)
+            outwrf=true
+            jobs+=(mpassit)
             ;;
         -*)
             echo "Unknown option: $key"
@@ -3356,6 +3603,7 @@ echo " "
 
 RSTINVL_STR=$(printf "00:%02d:00" $((intvl_sec/60)) )
 OUTINVL_STR="1:00:00"                    # turn off history/diag outputs
+if [[ ${outwrf} == true ]]; then OUTINVL_STR=${RSTINVL_STR}; fi
 
 #
 # Start the data assimilation cycles

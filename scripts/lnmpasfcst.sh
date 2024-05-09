@@ -1,7 +1,6 @@
 #!/bin/bash
 
-fcst_root="/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs"
-dest_root="/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs/FCST"
+fcst_root="/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs2"
 
 eventdateDF=$(date -u +%Y%m%d)
 
@@ -26,6 +25,8 @@ function usage {
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
     echo "              -fcst fcst          FCST cycles subdirectory name. Default: fcst"
+    echo "              -src  fcst_root     FCST cycles directory. Default: ${fcst_root}"
+    echo "              -dest dest_root     WRF FCST directory name. Default: \${fcst_root}/FCST"
     echo "              -s starttime        in HHMM. Default: 1700"
     echo "              -e endtime          in HHMM. Default: 0300"
     echo "              -b 5                Forecast first available time in minutes. Default: 5 minutes"
@@ -33,7 +34,7 @@ function usage {
     echo "   DEFAULTS:"
     echo "              eventdt    = $eventdate"
     echo "              fcst_root  = $fcst_root"
-    echo "              dest_root  = $dest_root"
+    echo "              dest_root  = $fcst_root/FCST"
     echo " "
     echo "                                     -- By Y. Wang (2024.04.17)"
     echo " "
@@ -70,6 +71,22 @@ while [[ $# -gt 0 ]]; do
             ;;
         -fcst)
             fcstdir="$2"
+            shift
+            ;;
+        -src)
+            if [[ ! -d ${2} ]]; then
+                echo "ERROR: directory ${2} not exist"
+            else
+                fcst_root="$2"
+            fi
+            shift
+            ;;
+       -dest)
+            if [[ ! -d ${2} ]]; then
+                echo "ERROR: directory ${2} not exist"
+            else
+                dest_root="$2"
+            fi
             shift
             ;;
         -b)
@@ -119,6 +136,10 @@ done
 if [[ ! -d ${fcst_root}/${eventdate}/${fcstdir} ]]; then
     echo "ERROR: ${fcst_root}/${eventdate}/${fcstdir} not exist."
     usage 1
+fi
+
+if [[ -z ${dest_root} ]]; then
+    dest_root="${fcst_root}/FCST"
 fi
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
