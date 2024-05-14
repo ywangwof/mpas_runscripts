@@ -987,10 +987,10 @@ function write_runtimeconfig {
         partition_dafcst="ujet,tjet,xjet,vjet,kjet"; claim_cpu_dafcst="--cpus-per-task=2"
         partition_filter="ujet,tjet,xjet,vjet,kjet"; claim_cpu_filter="--cpus-per-task=2"
                                                      claim_cpu_update="--cpus-per-task=1 --mem-per-cpu=8G"
-        npedafcst=48       #; nnodes_fcst=$(( npefcst/ncores_fcst ))
+        npedafcst=48        #; nnodes_fcst=$(( npefcst/ncores_fcst ))
         npefilter=1536      #; nnodes_filter=$(( npefilter/ncores_filter ))
-        nnodes_filter="0"
-        nnodes_dafcst="0"
+        nnodes_filter="1"
+        nnodes_dafcst="1"
 
         # FCST cycles
         ncores_fcst=6;  ncores_post=6
@@ -1019,8 +1019,8 @@ function write_runtimeconfig {
                                   claim_cpu_update="--cpus-per-task=1 --mem-per-cpu=8G"
         npedafcst=40       #; nnodes_fcst=$(( npefcst/ncores_fcst ))
         npefilter=160      #; nnodes_filter=$(( npefilter/ncores_filter ))
-        nnodes_filter="0"
-        nnodes_dafcst="0"
+        nnodes_filter="1"
+        nnodes_dafcst="1"
 
         # FCST cycles
         ncores_fcst=40;  ncores_post=40
@@ -1086,8 +1086,8 @@ function write_runtimeconfig {
         # DA cycles
         ncores_filter=96; ncores_dafcst=96
 
-        npefilter=768           ; nnodes_filter=$(( npefilter/ncores_filter  ))
-        npedafcst=56            ; nnodes_dafcst=$(( npefcst/ncores_dafcst ))
+        npefilter=768           ; nnodes_filter=1
+        npedafcst=56            ; nnodes_dafcst=1
 
         partition_dafcst="batch"  ; claim_cpu_dafcst="";
         partition_filter="batch"  ; claim_cpu_filter="--ntasks-per-node=\${ncores_filter}"
@@ -1098,8 +1098,8 @@ function write_runtimeconfig {
         partition_fcst="batch"      ; claim_cpu_fcst="";
         partition_post="batch"      ; claim_cpu_post=""
 
-        npepost=24      ; nnodes_post=$(( npepost/ncores_post  ))
-        npefcst=80      ; nnodes_fcst=$(( npefcst/ncores_fcst ))
+        npepost=24      ; nnodes_post=1
+        npefcst=80      ; nnodes_fcst=1
         ;;
     esac
 
@@ -1125,9 +1125,9 @@ function write_runtimeconfig {
 
     MPASLSM='sf_ruc'
     MPASNFLS=9
-    # suite,sf_monin_obukhov,sf_mynn,off (default: suite)
+    # suite,sf_monin_obukhov,sf_mynn,off (default: suite)  Keep its 3-elements, Otherwise, need a script change
     sfclayer_schemes=('sf_monin_obukhov_rev' 'sf_monin_obukhov' 'sf_mynn')
-    # suite,bl_ysu,bl_mynn,off           (default: suite)
+    # suite,bl_ysu,bl_mynn,off           (default: suite)  Keep its 3-elements
     pbl_schemes=('bl_ysu' 'bl_myj' 'bl_mynn')   # comment?
 
     WPSGEOG_PATH="${WPSGEOG_PATH}"
@@ -1184,7 +1184,7 @@ function write_runtimeconfig {
     run_updatebc=true                   # run mpas_update_bc
     run_obs2nc=true                     # run obs_seq_to_netcdf after filter
     run_obsdiag=true                    # run obs_diag after filter for each cycle
-    run_addnoise=true                   # run WoFS add_noise facility (Python)
+    run_addnoise=false                  # run WoFS add_noise facility (Python)
     run_trimvr=true                     # Trim NaNs from radial velocity observations (Python)
     python_machine="${pythonmachine}"   # if not empty, you should have set up passwordless access on it and the
                                         # Python environment is properly set in run_noise_mask.slurm & run_noise_pert.slurm
@@ -1195,14 +1195,15 @@ function write_runtimeconfig {
 
     partition_fcst="${partition_dafcst}";
     partition_filter="${partition_filter}"
-    npefcst="${npedafcst}";   ncores_fcst="${ncores_dafcst}"
-    npefilter="${npefilter}"; ncores_filter="${ncores_filter}"
-    nnodes_filter="${nnodes_filter}"    # on Cheyenne only
-    nnodes_fcst="${nnodes_dafcst}"      # on Cheyenne only
+    npefcst="${npedafcst}";   ncores_fcst="${ncores_dafcst}";   nnodes_filter="${nnodes_filter}"
+    npefilter="${npefilter}"; ncores_filter="${ncores_filter}"; nnodes_fcst="${nnodes_dafcst}"
+
     claim_cpu_fcst="${claim_cpu_dafcst}"
     claim_cpu_filter="${claim_cpu_filter}"
     claim_cpu_update="${claim_cpu_update}"
     claim_time_fcst="00:20:00"
+
+    npepost="${npepost}"; claim_cpu_post=""; claim_time_mpassit_alltimes="00:30:00"
 
     job_exclusive_str=""
 [fcst]
@@ -1213,15 +1214,13 @@ function write_runtimeconfig {
     OUTINVL=300
     OUTIOTYPE="netcdf4"
 
-    ncores_fcst="${ncores_fcst}";  npefcst="${npefcst}"
-    ncores_post="${ncores_post}";  npepost="${npepost}"
     partition_fcst="${partition_fcst}"
     partition_post="${partition_post}"
     claim_cpu_fcst="${claim_cpu_fcst}"
     claim_cpu_post="${claim_cpu_post}"
+    npefcst="${npefcst}";          ncores_fcst="${ncores_fcst}";  nnodes_fcst="${nnodes_fcst}"
+    ncores_post="${ncores_post}";  npepost="${npepost}";          nnodes_post="${nnodes_post}"
 
-    nnodes_fcst="${nnodes_fcst}"        # on Cheyenne only
-    nnodes_post="${nnodes_post}"        # on Cheyenne only
     claim_time_fcst="01:20:00"
     claim_time_mpassit_alltimes="03:30:00"
     claim_time_mpassit_onetime="00:50:00"

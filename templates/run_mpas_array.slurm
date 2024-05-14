@@ -21,7 +21,7 @@ else
     source ROOTDIR/modules/MODULE
 fi
 
-nnode=$SLURM_JOB_NUM_NODES
+nnode=NNODES
 if (( NOPART % nnode == 0 )); then
     ncores=$(( NOPART/nnode ))
 fi

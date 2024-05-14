@@ -2273,10 +2273,10 @@ function run_mpas {
 
     intvl_min=$((intvl_sec/60))
 
-    fcst_sec=$(( iseconds + intvl_sec ))
     currtime_str=$(date -u -d @${iseconds} +%Y-%m-%d_%H:%M:%S)
     currtime_fil=${currtime_str//:/.}
-    fcsttime_fil=$(date -u -d @${fcst_sec} +%Y-%m-%d_%H.%M.%S)
+    #fcst_sec=$(( iseconds + intvl_sec ))
+    #fcsttime_fil=$(date -u -d @${fcst_sec} +%Y-%m-%d_%H.%M.%S)
 
     #
     # Preparation for each member
@@ -2541,6 +2541,7 @@ EOF
     cat <<EOF > $sedfile
 s/PARTION/${partition_fcst}/
 s/NOPART/$npefcst/
+s/NNODES/${nnodes_fcst}/
 s/JOBNAME/mpas_${eventtime}/
 s/CPUSPEC/${claim_cpu_fcst}/g
 s/CLAIMTIME/${claim_time_fcst}/
@@ -3009,6 +3010,7 @@ function run_mpassit {
     fi
 
     minstr=$(printf "%02d" $((intvl_sec/60)) )
+    #minstr="00"
     fcst_minutes+=("${minstr}")
 
     #
@@ -3155,7 +3157,7 @@ function mpassit_wait_create_nml_onetime {
             for fn in $histfile $diagfile; do
                 if [[ $outdone == false ]]; then
                     #echo "$$-${FUNCNAME[0]}: Checking ${fn##$rundir/} ..."
-                    echo "$$-${FUNCNAME[0]}: Checking forecast files at $fminstr for all $ENS_SIZE memebers from dacycles/${fcst_lauch_time} ..."
+                    echo "$$-${FUNCNAME[0]}: Checking forecast files at $fminstr for all $ENS_SIZE memebers from dacycles${affix}/${fcst_lauch_time} ..."
                     outdone=true
                 fi
                 while [[ ! -f $fn ]]; do

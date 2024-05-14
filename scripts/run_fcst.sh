@@ -514,6 +514,7 @@ EOF
     cat <<EOF > $sedfile
 s/PARTION/${partition_fcst}/
 s/NOPART/$npefcst/
+s/NNODES/${nnodes_fcst}/
 s/JOBNAME/mpas_${eventtime}/
 s/CPUSPEC/${claim_cpu_fcst}/g
 s/CLAIMTIME/${claim_time_fcst}/

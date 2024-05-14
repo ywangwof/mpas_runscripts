@@ -67,7 +67,7 @@ def update_progress(job_title, progress):
 
 ########################################################################
 
-def load_obs_seq(filename):
+def load_obs_seq(filename,cargs,rargs):
     ''' Read obs_seq text file '''
 
     obs_obj = {}
@@ -113,7 +113,7 @@ def load_obs_seq(filename):
 
                 elif line.startswith("OBS "):
                     iobs = int(line.split()[1])      # number of this obs
-                    obs = decode_one_obs(fh,iobs,ncopy,nqc)
+                    obs = decode_one_obs(fh,iobs,ncopy,nqc,cargs,rargs)
                     obs_list.append(obs)
     else:
         print(f"ERROR: file {filename} not found")
@@ -135,7 +135,7 @@ def load_obs_seq(filename):
 
 ########################################################################
 
-def decode_one_obs(fhandle,iobs,ncopy,nqc):
+def decode_one_obs(fhandle,iobs,ncopy,nqc,cargs,rargs):
 
     nobslines = 8+ncopy+nqc
 
@@ -148,12 +148,14 @@ def decode_one_obs(fhandle,iobs,ncopy,nqc):
     values = []
     qcs    = []
     platform = {}
-    mask   = False
+    visirs  = []
+    mask     = False
 
     cloud_GOES  = False
     cloud_base  = None
     cloud_top   = None
     cloud_index = None
+    visir       = False
 
     i = 0
     while True:
@@ -175,7 +177,7 @@ def decode_one_obs(fhandle,iobs,ncopy,nqc):
         elif i == itype:              # get kind
             #print(i,itype,sline)
             otype = int(sline)
-            if (otype >= 124 and otype <= 130): # or (otype >= 80 and otype <= 87):
+            if otype in rargs.clouds:     # or (otype >= 80 and otype <= 87):
                 cloud_GOES = True
 
                 line = fhandle.readline()
@@ -219,8 +221,34 @@ def decode_one_obs(fhandle,iobs,ncopy,nqc):
                          'key'    :  jlink
                         }
             i += j
+        elif sline == "visir":
+            itime = itype + 7        # skip 6 more lines
+            ivar  = itime + 1
+            nobslines += 6
+
+# visir
+#    17.08586741569378         40.85687083986613        -888888.0000000000
+#    41.82816763132313
+#            4           16           44            8
+#   -888888.0000000000
+#          132
+
+            visir = True
+
+            j = 0
+            while j < 5:
+                line = fhandle.readline()
+                sline = line.strip()
+                #print(i,j,sline)
+                if j in (0,1,3):
+                    visirs.extend([decimal.Decimal(x) for x in sline.split()])
+                elif j in (2,4):
+                    visirs.extend([int(x) for x in sline.split()])
+                j += 1
+            i += j
+
         elif i == itime:             # get seconds, days
-            #print(f"time: {i}/{nobslines},{itime} - {sline}")
+            if cargs.verbose: print(f"time: {i}/{nobslines},{itime} - {sline}")
             secs,days = sline.split()
         elif i == ivar:              # get error variance
             #print(f"var: {i}/{nobslines},{ivar} - {sline}")
@@ -248,7 +276,9 @@ def decode_one_obs(fhandle,iobs,ncopy,nqc):
               'variance'  : var,
               'mask'      : mask,
               'GOES'      : cloud_GOES,
-              'clouds'    : (cloud_base, cloud_top, cloud_index)
+              'clouds'    : (cloud_base, cloud_top, cloud_index),
+              'visir'     : visir,
+              'visir_a'   : visirs
               }
 
     return make_namespace(obsobj,level=1)
@@ -352,6 +382,21 @@ def write_obs_seq(obs, filename, number=0 ):
                     fi.write(f"""    {it.platform["nyquist"]:f}     \n""" )
                     fi.write(f"""    {it.platform["key"]}           \n""" )
 
+# visir
+#    17.08586741569378         40.85687083986613        -888888.0000000000
+#    41.82816763132313
+#            4           16           44            8
+#   -888888.0000000000
+#          132
+                if it.visir:
+                    fi.write("visir\n")
+                    fi.write(f"""    {it.visir_a[0:3]} \n""" )
+                    fi.write(f"""    {it.visir_a[3]}   \n""" )
+                    fi.write(f"""    {it.visir_a[4:8]} \n""" )
+                    fi.write(f"""    {it.visir_a[8]}   \n""" )
+                    fi.write(f"""    {it.visir_a[9]}   \n""" )
+
+
                 # Done with special radial velocity obs back to dumping out time, day, error variance info
                 fi.write(f"{it.seconds}     {it.days}\n" )
 
@@ -365,6 +410,104 @@ def write_obs_seq(obs, filename, number=0 ):
                 if cargs.verbose: update_progress(" write_DART_ascii:  Processed observation ",iobs/obs.nobs)
     return
 
+########################################################################
+
+def print_obs(obs_in,rargs):
+
+    for it in obs_in.obs:
+        # print(f"Available attributes: {vars(it)}")
+        # 'values', 'qcs', 'lon', 'lat', 'level', 'level_type', 'links', 'kind', 'platform', 'days', 'seconds', 'time', 'variance', 'mask', 'GOES', 'clouds'
+        if it.kind == int(rargs.t_type):
+            print(f"iobs = {it.iobs:6d}, ", end="")
+            for varname in rargs.t_var:
+                value = getattr(it,varname)
+                if isinstance(value,list):
+                    valuestr=','.join([str(x) for x in value])
+                    print(f"{varname} - {valuestr}, ", end="")
+                else:
+                    #variances.append(value)
+                    print(f"{varname} - {value:f}, ", end="")
+            print("")
+    #variance = np.array(variances)
+    #print(f"{variance.mean()}, {variance.min()}, {variance.max()}, {np.sqrt(variance.mean())}")
+
+########################################################################
+
+def process_obs(obs_in, obs_out, cargs,rargs):
+
+    #
+    # Mask observations for NaN
+    #
+    if not cargs.notrim:
+        # default, trim all observation contain any NaN
+        for it in obs_out.obs:
+            if it.platform:
+                if it.platform["dir3d"][0].is_nan() or it.platform["dir3d"][1].is_nan():
+                    it.mask = True
+
+    #
+    # Mask observations for unwanted types
+    #
+    if len(rargs.xtypes) > 0:
+        obs_out.types = {}
+        for type,label in obs_in.types.items():
+            if int(type) not in rargs.xtypes:
+                obs_out.types[type] = label
+
+        for it in obs_out.obs:
+            if it.kind in rargs.xtypes:
+                it.mask = True
+
+    #
+    # Filter out unwanted observations
+    #
+    obs_records = []
+    masked_obs  = []
+    #  mask_check = data.mask && numpy.isnan().any()
+    for it in obs_out.obs:
+        if it.mask == False:   # good values
+            obs_records.append(it)
+        else:
+            masked_obs.append(it.iobs)
+
+    if cargs.verbose: print(f"INFO: Dropped observations: {masked_obs}")
+
+    if cargs.keep:
+        # modify the linked list
+        for it in obs_records:
+            for mi in masked_obs:
+                i = sum(j<mi for j in masked_obs)
+
+                if it.iobs >= mi-i:
+                    it.iobs -= 1
+
+                if it.links[0] >= mi-i:
+                    it.links[0] -= 1
+
+                if it.links[1] > mi-i:
+                    it.links[1] -= 1
+    else:       # natural order for the links
+        n = 0
+        for it in obs_records:
+            n += 1
+            it.iobs = n
+            if it.iobs == 1:
+                i = -1
+            else:
+                i = it.iobs-1
+
+            if it.iobs >= len(obs_records):
+                j = -1
+            else:
+                j = it.iobs+1
+
+            it.links = [i,j,-1]
+
+    if len(obs_records) == 1:       # fix the link for next obs
+        for it in obs_records:
+            it.links[1] = -1
+
+    return obs_records
 
 ########################################################################
 
@@ -381,11 +524,13 @@ def parse_args():
     parser.add_argument('-v','--verbose', help='Verbose output',                                  action="store_true", default=False)
     parser.add_argument('-o','--outdir' , help='Name of the output file or an output directory',  default='./',        type=str)
     parser.add_argument('-x','--xtypes' , help='Type Numbers of observation to be removed',       default=None,        type=str)
+    parser.add_argument('-c','--clouds' , help='Type Numbers of observation that contains cloud lines', default="124,125,126", type=str)
     parser.add_argument('-t','--type'   , help='''Type Numbers of observation to be print, for examples,
                         44                 : Show observaiton value of observation type 44;
                         44,variance        : Show variance;
-                        44,values,variance : Show value and variance''',         default=None,        type=str)
-    parser.add_argument('-n','--number' , help='Fist N number of observations to be written',     default=0,           type=int)
+                        44,values,variance : Show value and variance''',                               default=None,        type=str)
+    parser.add_argument('-k','--keep' ,   help='After drop observations, keep it links as possible',   action="store_true", default=False)
+    parser.add_argument('-n','--number' , help='Fist N number of observations to be written',          default=0,           type=int)
     parser.add_argument('-N','--notrim' , help='Do not trim NaN in observations (default: Trim obs_seq for NaNs)', action="store_true", default=False)
 
     args = parser.parse_args()
@@ -393,7 +538,10 @@ def parse_args():
     rargs = {'outfile': None, 'xtypes' : [], 't_type': None }
 
     if args.xtypes is not None:
-        rargs['xtypes'] = [int(x) for x in args.xtypex.split(',')]
+        rargs['xtypes'] = [int(x) for x in args.xtypes.split(',')]
+
+    if args.clouds is not None:
+        rargs['clouds'] = [int(x) for x in args.clouds.split(',')]
 
     if args.type is not None:
         rlist = [item for item in args.type.split(',')]
@@ -425,89 +573,23 @@ if __name__ == "__main__":
 
     for filename in cargs.files:
         if cargs.verbose: print(f" load_obs_seq: Reading {filename}\n")
-        obs_in = load_obs_seq(filename)
+        obs_in = load_obs_seq(filename,cargs,rargs)
 
         if rargs.t_type is not None:  # Show its values
             #variances = []
             print(f" {rargs.t_type}: {obs_in.types[rargs.t_type]}")
-            for it in obs_in.obs:
-                # print(f"Available attributes: {vars(it)}")
-                # 'values', 'qcs', 'lon', 'lat', 'level', 'level_type', 'links', 'kind', 'platform', 'days', 'seconds', 'time', 'variance', 'mask', 'GOES', 'clouds'
-                if it.kind == int(rargs.t_type):
-                    print(f"iobs = {it.iobs:6d}, ", end="")
-                    for varname in rargs.t_var:
-                        value = getattr(it,varname)
-                        if isinstance(value,list):
-                            valuestr=','.join([str(x) for x in value])
-                            print(f"{varname} - {valuestr}, ", end="")
-                        else:
-                            #variances.append(value)
-                            print(f"{varname} - {value:f}, ", end="")
-                    print("")
-            #variance = np.array(variances)
-            #print(f"{variance.mean()}, {variance.min()}, {variance.max()}, {np.sqrt(variance.mean())}")
+
+            print_obs(obs_in,rargs)
+
         else:  # processs the sequence file to get a new one
             obs_out = copy(obs_in)
             #obs_out = deepcopy(obs_in)
 
-            #
-            # Mask observations for NaN
-            #
-            if not cargs.notrim:
-                # default, trim all observation contain any NaN
-                for it in obs_out.obs:
-                    if it.platform:
-                        if it.platform["dir3d"][0].is_nan() or it.platform["dir3d"][1].is_nan():
-                            it.mask = True
+            obs_out.obs = process_obs(obs_in,obs_out,cargs,rargs)
 
-            #
-            # Mask observations for unwanted types
-            #
-            if len(rargs.xtypes) > 0:
-                for type,label in obs_out.types:
-                    if int(type) in rargs.xtypes:
-                        del obs_out.types[type]
+            obs_out.nobs = len(obs_out.obs)
 
-                for it in obs_out.obs:
-                    if it.kind in rargs.xtypes:
-                        it.mask = True
-
-            #
-            # Filter out unwanted observations
-            #
-            obs_records = []
-            masked_obs  = []
-            #  mask_check = data.mask && numpy.isnan().any()
-            for it in obs_out.obs:
-                if it.mask == False:   # good values
-                    obs_records.append(it)
-                else:
-                    masked_obs.append(it.iobs)
-
-            obs_out.nobs = len(obs_records)
-
-            if cargs.verbose: print(f"INFO: Dropped observations: {masked_obs}")
-
-            # modify the linked list
-            for it in obs_records:
-                for mi in masked_obs:
-                    i = sum(j<mi for j in masked_obs)
-
-                    if it.iobs >= mi-i:
-                        it.iobs -= 1
-
-                    if it.links[0] >= mi-i:
-                        it.links[0] -= 1
-
-                    if it.links[1] > mi-i:
-                        it.links[1] -= 1
-
-            obs_out.obs = obs_records
             if cargs.verbose: print(" Number of good observations:  %d\n" % obs_out.nobs)
-
-            if obs_out.nobs == 1:       # fix the link for next obs
-                for it in obs_out.obs:
-                    it.links[1] = -1
 
             if obs_out.nobs < 1:
                 print(f"        Number of good observations: {obs_out.nobs}, skip {filename}")
