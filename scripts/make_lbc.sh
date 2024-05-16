@@ -67,18 +67,14 @@ function usage {
     echo "              -w                  Hold script to wait for all job conditions are satified and submitted (for mpassit & upp)."
     echo "                                  By default, the script will exit after submitting all possible jobs."
     echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
-    echo "              -d  wofs_mpas       Domain name, default: wofs_mpas"
     echo "              -s  init_dir        Directory name from which init & lbc subdirectories are used to initialize this run"
     echo "                                  which avoids runing duplicated preprocessing jobs (ungrib, init/lbc) again. default: false"
-    echo "              -p  npelbc          Number of MPI parts for ICs/LBCs, default: 24"
-    echo "              -affix              Affix attached to the run directory \"dacycles\". Default: null"
-    echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
-    echo "              -l  L60.txt         Vertical level file"
+    echo "              -f conf_file        Configuration file for this case. Default: ${WORKDIR}/config.${eventdate}"
     echo " "
     echo "   DEFAULTS:"
-    echo "              eventdt = $eventdateDF"
+    echo "              eventdt = $eventdate"
     echo "              rootdir = $rootdir"
-    echo "              WORKDIR = $rootdir/run_dirs"
+    echo "              WORKDIR = $WORKDIR"
     echo "              TEMPDIR = $rootdir/templates"
     echo "              FIXDIR  = $rootdir/fix_files"
     echo " "
@@ -93,7 +89,7 @@ function run_ungrib {
     grib_dir=$1
     gribtime=$2
 
-    wrkdir=$rundir/lbc${affix}/ungrib
+    wrkdir=$rundir/lbc/ungrib
     mkwrkdir $wrkdir 0
     cd $wrkdir || return
 
@@ -241,8 +237,8 @@ function run_lbc {
                 fi
 
                 # shellcheck disable=SC2154
-                check_and_resubmit "init" $rundir/init${affix} $nensics
-                check_and_resubmit "ungrib" $rundir/lbc${affix}/ungrib $nenslbc
+                check_and_resubmit "init" $rundir/init $nensics
+                check_and_resubmit "ungrib" $rundir/lbc/ungrib $nenslbc
                 sleep 10
             done
         done
@@ -250,7 +246,7 @@ function run_lbc {
         ln -sf ${domname}_01.init.nc ${domname}.invariant.nc
     fi
 
-    wrkdir=$rundir/lbc${affix}
+    wrkdir=$rundir/lbc
     if [[ -f $wrkdir/running.lbc || -f $wrkdir/done.lbc || -f $wrkdir/queue.lbc ]]; then
         return 0
     fi
@@ -322,7 +318,7 @@ function run_lbc {
     config_nsm = 30
     config_tc_vertical_grid = true
     config_blend_bdy_terrain = true
-    config_specified_zeta_levels = '${fixed_level}'
+    config_specified_zeta_levels = '${vertLevel_file}'
 /
 &interpolation_control
     config_extrap_airtemp = 'lapse-rate'
@@ -429,18 +425,18 @@ function run_clean {
         case $dirname in
         ungrib )
             if "${cleanall}"; then
-                cd "$rundir/lbc${affix}" || return
+                cd "$rundir/lbc" || return
                 rm -rf ungrib
             else
-                cd "$rundir/lbc${affix}/ungrib" || return
+                cd "$rundir/lbc/ungrib" || return
                 #jobname=$1 mywrkdir=$2 nummem=$3
                 clean_mem_runfiles "ungrib" "$rundir/lbc/ungrib" "$nenslbc"
             fi
             ;;
         lbc )
-            cd "$rundir/lbc${affix}" || return
+            cd "$rundir/lbc" || return
             #jobname=$1 mywrkdir=$2 nummem=$3
-            clean_mem_runfiles "lbc" "$rundir/lbc${affix}" "$nenslbc"
+            clean_mem_runfiles "lbc" "$rundir/lbc" "$nenslbc"
             ;;
         esac
     done
@@ -449,7 +445,7 @@ function run_clean {
 ########################################################################
 
 function run_cleanungrib {
-    cd $rundir/lbc${affix} || return
+    cd $rundir/lbc || return
     rm -rf ungrib
 }
 
@@ -469,10 +465,6 @@ eventdate="$eventdateDF"
 eventtime="1500"
 eventend="0900"
 
-domname="wofs_mpas"
-affix=""
-
-npelbc=24
 init_dir=false
 runcmd="sbatch"
 dorun=true
@@ -495,8 +487,6 @@ else
     machine="Jet"
 fi
 
-fixed_level="${FIXDIR}/L60.txt"
-nvertlevels=59
 #-----------------------------------------------------------------------
 #
 # Handle command line arguments
@@ -558,25 +548,8 @@ while [[ $# -gt 0 ]]
             fi
             shift
             ;;
-        -d)
-            domname=$2
-            shift
-            ;;
-        -affix)
-            affix=".$2"
-            shift
-            ;;
         -f)
             config_file="$2"
-            shift
-            ;;
-        -l)
-            fixed_level="${FIXDIR}/$2"
-            if [[ ! -e ${fixed_level} ]]; then
-                echo "ERROR: ${fixed_level} not exist."
-                usage 1
-            fi
-            nvertlevels=50
             shift
             ;;
         -s )
@@ -593,15 +566,6 @@ while [[ $# -gt 0 ]]
                 done
             else
                 echo "ERROR: initialization directory  \"$2\" not exists."
-                usage 1
-            fi
-            shift
-            ;;
-        -p)
-            if [[ $2 =~ ^[0-9]+$ ]]; then
-                npelbc=$2
-            else
-                echo "ERROR: npes is required as \"npelbc\", get: $2."
                 usage 1
             fi
             shift
@@ -723,6 +687,14 @@ if [[ ! -r ${config_file} ]]; then
 fi
 readconf ${config_file} COMMON lbc || exit $?
 # get ENS_SIZE, EXTINVL, LBCIOTYPE
+
+if [[ -e ${vertLevel_file} ]]; then
+    nvertlevels=$(cat ${vertLevel_file} | sed '/^\s*$/d' | wc -l)
+    (( nvertlevels -= 1 ))
+else
+    echo "ERROR: ${vertLevel_file} not exist."
+    usage 1
+fi
 
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 

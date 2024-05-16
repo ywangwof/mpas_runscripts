@@ -93,16 +93,18 @@ function usage {
     echo "              -k  [0,1,2]     Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
     echo "                              Default is 0 for ungrib, mpassit, upp and 1 for others"
     echo "              -t  DIR         Template directory for runtime files"
-    echo "              -d  domname     Domain name, default: wofs_mpas"
     echo "              -m  Machine     Machine name to run on, [Jet, Cheyenne, Vecna]."
     echo "              -a  wof         Account name for job submission."
     echo "              -c  lat,lon     Domain central lat/lon, for example, 43.33296,-84.24593"
+    echo "              -d  domname     Domain name, default: wofs_mpas"
     echo "              -l  L60.txt     Vertical level file"
+    echo "              -o  filename    Ouput file name of the configuration file for this case"
+    echo "                              Default: $WORKDIR/config.${eventdate}"
     echo " "
     echo "   DEFAULTS:"
-    echo "              eventdt = $eventdateDF"
+    echo "              eventdt = ${eventdate}"
     echo "              rootdir = $rootdir"
-    echo "              WORKDIR = $rootdir/run_dirs"
+    echo "              WORKDIR = ${WORKDIR}"
     echo "              TEMPDIR = $rootdir/templates"
     echo "              FIXDIR  = $rootdir/fix_files"
     echo " "
@@ -973,12 +975,13 @@ function write_runtimeconfig {
     case $machine in
     "Jet" )
         # ICs
-        ncores_ics="2"
+        npeics=24; ncores_ics=2
         partition_ics="ujet,tjet,xjet,vjet,kjet"
         claim_cpu_ics="--cpus-per-task=2"
         claim_cpu_ungrib="--cpus-per-task=12 --mem-per-cpu=10G"
 
         # LBCs
+        npelbc=24;  ncores_lbc=2
         partition_lbc="ujet,tjet,xjet,vjet,kjet"
         claim_cpu_lbc="--cpus-per-task=2"
 
@@ -1003,12 +1006,13 @@ function write_runtimeconfig {
 
     "Hercules" )
         # ICs
-        ncores_ics="2"
+        npeics=24; ncores_ics=2
         partition_ics="batch"
         claim_cpu_ics="--cpus-per-task=2"
         claim_cpu_ungrib="--cpus-per-task=12 --mem-per-cpu=10G"
 
         # LBCs
+        npelbc=24;  ncores_lbc=2
         partition_lbc="batch"
         claim_cpu_lbc="--cpus-per-task=2"
 
@@ -1037,13 +1041,13 @@ function write_runtimeconfig {
 
         # Derecho node has 128 processors
         # ICs
-        ncores_ics=32
+        npeics=32; ncores_ics=32
         partition_ics="preempt"
         claim_cpu_ics="ncpus=${ncores_ics}"
         claim_cpu_ungrib=""
 
         # LBCs
-        ncores_lbc=32
+        npelbc=32;  ncores_lbc=32
         partition_lbc="preempt"
         claim_cpu_lbc="ncpus=${ncores_lbc}"
 
@@ -1072,13 +1076,13 @@ function write_runtimeconfig {
         mpas_wofs_python="/scratch/ywang/MPAS/wofs_new_noise"
 
         # ICs
-        ncores_ics=96
+        npeics=24;   ncores_ics=96
         partition_ics="batch"
         claim_cpu_ics="--ntasks-per-node=${ncores_ics}"
         claim_cpu_ungrib=""
 
         # LBCs
-        ncores_lbc=96
+        npelbc=24;  ncores_lbc=96
         partition_lbc="batch"
         claim_cpu_lbc="--ntasks-per-node=${ncores_lbc}"
         claim_cpu_ungrib=""
@@ -1123,7 +1127,7 @@ function write_runtimeconfig {
     nenslbc=18
     EXTINVL=3600
 
-    domname="wofs_mpas"
+    domname="${domname}"
     daffix=""                   # DA & fcst cycle work directory affix, default: dacycles/fcst
                                 # otherwise dacyles.\${daffix}/fcst.\${daffix}
     damode="restart"            # DA cycles mode, either "restart" or "init"
@@ -1137,6 +1141,8 @@ function write_runtimeconfig {
                                                 # Keep its 3-elements, Otherwise, need a script change
     pbl_schemes=('bl_ysu' 'bl_myj' 'bl_mynn')   # suite,bl_ysu,bl_myj,bl_mynn,off  (default: suite)
                                                 # Keep its 3-elements
+
+    vertLevel_file="${fixed_level}"            # works make_ics.sh & make_lbc.sh only
 
     WPSGEOG_PATH="${WPSGEOG_PATH}"
 
@@ -1161,7 +1167,7 @@ function write_runtimeconfig {
 
     partition_ics="${partition_ics}"
     claim_cpu_ics="${claim_cpu_ics}"
-    ncores_ics="${ncores_ics}"
+    npeics="${npeics}";    ncores_ics="${ncores_ics}"
     claim_cpu_ungrib="${claim_cpu_ungrib}"
 
 [lbc]
@@ -1173,7 +1179,7 @@ function write_runtimeconfig {
     hrrr_dir="${hrrr_dir}"
     hrrr_time="1200"
 
-    ncores_lbc="${ncores_lbc}"
+    npelbc="${npelbc}"; ncores_lbc="${ncores_lbc}"
     partition_lbc="${partition_lbc}"
     claim_cpu_lbc="${claim_cpu_lbc}"
 
@@ -1279,6 +1285,7 @@ else
 fi
 
 fixed_level="${FIXDIR}/L60.txt"
+
 #-----------------------------------------------------------------------
 #
 # Handle command line arguments
@@ -1361,6 +1368,10 @@ while [[ $# -gt 0 ]]
             ;;
         -a)
             hpcaccount=$2
+            shift
+            ;;
+        -o)
+            caseconfig=$2
             shift
             ;;
         -*)
@@ -1582,7 +1593,7 @@ exedir="$rootdir/exec"
 #
 # write runtime configuration file
 #
-caseconfig="$WORKDIR/config.${eventdate}"
+caseconfig=${caseconfig-$WORKDIR/config.${eventdate}}
 write_runtimeconfig "$caseconfig"
 
 if [[ " ${jobs[*]} " == " setup " ]]; then exit 0; fi
