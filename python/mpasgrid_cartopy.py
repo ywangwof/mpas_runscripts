@@ -676,7 +676,7 @@ if __name__ == "__main__":
             outfile = f"{args.name}.{args.event}.{basmap}.png"
 
     figname = os.path.join(outdir,outfile)
-    envfilename=os.path.join(outdir,f'radars.{args.event}.sh')
+    envfilename=os.path.join(outdir,f'{args.name}.radars.{args.event}.sh')
 
     #-----------------------------------------------------------------------
     #

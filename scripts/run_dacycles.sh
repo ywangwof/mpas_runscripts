@@ -492,10 +492,10 @@ function run_obsmerge {
     # Source environment for radars
     #
 
-    if [[ -e $rundir/$domname/radars.${eventdate}.sh ]]; then
-        source $rundir/$domname/radars.${eventdate}.sh || exit $?
+    if [[ -e $rundir/$domname/${domname}.radars.${eventdate}.sh ]]; then
+        source $rundir/$domname/${domname}.radars.${eventdate}.sh || exit $?
     else
-        echo "ERROR: File $rundir/$domname/radars.${eventdate}.sh not exist"
+        echo "ERROR: File $rundir/$domname/${domname}.radars.${eventdate}.sh not exist"
         exit 0
     fi
 

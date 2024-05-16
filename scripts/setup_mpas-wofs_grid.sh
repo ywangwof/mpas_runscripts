@@ -95,8 +95,10 @@ function usage {
     echo "              -t  DIR         Template directory for runtime files"
     echo "              -m  Machine     Machine name to run on, [Jet, Cheyenne, Vecna]."
     echo "              -a  wof         Account name for job submission."
+    echo "              -M  restart     DA cycles mode, either init or restart. default: restart"
     echo "              -c  lat,lon     Domain central lat/lon, for example, 43.33296,-84.24593"
     echo "              -d  domname     Domain name, default: wofs_mpas"
+    echo "              -x  affix       Affix attached to the run directory \"dacycles\" or \"fcst\". Default: Null"
     echo "              -l  L60.txt     Vertical level file"
     echo "              -o  filename    Ouput file name of the configuration file for this case"
     echo "                              Default: $WORKDIR/config.${eventdate}"
@@ -644,7 +646,7 @@ function run_rotate {
     #ang_rotate=$(echo $CEN_LON - -84.24591 | bc -l)
     ang_rotate="0.0"
     ln -sf ${FIXDIR}/WOFSdomain.grid.nc input_filename.nc
-    ln -sf ${FIXDIR}/WOFSdomain.graph.info wofs_mpas.graph.info
+    ln -sf ${FIXDIR}/WOFSdomain.graph.info ${domname}.graph.info
 
     cat <<EOF > namelist.input
 &input
@@ -864,13 +866,13 @@ function run_meshplot_py {
     fi
     cd $wrkdir  || return
 
-    if [[ -f "radars.${eventdate}.sh" ]]; then
-        echo "Found file \"radars.${eventdate}.sh\", skipping run_run_meshplot_py ...."
+    if [[ -f "${domname}.radars.${eventdate}.sh" ]]; then
+        echo "Found file \"${domname}.radars.${eventdate}.sh\", skipping run_run_meshplot_py ...."
         echo ""
         return
     fi
 
-    output_grid="../geo_${domname##*_}/wofs_mpas_output.json"
+    output_grid="../geo_${domname##*_}/${domname}_output.json"
 
     #
     # Run job script and submit it
@@ -893,9 +895,9 @@ function run_meshplot_py {
     echo "Running $jobcmdstr"
     python $jobcmdstr
 
-    ls -l radars.${eventdate}.sh
-    #echo "Waiting for radars.${eventdate}.sh ...."
-    #while [[ ! -e radars.${eventdate}.sh  ]]; do
+    ls -l ${domname}.radars.${eventdate}.sh
+    #echo "Waiting for ${domname}.radars.${eventdate}.sh ...."
+    #while [[ ! -e ${domname}.radars.${eventdate}.sh  ]]; do
     #    sleep 10
     #done
 }
@@ -1128,9 +1130,9 @@ function write_runtimeconfig {
     EXTINVL=3600
 
     domname="${domname}"
-    daffix=""                   # DA & fcst cycle work directory affix, default: dacycles/fcst
+    daffix="${affix}"           # DA & fcst cycle work directory affix, default: dacycles/fcst
                                 # otherwise dacyles.\${daffix}/fcst.\${daffix}
-    damode="restart"            # DA cycles mode, either "restart" or "init"
+    damode="${damode}"          # DA cycles mode, either "restart" or "init"
 
     MPASLSM='sf_ruc'
     MPASNFLS=9
@@ -1142,7 +1144,7 @@ function write_runtimeconfig {
     pbl_schemes=('bl_ysu' 'bl_myj' 'bl_mynn')   # suite,bl_ysu,bl_myj,bl_mynn,off  (default: suite)
                                                 # Keep its 3-elements
 
-    vertLevel_file="${fixed_level}"            # works make_ics.sh & make_lbc.sh only
+    vertLevel_file="${fixed_level}"             # works make_ics.sh & make_lbc.sh only
 
     WPSGEOG_PATH="${WPSGEOG_PATH}"
 
@@ -1266,6 +1268,7 @@ FIXDIR="${rootdir}/fix_files"
 eventdate="$eventdateDF"
 eventtime="1500"
 domname="wofs_mpas"
+affix=""
 
 runcmd="sbatch"
 dorun=true
@@ -1285,6 +1288,7 @@ else
 fi
 
 fixed_level="${FIXDIR}/L60.txt"
+damode="restart"
 
 #-----------------------------------------------------------------------
 #
@@ -1326,8 +1330,21 @@ while [[ $# -gt 0 ]]
             fi
             shift
             ;;
+        -M)
+            if [[ ${2,,} == "init" || ${2,,} == "restart" ]]; then
+                damode="${2,,}"
+            else
+                echo "ERROR: unknow argument. Expect: \"init\" or \"restart\". Got: ${2,,}"
+                usage 1
+            fi
+            shift
+            ;;
         -d)
             domname=$2
+            shift
+            ;;
+        -x)
+            affix=".$2"
             shift
             ;;
         -l)
@@ -1593,7 +1610,7 @@ exedir="$rootdir/exec"
 #
 # write runtime configuration file
 #
-caseconfig=${caseconfig-$WORKDIR/config.${eventdate}}
+caseconfig="${WORKDIR}/${caseconfig-config.${eventdate}}"
 write_runtimeconfig "$caseconfig"
 
 if [[ " ${jobs[*]} " == " setup " ]]; then exit 0; fi
