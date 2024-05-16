@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2317,SC1090,SC1091,SC2086
+# shellcheck disable=SC2317,SC1090,SC1091,SC2086,SC2154
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
@@ -102,18 +102,13 @@ function usage {
     echo "                                  Default is 0 for ungrib, mpassit, upp and 1 for others"
     echo "              -t  DIR             Template directory for runtime files"
     echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
-    echo "              -d  wofs_mpas       Domain name to be used"
     echo "              -i  YYYYmmddHHMM    Initial time, default: same as start time from the command line argument"
     echo "              -s  YYYYmmddHHMM    Start date & time of the DA cycles"
     echo "                  HHMM            Start time of the DA cycles"
     echo "              -e  YYYYmmddHHMM    End date & time of the DA cycles"
     echo "                  HHMM            End time of the DA cycles"
-    echo "              -p  nssl            MP scheme, [nssl, thompson], default: nssl"
     echo "              -r                  Realtime run, will wait for observations, default: retrospective run"
-    echo "              -damode restart     DA cycles mode, either init or restart. default: restart"
-    echo "              -affix affix        Affix attached to the run directory \"dacycles\". Default: null"
     echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
-    echo "              -outwrf             Run MPASSIT"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt = $eventdateDF"
@@ -210,7 +205,6 @@ function run_obsmerge {
           echo "";
         }                                                          >& ${srunout}_BUFR
 
-        # shellcheck disable=SC2154
         ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >> ${srunout}_BUFR 2>&1
 
         # shellcheck disable=SC2181
@@ -268,7 +262,6 @@ function run_obsmerge {
           echo "";
         }                                                          >& ${srunout}_MESO
 
-        # shellcheck disable=SC2154
         ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >> ${srunout}_MESO 2>&1
 
         # shellcheck disable=SC2181
@@ -325,7 +318,6 @@ function run_obsmerge {
           echo "echo  \"${g_date} ${g_sec}\" | ${obspreprocess}";
           echo "";
         }                                               >& ${srunout}_CWP
-        # shellcheck disable=SC2154
         ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >> ${srunout}_CWP 2>&1
 
         # shellcheck disable=SC2181
@@ -531,7 +523,6 @@ function run_obsmerge {
     fi
 
     j=0; n=0
-    # shellcheck disable=SC2154
     while [[ ${j} -lt ${num_rad} ]]; do
 
         vrj_file=${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out
@@ -545,7 +536,7 @@ function run_obsmerge {
             wait_for_file_age ${vrj_file} 30
 
             if [[ ${run_trimvr} == true ]]; then
-                trimvr_cmd="${scpdir}/seq_filter.py -o ./obs_seq.old ${vrj_file}"
+                trimvr_cmd="${scpdir}/seq_filter.py -k -o ./obs_seq.old ${vrj_file}"
                 echo "    --- ${trimvr_cmd}"
 
                 if ! ${trimvr_cmd}; then
@@ -685,7 +676,6 @@ function run_filter {
         return
     fi
 
-    # shellcheck disable=SC2154
     timesec_pre=$((iseconds-intvl_sec))
     event_pre=$(date -u -d @${timesec_pre}   +%H%M)
     timestr_cur=$(date -u -d @${iseconds}    +%Y%m%d%H%M)
@@ -780,7 +770,6 @@ function run_filter {
     #------------------------------------------------------
     # 3. Prepare namelist file
     #------------------------------------------------------
-    # shellcheck disable=SC2154
     cat << EOF > input.nml
 &perfect_model_obs_nml
    read_input_state_from_file = .true.
@@ -1651,10 +1640,8 @@ EOF
     #
     # Create job script and submit it
     #
-    # shellcheck disable=SC2154
     jobscript="run_filter.${mach}"
     sedfile=$(mktemp -t filter_${eventtime}.sed_XXXX)
-    # shellcheck disable=SC2154
     cat <<EOF > $sedfile
 s/PARTION/${partition_filter}/
 s/NOPART/$npefilter/
@@ -1674,7 +1661,6 @@ s/RUNOBSDIAG/${run_obsdiag}/
 s/RUNADDNOISE/${run_addnoise}/
 s/RUNCMD/${job_runexe_str}/
 EOF
-    # shellcheck disable=SC2154
     if [[ "${mach}" == "pbs" ]]; then
         echo "s/NNODES/${nnodes_filter}/;s/NCORES/${ncores_filter}/" >> $sedfile
     fi
@@ -1712,7 +1698,6 @@ function run_update_states {
     #------------------------------------------------------
     # Prepare update_mpas_states by copying/linking the background files
     #------------------------------------------------------
-    # shellcheck disable=SC2154
     if [[ $update_in_place == true ]]; then
         cpcmd="ln -sf"
     else
@@ -1808,7 +1793,6 @@ function run_update_states {
     #
     jobscript="run_update_states.${mach}"
     sedfile=$(mktemp -t update_${eventtime}.sed_XXXX)
-    # shellcheck disable=SC2154
     cat <<EOF > $sedfile
 s/PARTION/${partition_filter}/
 s/NOPART/1/
@@ -1876,7 +1860,6 @@ function run_update_bc {
         done
     fi
 
-    # shellcheck disable=SC2154
     if [[ $icycle -ge 0 && ${run_updatebc} == true ]]; then
         cpcmd="cp"
         #cpcmd="rsync -a"
@@ -1913,7 +1896,6 @@ function run_update_bc {
         #
         # lbc files
         #
-        # shellcheck disable=SC2154
         jens=$(( (iens-1)%nenslbc+1 ))
         mlbcstr=$(printf "%02d" $jens)           # get LBC member string
 
@@ -2256,7 +2238,6 @@ function run_mpas {
     #
     # Preparation for all members
     #
-    # shellcheck disable=SC2154
     if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npefcst} ]]; then
         cd "${rundir}/${domname}" || exit $?
         if [[ $verb -eq 1 ]]; then
@@ -2292,9 +2273,7 @@ function run_mpas {
         else
             idx=2
         fi
-        # shellcheck disable=SC2154
         pblscheme=${pbl_schemes[$idx]}
-        # shellcheck disable=SC2154
         sfcscheme=${sfclayer_schemes[$idx]}
 
         memwrkdir=$wrkdir/fcst_$memstr
@@ -2350,7 +2329,6 @@ function run_mpas {
         fcstmin_str=$(printf "%02d" "${intvl_min}")
 
         # the ratio of radt to dt is 15
-        # shellcheck disable=SC2154
         cat << EOF > namelist.atmosphere
 &nhyd_model
     config_time_integration_order   = 2
@@ -2537,7 +2515,6 @@ EOF
     # Create job script for MPAS forecast and submit it
     #
     sedfile=$(mktemp -t mpas_${eventtime}.sed_XXXX)
-    # shellcheck disable=SC2154
     cat <<EOF > $sedfile
 s/PARTION/${partition_fcst}/
 s/NOPART/$npefcst/
@@ -2557,7 +2534,6 @@ EOF
     #mpas_jobscript="run_mpas.${mach}"
     jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
 
-    # shellcheck disable=SC2154
     if [[ "${mach}" == "pbs" ]]; then
         echo "s/NNODES/${nnodes_fcst}/;s/NCORES/${ncores_fcst}/" >> $sedfile
     fi
@@ -2598,7 +2574,7 @@ function da_cycle_driver() {
     #
     # Build working directory
     #
-    wrkdir="$rundir/dacycles${affix}"
+    wrkdir="$rundir/dacycles${daffix}"
     mkwrkdir $wrkdir $overwrite
     cd $wrkdir || return
 
@@ -2782,7 +2758,7 @@ function run_obs_diag {
     #
     # Build working directory
     #
-    dawrkdir="$rundir/dacycles${affix}"
+    dawrkdir="$rundir/dacycles${daffix}"
     if [[ ! -d $dawrkdir ]]; then
         echo "ERROR: $dawrkdir not exsit."
         exit 1
@@ -2892,7 +2868,7 @@ function run_obs_final2nc {
     #
     # Build working directory
     #
-    dawrkdir="$rundir/dacycles${affix}"
+    dawrkdir="$rundir/dacycles${daffix}"
     if [[ ! -d $dawrkdir ]]; then
         echo "ERROR: $dawrkdir not exsit."
         exit 1
@@ -3011,6 +2987,10 @@ function run_mpassit {
 
     minstr=$(printf "%02d" $((intvl_sec/60)) )
     #minstr="00"
+    fcst_minutes=()
+    if [[ ${damode} == "init" ]]; then
+        fcst_minutes=("00")
+    fi
     fcst_minutes+=("${minstr}")
 
     #
@@ -3054,7 +3034,7 @@ function run_mpassit {
 
         cd $wrkdir || return
 
-        run_mpassit_alltimes "${wrkdir}" "${iseconds}" "${minstr}" "${jobarrays_str}"
+        run_mpassit_alltimes "${wrkdir}" "${iseconds}" "${fcst_minutes[*]}" "${jobarrays_str}"
     fi
 }
 
@@ -3065,21 +3045,29 @@ function run_mpassit_alltimes {
     # wrkdir    iseconds
     local -r wrkdir=$1
     local -r iseconds=$2
-    local -r minstr=$3
+    local fcsttimes
     local -r jobarraystr=$4
+
+    IFS=" " read -r -a fcsttimes <<< "$3"
 
     cd $wrkdir || return
 
     # Loop over forecast minutes
+    local minsec=3600
+    local maxsec=0
 
-    minsec=$(( 10#${minstr}*60 ))
+    for minstr in "${fcsttimes[@]}"; do
+        (( i=10#${minstr}*60 ))
+        (( i > maxsec )) && maxsec=$i
+        (( i < minsec )) && minsec=$i
 
-    mpassit_wait_create_nml_onetime $wrkdir ${iseconds} $minsec 5
-    local estatus=$?               # number of missing members
-    if [[ ${estatus} -gt 0 ]]; then
-        echo "$$-${FUNCNAME[0]}: ${estatus} files missing"
-        exit 1
-    fi
+        mpassit_wait_create_nml_onetime $wrkdir ${iseconds} $i 5
+        local estatus=$?               # number of missing members
+        if [[ ${estatus} -gt 0 ]]; then
+            echo "$$-${FUNCNAME[0]}: ${estatus} files missing"
+            exit 1
+        fi
+    done
 
     #
     # Create job script and submit it
@@ -3088,7 +3076,6 @@ function run_mpassit_alltimes {
     jobscript="run_mpassit.${mach}"
 
     sedfile=$(mktemp -t mpassit_${eventtime}.sed_XXXX)
-    # shellcheck disable=SC2154
     cat <<EOF > $sedfile
 s/PARTION/${partition_filter}/
 s/NOPART/$npepost/
@@ -3098,7 +3085,7 @@ s/CPUSPEC/${claim_cpu_post}/
 s/CLAIMTIME/${claim_time_mpassit_alltimes}/
 s/HHMINSTR//g
 s/FCST_START/${minsec}/
-s/FCST_END/${minsec}/
+s/FCST_END/${maxsec}/
 s/FCST_INTVL/${intvl_sec}/
 s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
@@ -3109,7 +3096,6 @@ s/EXCLSTR/${job_exclusive_str}/
 s/RUNMPCMD/${job_runmpexe_str}/
 EOF
 
-    # shellcheck disable=SC2154
     if [[ "${mach}" == "pbs" ]]; then
         echo "s/NNODES/${nnodes_post}/;s/NCORES/${ncores_post}/" >> $sedfile
     fi
@@ -3157,7 +3143,7 @@ function mpassit_wait_create_nml_onetime {
             for fn in $histfile $diagfile; do
                 if [[ $outdone == false ]]; then
                     #echo "$$-${FUNCNAME[0]}: Checking ${fn##$rundir/} ..."
-                    echo "$$-${FUNCNAME[0]}: Checking forecast files at $fminstr for all $ENS_SIZE memebers from dacycles${affix}/${fcst_lauch_time} ..."
+                    echo "$$-${FUNCNAME[0]}: Checking forecast files at $fminstr for all $ENS_SIZE memebers from dacycles${daffix}/${fcst_lauch_time} ..."
                     outdone=true
                 fi
                 while [[ ! -f $fn ]]; do
@@ -3221,7 +3207,7 @@ function run_clean {
 
     local isec
 
-    wrkdir="$rundir/dacycles${affix}"
+    wrkdir="$rundir/dacycles${daffix}"
 
     for isec in $(seq $start_sec $intvl_sec $end_sec ); do
         timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
@@ -3280,17 +3266,11 @@ FIXDIR="${rootdir}/fix_files"
 eventdate="$eventdateDF"
 eventtime="1500"
 
-domname="wofs_mpas"
-mpscheme="mp_nssl2m"
-
 verb=0
 overwrite=0
 runcmd="sbatch"
 dorun=true
 rt_run=false            # realtime run?
-damode="restart"
-affix=""
-outwrf=false
 
 machine="Jet"
 
@@ -3365,23 +3345,6 @@ while [[ $# -gt 0 ]]; do
             fi
             shift
             ;;
-        -d)
-            domname=$2
-            shift
-            ;;
-        -damode)
-            if [[ ${2,,} == "init" || ${2,,} == "restart" ]]; then
-                damode="${2,,}"
-            else
-                echo "ERROR: unknow argument. Expect: \"init\" or \"restart\". Got: ${2,,}"
-                usage 1
-            fi
-            shift
-            ;;
-        -affix)
-            affix=".$2"
-            shift
-            ;;
         -f)
             config_file="$2"
             shift
@@ -3422,21 +3385,6 @@ while [[ $# -gt 0 ]]; do
                 usage 1
             fi
             shift
-            ;;
-        -p)
-            if [[ ${2^^} == "NSSL" ]]; then
-                mpscheme="mp_nssl2m"
-            elif [[ ${2^^} == "THOMPSON" ]]; then
-                mpscheme="Thompson"
-            else
-                echo "ERROR: Unsupported MP scheme name, got \"$2\"."
-                usage 1
-            fi
-            shift
-            ;;
-        -outwrf)
-            outwrf=true
-            jobs+=(mpassit)
             ;;
         -*)
             echo "Unknown option: $key"
@@ -3537,6 +3485,30 @@ fi
 readconf ${config_file} COMMON dacycles || exit $?
 # get ENS_SIZE, time_step, EXTINVL, ADAPTIVE_INF, update_in_place
 
+#
+# Check configurations reading in
+#
+if [[ "${damode}" == "restart" || "${damode}" == "init" ]]; then
+    :
+else
+    echo "ERROR: damode=${damode} is not supported."
+    usage 1
+fi
+
+if [[ "${mpscheme}" == "mp_nssl2m" || "${mpscheme}" == "Thompson" ]]; then
+    :
+else
+    echo "ERROR: mpscheme=${mpscheme} is not supported."
+    usage 1
+fi
+
+if [[ ${outwrf} == true ]]; then
+    jobs+=(mpassit)
+    OUTINVL=${intvl_sec}
+else
+    OUTINVL=$((2*intvl_sec))
+fi
+
 #first_cycle_sec=$((inittime_sec+intvl_sec))
 #frsttime_str=$(date -u -d @${first_cycle_sec} +%Y-%m-%d_%H.%M.%S)
 #inittime_str=$(date -u -d @${inittime_sec} +%H%M)
@@ -3604,8 +3576,7 @@ echo "     Domain name: $domname;  MP scheme: ${mpscheme}"
 echo " "
 
 RSTINVL_STR=$(printf "00:%02d:00" $((intvl_sec/60)) )
-OUTINVL_STR="1:00:00"                    # turn off history/diag outputs
-if [[ ${outwrf} == true ]]; then OUTINVL_STR=${RSTINVL_STR}; fi
+OUTINVL_STR=$(printf "00:%02d:00" $(( OUTINVL/60 )) )
 
 #
 # Start the data assimilation cycles

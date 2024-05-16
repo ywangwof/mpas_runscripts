@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC1091,SC2086
+# shellcheck disable=SC1090,SC1091,SC2086,SC2154
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
@@ -120,18 +120,13 @@ function usage {
     echo "              -w                  Hold script to wait for all job conditions are satified and submitted (for mpassit & upp)."
     echo "                                  By default, the script will exit after submitting all possible jobs."
     echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
-    echo "              -d  wofs_mpas       Domain name to be used"
     echo "              -i  YYYYmmddHHMM    Initial time, default: same as start time from the command line argument"
     echo "              -s  YYYYmmddHHMM    Start date & time of the forecast cycles"
     echo "                  HHMM            Start time of the forecast cycles"
     echo "              -e  YYYYmmddHHMM    End date & time of the forecast cycles"
     echo "                  HHMM            End time of the forecast cycles"
-    echo "              -p  nssl            MP scheme, [nssl, thompson], default: nssl"
     echo "              -r                  Realtime run, default: a retrospective run"
-    echo "              -damode restart     DA cycles mode, either init or restart. default: restart"
-    echo "              -affix affix        Affix attached to the run directory \"fcst\". Default: null"
     echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
-    echo "              -outpsfc            An extra streams for PSFC output every 5 minutes"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt = $eventdateDF"
@@ -166,7 +161,7 @@ function run_mpas {
     cd ${wrkdir} || return
 
     timestr=$(date -u -d @${iseconds} +%H%M)
-    dawrkdir=${rundir}/dacycles${affix}/${timestr}
+    dawrkdir=${rundir}/dacycles${daffix}/${timestr}
     #
     # Waiting for job conditions
     #
@@ -194,7 +189,6 @@ function run_mpas {
     #
     # Preparation for all members
     #
-    # shellcheck disable=SC2154
     if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npefcst} ]]; then
         cd $rundir/$domname || return
         if [[ $verb -eq 1 ]]; then
@@ -227,9 +221,7 @@ function run_mpas {
         else
             idx=2
         fi
-        # shellcheck disable=SC2154
         pblscheme=${pbl_schemes[$idx]}
-        # shellcheck disable=SC2154
         sfcscheme=${sfclayer_schemes[$idx]}
 
         memwrkdir=$wrkdir/fcst_$memstr
@@ -252,7 +244,6 @@ function run_mpas {
         #
         # lbc files
         #
-        # shellcheck disable=SC2154         #undefined variable nenslbc
         jens=$(( (iens-1)%nenslbc+1 ))
         mlbcstr=$(printf "%02d" $jens)
 
@@ -303,7 +294,6 @@ function run_mpas {
 
         fcsthr_str=$(printf "%02d:00:00" $((fcst_seconds/3600)))
 
-        # shellcheck disable=SC2154
         cat << EOF > namelist.atmosphere
 &nhyd_model
     config_time_integration_order   = 2
@@ -483,7 +473,7 @@ EOF
         clobber_mode="replace_files"
         precision="single"
         io_type="pnetcdf,cdf5"
-        output_interval="00:05:00">
+        output_interval="${OUTINVL_STR}">
 
         <var name="surface_pressure"/>
         <var name="tend_sfc_pressure"/>
@@ -505,12 +495,10 @@ EOF
     #
     cd $wrkdir || return
 
-    # shellcheck disable=SC2154
     jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
 
     # undefined variables are from the config file
     sedfile=$(mktemp -t mpas_${eventtime}.sed_XXXX)
-    # shellcheck disable=SC2154
     cat <<EOF > $sedfile
 s/PARTION/${partition_fcst}/
 s/NOPART/$npefcst/
@@ -527,7 +515,6 @@ s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/RUNMPCMD/${job_runmpexe_str}/
 EOF
-    # shellcheck disable=SC2154
     if [[ "${mach}" == "pbs" ]]; then
         echo "s/NNODES/${nnodes_fcst}/;s/NCORES/${ncores_fcst}/" >> $sedfile
     fi
@@ -677,7 +664,6 @@ function run_mpassit_oneAtime {
         jobscript="run_mpassit_$minstr.${mach}"
 
         sedfile=$(mktemp -t mpassit_${eventtime}_$minstr.sed_XXXX)
-        # shellcheck disable=SC2154
         cat <<EOF > $sedfile
 s/PARTION/${partition_post}/
 s/NOPART/$npepost/
@@ -698,7 +684,6 @@ s/EXCLSTR/${job_exclusive_str}/
 s/RUNMPCMD/${job_runmpexe_str}/
 EOF
 
-        # shellcheck disable=SC2154
         if [[ "${mach}" == "pbs" ]]; then
             echo "s/NNODES/${nnodes_post}/;s/NCORES/${ncores_post}/" >> $sedfile
         fi
@@ -748,7 +733,6 @@ function run_mpassit_alltimes {
         jobscript="run_mpassit.${mach}"
 
         sedfile=$(mktemp -t mpassit_${eventtime}.sed_XXXX)
-        # shellcheck disable=SC2154
         cat <<EOF > $sedfile
 s/PARTION/${partition_post}/
 s/NOPART/$npepost/
@@ -769,7 +753,6 @@ s/EXCLSTR/${job_exclusive_str}/
 s/RUNMPCMD/${job_runmpexe_str}/
 EOF
 
-        # shellcheck disable=SC2154
         if [[ "${mach}" == "pbs" ]]; then
             echo "s/NNODES/${nnodes_post}/;s/NCORES/${ncores_post}/" >> $sedfile
         fi
@@ -1074,7 +1057,7 @@ function fcst_driver() {
     #
     # Build working directory
     #
-    wrkdir=$rundir/fcst${affix}
+    wrkdir=$rundir/fcst${daffix}
     mkwrkdir $wrkdir $overwrite
     cd $wrkdir || return
 
@@ -1088,7 +1071,6 @@ function fcst_driver() {
     echo "Forecasting cycles from $date_beg to $date_end ...."
 
     # fcst_length_seconds/fcst_launch_intvl from the config file
-    # shellcheck disable=SC2154
     for ilaunch in $(seq $start_sec ${fcst_launch_intvl} $end_sec ); do
         #timestr_curr=$(date -u -d @$ilaunch +%Y%m%d%H%M)
         eventtime=$(date -u -d @$ilaunch +%H%M)
@@ -1186,7 +1168,7 @@ function run_clean {
     local end_sec=$2
     local what=$3
 
-    wrkdir=$rundir/fcst${affix}
+    wrkdir=$rundir/fcst${daffix}
 
     for isec in $(seq ${start_sec} ${fcst_launch_intvl} ${end_sec} ); do
         #timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
@@ -1327,17 +1309,12 @@ FIXDIR="${rootdir}/fix_files"
 eventdate="$eventdateDF"
 eventtime="1700"
 
-domname="wofs_mpas"
-mpscheme="mp_nssl2m"
-
 verb=0
 overwrite=0
 jobwait=0
 runcmd="sbatch"
 dorun=true
 rt_run=false            # realtime run?
-damode="restart"
-affix=""
 
 myhostname=$(hostname)
 if [[ "${myhostname}" == ln? ]]; then
@@ -1360,8 +1337,6 @@ source $scpdir/Common_Utilfuncs.sh || exit $?
 #
 #-----------------------------------------------------------------------
 #% ARGS
-
-outpsfc=false
 
 while [[ $# -gt 0 ]]
     do
@@ -1416,10 +1391,6 @@ while [[ $# -gt 0 ]]
             fi
             shift
             ;;
-        -d)
-            domname=$2
-            shift
-            ;;
         -i)
             if [[ $2 =~ ^[0-9]{12}$ ]]; then
                 initdatetime=$2
@@ -1457,36 +1428,9 @@ while [[ $# -gt 0 ]]
             fi
             shift
             ;;
-        -p)
-            if [[ ${2^^} == "NSSL" ]]; then
-                mpscheme="mp_nssl2m"
-            elif [[ ${2^^} == "THOMPSON" ]]; then
-                mpscheme="Thompson"
-            else
-                echo "ERROR: Unsupported MP scheme name, got \"$2\"."
-                usage 1
-            fi
-            shift
-            ;;
-        -damode)
-            if [[ ${2,,} == "init" || ${2,,} == "restart" ]]; then
-                damode="${2,,}"
-            else
-                echo "ERROR: unknow argument. Expect: \"init\" or \"restart\". Got: ${2,,}"
-                usage 1
-            fi
-            shift
-            ;;
-        -affix)
-            affix=".$2"
-            shift
-            ;;
         -f)
             config_file="$2"
             shift
-            ;;
-        -outpsfc)
-            outpsfc=true
             ;;
         -*)
             echo "Unknown option: $key"
@@ -1617,6 +1561,26 @@ fi
 readconf ${config_file} COMMON fcst || exit $?
 # get ENS_SIZE, time_step, EXTINVL, OUTINVL, OUTIOTYPE
 
+#
+# Check configurations reading in
+#
+if [[ "${damode}" == "restart" ]]; then
+    diag_start=${OUTINVL}
+elif [[ "${damode}" == "init" ]]; then
+    diag_start=0
+else
+    echo "ERROR: damode=${damode} is not supported."
+    usage 1
+fi
+
+if [[ "${mpscheme}" == "mp_nssl2m" || "${mpscheme}" == "Thompson" ]]; then
+    :
+else
+    echo "ERROR: mpscheme=${mpscheme} is not supported."
+    usage 1
+fi
+
+
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
 # Perform FCST cycles
@@ -1642,11 +1606,6 @@ EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 OUTINVL_STR=$(printf "00:%02d:00" $((OUTINVL/60)) )
 RSTINVL_STR="10:00:00"         # turn off restart file output
 
-if [[ "${damode}" == "restart" ]]; then
-    diag_start=OUTINVL
-else
-    diag_start=0
-fi
 #
 # Start the forecast driver
 #

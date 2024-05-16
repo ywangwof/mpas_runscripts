@@ -1197,7 +1197,7 @@ def retrieve_scattervar(cmdargs,vtype,varobj):
         sdata[qcstr]['post']  = postdta[qindex]
         #sdata[qcstr]['count'] = postdta[qindex].count()
 
-        if varobj.timedat is not None:
+        if varobj.timeda is not None:
             sdata[qcstr]['time']  = varobj.timeda
         else:
             otime = timedta[qindex]

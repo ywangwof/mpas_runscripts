@@ -42,7 +42,7 @@ def make_namespace(d: dict,lvl=0,level=None):
     ns =  argparse.Namespace()
     for k, v in d.items():
         lvl += 1
-        if isinstance(v, dict):
+        if v and isinstance(v, dict):
             if level is None or (level is not None and lvl < level):
                 leaf_ns = make_namespace(v,lvl,level)
                 ns.__dict__[k] = leaf_ns
@@ -67,7 +67,7 @@ def update_progress(job_title, progress):
 
 ########################################################################
 
-def load_obs_seq(filename,cargs,rargs):
+def load_obs_seq(filename,cloud_types,verbose):
     ''' Read obs_seq text file '''
 
     obs_obj = {}
@@ -113,7 +113,7 @@ def load_obs_seq(filename,cargs,rargs):
 
                 elif line.startswith("OBS "):
                     iobs = int(line.split()[1])      # number of this obs
-                    obs = decode_one_obs(fh,iobs,ncopy,nqc,cargs,rargs)
+                    obs = decode_one_obs(fh,iobs,ncopy,nqc,cloud_types,verbose)
                     obs_list.append(obs)
     else:
         print(f"ERROR: file {filename} not found")
@@ -135,7 +135,7 @@ def load_obs_seq(filename,cargs,rargs):
 
 ########################################################################
 
-def decode_one_obs(fhandle,iobs,ncopy,nqc,cargs,rargs):
+def decode_one_obs(fhandle,iobs,ncopy,nqc,cloud_types,verbose):
 
     nobslines = 8+ncopy+nqc
 
@@ -148,14 +148,10 @@ def decode_one_obs(fhandle,iobs,ncopy,nqc,cargs,rargs):
     values = []
     qcs    = []
     platform = {}
-    visirs  = []
     mask     = False
 
-    cloud_GOES  = False
-    cloud_base  = None
-    cloud_top   = None
-    cloud_index = None
-    visir       = False
+    cloud_values  = []
+    visir_values  = []
 
     i = 0
     while True:
@@ -177,9 +173,7 @@ def decode_one_obs(fhandle,iobs,ncopy,nqc,cargs,rargs):
         elif i == itype:              # get kind
             #print(i,itype,sline)
             otype = int(sline)
-            if otype in rargs.clouds:     # or (otype >= 80 and otype <= 87):
-                cloud_GOES = True
-
+            if otype in cloud_types:     # or (otype >= 80 and otype <= 87):
                 line = fhandle.readline()
                 sline = line.strip()
                 cloud_base,cloud_top = [decimal.Decimal(x) for x in sline.split()]
@@ -187,6 +181,8 @@ def decode_one_obs(fhandle,iobs,ncopy,nqc,cargs,rargs):
                 line = fhandle.readline()
                 sline = line.strip()
                 cloud_index = decimal.Decimal(sline)
+
+                cloud_values  = (cloud_base, cloud_top, cloud_index)
 
                 # GOES observation contains an extra line for cloud base and cloud top heights
                 itime = itype + 3             # and an integer line (?)
@@ -233,22 +229,20 @@ def decode_one_obs(fhandle,iobs,ncopy,nqc,cargs,rargs):
 #   -888888.0000000000
 #          132
 
-            visir = True
-
             j = 0
             while j < 5:
                 line = fhandle.readline()
                 sline = line.strip()
                 #print(i,j,sline)
                 if j in (0,1,3):
-                    visirs.extend([decimal.Decimal(x) for x in sline.split()])
+                    visir_values.extend([decimal.Decimal(x) for x in sline.split()])
                 elif j in (2,4):
-                    visirs.extend([int(x) for x in sline.split()])
+                    visir_values.extend([int(x) for x in sline.split()])
                 j += 1
             i += j
 
         elif i == itime:             # get seconds, days
-            if cargs.verbose: print(f"time: {i}/{nobslines},{itime} - {sline}")
+            if verbose: print(f"time: {i}/{nobslines},{itime} - {sline}")
             secs,days = sline.split()
         elif i == ivar:              # get error variance
             #print(f"var: {i}/{nobslines},{ivar} - {sline}")
@@ -261,27 +255,29 @@ def decode_one_obs(fhandle,iobs,ncopy,nqc,cargs,rargs):
     # one day is 86400 seconds
 
     obsobj = {'iobs'      : iobs,
+              'kind'      : otype,
               'values'    : values,
               'qcs'       : qcs,
-              'lon'       : decimal.Decimal(lon),
-              'lat'       : decimal.Decimal(lat),
-              'level'     : decimal.Decimal(alt),
-              'level_type': int(vert),
+              'location'  : {'lon'        : decimal.Decimal(lon),
+                             'lat'        : decimal.Decimal(lat),
+                             'level'      : decimal.Decimal(alt),
+                             'level_type' : int(vert)
+                            },
+              'time'      : { 'days'        : int(days),
+                              'seconds'     : int(secs),
+                              'decimalDays' : decimal.Decimal(days)+decimal.Decimal(secs)/86400    # in decimal days
+                            },
               'links'     : links,
-              'kind'      : otype,
-              'platform'  : platform,
-              'days'      : int(days),
-              'seconds'   : int(secs),
-              'time'      : decimal.Decimal(days)+decimal.Decimal(secs)/86400,
               'variance'  : var,
-              'mask'      : mask,
-              'GOES'      : cloud_GOES,
-              'clouds'    : (cloud_base, cloud_top, cloud_index),
-              'visir'     : visir,
-              'visir_a'   : visirs
+
+              'platform'  : platform,
+              'clouds'    : cloud_values,
+              'visir'     : visir_values,
+
+              'mask'      : mask
               }
 
-    return make_namespace(obsobj,level=1)
+    return make_namespace(obsobj)
 
 ########################################################################
 
@@ -316,7 +312,6 @@ def write_obs_seq(obs, filename, number=0 ):
         fi.write(f"  first:            {max(obs.first,1):d}  last:        {min(obs.last,obs.nobs):d}\n")
 
         iobs = 0
-        n = 0
         for it in obs.obs:
 
             if it.mask == True:   # bad values
@@ -325,24 +320,6 @@ def write_obs_seq(obs, filename, number=0 ):
                 iobs += 1
 
                 if number > 0 and iobs > number:   break
-
-# From Craig on Jan 19, 2024
-#
-# I'm a bit more concerned about your surface observation types having a
-# "which_vert" of -1 (obs_seq.bufr), which is VERTISSURFACE.  When computing
-# distances between two locations defined as "VERTISSURFACE", the vertical
-# difference between these two locations is ignored.  That's arguably not
-# a good thing.  I wonder what would happen if you used VERTISHEIGHT (value is 3)
-# for the prebufr obs.
-#
-# It would be in the fortran code--probably in ascii_to_obs/prepbufr_to_obs.f90.
-#
-                if it.kind == 29 and it.level_type == -1:
-                    level_type = 3
-                    n += 1
-                    print(f"iobs = {it.iobs}: which_vert changed from -1 to 3")
-                else:
-                    level_type = it.level_type
 
                 fi.write(f" OBS   {it.iobs:12d}\n")
 
@@ -358,13 +335,13 @@ def write_obs_seq(obs, filename, number=0 ):
 
                 fi.write("obdef\n")
                 fi.write("loc3d\n")
-                fi.write(f"  {it.lon}      {it.lat}      {it.level}      {level_type:d}\n")
+                fi.write(f"  {it.location.lon}      {it.location.lat}      {it.location.level}      {it.location.level_type:d}\n")
 
                 fi.write("kind\n")
                 fi.write(f"          {it.kind}\n")
 
                 # GOES CWP etc. add cloud base/top and an index number
-                if it.GOES:
+                if it.clouds:
                     fi.write(f"    {it.clouds[0]:f}          {it.clouds[1]:f}\n" )
                     fi.write(f"    {it.clouds[2]:d}                      \n" )
 
@@ -372,33 +349,33 @@ def write_obs_seq(obs, filename, number=0 ):
                 if it.platform:
                     fi.write("platform\n")
                     fi.write("loc3d\n")
-                    fi.write(f"""    {it.platform["loc3d"][0]:f}          {it.platform["loc3d"][1]:f}        {it.platform["loc3d"][2]:f}    {it.platform["loc3d"][3]:d}\n""" )
+                    fi.write(f"""    {it.platform.loc3d[0]:f}          {it.platform.loc3d[1]:f}        {it.platform.loc3d[2]:f}    {it.platform.loc3d[3]:d}\n""" )
 
                     fi.write("dir3d\n")
-                    #fi.write("    %20.14f          %20.14f        %20.14f\n" % (it.platform["dir3d"][0],it.platform["dir3d"][1],it.platform["dir3d"][2]) )
-                    fi.write(f"""    {it.platform["dir3d"][0]:f}          {it.platform["dir3d"][1]:f}        {it.platform["dir3d"][2]:f}\n""" )
+                    #fi.write("    %20.14f          %20.14f        %20.14f\n" % (it.platform.dir3d[0],it.platform.dir3d[1],it.platform.dir3d[2]) )
+                    fi.write(f"""    {it.platform.dir3d[0]:f}          {it.platform.dir3d[1]:f}        {it.platform.dir3d[2]:f}\n""" )
 
-                    #fi.write("    %20.14f     \n" % it.platform["nyquist"] )
-                    fi.write(f"""    {it.platform["nyquist"]:f}     \n""" )
-                    fi.write(f"""    {it.platform["key"]}           \n""" )
+                    #fi.write("    %20.14f     \n" % it.platform.nyquist )
+                    fi.write(f"""    {it.platform.nyquist:f}     \n""" )
+                    fi.write(f"""    {it.platform.key}           \n""" )
 
-# visir
-#    17.08586741569378         40.85687083986613        -888888.0000000000
-#    41.82816763132313
-#            4           16           44            8
-#   -888888.0000000000
-#          132
+                # visir
+                #    17.08586741569378         40.85687083986613        -888888.0000000000
+                #    41.82816763132313
+                #            4           16           44            8
+                #   -888888.0000000000
+                #          132
                 if it.visir:
                     fi.write("visir\n")
-                    fi.write(f"""    {it.visir_a[0:3]} \n""" )
-                    fi.write(f"""    {it.visir_a[3]}   \n""" )
-                    fi.write(f"""    {it.visir_a[4:8]} \n""" )
-                    fi.write(f"""    {it.visir_a[8]}   \n""" )
-                    fi.write(f"""    {it.visir_a[9]}   \n""" )
+                    fi.write(f"""    {it.visir[0:3]} \n""" )
+                    fi.write(f"""    {it.visir[3]}   \n""" )
+                    fi.write(f"""    {it.visir[4:8]} \n""" )
+                    fi.write(f"""    {it.visir[8]}   \n""" )
+                    fi.write(f"""    {it.visir[9]}   \n""" )
 
 
                 # Done with special radial velocity obs back to dumping out time, day, error variance info
-                fi.write(f"{it.seconds}     {it.days}\n" )
+                fi.write(f"{it.time.seconds}     {it.time.days}\n" )
 
                 # Logic for command line override of observational error variances
 
@@ -414,39 +391,79 @@ def write_obs_seq(obs, filename, number=0 ):
 
 def print_obs(obs_in,rargs):
 
-    for it in obs_in.obs:
-        # print(f"Available attributes: {vars(it)}")
-        # 'values', 'qcs', 'lon', 'lat', 'level', 'level_type', 'links', 'kind', 'platform', 'days', 'seconds', 'time', 'variance', 'mask', 'GOES', 'clouds'
-        if it.kind == int(rargs.t_type):
-            print(f"iobs = {it.iobs:6d}, ", end="")
-            for varname in rargs.t_var:
-                value = getattr(it,varname)
-                if isinstance(value,list):
-                    valuestr=','.join([str(x) for x in value])
-                    print(f"{varname} - {valuestr}, ", end="")
-                else:
-                    #variances.append(value)
-                    print(f"{varname} - {value:f}, ", end="")
-            print("")
-    #variance = np.array(variances)
-    #print(f"{variance.mean()}, {variance.min()}, {variance.max()}, {np.sqrt(variance.mean())}")
+    if rargs.metaonly:
+        count_obs = {}
+        for key, label in obs_in.types.items():
+            count_obs[key] = 0
+
+        for it in obs_in.obs:
+            count_obs[str(it.kind)] += 1
+
+        print(f"\nnobs     = {obs_in.nobs},    first    = {obs_in.first},    last    = {obs_in.last}\n")
+
+        for key, label in obs_in.types.items():
+            print(f"    {key} - {label} ({count_obs[key]})")
+
+        print(f"\nnvarcopy = {obs_in.nvarcopy}")
+        for key,label in obs_in.copy_labels.items():
+            print(f"    {key} - {label}")
+
+        print(f"\nnqccopy = {obs_in.nqccopy}")
+        for key, label in obs_in.qc_labels.items():
+            print(f"    {key} - {label}")
+
+    else:
+
+        print(f" {rargs.t_type}: {obs_in.types[rargs.t_type]}")
+
+        n = 0
+        for it in obs_in.obs:
+
+            if "location" in rargs.t_var:
+                it.location.lon = math.degrees(it.location.lon)
+                it.location.lat = math.degrees(it.location.lat)
+
+            # print(f"Available attributes: {vars(it)}")
+            # 'values', 'qcs', {'lon', 'lat', 'level', 'level_type'}, 'links', 'kind', 'platform', {'days', 'seconds', 'time'}, 'variance', 'mask', 'visir', 'clouds'
+            if it.kind == int(rargs.t_type):
+                print(f"iobs = {it.iobs:6d}, ", end="")
+                for varname in rargs.t_var:
+                    value = getattr(it,varname)
+                    if isinstance(value,list):
+                        valuestr=','.join([str(x) for x in value])
+                        print(f"{varname} - {valuestr}, ", end="")
+                    elif isinstance(value,dict):
+                        valuestr=','.join([f"{k}:{v}" for k,v in value.items()])
+                        print(f"{varname} - {valuestr}, ", end="")
+                    elif isinstance(value,argparse.Namespace):
+                        valuestr=','.join([f"{k}:{v}" for k,v in value.__dict__.items()])
+                        print(f"{varname} - {valuestr}, ", end="")
+                    else:
+                        #variances.append(value)
+                        print(f"{varname} - {value:f}, ", end="")
+                print("")
+                n += 1
+                if rargs.number > 0 and n >= rargs.number:   break
+
+        #variance = np.array(variances)
+        #print(f"{variance.mean()}, {variance.min()}, {variance.max()}, {np.sqrt(variance.mean())}")
 
 ########################################################################
 
 def process_obs(obs_in, obs_out, cargs,rargs):
 
     #
-    # Mask observations for NaN
+    # 1. Mask observations for NaN
     #
     if not cargs.notrim:
         # default, trim all observation contain any NaN
         for it in obs_out.obs:
             if it.platform:
-                if it.platform["dir3d"][0].is_nan() or it.platform["dir3d"][1].is_nan():
+                if it.platform.dir3d[0].is_nan() or it.platform.dir3d[1].is_nan():
                     it.mask = True
 
     #
-    # Mask observations for unwanted types
+    # 2. Mask observations for unwanted types
     #
     if len(rargs.xtypes) > 0:
         obs_out.types = {}
@@ -459,7 +476,7 @@ def process_obs(obs_in, obs_out, cargs,rargs):
                 it.mask = True
 
     #
-    # Filter out unwanted observations
+    # 3. Filter out unwanted observations
     #
     obs_records = []
     masked_obs  = []
@@ -472,8 +489,10 @@ def process_obs(obs_in, obs_out, cargs,rargs):
 
     if cargs.verbose: print(f"INFO: Dropped observations: {masked_obs}")
 
+    #
+    # 4. Fix the linked list
+    #
     if cargs.keep:
-        # modify the linked list
         for it in obs_records:
             for mi in masked_obs:
                 i = sum(j<mi for j in masked_obs)
@@ -507,6 +526,24 @@ def process_obs(obs_in, obs_out, cargs,rargs):
         for it in obs_records:
             it.links[1] = -1
 
+    #
+    # 5. From Craig on Jan 19, 2024
+    #
+    # I'm a bit more concerned about your surface observation types having a
+    # "which_vert" of -1 (obs_seq.bufr), which is VERTISSURFACE.  When computing
+    # distances between two locations defined as "VERTISSURFACE", the vertical
+    # difference between these two locations is ignored.  That's arguably not
+    # a good thing.  I wonder what would happen if you used VERTISHEIGHT (value is 3)
+    # for the prebufr obs.
+    #
+    # It would be in the fortran code--probably in ascii_to_obs/prepbufr_to_obs.f90.
+    #
+
+    #for it in obs_records:
+    #    if it.kind == 29 and it.location.level_type == -1:
+    #        it.location.level_type = 3
+    #        print(f"iobs = {it.iobs}: which_vert changed from -1 to 3")
+
     return obs_records
 
 ########################################################################
@@ -524,24 +561,34 @@ def parse_args():
     parser.add_argument('-v','--verbose', help='Verbose output',                                  action="store_true", default=False)
     parser.add_argument('-o','--outdir' , help='Name of the output file or an output directory',  default='./',        type=str)
     parser.add_argument('-x','--xtypes' , help='Type Numbers of observation to be removed',       default=None,        type=str)
-    parser.add_argument('-c','--clouds' , help='Type Numbers of observation that contains cloud lines', default="124,125,126", type=str)
+    parser.add_argument('-c','--ctypes' , help='Type Numbers of observation that contains cloud lines', default="124,125,126", type=str)
     parser.add_argument('-t','--type'   , help='''Type Numbers of observation to be print, for examples,
                         44                 : Show observaiton value of observation type 44;
                         44,variance        : Show variance;
-                        44,values,variance : Show value and variance''',                               default=None,        type=str)
+                        44,values,variance : Show value and variance; Valid names are: time,location,qcs,platform,clouds,visir,mask''',
+                                                                                                       default=None,        type=str)
     parser.add_argument('-k','--keep' ,   help='After drop observations, keep it links as possible',   action="store_true", default=False)
     parser.add_argument('-n','--number' , help='Fist N number of observations to be written',          default=0,           type=int)
     parser.add_argument('-N','--notrim' , help='Do not trim NaN in observations (default: Trim obs_seq for NaNs)', action="store_true", default=False)
 
     args = parser.parse_args()
 
-    rargs = {'outfile': None, 'xtypes' : [], 't_type': None }
+    rargs = {'files': [], 'outfile': None, 'xtypes' : [], 't_type': None, 'metaonly': False, 'number': args.number }
+
+    for fn in args.files:
+        if fn == "list":
+            rargs['metaonly'] = True
+        elif os.path.lexists(fn):
+            rargs['files'].append(fn)
+        else:
+            print(f"ERROR: unknow argument: {fn}")
+            sys.exit(1)
 
     if args.xtypes is not None:
         rargs['xtypes'] = [int(x) for x in args.xtypes.split(',')]
 
-    if args.clouds is not None:
-        rargs['clouds'] = [int(x) for x in args.clouds.split(',')]
+    if args.ctypes is not None:
+        rargs['ctypes'] = [int(x) for x in args.ctypes.split(',')]
 
     if args.type is not None:
         rlist = [item for item in args.type.split(',')]
@@ -571,13 +618,11 @@ if __name__ == "__main__":
 
     cargs,rargs = parse_args()
 
-    for filename in cargs.files:
+    for filename in rargs.files:
         if cargs.verbose: print(f" load_obs_seq: Reading {filename}\n")
-        obs_in = load_obs_seq(filename,cargs,rargs)
+        obs_in = load_obs_seq(filename,rargs.ctypes,cargs.verbose)
 
-        if rargs.t_type is not None:  # Show its values
-            #variances = []
-            print(f" {rargs.t_type}: {obs_in.types[rargs.t_type]}")
+        if rargs.metaonly or rargs.t_type is not None:  # Show its values
 
             print_obs(obs_in,rargs)
 
@@ -617,4 +662,4 @@ if __name__ == "__main__":
             else:
                 print(f"        {filename} -> {outfilename}\n        Number of good observations: {obs_out.nobs}")
 
-            write_obs_seq(obs_out, outfilename)
+            write_obs_seq(obs_out, outfilename, rargs.number)

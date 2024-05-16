@@ -1123,12 +1123,20 @@ function write_runtimeconfig {
     nenslbc=18
     EXTINVL=3600
 
+    domname="wofs_mpas"
+    daffix=""                   # DA & fcst cycle work directory affix, default: dacycles/fcst
+                                # otherwise dacyles.\${daffix}/fcst.\${daffix}
+    damode="restart"            # DA cycles mode, either "restart" or "init"
+
     MPASLSM='sf_ruc'
     MPASNFLS=9
-    # suite,sf_monin_obukhov,sf_mynn,off (default: suite)  Keep its 3-elements, Otherwise, need a script change
+
+    mpscheme='mp_nssl2m'                        # Microphysics scheme, valid values are ('mp_nssl2m', 'Thompson')
     sfclayer_schemes=('sf_monin_obukhov_rev' 'sf_monin_obukhov' 'sf_mynn')
-    # suite,bl_ysu,bl_mynn,off           (default: suite)  Keep its 3-elements
-    pbl_schemes=('bl_ysu' 'bl_myj' 'bl_mynn')   # comment?
+                                                # suite,sf_monin_obukhov_rev,sf_monin_obukhov,sf_mynn,off (default: suite)
+                                                # Keep its 3-elements, Otherwise, need a script change
+    pbl_schemes=('bl_ysu' 'bl_myj' 'bl_mynn')   # suite,bl_ysu,bl_myj,bl_mynn,off  (default: suite)
+                                                # Keep its 3-elements
 
     WPSGEOG_PATH="${WPSGEOG_PATH}"
 
@@ -1153,7 +1161,7 @@ function write_runtimeconfig {
 
     partition_ics="${partition_ics}"
     claim_cpu_ics="${claim_cpu_ics}"
-    ncores_ics="${ncores_ics}"          # on Cheyenne only
+    ncores_ics="${ncores_ics}"
     claim_cpu_ungrib="${claim_cpu_ungrib}"
 
 [lbc]
@@ -1191,6 +1199,8 @@ function write_runtimeconfig {
     WOFSAN_PATH="${mpas_wofs_python}"
 
     OUTIOTYPE="netcdf4"
+    outwrf=false                        # Run MPASSIT after each data assimilation
+
     OBS_DIR="${OBS_DIR}"
 
     partition_fcst="${partition_dafcst}";
@@ -1213,6 +1223,8 @@ function write_runtimeconfig {
     fcst_length_seconds=(21600 10800)   # 6 hours at :00 and 3 hours at :30
     OUTINVL=300
     OUTIOTYPE="netcdf4"
+
+    outpsfc=false                       # An extra streams for PSFC output"
 
     partition_fcst="${partition_fcst}"
     partition_post="${partition_post}"
