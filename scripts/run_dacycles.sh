@@ -847,6 +847,7 @@ function run_filter {
 &quality_control_nml
    input_qc_threshold = 5,
    outlier_threshold  = 3.5,
+   inlier_threshold   = 0.25,
    enable_special_outlier_code = .false.,
   /
 
@@ -1233,6 +1234,7 @@ function run_filter {
                            't2m',                   'QTY_2M_TEMPERATURE',
                            'q2',                    'QTY_2M_SPECIFIC_HUMIDITY',
                            'surface_pressure',      'QTY_SURFACE_PRESSURE',
+                           'rt_diabatic_tend',      'QTY_CONDENSATIONAL_HEATING',
                            'qv',                    'QTY_VAPOR_MIXING_RATIO',
                            'qc',                    'QTY_CLOUDWATER_MIXING_RATIO',
                            'qr',                    'QTY_RAINWATER_MIXING_RATIO',
