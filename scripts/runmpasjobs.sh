@@ -12,7 +12,8 @@ eventdateDF=$(date -u +%Y%m%d%H%M)
 
 run_dir=${top_dir}/run_dirs
 script_dir=${top_dir}/scripts
-post_dir=${top_dir}/wofs_post/wofs/scripts
+#post_dir=${top_dir}/wofs_post/wofs/scripts
+post_dir="/scratch/ywang/MPAS/gnu/frdd-wofs-post/wofs/scripts"
 
 host="$(hostname)"
 
@@ -33,6 +34,8 @@ function usage {
     echo "              -h                  Display this message"
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
+    echo "              -e                  Last time in HHMM format"
+    echo "              -x                  Directory affix (for post & diag only)"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt    = $eventdateDF"
@@ -60,6 +63,9 @@ fi
 
 runtime="$eventdate"
 
+affix=""
+endtime="0300"
+
 #-----------------------------------------------------------------------
 #
 # Handle command line arguments (override default settings)
@@ -82,11 +88,19 @@ while [[ $# -gt 0 ]]; do
         -v)
             verb=true
             ;;
+        -x)
+            affix="$2"
+            shift
+            ;;
+        -e)
+            endtime="$2"
+            shift
+            ;;
         -*)
             echo "Unknown option: $key"
             usage 2
             ;;
-        dacycles | fcst | post | plot )
+        dacycles | fcst | post | plot | diag )
             cmd=$key
             ;;
         *)
@@ -119,7 +133,7 @@ post | plot | diag )
         exit 1
     fi
 
-    if [[ -z ${MAMBA_EXE} ]]; then   # not set micromamba, load Python environment
+    if [[ -z ${MAMBA_EXE} || -t 0 ]]; then   # not set micromamba, load Python environment
         # >>> mamba initialize >>>
         # !! Contents within this block are managed by 'mamba init' !!
         export MAMBA_EXE='/home/yunheng.wang/y/bin/micromamba';
@@ -134,6 +148,7 @@ post | plot | diag )
         # <<< mamba initialize <<<
         micromamba activate "/home/brian.matilla/micromamba/envs/wofs-func"
     fi
+    #echo "Activated Python environment on ${host} ..."
     ;;
 esac
 
@@ -147,9 +162,9 @@ if [[ ! -d ${log_dir} ]]; then
 fi
 
 if [ -t 1 ]; then       # interactive
-    exec > >(tee -ia "${log_dir}/log.${cmd}") 2>&1
+    exec > >(tee -ia "${log_dir}/log.${cmd}${affix}") 2>&1
 else                    # "at job"
-    exec 1>> "${log_dir}/log.${cmd}" 2>&1
+    exec 1>> "${log_dir}/log.${cmd}${affix}" 2>&1
 fi
 
 echo "=== $(date +%Y%m%d_%H:%M:%S) - $0 ${saved_args} ==="
@@ -160,22 +175,39 @@ dacycles )
     if [ -t 1 ]; then # "interactive"
         echo "$cmd $runtime in $(pwd)"
     fi
-    ${show} ${script_dir}/run_dacycles.sh "${runtime}" -r
+    ${show} "${script_dir}/run_dacycles.sh" "${runtime}" -r
     ;;
 fcst )
     cd "${script_dir}" || exit 1
     if [ -t 1 ]; then # "interactive"
         echo "$cmd $runtime in $(pwd)"
     fi
-    ${show} ${script_dir}/run_fcst.sh "${runtime}" -r -w
+    ${show} "${script_dir}/run_fcst.sh" "${runtime}" -r -w
     ;;
 
-post | plot )
-
-    nextdate=$(date -d "${eventdate} 1 day" +%Y%m%d)
-    if [[ ! -e "${run_dir}/FCST/${eventdate}/fcst_${nextdate}0300_start" ]]; then
-        "${script_dir}/lnmpasfcst.sh" "${eventdate}"
+post )
+    enddate=${eventdate}
+    if [[ $((10#endtime)) -lt 1200 ]]; then
+        enddate=$(date -d "${eventdate} 1 day" +%Y%m%d)
     fi
+
+    if [[ ! -e "${run_dir}/FCST/${eventdate}/fcst_${enddate}${endtime}_start" ]]; then
+        "${script_dir}/lnmpasfcst.sh" -fcst fcst${affix} "${eventdate}"
+    fi
+
+    cd "${post_dir}" || exit 1
+    if [ -t 1 ]; then # "interactive"
+        echo "$cmd $eventdate in $(pwd)"
+    fi
+    ${show} time "./wofs_${cmd}_summary_files_MPAS.py" "${eventdate}"
+    ;;
+
+plot )
+
+    echo "Waiting for ${run_dir}/summary_files/${eventdate}/${endtime}/wofs_postswt_${endtime}_finished ..."
+    while [[ ! -e "${run_dir}/summary_files/${eventdate}/${endtime}/wofs_postswt_${endtime}_finished" ]]; do
+        sleep 10
+    done
 
     cd "${post_dir}" || exit 1
     if [ -t 1 ]; then # "interactive"
@@ -189,7 +221,7 @@ diag )
     if [ -t 1 ]; then # "interactive"
         echo "$cmd $eventdate in $(pwd)"
     fi
-    ${show} ${script_dir}/plot_allobs.sh "${eventdate}"
+    ${show} "${script_dir}/plot_allobs.sh" -d dacycles${affix} -e ${endtime} "${eventdate}"
     ;;
 * )
     echo "Unknown command: $cmd"

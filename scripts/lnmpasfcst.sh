@@ -30,6 +30,7 @@ function usage {
     echo "              -s starttime        in HHMM. Default: 1700"
     echo "              -e endtime          in HHMM. Default: 0300"
     echo "              -b 5                Forecast first available time in minutes. Default: 5 minutes"
+    echo "              -c                  Overwritten existing files, otherwise, keep existing files"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt    = $eventdate"
@@ -49,6 +50,7 @@ function usage {
 #% ARGS
 show=""
 verb=false
+force_clean=false
 
 eventdate=${eventdateDF}
 starttime="1700"
@@ -68,6 +70,9 @@ while [[ $# -gt 0 ]]; do
             ;;
         -v)
             verb=true
+            ;;
+        -c)
+            force_clean=true
             ;;
         -fcst)
             fcstdir="$2"
@@ -183,7 +188,7 @@ for ((s=start_s;s<=end_s;s+=3600)); do
             wrftimestr=$(date -u -d @$fcsttime  +%Y-%m-%d_%H:%M:%S)
             memfile="MPASSIT_${memstr}.${fcsttimestr}.nc"
             desfile="wrfwof_d01_${wrftimestr}"
-            if [[ ! -f ${desfile} ]]; then
+            if [[ ! -f ${desfile} || ${force_clean} == true ]]; then
                 if [[ ! -e ${memdir}/${memfile} ]]; then
                     echo "Waiting for ${memdir}/${memfile} ...."
                     #exit 1

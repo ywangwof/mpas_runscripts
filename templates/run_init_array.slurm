@@ -3,7 +3,7 @@
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
 #SBATCH -t 00:30:00
-#SBATCH --output=WRKDIR/init_%a_%j.log
+#SBATCH --output=WRKDIR/PREFIX_%a_%j.log
 ACCTSTR
 EXCLSTR
 
@@ -27,21 +27,21 @@ ulimit -s unlimited
 mem=${SLURM_ARRAY_TASK_ID}
 memstr=$(printf "%02d" $mem)
 
-cd WRKDIR/init_$memstr
+cd WRKDIR/PREFIX_$memstr
 
-touch running.init_$memstr
-rm -rf error.init_$memstr queue.init_$memstr 
+touch running.PREFIX_$memstr
+rm -rf error.PREFIX_$memstr queue.PREFIX_$memstr
 
 RUNMPCMD -n NOPART EXEDIR/init_atmosphere_model
 
 if [[ $? -eq 0 ]]; then
     mv PREFIX_${memstr}.init.nc ..
-    touch done.init_$memstr
+    touch done.PREFIX_$memstr
 else
-    touch error.init_$memstr
+    touch error.PREFIX_$memstr
 fi
 
-rm -rf running.init_$memstr
+rm -rf running.PREFIX_$memstr
 
 time2=$(date '+%s')
 

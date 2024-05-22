@@ -91,7 +91,7 @@ function usage {
     echo "               YYYYmmdd:     run all cycles from $eventtime to 0300. Or use options \"-s\" & \"-e\" to specify cycles."
     echo "               YYYYmmddHHMM: run this DA cycle only."
     echo "    WORKDIR  - Run Directory"
-    echo "    JOBS     - One or more jobs from [filter,update_states,update_bc,mpas,clean,obs_diag,obs_final2nc]"
+    echo "    JOBS     - One or more jobs from [filter,update_states,update_bc,mpas,obs_diag,obs_final2nc,clean]"
     echo "               Default all jobs in [filter,update_states,update_bc,mpas] for a DA cyle"
     echo " "
     echo "    OPTIONS:"
@@ -162,8 +162,8 @@ function run_obsmerge {
 
     input_base="${wrkdir}/input.nml"
 
-    echo "$$-${FUNCNAME[0]}: OBS Preprocessing for analysis time: ${anlys_time}, days: ${g_date}, seconds: ${g_sec}"
-    echo "$$-${FUNCNAME[0]}: OBS_DIR=${OBS_DIR}"
+    echo -e "${DARK}${FUNCNAME[0]}:${NC} OBS Preprocessing for analysis time: ${anlys_time}, days: ${g_date}, seconds: ${g_sec}"
+    echo -e "${DARK}${FUNCNAME[0]}:${NC} OBS_DIR=${OBS_DIR}"
 
     obsflists=()
     k=1
@@ -218,7 +218,7 @@ function run_obsmerge {
 
             obsflists+=(obsflist.bufr)
         else
-            echo "Error with command ${obspreprocess} for PREPBUFR data"
+            echo -e "${RED}ERROR${NC}: command ${obspreprocess} for PREPBUFR data"
         fi
     else
         if [[ "${anlys_time:2:2}" == "00" ]]; then
@@ -274,7 +274,7 @@ function run_obsmerge {
 
             obsflists+=(obsflist.meso)
         else
-            echo "Error with command ${obspreprocess} for MESONET data"
+            echo -e "${RED}ERROR${NC}: command ${obspreprocess} for MESONET data"
         fi
     else
         if [[ ${use_MESO} == true ]]; then
@@ -330,7 +330,7 @@ function run_obsmerge {
 
             obsflists+=(obsflist.cwp)
         else
-            echo "Error with command ${obspreprocess} for CWP data"
+            echo -e "${RED}ERROR${NC}: command ${obspreprocess} for CWP data"
         fi
     else
         if [[ ${use_CWP} == true && "${anlys_time:3:1}" == "0" ]]; then
@@ -402,7 +402,7 @@ function run_obsmerge {
                     rm ./obs_seq.old
                     echo $wrkdir/OBSDIR/obs_seq.abiC$chan >> obsflist.abi
                 else
-                    echo "Error with command ${obspreprocess} for Radiance data"
+                    echo -e "${RED}ERROR${NC}: command ${obspreprocess} for Radiance data"
                     exit 1
                 fi
             else
@@ -474,7 +474,7 @@ function run_obsmerge {
 
             obsflists+=(obsflist.mrms)
         else
-            echo "Error with command ${obspreprocess} for REF data"
+            echo -e "${RED}ERROR${NC}: command ${obspreprocess} for REF data"
         fi
     else
         echo "    REF data not found: ${dbz_file}"
@@ -495,7 +495,7 @@ function run_obsmerge {
     if [[ -e $rundir/$domname/${domname}.radars.${eventdate}.sh ]]; then
         source $rundir/$domname/${domname}.radars.${eventdate}.sh || exit $?
     else
-        echo "ERROR: File $rundir/$domname/${domname}.radars.${eventdate}.sh not exist"
+        echo -e "${RED}ERROR${NC}: File $rundir/$domname/${domname}.radars.${eventdate}.sh not exist"
         exit 0
     fi
 
@@ -537,7 +537,7 @@ function run_obsmerge {
 
             if [[ ${run_trimvr} == true ]]; then
                 trimvr_cmd="${scpdir}/seq_filter.py -k -o ./obs_seq.old ${vrj_file}"
-                echo "    --- ${trimvr_cmd}"
+                echo -e "    --- ${BROWN}${trimvr_cmd}${NC}" | sed "s#${scpdir}/##;s#${OBS_DIR}#\${OBS_DIR}#g"      # just to get a short message line
 
                 if ! ${trimvr_cmd}; then
                     #echo "        Failed. Ignore ${vrj_file}"
@@ -633,10 +633,10 @@ EOF
     ${runcmd_str} ${exedir}/dart/obs_sequence_tool >& ${srunout}_sequence_tool
 
     if [[ $? -eq 0 && -e obs_seq.${anlys_date}${anlys_time} ]]; then
-        echo "    Observation file ${wrkdir}/OBSDIR/obs_seq.${anlys_date}${anlys_time} created"
+        echo -e "\n    Observation file ${wrkdir}/OBSDIR/obs_seq.${anlys_date}${anlys_time} created"
         mv input.nml input.nml.sequence_tool
     else
-        echo "ERROR: ${runcmd_str} ${exedir}/dart/obs_sequence_tool"
+        echo -e "${RED}ERROR${NC}: ${runcmd_str} ${exedir}/dart/obs_sequence_tool"
     fi
 
     #rm -f ./obs_seq.hfmetar ./obs_seq.meso ./obs_seq.cwp ./obs_seq.mrms ./obs_seq.rad ./obs_seq.vr*
@@ -698,14 +698,14 @@ function run_filter {
     #------------------------------------------------------
 
     if [[ $icycle -eq 0 ]]; then
-        conditions=("${rundir}/init/done.init")
+        conditions=("${rundir}/init/done.${domname}")
     else
         conditions=("${parentdir}/${event_pre}/done.fcst")
     fi
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            echo "$$-${FUNCNAME[0]}: Checking $cond"
+            echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
@@ -727,9 +727,9 @@ function run_filter {
     for iens in $(seq 1 $ENS_SIZE); do
         memstr=$(printf "%02d" $iens)
         if [[ $icycle -eq 0 ]]; then
-            input_file="$rundir/init/wofs_mpas_${memstr}.init.nc"
+            input_file="$rundir/init/${domname}_${memstr}.init.nc"
         else
-            input_file="$parentdir/${event_pre}/fcst_${memstr}/wofs_mpas_${memstr}.restart.$currtime_str.nc"
+            input_file="$parentdir/${event_pre}/fcst_${memstr}/${domname}_${memstr}.restart.$currtime_str.nc"
         fi
 
         if [[ $dorun == true && ! -f $input_file ]]; then
@@ -762,7 +762,7 @@ function run_filter {
             inf_flavors=(2 0)
         #else
         #    echo "File ${parentdir}/${event_pre}/output_priorinf_mean.nc does not exist."
-        #    echo "$$-${FUNCNAME[0]} WARNING: Do not use adaptive inflation for this cycle."
+        #    echo -e "$$-${FUNCNAME[0]} ${BROWN}WARNING${NC}:: Do not use adaptive inflation for this cycle."
         #    #exit 2
         fi
     fi
@@ -847,7 +847,7 @@ function run_filter {
 &quality_control_nml
    input_qc_threshold = 5,
    outlier_threshold  = 3.5,
-   enable_special_outlier_code = .false.
+   enable_special_outlier_code = .false.,
   /
 
 &state_vector_io_nml
@@ -1057,25 +1057,25 @@ function run_filter {
                                               5.0,
                                               5.0,
                                               5.0,
-  /
+/
 
 &xyz_location_nml
-  /
+/
 
 &cov_cutoff_nml
-   select_localization = 1
-  /
+    select_localization = 1
+/
 
 &reg_factor_nml
-   select_regression    = 1
-   input_reg_file       = 'time_mean_reg'
-   save_reg_diagnostics = .false.
-   reg_diagnostics_file = 'reg_diagnostics'
-  /
+    select_regression    = 1
+    input_reg_file       = 'time_mean_reg'
+    save_reg_diagnostics = .false.
+    reg_diagnostics_file = 'reg_diagnostics'
+/
 
 &obs_sequence_nml
-   write_binary_obs_sequence = .false.
-  /
+    write_binary_obs_sequence = .false.
+/
 
 !   assimilate_these_obs_types = 'RADIOSONDE_TEMPERATURE',
 !                                'RADIOSONDE_U_WIND_COMPONENT',
@@ -1132,64 +1132,64 @@ function run_filter {
 !                                'LAND_SFC_V_WIND_COMPONENT',
 !
 &obs_kind_nml
-   assimilate_these_obs_types = 'AIRCRAFT_U_WIND_COMPONENT',
-                                'AIRCRAFT_V_WIND_COMPONENT',
-                                'AIRCRAFT_TEMPERATURE',
-                                'ACARS_U_WIND_COMPONENT',
-                                'ACARS_V_WIND_COMPONENT',
-                                'ACARS_TEMPERATURE',
-                                'METAR_ALTIMETER',
-                                'METAR_DEWPOINT_2_METER',
-                                'METAR_U_10_METER_WIND',
-                                'METAR_V_10_METER_WIND',
-                                'METAR_TEMPERATURE_2_METER',
-                                'MARINE_SFC_U_WIND_COMPONENT',
-                                'MARINE_SFC_V_WIND_COMPONENT',
-                                'MARINE_SFC_TEMPERATURE',
-                                'MARINE_SFC_ALTIMETER',
-                                'MARINE_SFC_DEWPOINT',
-                                'LAND_SFC_PRESSURE',
-                                'LAND_SFC_ALTIMETER',
-                                'LAND_SFC_TEMPERATURE',
-                                'LAND_SFC_DEWPOINT',
-                                'LAND_SFC_U_WIND_COMPONENT',
-                                'LAND_SFC_V_WIND_COMPONENT',
-                                'RADAR_REFLECTIVITY',
-                                'RADAR_CLEARAIR_REFLECTIVITY',
-                                'DOPPLER_RADIAL_VELOCITY',
-                                'GOES_IWP_PATH',
-                                'GOES_CWP_ZERO',
-                                'GOES_CWP_PATH',
-                                'GOES_LWP_PATH',
-                                'GOES_16_ABI_TB',
-   evaluate_these_obs_types = ''
-  /
+    assimilate_these_obs_types = 'AIRCRAFT_U_WIND_COMPONENT',
+                                 'AIRCRAFT_V_WIND_COMPONENT',
+                                 'AIRCRAFT_TEMPERATURE',
+                                 'ACARS_U_WIND_COMPONENT',
+                                 'ACARS_V_WIND_COMPONENT',
+                                 'ACARS_TEMPERATURE',
+                                 'METAR_ALTIMETER',
+                                 'METAR_DEWPOINT_2_METER',
+                                 'METAR_U_10_METER_WIND',
+                                 'METAR_V_10_METER_WIND',
+                                 'METAR_TEMPERATURE_2_METER',
+                                 'MARINE_SFC_U_WIND_COMPONENT',
+                                 'MARINE_SFC_V_WIND_COMPONENT',
+                                 'MARINE_SFC_TEMPERATURE',
+                                 'MARINE_SFC_ALTIMETER',
+                                 'MARINE_SFC_DEWPOINT',
+                                 'LAND_SFC_PRESSURE',
+                                 'LAND_SFC_ALTIMETER',
+                                 'LAND_SFC_TEMPERATURE',
+                                 'LAND_SFC_DEWPOINT',
+                                 'LAND_SFC_U_WIND_COMPONENT',
+                                 'LAND_SFC_V_WIND_COMPONENT',
+                                 'RADAR_REFLECTIVITY',
+                                 'RADAR_CLEARAIR_REFLECTIVITY',
+                                 'DOPPLER_RADIAL_VELOCITY',
+                                 'GOES_IWP_PATH',
+                                 'GOES_CWP_ZERO',
+                                 'GOES_CWP_PATH',
+                                 'GOES_LWP_PATH',
+                                 'GOES_16_ABI_TB',
+    evaluate_these_obs_types = ''
+/
 
 &obs_def_gps_nml
-   max_gpsro_obs = 100000
-  /
+    max_gpsro_obs = 100000
+/
 
 &obs_def_radar_mod_nml
-   apply_ref_limit_to_obs     =  .true. ,
-   reflectivity_limit_obs     =     0.0 ,
-   lowest_reflectivity_obs    =     0.0 ,
-   apply_ref_limit_to_fwd_op  =  .true. ,
-   reflectivity_limit_fwd_op  =     0.0 ,
-   lowest_reflectivity_fwd_op =     0.0 ,
-   dielectric_factor          =   0.224 ,
-   n0_rain                    =   8.0e6 ,
-   n0_graupel                 =   4.0e6 ,
-   n0_snow                    =   3.0e6 ,
-   rho_rain                   =  1000.0 ,
-   rho_graupel                =   400.0 ,
-   rho_snow                   =   100.0 ,
-   allow_wet_graupel          = .false. ,
-   microphysics_type          =       5 ,
-   allow_dbztowt_conv         = .true.
+    apply_ref_limit_to_obs     =  .true. ,
+    reflectivity_limit_obs     =     0.0 ,
+    lowest_reflectivity_obs    =     0.0 ,
+    apply_ref_limit_to_fwd_op  =  .true. ,
+    reflectivity_limit_fwd_op  =     0.0 ,
+    lowest_reflectivity_fwd_op =     0.0 ,
+    dielectric_factor          =   0.224 ,
+    n0_rain                    =   8.0e6 ,
+    n0_graupel                 =   4.0e6 ,
+    n0_snow                    =   3.0e6 ,
+    rho_rain                   =  1000.0 ,
+    rho_graupel                =   400.0 ,
+    rho_snow                   =   100.0 ,
+    allow_wet_graupel          = .false. ,
+    microphysics_type          =       5 ,
+    allow_dbztowt_conv         = .true.
 /
 &obs_def_cwp_nml
-   pressure_top               = 15000.0,
-   physics                    = 8
+    pressure_top               = 15000.0,
+    physics                    = 8
 /
 
 &model_nml
@@ -1223,107 +1223,107 @@ function run_filter {
 !                          'q2',                    'QTY_2M_SPECIFIC_HUMIDITY',
 
 &mpas_vars_nml
-   mpas_state_variables = 'theta',                 'QTY_POTENTIAL_TEMPERATURE',
-                          'rho',                   'QTY_DENSITY',
-                          'uReconstructZonal',     'QTY_U_WIND_COMPONENT',
-                          'uReconstructMeridional','QTY_V_WIND_COMPONENT',
-                          'w',                     'QTY_VERTICAL_VELOCITY',
-                          'u10',                   'QTY_10M_U_WIND_COMPONENT',
-                          'v10',                   'QTY_10M_V_WIND_COMPONENT',
-                          't2m',                   'QTY_2M_TEMPERATURE',
-                          'q2',                    'QTY_2M_SPECIFIC_HUMIDITY',
-                          'surface_pressure',      'QTY_SURFACE_PRESSURE',
-                          'qv',                    'QTY_VAPOR_MIXING_RATIO',
-                          'qc',                    'QTY_CLOUDWATER_MIXING_RATIO',
-                          'qr',                    'QTY_RAINWATER_MIXING_RATIO',
-                          'qi',                    'QTY_ICE_MIXING_RATIO',
-                          'qs',                    'QTY_SNOW_MIXING_RATIO',
-                          'qg',                    'QTY_GRAUPEL_MIXING_RATIO',
-                          'qh',                    'QTY_HAIL_MIXING_RATIO',
-                          'volg',                  'QTY_GRAUPEL_VOLUME',
-                          'volh',                  'QTY_HAIL_VOLUME',
-                          'nc',                    'QTY_DROPLET_NUMBER_CONCENTR',
-                          'nr',                    'QTY_RAIN_NUMBER_CONCENTR',
-                          'ni',                    'QTY_ICE_NUMBER_CONCENTRATION',
-                          'ns',                    'QTY_SNOW_NUMBER_CONCENTR',
-                          'ng',                    'QTY_GRAUPEL_NUMBER_CONCENTR',
-                          'nh',                    'QTY_HAIL_NUMBER_CONCENTR',
-                          'refl10cm',              'QTY_RADAR_REFLECTIVITY',
-   mpas_state_bounds    = 'qv','0.0','NULL','CLAMP',
-                          'qc','0.0','NULL','CLAMP',
-                          'qr','0.0','NULL','CLAMP',
-                          'qi','0.0','NULL','CLAMP',
-                          'qs','0.0','NULL','CLAMP',
-                          'qg','0.0','NULL','CLAMP',
-                          'qh','0.0','NULL','CLAMP',
-                          'volg','0.0','NULL','CLAMP',
-                          'volh','0.0','NULL','CLAMP',
-                          'nc','0.0','NULL','CLAMP',
-                          'nr','0.0','NULL','CLAMP',
-                          'ni','0.0','NULL','CLAMP',
-                          'ns','0.0','NULL','CLAMP',
-                          'ng','0.0','NULL','CLAMP',
-                          'nh','0.0','NULL','CLAMP',
-  /
+    mpas_state_variables = 'theta',                 'QTY_POTENTIAL_TEMPERATURE',
+                           'rho',                   'QTY_DENSITY',
+                           'uReconstructZonal',     'QTY_U_WIND_COMPONENT',
+                           'uReconstructMeridional','QTY_V_WIND_COMPONENT',
+                           'w',                     'QTY_VERTICAL_VELOCITY',
+                           'u10',                   'QTY_10M_U_WIND_COMPONENT',
+                           'v10',                   'QTY_10M_V_WIND_COMPONENT',
+                           't2m',                   'QTY_2M_TEMPERATURE',
+                           'q2',                    'QTY_2M_SPECIFIC_HUMIDITY',
+                           'surface_pressure',      'QTY_SURFACE_PRESSURE',
+                           'qv',                    'QTY_VAPOR_MIXING_RATIO',
+                           'qc',                    'QTY_CLOUDWATER_MIXING_RATIO',
+                           'qr',                    'QTY_RAINWATER_MIXING_RATIO',
+                           'qi',                    'QTY_ICE_MIXING_RATIO',
+                           'qs',                    'QTY_SNOW_MIXING_RATIO',
+                           'qg',                    'QTY_GRAUPEL_MIXING_RATIO',
+                           'qh',                    'QTY_HAIL_MIXING_RATIO',
+                           'volg',                  'QTY_GRAUPEL_VOLUME',
+                           'volh',                  'QTY_HAIL_VOLUME',
+                           'nc',                    'QTY_DROPLET_NUMBER_CONCENTR',
+                           'nr',                    'QTY_RAIN_NUMBER_CONCENTR',
+                           'ni',                    'QTY_ICE_NUMBER_CONCENTRATION',
+                           'ns',                    'QTY_SNOW_NUMBER_CONCENTR',
+                           'ng',                    'QTY_GRAUPEL_NUMBER_CONCENTR',
+                           'nh',                    'QTY_HAIL_NUMBER_CONCENTR',
+                           'refl10cm',              'QTY_RADAR_REFLECTIVITY',
+    mpas_state_bounds    = 'qv','0.0','NULL','CLAMP',
+                           'qc','0.0','NULL','CLAMP',
+                           'qr','0.0','NULL','CLAMP',
+                           'qi','0.0','NULL','CLAMP',
+                           'qs','0.0','NULL','CLAMP',
+                           'qg','0.0','NULL','CLAMP',
+                           'qh','0.0','NULL','CLAMP',
+                           'volg','0.0','NULL','CLAMP',
+                           'volh','0.0','NULL','CLAMP',
+                           'nc','0.0','NULL','CLAMP',
+                           'nr','0.0','NULL','CLAMP',
+                           'ni','0.0','NULL','CLAMP',
+                           'ns','0.0','NULL','CLAMP',
+                           'ng','0.0','NULL','CLAMP',
+                           'nh','0.0','NULL','CLAMP',
+/
 
 &update_mpas_states_nml
-  update_input_file_list  = 'filter_out.txt'
-  update_output_file_list = 'filter_in.txt'
-  print_data_ranges       = .true.
-  /
+    update_input_file_list  = 'filter_out.txt'
+    update_output_file_list = 'filter_in.txt'
+    print_data_ranges       = .true.
+/
 
 &update_bc_nml
-  update_analysis_file_list           = 'filter_out.txt'
-  update_boundary_file_list           = 'boundary_inout.txt'
-  lbc_update_from_reconstructed_winds = .false.
-  lbc_update_winds_from_increments    = .false.
-  debug = 0
+    update_analysis_file_list           = 'filter_out.txt'
+    update_boundary_file_list           = 'boundary_inout.txt'
+    lbc_update_from_reconstructed_winds = .false.
+    lbc_update_winds_from_increments    = .false.
+    debug = 0
 /
 
 &utilities_nml
-   TERMLEVEL      = 1
-   module_details = .false.
-   logfilename    = 'dart_log.out'
-   nmlfilename    = 'dart_log.nml'
-   write_nml      = 'file'
-  /
+    TERMLEVEL      = 1
+    module_details = .false.
+    logfilename    = 'dart_log.out'
+    nmlfilename    = 'dart_log.nml'
+    write_nml      = 'file'
+/
 
 &preprocess_nml
-   overwrite_output        = .true.
-   input_obs_def_mod_file  = '../../../observations/forward_operators/DEFAULT_obs_def_mod.F90'
-   output_obs_def_mod_file = '../../../observations/forward_operators/obs_def_mod.f90'
-   input_obs_qty_mod_file  = '../../../assimilation_code/modules/observations/DEFAULT_obs_kind_mod.F90'
-   output_obs_qty_mod_file = '../../../assimilation_code/modules/observations/obs_kind_mod.f90'
-   obs_type_files          = '../../../observations/forward_operators/obs_def_reanalysis_bufr_mod.f90',
-                             '../../../observations/forward_operators/obs_def_altimeter_mod.f90',
-                             '../../../observations/forward_operators/obs_def_gts_mod.f90',
-                             '../../../observations/forward_operators/obs_def_metar_mod.f90',
-                             '../../../observations/forward_operators/obs_def_gps_mod.f90',
-                             '../../../observations/forward_operators/obs_def_vortex_mod.f90',
-                             '../../../observations/forward_operators/obs_def_rel_humidity_mod.f90',
-                             '../../../observations/forward_operators/obs_def_dew_point_mod.f90',
-                             '../../../observations/forward_operators/obs_def_radar_mod.f90',
-                             '../../../observations/forward_operators/obs_def_cwp_mod.f90'
-   quantity_files          = '../../../assimilation_code/modules/observations/default_quantities_mod.f90',
-                             '../../../assimilation_code/modules/observations/atmosphere_quantities_mod.f90',
-  /
+    overwrite_output        = .true.
+    input_obs_def_mod_file  = '../../../observations/forward_operators/DEFAULT_obs_def_mod.F90'
+    output_obs_def_mod_file = '../../../observations/forward_operators/obs_def_mod.f90'
+    input_obs_qty_mod_file  = '../../../assimilation_code/modules/observations/DEFAULT_obs_kind_mod.F90'
+    output_obs_qty_mod_file = '../../../assimilation_code/modules/observations/obs_kind_mod.f90'
+    obs_type_files          = '../../../observations/forward_operators/obs_def_reanalysis_bufr_mod.f90',
+                              '../../../observations/forward_operators/obs_def_altimeter_mod.f90',
+                              '../../../observations/forward_operators/obs_def_gts_mod.f90',
+                              '../../../observations/forward_operators/obs_def_metar_mod.f90',
+                              '../../../observations/forward_operators/obs_def_gps_mod.f90',
+                              '../../../observations/forward_operators/obs_def_vortex_mod.f90',
+                              '../../../observations/forward_operators/obs_def_rel_humidity_mod.f90',
+                              '../../../observations/forward_operators/obs_def_dew_point_mod.f90',
+                              '../../../observations/forward_operators/obs_def_radar_mod.f90',
+                              '../../../observations/forward_operators/obs_def_cwp_mod.f90'
+    quantity_files          = '../../../assimilation_code/modules/observations/default_quantities_mod.f90',
+                              '../../../assimilation_code/modules/observations/atmosphere_quantities_mod.f90',
+/
 
 &obs_sequence_tool_nml
-   filename_seq_list = 'obsflist'
-   filename_out      = 'obs_seq.${timestr_cur}'
-   first_obs_days    = -1
-   first_obs_seconds = -1
-   last_obs_days     = -1
-   last_obs_seconds  = -1
-   print_only        = .false.
-   min_lat           = -90.0
-   max_lat           =  90.0
-   min_lon           =   0.0
-   max_lon           = 360.0
-   gregorian_cal     = .true.
-   keep_types        = .true.
-   obs_types         = ''
-  /
+    filename_seq_list = 'obsflist'
+    filename_out      = 'obs_seq.${timestr_cur}'
+    first_obs_days    = -1
+    first_obs_seconds = -1
+    last_obs_days     = -1
+    last_obs_seconds  = -1
+    print_only        = .false.
+    min_lat           = -90.0
+    max_lat           =  90.0
+    min_lon           =   0.0
+    max_lon           = 360.0
+    gregorian_cal     = .true.
+    keep_types        = .true.
+    obs_types         = ''
+/
 
 # The times in the namelist for the obs_diag program are vectors
 # that follow the following sequence:
@@ -1355,59 +1355,59 @@ function run_filter {
 
 
 &schedule_nml
-   calendar             = 'Gregorian'
-   first_bin_start      =  ${datestr4obsdiag_start}
-   first_bin_end        =  ${datestr4obsdiag_end}
-   last_bin_end         =  ${datestr4obsdiag_end}
-   bin_interval_days    = 0
-   bin_interval_seconds = ${gobtw_secs}
-   max_num_bins         = 1000
-   print_table          = .true.
-  /
+    calendar             = 'Gregorian'
+    first_bin_start      =  ${datestr4obsdiag_start}
+    first_bin_end        =  ${datestr4obsdiag_end}
+    last_bin_end         =  ${datestr4obsdiag_end}
+    bin_interval_days    = 0
+    bin_interval_seconds = ${gobtw_secs}
+    max_num_bins         = 1000
+    print_table          = .true.
+/
 
 
 &obs_seq_to_netcdf_nml
-   obs_sequence_name = 'obs_seq.final'
-   obs_sequence_list = ''
-   append_to_netcdf  = .false.
-   lonlim1           =    0.0
-   lonlim2           =  360.0
-   latlim1           =  -90.0
-   latlim2           =   90.0
-   verbose           = .true.
-  /
+    obs_sequence_name = 'obs_seq.final'
+    obs_sequence_list = ''
+    append_to_netcdf  = .false.
+    lonlim1           =    0.0
+    lonlim2           =  360.0
+    latlim1           =  -90.0
+    latlim2           =   90.0
+    verbose           = .true.
+/
 
 &obs_diag_nml
-   obs_sequence_name  = 'obs_seq.final'
-   obs_sequence_list  = ''
-   first_bin_center   = ${datestr4obsdiag}
-   last_bin_center    = ${datestr4obsdiag}
-   bin_width          = ${dateintvl4obsdiag}
-   bin_separation     = ${dateintvl4obsdiag}
-   time_to_skip       =    0, 0, 0,00,00,00
-   trusted_obs        = 'null'
-   nregions  = 1
-   lonlim1   =   0.0
-   lonlim2   = 360.0
-   latlim1   = -90.0
-   latlim2   =  90.0
-   reg_names = 'WOFS'
-   create_rank_histogram = .true.
-   outliers_in_histogram = .true.
-   use_zero_error_obs    = .false.
-   verbose               = .true.
-  /
+    obs_sequence_name  = 'obs_seq.final'
+    obs_sequence_list  = ''
+    first_bin_center   = ${datestr4obsdiag}
+    last_bin_center    = ${datestr4obsdiag}
+    bin_width          = ${dateintvl4obsdiag}
+    bin_separation     = ${dateintvl4obsdiag}
+    time_to_skip       =    0, 0, 0,00,00,00
+    trusted_obs        = 'null'
+    nregions  = 1
+    lonlim1   =   0.0
+    lonlim2   = 360.0
+    latlim1   = -90.0
+    latlim2   =  90.0
+    reg_names = 'WOFS'
+    create_rank_histogram = .true.
+    outliers_in_histogram = .true.
+    use_zero_error_obs    = .false.
+    verbose               = .true.
+/
 
 &obs_common_subset_nml
-   num_to_compare_at_once = 2
-   filename_seq           = ''
-   filename_seq_list      = ''
-   filename_out_suffix    = '.common'
-   calendar               = 'Gregorian'
-   print_every            = 1000
-   dart_qc_threshold      = 3
-   print_only             = .false.
-  /
+    num_to_compare_at_once = 2
+    filename_seq           = ''
+    filename_seq_list      = ''
+    filename_out_suffix    = '.common'
+    calendar               = 'Gregorian'
+    print_every            = 1000
+    dart_qc_threshold      = 3
+    print_only             = .false.
+/
 
 # possible vertical coordinate systems are:
 # VERTISUNDEF VERTISSURFACE VERTISLEVEL VERTISPRESSURE VERTISHEIGHT VERTISSCALEHEIGHT
@@ -1420,194 +1420,194 @@ function run_filter {
    quantity_of_interest = 'QTY_VAPOR_MIXING_RATIO'
 
 &model_mod_check_nml
-   input_state_files     = 'mpas_init.nc'
-   output_state_files    = 'check_me.nc'
-   test1thru             = 0
-   run_tests             = 1,2,3,4,5,7
-   x_ind                 = 300
-   loc_of_interest       = 240.0, 0.0, 10000.0
-   quantity_of_interest  = 'QTY_U_WIND_COMPONENT'
-   interp_test_lonrange  = 0.0, 359.0
-   interp_test_dlon      = 1.0
-   interp_test_latrange  = -89.0, 89.0
-   interp_test_dlat      = 1.0
-   interp_test_vertrange = 100.0,  20100.0
-   interp_test_dvert     = 2000.0
-   interp_test_vertcoord = 'VERTISHEIGHT'
-   verbose               = .false.
-  /
+    input_state_files     = 'mpas_init.nc'
+    output_state_files    = 'check_me.nc'
+    test1thru             = 0
+    run_tests             = 1,2,3,4,5,7
+    x_ind                 = 300
+    loc_of_interest       = 240.0, 0.0, 10000.0
+    quantity_of_interest  = 'QTY_U_WIND_COMPONENT'
+    interp_test_lonrange  = 0.0, 359.0
+    interp_test_dlon      = 1.0
+    interp_test_latrange  = -89.0, 89.0
+    interp_test_dlat      = 1.0
+    interp_test_vertrange = 100.0,  20100.0
+    interp_test_dvert     = 2000.0
+    interp_test_vertcoord = 'VERTISHEIGHT'
+    verbose               = .false.
+/
 
 &exhaustion_nml
-   dart_input_file       = 'dart_ics'
-   output_file           = 'exhaust'
-   advance_time_present  = .FALSE.
-   verbose               = .FALSE.
-   matlab_out            = .FALSE.
-   netcdf_out            = .TRUE.
-   kind_of_interest      = 'QTY_U_WIND_COMPONENT'
-   interp_test_lonrange  = 0.0, 360.0
-   interp_test_dlon      = 1.0
-   interp_test_latrange  = -89.0, 89.0
-   interp_test_dlat      = 1.0
-   interp_test_vertrange = 7000.0, 7000.0
-   interp_test_dvert     = 1000.0
-   interp_test_vertcoord = 'VERTISHEIGHT'
-   hscale                = 100.0
-   diff_threshold        = 2.0
-   pointcount            = 100000
-  /
+    dart_input_file       = 'dart_ics'
+    output_file           = 'exhaust'
+    advance_time_present  = .FALSE.
+    verbose               = .FALSE.
+    matlab_out            = .FALSE.
+    netcdf_out            = .TRUE.
+    kind_of_interest      = 'QTY_U_WIND_COMPONENT'
+    interp_test_lonrange  = 0.0, 360.0
+    interp_test_dlon      = 1.0
+    interp_test_latrange  = -89.0, 89.0
+    interp_test_dlat      = 1.0
+    interp_test_vertrange = 7000.0, 7000.0
+    interp_test_dvert     = 1000.0
+    interp_test_vertcoord = 'VERTISHEIGHT'
+    hscale                = 100.0
+    diff_threshold        = 2.0
+    pointcount            = 100000
+/
 
 &obs_def_rttov_nml
-   rttov_sensor_db_file   = 'rttov_sensor_db.csv'
-   first_lvl_is_sfc       = .true.
-   mw_clear_sky_only      = .false.
-   interp_mode            = 1
-   do_checkinput          = .true.
-   apply_reg_limits       = .true.
-   verbose                = .true.
-   fix_hgpl               = .false.
-   do_lambertian          = .false.
-   lambertian_fixed_angle = .true.
-   rad_down_lin_tau       = .true.
-   use_q2m                = .true.
-   use_uv10m              = .true.
-   use_wfetch             = .false.
-   use_water_type         = .false.
-   addrefrac              = .false.
-   plane_parallel         = .false.
-   use_salinity           = .false.
-   cfrac_data             = .true.
-   clw_data               = .true.
-   rain_data              = .true.
-   ciw_data               = .true.
-   snow_data              = .true.
-   graupel_data           = .true.
-   hail_data              = .false.
-   w_data                 = .true.
-   clw_scheme             = 1
-   clw_cloud_top          = 322.
-   fastem_version         = 6
-   supply_foam_fraction   = .false.
-   use_totalice           = .true.
-   use_zeeman             = .false.
-   cc_threshold           = 0.05
-   ozone_data             = .false.
-   co2_data               = .false.
-   n2o_data               = .false.
-   co_data                = .false.
-   ch4_data               = .false.
-   so2_data               = .false.
-   addsolar               = .false.
-   rayleigh_single_scatt  = .true.
-   do_nlte_correction     = .false.
-   solar_sea_brdf_model   = 2
-   ir_sea_emis_model      = 2
-   use_sfc_snow_frac      = .false.
-   add_aerosl             = .false.
-   aerosl_type            = 1
-   add_clouds             = .true.
-   ice_scheme             = 1
-   use_icede              = .false.
-   idg_scheme             = 2
-   user_aer_opt_param     = .false.
-   user_cld_opt_param     = .false.
-   grid_box_avg_cloud     = .true.
-   cldcol_threshold       = -1.0
-   cloud_overlap          = 1
-   cc_low_cloud_top       = 750.0
-   ir_scatt_model         = 2
-   vis_scatt_model        = 1
-   dom_nstreams           = 8
-   dom_accuracy           = 0.0
-   dom_opdep_threshold    = 0.0
-   addpc                  = .false.
-   npcscores              = -1
-   addradrec              = .false.
-   ipcreg                 = 1
-   use_htfrtc             = .false.
-   htfrtc_n_pc            = -1
-   htfrtc_simple_cloud    = .false.
-   htfrtc_overcast        = .false.
- /
+    rttov_sensor_db_file   = 'rttov_sensor_db.csv'
+    first_lvl_is_sfc       = .true.
+    mw_clear_sky_only      = .false.
+    interp_mode            = 1
+    do_checkinput          = .true.
+    apply_reg_limits       = .true.
+    verbose                = .true.
+    fix_hgpl               = .false.
+    do_lambertian          = .false.
+    lambertian_fixed_angle = .true.
+    rad_down_lin_tau       = .true.
+    use_q2m                = .true.
+    use_uv10m              = .true.
+    use_wfetch             = .false.
+    use_water_type         = .false.
+    addrefrac              = .false.
+    plane_parallel         = .false.
+    use_salinity           = .false.
+    cfrac_data             = .true.
+    clw_data               = .true.
+    rain_data              = .true.
+    ciw_data               = .true.
+    snow_data              = .true.
+    graupel_data           = .true.
+    hail_data              = .false.
+    w_data                 = .true.
+    clw_scheme             = 1
+    clw_cloud_top          = 322.
+    fastem_version         = 6
+    supply_foam_fraction   = .false.
+    use_totalice           = .true.
+    use_zeeman             = .false.
+    cc_threshold           = 0.05
+    ozone_data             = .false.
+    co2_data               = .false.
+    n2o_data               = .false.
+    co_data                = .false.
+    ch4_data               = .false.
+    so2_data               = .false.
+    addsolar               = .false.
+    rayleigh_single_scatt  = .true.
+    do_nlte_correction     = .false.
+    solar_sea_brdf_model   = 2
+    ir_sea_emis_model      = 2
+    use_sfc_snow_frac      = .false.
+    add_aerosl             = .false.
+    aerosl_type            = 1
+    add_clouds             = .true.
+    ice_scheme             = 1
+    use_icede              = .false.
+    idg_scheme             = 2
+    user_aer_opt_param     = .false.
+    user_cld_opt_param     = .false.
+    grid_box_avg_cloud     = .true.
+    cldcol_threshold       = -1.0
+    cloud_overlap          = 1
+    cc_low_cloud_top       = 750.0
+    ir_scatt_model         = 2
+    vis_scatt_model        = 1
+    dom_nstreams           = 8
+    dom_accuracy           = 0.0
+    dom_opdep_threshold    = 0.0
+    addpc                  = .false.
+    npcscores              = -1
+    addradrec              = .false.
+    ipcreg                 = 1
+    use_htfrtc             = .false.
+    htfrtc_n_pc            = -1
+    htfrtc_simple_cloud    = .false.
+    htfrtc_overcast        = .false.
+/
 &obs_seq_coverage_nml
-   obs_sequences     = ''
-   obs_sequence_list = 'obs_coverage_list.txt'
-   obs_of_interest   = 'RADIOSONDE_TEMPERATURE', 'RADIOSONDE_U_WIND_COMPONENT', 'RADIOSONDE_V_WIND_COMPONENT'
-   textfile_out      = 'obsdef_mask.txt'
-   netcdf_out        = 'obsdef_mask.nc'
-   calendar          = 'Gregorian'
-   first_analysis    =  2008, 8, 1, 18, 0, 0
-   last_analysis     =  2008, 8, 1, 18, 0, 0
-   forecast_length_days          = 0
-   forecast_length_seconds       = 21600
-   verification_interval_seconds = 21600
-   temporal_coverage_percent     = 50.0
-   lonlim1    =    0.0
-   lonlim2    =  360.0
-   latlim1    =  -90.0
-   latlim2    =   90.0
-   verbose    = .true.
-   debug      = .false.
-  /
+    obs_sequences     = ''
+    obs_sequence_list = 'obs_coverage_list.txt'
+    obs_of_interest   = 'RADIOSONDE_TEMPERATURE', 'RADIOSONDE_U_WIND_COMPONENT', 'RADIOSONDE_V_WIND_COMPONENT'
+    textfile_out      = 'obsdef_mask.txt'
+    netcdf_out        = 'obsdef_mask.nc'
+    calendar          = 'Gregorian'
+    first_analysis    =  2008, 8, 1, 18, 0, 0
+    last_analysis     =  2008, 8, 1, 18, 0, 0
+    forecast_length_days          = 0
+    forecast_length_seconds       = 21600
+    verification_interval_seconds = 21600
+    temporal_coverage_percent     = 50.0
+    lonlim1    =    0.0
+    lonlim2    =  360.0
+    latlim1    =  -90.0
+    latlim2    =   90.0
+    verbose    = .true.
+    debug      = .false.
+/
 
 # selections_file is a list of obs_defs output
 # from the obs_seq_coverage utility.
 &obs_selection_nml
-   filename_seq          = 'obs_seq.out'
-   filename_seq_list     = ''
-   filename_out          = 'obs_seq.processed'
-   selections_file       = 'obsdef_mask.txt'
-   selections_is_obs_seq = .false.
-   print_only            = .false.
-   calendar              = 'Gregorian'
-  /
+    filename_seq          = 'obs_seq.out'
+    filename_seq_list     = ''
+    filename_out          = 'obs_seq.processed'
+    selections_file       = 'obsdef_mask.txt'
+    selections_is_obs_seq = .false.
+    print_only            = .false.
+    calendar              = 'Gregorian'
+/
 
 # one of the other, but not both
    obs_sequences = 'obs_seq.final.2008060100', 'obs_seq.final.2008060112'
    obs_sequence_list = 'obs_forecast_list.txt'
 &obs_seq_verify_nml
-   obs_sequences     = ''
-   obs_sequence_list = 'obs_forecast_list.txt'
-   input_template    = 'obsdef_mask.nc'
-   netcdf_out        = 'forecast.nc'
-   obtype_string     = 'RADIOSONDE_TEMPERATURE'
-   print_every       = 20000
-   verbose           = .true.
-   debug             = .false.
-  /
+    obs_sequences     = ''
+    obs_sequence_list = 'obs_forecast_list.txt'
+    input_template    = 'obsdef_mask.nc'
+    netcdf_out        = 'forecast.nc'
+    obtype_string     = 'RADIOSONDE_TEMPERATURE'
+    print_every       = 20000
+    verbose           = .true.
+    debug             = .false.
+/
 
 &mpas_dart_obs_preprocess_nml
-   file_name_input          = 'obs_seq.old'
-   file_name_output         = 'obs_seq.new'
-   include_sig_data         = .false.
-   superob_aircraft         = .false.
-   superob_sat_winds        = .false.
-   sfc_elevation_check      = .false.
-   overwrite_ncep_sfc_qc    = .false.
-   overwrite_ncep_satwnd_qc = .false.
-   aircraft_pres_int        = 2500.0
-   sat_wind_pres_int        = 2500.0
-   sfc_elevation_tol        = 300.0
-   obs_pressure_top         = 1.0
-   obs_height_top           = 2.0e10
-   max_num_obs              = 1000000
-   sonde_extra              = 'obs_seq.rawin'
-   metar_extra              = 'obs_seq.metar'
-   acars_extra              = 'obs_seq.acars'
-   land_sfc_extra           = 'obs_seq.land_sfc'
-   marine_sfc_extra         = 'obs_seq.marine'
-   sat_wind_extra           = 'obs_seq.satwnd'
-   profiler_extra           = 'obs_seq.profiler'
-   trop_cyclone_extra       = 'obs_seq.tc'
-   gpsro_extra              = 'obs_seq.gpsro'
-   tc_sonde_radii           = -1.0
-   overwrite_obs_time       = .false.
-   windowing_obs_time       = .true.
-   windowing_int_hour       = 0.5
-   increase_bdy_error       = .true.
-   maxobsfac                = 10.
-   obsdistbdy               = 15000.0     ! meters
-   obs_boundary             =  5000.0     ! meters
+    file_name_input          = 'obs_seq.old'
+    file_name_output         = 'obs_seq.new'
+    include_sig_data         = .false.
+    superob_aircraft         = .false.
+    superob_sat_winds        = .false.
+    sfc_elevation_check      = .false.
+    overwrite_ncep_sfc_qc    = .false.
+    overwrite_ncep_satwnd_qc = .false.
+    aircraft_pres_int        = 2500.0
+    sat_wind_pres_int        = 2500.0
+    sfc_elevation_tol        = 300.0
+    obs_pressure_top         = 1.0
+    obs_height_top           = 2.0e10
+    max_num_obs              = 1000000
+    sonde_extra              = 'obs_seq.rawin'
+    metar_extra              = 'obs_seq.metar'
+    acars_extra              = 'obs_seq.acars'
+    land_sfc_extra           = 'obs_seq.land_sfc'
+    marine_sfc_extra         = 'obs_seq.marine'
+    sat_wind_extra           = 'obs_seq.satwnd'
+    profiler_extra           = 'obs_seq.profiler'
+    trop_cyclone_extra       = 'obs_seq.tc'
+    gpsro_extra              = 'obs_seq.gpsro'
+    tc_sonde_radii           = -1.0
+    overwrite_obs_time       = .false.
+    windowing_obs_time       = .true.
+    windowing_int_hour       = 0.5
+    increase_bdy_error       = .true.
+    maxobsfac                = 10.
+    obsdistbdy               = 15000.0     ! meters
+    obs_boundary             =  5000.0     ! meters
 /
 EOF
 
@@ -1625,7 +1625,7 @@ EOF
         if [[ -e OBSDIR/obs_seq.${timestr_cur} ]]; then
             ln -sf OBSDIR/obs_seq.${timestr_cur} obs_seq.in
         else
-            echo "$$-${FUNCNAME[0]}: WARNING: Observation file \"OBSDIR/obs_seq.${timestr_cur}\" not found"
+            echo -e "$$-${FUNCNAME[0]}: ${BROWN}WARNING${NC}:: Observation file \"OBSDIR/obs_seq.${timestr_cur}\" not found"
             touch done.filter
             no_observation=true
             return
@@ -1635,7 +1635,6 @@ EOF
     #------------------------------------------------------
     # 5. Run filter
     #------------------------------------------------------
-    #cp $rundir/init/wofs_mpas_01.init.nc init.nc
 
     #
     # Create job script and submit it
@@ -1762,7 +1761,7 @@ function run_update_states {
     cd $wrkdir || return
 
     if [[ $no_observation == true ]]; then
-        echo "$$-${FUNCNAME[0]}:WARNING no observation skipping ...."
+        echo -e "$$-${FUNCNAME[0]}:${BROWN}WARNING${NC}: no observation skipping ...."
         touch done.update_states
         return
     fi
@@ -1774,7 +1773,7 @@ function run_update_states {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            echo "$$-${FUNCNAME[0]}: Checking $cond"
+            echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
@@ -1850,7 +1849,7 @@ function run_update_bc {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            echo "$$-${FUNCNAME[0]}: Checking $cond"
+            echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
@@ -1887,7 +1886,7 @@ function run_update_bc {
         rm -rf ${update_input_file_list}
 
         if [[ ! -e input.nml ]]; then
-            echo "ERROR: ${FUNCNAME[0]} should have run mpas_update_states first."
+            echo -e "${RED}ERROR${NC}: ${FUNCNAME[0]} should have run mpas_update_states first."
         else
             state_output_file=$(awk '/update_output_file_list/{print $3}' input.nml)
             readarray -t input_file_array < ${state_output_file:1:${#state_output_file}-2}
@@ -1941,7 +1940,7 @@ function run_update_bc {
             touch "$memwrkdir/done.update_bc_${memstr}"
         fi
 
-        #echo "$$-${FUNCNAME[0]}: Using lbc file: $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc ..."
+        #echo -e "${DARK}${FUNCNAME[0]}:${NC} Using lbc file: $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc ..."
         ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc ${domname}_${memstr}.lbc.${mpastime_str2}.nc
 
         jobarrays+=("$iens")
@@ -1950,7 +1949,7 @@ function run_update_bc {
     cd $wrkdir || return
 
     if [[ ${no_observation} == true ]]; then
-        echo "$$-${FUNCNAME[0]}:WARNING no observation skipping ...."
+        echo -e "$$-${FUNCNAME[0]}:${BROWN}WARNING${NC}: no observation skipping ...."
         touch done.update_bc
         return
     fi
@@ -2011,19 +2010,18 @@ function run_add_noise {
     cd $wrkdir || return
 
     timestr_cur=$(date  -u -d @$iseconds    +%Y%m%d%H%M)
-    mpas_timestr=$(date -u -d @$iseconds    +%Y-%m-%d_%H.%M.%S)
     read -r -a days_secs < <(convertS2days "${iseconds}")
 
     #
     # Return if is running or is done
     #
     if [[ -f $wrkdir/done.add_noise ]]; then
-        #echo "$$-${FUNCNAME[0]}: add_noise is already done"
+        #echo -e "${DARK}${FUNCNAME[0]}:${NC} add_noise is already done"
         return
     fi
 
     if [[ -f $wrkdir/running.noise_pert || -f $wrkdir/queue.noise_pert ]]; then
-        #echo "$$-${FUNCNAME[0]}: add_noise is running/queued."
+        #echo -e "${DARK}${FUNCNAME[0]}:${NC} add_noise is running/queued."
         return
     fi
 
@@ -2034,7 +2032,7 @@ function run_add_noise {
     #------------------------------------------------------
 
     if [[ ${no_observation} == true ]]; then
-        echo "$$-${FUNCNAME[0]}:WARNING no observation skipping ...."
+        echo -e "$$-${FUNCNAME[0]}:${BROWN}WARNING${NC}: no observation skipping ...."
         touch done.add_noise done.noise_mask
         return
     fi
@@ -2046,7 +2044,7 @@ function run_add_noise {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            echo "$$-${FUNCNAME[0]}: Checking $cond"
+            echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
@@ -2113,7 +2111,7 @@ EOF
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            echo "$$-${FUNCNAME[0]}: Checking $cond"
+            echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
@@ -2137,7 +2135,7 @@ EOF
 
         if [[ ! -e done.add_noise_${memstr} && ! -e running.add_noise_${memstr} ]]; then
             days_str=$(printf "%5.5i_%6.6i" ${days_secs[0]} ${days_secs[1]})
-            ln -sf ../refl_obs_${days_str}.pkl ../wofs_mpas_grid_kdtree.pkl ../mpas_XYZ.pkl .
+            ln -sf ../refl_obs_${days_str}.pkl ../${domname}_grid_kdtree.pkl ../mpas_XYZ.pkl .
             jobarrays+=("$iens")
         fi
     done
@@ -2172,7 +2170,6 @@ s/SEQFILE/${seqfile}/g
 s#WAN_PATH#${WOFSAN_PATH}#g
 s/EVENTDAYS/${days_secs[0]}/g
 s/EVENTSECS/${days_secs[1]}/g
-s/MPASTIME/${mpas_timestr}/g
 s/RUNCMD/${runexe_str}/
 EOF
         if [[ "${mach}" == "pbs" ]]; then
@@ -2225,7 +2222,7 @@ function run_mpas {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            echo "$$-${FUNCNAME[0]}: Checking $cond"
+            echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     echo "Waiting for file: $cond"
@@ -2296,14 +2293,14 @@ function run_mpas {
         fi
         if [[ $verb -eq 1 ]]; then echo "Member: $iens use init file: ${initfile}"; fi
         if [[ ! -e ${initfile} && ${dorun} == true ]]; then
-            echo "ERROR: ${damode} file: ${initfile} not exists"
+            echo -e "${RED}ERROR${NC}: ${damode} file: ${initfile} not exists"
             exit 1              # something wrong should never happen
         fi
 
         ln -sf $rundir/$domname/$domname.graph.info.part.${npefcst} .
         ln -sf $rundir/init/${domname}.invariant.nc .
 
-        streamlists=(stream_list.atmosphere.diagnostics stream_list.atmosphere.output stream_list.atmosphere.surface)
+        streamlists=(stream_list.atmosphere.diagnostics_da stream_list.atmosphere.output stream_list.atmosphere.surface)
         for fn in "${streamlists[@]}"; do
             cp -f ${FIXDIR}/$fn .
         done
@@ -2468,7 +2465,7 @@ EOF
                   clobber_mode="replace_files"
                   output_interval="${OUTINVL_STR}" >
 
-    <file name="stream_list.atmosphere.output"/>
+                <file name="stream_list.atmosphere.output"/>
 </stream>
 
 <stream name="diagnostics"
@@ -2476,9 +2473,9 @@ EOF
                   filename_template="${domname}_${memstr}.diag.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
                   io_type="${OUTIOTYPE}"
                   clobber_mode="replace_files"
-                  output_interval="${OUTINVL_STR}" >
+                  output_interval="${RSTINVL_STR}" >
 
-    <file name="stream_list.atmosphere.diagnostics"/>
+                <file name="stream_list.atmosphere.diagnostics_da"/>
 </stream>
 
 <stream name="surface"
@@ -2487,7 +2484,7 @@ EOF
                   filename_interval="none"
                   input_interval="none" >
 
-    <file name="stream_list.atmosphere.surface"/>
+                <file name="stream_list.atmosphere.surface"/>
 </stream>
 
 <immutable_stream name="iau"
@@ -2543,7 +2540,7 @@ EOF
 
 ########################################################################
 
-function da_cycle_driver() {
+function dacycle_driver() {
     #
     #  based on driver_mpas_dart.csh in the DART package
     #
@@ -2587,7 +2584,7 @@ function da_cycle_driver() {
     intvl_min=$((intvl_sec/60))
     n_cycles=$(( (end_sec-start_sec)/intvl_sec+1 ))
 
-    echo "Total ${n_cycles} cycles from $date_beg to $date_end will be run every $intvl_min minutes."
+    echo -e "Total ${n_cycles} cycles from ${GREEN}$date_beg${NC} to ${LIGHT_BLUE}$date_end${NC} will be run every $intvl_min minutes."
 
     if [[ $dorun == true ]]; then
         num_resubmit=2               # resubmit failed jobs
@@ -2624,7 +2621,7 @@ function da_cycle_driver() {
             if [[ $icyc -eq 0 ]]; then
                 if [[ ! -e $rundir/lbc/done.lbc ]]; then
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                    check_and_resubmit "lbc" $rundir/lbc $nenslbc run_lbc.${mach} 0
+                    check_job_status "lbc" $rundir/lbc $nenslbc run_lbc.${mach} 0
                 fi
             else   #if [[ $icyc -gt 0 ]]; then
                 timesec_pre=$((isec-intvl_sec))
@@ -2632,7 +2629,7 @@ function da_cycle_driver() {
                 wrkdir_pre=${wrkdir}/${event_pre}
                 if [[ ! -e ${wrkdir_pre}/done.fcst ]]; then
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                    check_and_resubmit "fcst" $wrkdir_pre $ENS_SIZE run_mpas.${mach} 0
+                    check_job_status "fcst" $wrkdir_pre $ENS_SIZE run_mpas.${mach} 0
                 fi
             fi
         fi
@@ -2654,14 +2651,15 @@ function da_cycle_driver() {
         fi
 
         #------------------------------------------------------
-        # 3. Add noise
+        # 3. Add noise (must run after update_states)
         #------------------------------------------------------
+
         if [[ $run_addnoise == true ]]; then
             # check and set update_states status
             if [[ $dorun == true ]]; then
                 if [[ ! -e done.update_states ]]; then
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                    check_and_resubmit "update_states fcst_" $dawrkdir $ENS_SIZE run_update_states.${mach} 1
+                    check_job_status "update_states fcst_" $dawrkdir $ENS_SIZE run_update_states.${mach} 1
                 fi
             fi
 
@@ -2677,12 +2675,12 @@ function da_cycle_driver() {
                 if [[ ${run_addnoise} == true ]]; then   # check and set add_noise status
                     if [[ ! -e done.add_noise ]]; then
                         #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                        check_and_resubmit "add_noise fcst_" $dawrkdir $ENS_SIZE run_noise_pert.${mach} 0
+                        check_job_status "add_noise fcst_" $dawrkdir $ENS_SIZE run_noise_pert.${mach} 0
                     fi
                 else                                     # check and set update_states status
                     if [[ ! -e done.update_states ]]; then
                         #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                        check_and_resubmit "update_states fcst_" $dawrkdir $ENS_SIZE run_update_states.${mach} 0
+                        check_job_status "update_states fcst_" $dawrkdir $ENS_SIZE run_update_states.${mach} 0
                     fi
                 fi
             fi
@@ -2695,27 +2693,26 @@ function da_cycle_driver() {
         # 5. Advance model for each member
         #------------------------------------------------------
         # Run forecast for ensemble members until the next analysis time
-        if [[ " ${jobs[*]} " =~ " mpas " && "${eventtime}" != "0300" ]]; then
+        if [[ " ${jobs[*]} " =~ " mpas " ]]; then
             # check and set update_bc status
             if [[ $dorun == true ]]; then
                 if [[ ! -e done.update_bc ]]; then
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                    check_and_resubmit "update_bc fcst_" $dawrkdir $ENS_SIZE run_update_bc.${mach} 0
+                    check_job_status "update_bc fcst_" $dawrkdir $ENS_SIZE run_update_bc.${mach} 0
                 fi
             fi
 
-            if [[ $verb -eq 1 ]]; then echo ""; echo "    Run advance model at $eventtime"; fi
+            if [[ "${eventtime}" != "0300" ]]; then
+                if [[ $verb -eq 1 ]]; then echo ""; echo "    Run advance model at $eventtime"; fi
 
-            mpas_jobscript="run_mpas.${mach}"
-            run_mpas $dawrkdir $icyc $isec
+                mpas_jobscript="run_mpas.${mach}"
+                run_mpas $dawrkdir $icyc $isec
 
-            if [[ $dorun == true ]]; then
-                if [[ ! -e done.fcst ]]; then
-                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                    check_and_resubmit "fcst" $dawrkdir $ENS_SIZE $mpas_jobscript 2
-                    # Clean not needed files in each member's forecast directory after
-                    # the MPAS forward forecast
-                    #rm -rf ${dawrkdir}/fcst_??/${domname}_??.{diag,history}.*
+                if [[ $dorun == true ]]; then
+                    if [[ ! -e done.fcst ]]; then
+                        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+                        check_job_status "fcst" $dawrkdir $ENS_SIZE $mpas_jobscript 2
+                    fi
                 fi
             fi
         fi
@@ -2730,7 +2727,13 @@ function da_cycle_driver() {
             run_mpassit $dawrkdir ${isec}
 
             if [[ $dorun == true ]]; then
-                check_and_resubmit "mpassit mem" $dawrkdir/mpassit $ENS_SIZE run_mpassit.${mach} ${num_resubmit}
+                check_job_status "mpassit mem" $dawrkdir/mpassit $ENS_SIZE run_mpassit.${mach} ${num_resubmit}
+            fi
+        else
+            # Clean not needed files in each member's forecast directory after
+            # the MPAS forward forecast
+            if [[ $outwrf == false && $icyc -gt 0 ]]; then
+                rm -rf ${dawrkdir}/fcst_??/${domname}_??.{diag,history}.*
             fi
         fi
 
@@ -2740,7 +2743,7 @@ function da_cycle_driver() {
         time2=$(date +%s)
         if [[ $time2 -gt $time1 ]]; then
             (( secoffset = time2-time1 )); (( minoffset = secoffset/60 )); (( secoffset = secoffset%60 ))
-            echo "= Cycle ${eventtime} took ${minoffset}:${secoffset} minutes:seconds."
+            echo -e "= Cycle ${eventtime} took ${CYAN}${minoffset}:${secoffset}${NC} minutes:seconds."
         fi
 
         (( icyc+=1 ))
@@ -2760,7 +2763,7 @@ function run_obs_diag {
     #
     dawrkdir="$rundir/dacycles${daffix}"
     if [[ ! -d $dawrkdir ]]; then
-        echo "ERROR: $dawrkdir not exsit."
+        echo -e "${RED}ERROR${NC}: $dawrkdir not exsit."
         exit 1
     fi
     wrkdir=$dawrkdir/obs_diag
@@ -2806,7 +2809,7 @@ function run_obs_diag {
     #
 
     if [[ ${#obs_final_files[@]} -ne ${n_cycles} ]]; then
-        echo "ERROR: found  ${#obs_final_files[@]} \"obs_seq.final\" files, expected ${n_cycles}."
+        echo -e "${RED}ERROR${NC}: found  ${#obs_final_files[@]} \"obs_seq.final\" files, expected ${n_cycles}."
         exit 1
     fi
 
@@ -2870,7 +2873,7 @@ function run_obs_final2nc {
     #
     dawrkdir="$rundir/dacycles${daffix}"
     if [[ ! -d $dawrkdir ]]; then
-        echo "ERROR: $dawrkdir not exsit."
+        echo -e "${RED}ERROR${NC}: $dawrkdir not exsit."
         exit 1
     fi
     wrkdir=$dawrkdir/obs_diag
@@ -2910,7 +2913,7 @@ function run_obs_final2nc {
     #
 
     if [[ ${#obs_final_files[@]} -lt ${n_cycles} ]]; then
-        echo "ERROR: found  ${#obs_final_files[@]} \"obs_seq.final\" files, expected ${n_cycles}."
+        echo -e "${RED}ERROR${NC}: found  ${#obs_final_files[@]} \"obs_seq.final\" files, expected ${n_cycles}."
         exit 1
     fi
 
@@ -2971,17 +2974,17 @@ function run_mpassit {
     # Check MPASSIT status
     #
     if [[ -f done.mpassit ]]; then
-        echo "$$-${FUNCNAME[0]}: MPASSIT done for all forecast minutes"
+        echo -e "${DARK}${FUNCNAME[0]}:${NC} MPASSIT done for all forecast minutes"
         return
     fi
 
     if [[ -f running.mpassit || -f queue.mpassit ]]; then
-        echo "$$-${FUNCNAME[0]}: MPASSIT is running/queued for all forecast minutes"
+        echo -e "${DARK}${FUNCNAME[0]}:${NC} MPASSIT is running/queued for all forecast minutes"
         return
     fi
 
     if [[ -f error.mpassit ]]; then
-        echo "$$-${FUNCNAME[0]}: MPASSIT failed for all forecast minutes "
+        echo -e "${DARK}${FUNCNAME[0]}:${NC} MPASSIT failed for all forecast minutes "
         return
     fi
 
@@ -3022,7 +3025,7 @@ function run_mpassit {
                     elif [[ -e $FIXDIR/MPASSIT/${fn} ]]; then
                         ln -sf $FIXDIR/MPASSIT/$fn .
                     else
-                        echo "ERROR: file \"$FIXDIR/MPASSIT/${fn}\" not exist."
+                        echo -e "${RED}ERROR${NC}: file \"$FIXDIR/MPASSIT/${fn}\" not exist."
                         return
                     fi
                 fi
@@ -3061,10 +3064,10 @@ function run_mpassit_alltimes {
         (( i > maxsec )) && maxsec=$i
         (( i < minsec )) && minsec=$i
 
-        mpassit_wait_create_nml_onetime $wrkdir ${iseconds} $i 5
+        prepare_mpassit_onetime $wrkdir ${iseconds} $i 5
         local estatus=$?               # number of missing members
         if [[ ${estatus} -gt 0 ]]; then
-            echo "$$-${FUNCNAME[0]}: ${estatus} files missing"
+            echo -e "${DARK}${FUNCNAME[0]}:${NC} ${estatus} files missing"
             exit 1
         fi
     done
@@ -3105,7 +3108,7 @@ EOF
 
 ########################################################################
 
-function mpassit_wait_create_nml_onetime {
+function prepare_mpassit_onetime {
     # Work for one forecast time and all ensemble members
     # 1. Wait for the history/diag files
     # 2. Create namelist files
@@ -3142,8 +3145,8 @@ function mpassit_wait_create_nml_onetime {
         if [[ $dorun == true ]]; then
             for fn in $histfile $diagfile; do
                 if [[ $outdone == false ]]; then
-                    #echo "$$-${FUNCNAME[0]}: Checking ${fn##$rundir/} ..."
-                    echo "$$-${FUNCNAME[0]}: Checking forecast files at $fminstr for all $ENS_SIZE memebers from dacycles${daffix}/${fcst_lauch_time} ..."
+                    #echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking ${fn##$rundir/} ..."
+                    echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking forecast files at $fminstr for all $ENS_SIZE memebers from dacycles${daffix}/${fcst_lauch_time} ..."
                     outdone=true
                 fi
                 while [[ ! -f $fn ]]; do
@@ -3154,7 +3157,7 @@ function mpassit_wait_create_nml_onetime {
                 done
                 fileage=$(( $(date +%s) - $(stat -c %Y -- "$fn") ))
                 if [[ $fileage -lt $waitseconds ]]; then
-                    if [[ $verb -eq 1 ]]; then echo "$$-${FUNCNAME[0]}: Waiting for $fn ..."; fi
+                    if [[ $verb -eq 1 ]]; then echo -e "${DARK}${FUNCNAME[0]}:${NC} Waiting for $fn ..."; fi
                     sleep "$waitseconds"
                 fi
             done
@@ -3184,21 +3187,6 @@ EOF
 
 ########################################################################
 
-function cleanmpas {
-    # Clean not needed files in each member's forecast directory after
-    # the MPAS forward forecast
-
-    wrkdir=$1
-
-   if [[ $verb -eq 1 ]]; then
-        echo "Remove MPAS run-time files in ${wrkdir} ..."
-    fi
-
-    rm -rf ${wrkdir}/fcst_??/${domname}_??.diag.* ${wrkdir}/fcst_??/${domname}_??.history.*
-}
-
-########################################################################
-
 function run_clean {
     # $1    $2    $3
     # start  end
@@ -3212,6 +3200,7 @@ function run_clean {
     for isec in $(seq $start_sec $intvl_sec $end_sec ); do
         timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
         eventtime=$(date -u -d @$isec +%H%M)
+        timestr_file=$(date -u -d @$isec +%Y-%m-%d_%H.%M.%S)
 
         dawrkdir=$wrkdir/$eventtime
         if [[ -d $dawrkdir ]]; then
@@ -3225,25 +3214,38 @@ function run_clean {
 
                 case $dirname in
                 mpas )
-                    rm -f error.fcst_* log.????.abort
-                    rm -f log.atmosphere.????.out log.atmosphere.????.err #fcst_*_*.log
+                    rm -f fcst_??/error.fcst_* fcst_??/log.????.abort fcst_??/dart_log.*
+                    rm -f fcst_??/log.atmosphere.????.{out,err}  fcst_??/namelist.output fcst_*_*.log
+                    rm -f fcst_??/${domname}_??.{diag,history}.*.nc
+
+                    if [[ "${eventtime}" =~ ??00 ]]; then
+                        :       # keep lbc/{restart,init} for run MPAS free forecasts later
+                    else
+                        rm -f fcst_??/${domname}_??.lbc.${timestr_file}.nc
+                        rm -f fcst_??/${domname}_??.{restart,init}.${timestr_file}.nc
+                    fi
+
+                    rm -f fcst_??/mpas_XYZ.pkl fcst_??/wofs_mpas_grid_kdtree.pkl fcst_??/refl_*.{txt,pkl}
                     #if [[ $verb -eq 1 ]]; then echo "    clean mpas in $dawrkdir"; fi
                     #clean_mem_runfiles "fcst" $dawrkdir $ENS_SIZE
                     ;;
                 filter )
                     if [[ -e done.filter ]]; then
-                        rm -f error.filter dart_log.nml dart_log.out obs_seq_to_netcdf.log #filter_*.log
+                        rm -f error.filter dart_log.{nml,out} obs_seq_to_netcdf.log filter_*.log obs_diag.log
+                        rm -f preassim_*.nc output_*.nc
                         find OBSDIR -type f -not -name "obs_seq.${timestr_curr}" -exec rm -f {} \;
+                        rm -f noise_mask_*.log noise_pert_*.log mpas_XYZ.pkl wofs_mpas_grid_kdtree.pkl refl_*.{txt,pkl}
+                        rm -f ${domname}_??.analysis
                     fi
                     ;;
                 update_states )
                     if [[ -e done.update_states ]]; then
-                        rm -f error.update_states #update_states_*.log
+                        rm -f error.update_states update_states_*.log
                     fi
                     ;;
                 update_bc )
                     if [[ -e done.update_bc ]]; then
-                        rm -f error.update_bc #update_bc_*.log
+                        rm -f error.update_bc update_bc_*.log
                     fi
                     ;;
                 esac
@@ -3317,7 +3319,7 @@ while [[ $# -gt 0 ]]; do
                 overwrite=$2
                 shift
             else
-                echo "ERROR: option for '-k' can only be [0-2], but got \"$2\"."
+                echo -e "${RED}ERROR${NC}: option for '-k' can only be [0-2], but got \"$2\"."
                 usage 1
             fi
             ;;
@@ -3325,7 +3327,7 @@ while [[ $# -gt 0 ]]; do
             if [[ -d $2 ]]; then
                 TEMPDIR=$2
             else
-                echo "ERROR: Template directory \"$2\" does not exist."
+                echo -e "${RED}ERROR${NC}: Template directory \"$2\" does not exist."
                 usage 1
             fi
             shift
@@ -3340,7 +3342,7 @@ while [[ $# -gt 0 ]]; do
             elif [[ ${2^^} == "CHEYENNE" || ${2^^} == "DERECHO" ]]; then
                 machine=Cheyenne
             else
-                echo "ERROR: Unsupported machine name, got \"$2\"."
+                echo -e "${RED}ERROR${NC}: Unsupported machine name, got \"$2\"."
                 usage 1
             fi
             shift
@@ -3353,7 +3355,7 @@ while [[ $# -gt 0 ]]; do
             if [[ $2 =~ ^[0-9]{12}$ ]]; then
                 initdatetime=$2
             else
-                echo "ERROR: Initial time should be YYYYmmddHHMM, got \"$2\"."
+                echo -e "${RED}ERROR${NC}: Initial time should be YYYYmmddHHMM, got \"$2\"."
                 usage 1
             fi
             shift
@@ -3370,7 +3372,7 @@ while [[ $# -gt 0 ]]; do
             elif [[ $2 =~ ^[0-9]{4}$ ]]; then
                 eventtime="${2}"
             else
-                echo "ERROR: Start time should be in YYYYmmddHHMM or HHMM, got \"$2\"."
+                echo -e "${RED}ERROR${NC}: Start time should be in YYYYmmddHHMM or HHMM, got \"$2\"."
                 usage 1
             fi
             shift
@@ -3381,7 +3383,7 @@ while [[ $# -gt 0 ]]; do
             elif [[ $2 =~ ^[0-9]{4}$ ]]; then
                 endhrmin=$2
             else
-                echo "ERROR: End time should be in YYYYmmddHHMM or HHMM, got \"$2\"."
+                echo -e "${RED}ERROR${NC}: End time should be in YYYYmmddHHMM or HHMM, got \"$2\"."
                 usage 1
             fi
             shift
@@ -3426,7 +3428,7 @@ while [[ $# -gt 0 ]]; do
                 #echo $WORKDIR,$eventdate,$eventtime
             else
                 echo ""
-                echo "ERROR: unknown argument, get [$key]."
+                echo -e "${RED}ERROR${NC}: unknown argument, get [$key]."
                 usage 3
             fi
             ;;
@@ -3466,21 +3468,19 @@ stoptime_sec=$(date -u -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
 if [[ -z $config_file ]]; then
     config_file="$WORKDIR/config.${eventdate}"
 else
-    if [[ ! -e ${config_file} ]]; then
-        if [[ -e ${WORKDIR}/${config_file} ]]; then
-            config_file="${WORKDIR}/${config_file}"
-        else
-            echo "ERROR: file ${config_file} not exist."
-            usage 1
-        fi
+    if [[ -e ${WORKDIR}/${config_file} ]]; then
+        config_file="${WORKDIR}/${config_file}"
+    else
+        echo -e "${RED}ERROR${NC}: file ${config_file} not exist."
+        usage 1
     fi
 fi
 
 if [[ ! -r ${config_file} ]]; then
-    echo "ERROR: Configuration file ${config_file} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
+    echo -e "${RED}ERROR${NC}: Configuration file ${config_file} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
     exit 2
 else
-    echo "Reading case (${eventdate}) configuration file: ${config_file} ...."
+    echo -e "Reading case (${GREEN}${eventdate}${NC}) configuration file: ${CYAN}${config_file}${NC} ...."
 fi
 readconf ${config_file} COMMON dacycles || exit $?
 # get ENS_SIZE, time_step, EXTINVL, ADAPTIVE_INF, update_in_place
@@ -3491,14 +3491,14 @@ readconf ${config_file} COMMON dacycles || exit $?
 if [[ "${damode}" == "restart" || "${damode}" == "init" ]]; then
     :
 else
-    echo "ERROR: damode=${damode} is not supported."
+    echo -e "${RED}ERROR${NC}: damode=${damode} is not supported."
     usage 1
 fi
 
 if [[ "${mpscheme}" == "mp_nssl2m" || "${mpscheme}" == "Thompson" ]]; then
     :
 else
-    echo "ERROR: mpscheme=${mpscheme} is not supported."
+    echo -e "${RED}ERROR${NC}: mpscheme=${mpscheme} is not supported."
     usage 1
 fi
 
@@ -3544,7 +3544,7 @@ else    # Vecna at NSSL
 
     # Load Python Enviroment if necessary
     if [[ ${run_trimvr} == true || ${run_addnoise} == true ]]; then
-        echo "Enabling Python micromamba environment - wofs_an ...."
+        echo -e "Enabling Python micromamba environment - ${YELLOW}wofs_an${NC} ...."
         source /home/yunheng.wang/.pythonrc  || exit $?
     fi
 fi
@@ -3569,14 +3569,14 @@ exedir="$rootdir/exec"
 
 echo ""
 echo "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
-echo "     Event date : $eventdate ${eventtime}"
-echo "     Root    dir: $rootdir"
-echo "     Working dir: $WORKDIR"
-echo "     Domain name: $domname;  MP scheme: ${mpscheme}"
+echo -e "     Event date : ${GREEN}$eventdate${NC} ${eventtime}"
+echo    "     Root    dir: $rootdir"
+echo    "     Working dir: $WORKDIR"
+echo -e "     Domain name: ${PURPLE}$domname${NC};  MP scheme: ${BROWN}${mpscheme}${NC}"
 echo " "
 
 RSTINVL_STR=$(printf "00:%02d:00" $((intvl_sec/60)) )
-OUTINVL_STR=$(printf "00:%02d:00" $(( OUTINVL/60 )) )
+OUTINVL_STR=$(printf "00:%02d:00" $((OUTINVL/60)) )
 
 #
 # Start the data assimilation cycles
@@ -3585,7 +3585,7 @@ OUTINVL_STR=$(printf "00:%02d:00" $(( OUTINVL/60 )) )
 # $1    $2    $3
 # init start  end
 if [[ " ${jobs[*]} " =~ " "(filter|mpas|update_states|update_bc)" " ]]; then
-    da_cycle_driver $inittime_sec $starttime_sec $stoptime_sec
+    dacycle_driver $inittime_sec $starttime_sec $stoptime_sec
 elif [[ " ${jobs[*]} " =~ " "(obs_diag|obs_final2nc)" " ]]; then
     if [[ ${starttime_sec} -le ${inittime_sec} ]]; then
         begin_sec=$((starttime_sec+intvl_sec))

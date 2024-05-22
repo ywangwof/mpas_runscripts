@@ -22,16 +22,18 @@ README.md
 
     lnwrkfiles.sh    # Link necessary programs, runtime files and fixed files
 
-    cleanmpas        # Clean run-time output from a MPAS run
-    lnmpasrun        # Link MPAS run-time time for users to run the program by themselves
-    lnmpasfcst       # Link MPASSIT processed MPAS forecasts to a directory that simulates
+    cleanmpas.sh     # Clean run-time output from a MPAS run, a set of ensemble MPAS runs or the post-processing files
+    lnmpasrun        # Link MPAS run-time time for users to run the program manually
+    lnmpasfcst.sh    # Link MPASSIT processed MPAS forecasts to a directory that simulates
                      # the WRF-WoFS forecasts, the purpose is to use WoFS-post directly
                      # without modification
+    mpasruntime.sh   # Check MPAS-WoFS program runtime for all ensemble members or the time step for a single MPAS forecast
     tarmpas          # tar a MPAS CONUS run directory for seeking support from NCAR,
                      # not ncessary now since we got an account on Cheyenne.
 
-    plot_allobs.sh   # Plot Data assimilation diagnostic figures
-    runmpas.sh       # Higher level script to run the MPAS-WoFS workflow interactively
+    plot_allobs.sh   # Plot Data assimilation diagnostic pictures
+    runmpasjobs.sh   # Higher level script to run the MPAS-WoFS workflow interactively
                      # or using Linux at/cronb facility for 2024 NSSL near-realtime experiments
-                     # 1. DA;   2. FCST;   on Vecna    
-                     # 3. post; 4. plot    on wof-epyc8
+                     # 1. DA;   2. FCST;            on Vecna
+                     # 3. post; 4. plot; 5. diag    on wof-epyc8
+    seq_filter.py    # DART obs_seq file filter or examiner

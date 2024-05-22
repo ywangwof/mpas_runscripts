@@ -4,6 +4,7 @@ rootdir=$(realpath "$(dirname "${script_dir}")")
 #rootdir="/scratch/ywang/MPAS/gnu/mpas_scripts"
 
 rundir="${rootdir}/run_dirs"
+imagedir="${rundir}/image_files"
 
 eventdateDF=$(date -u +%Y%m%d)
 
@@ -136,13 +137,13 @@ if [[ ! "$host" =~ ^${machine}.*$ ]]; then
     exit 1
 fi
 
-if [[ -z ${MAMBA_EXE} ]]; then   # not set micromamba
-    if [[ ! "$host" =~ ^vecna.*$ ]]; then
+if [[ -z ${MAMBA_EXE} || -t 0 ]]; then   # not set micromamba
+    if [[ "$host" =~ ^vecna.*$ ]]; then
         micromamba_dir='/home/yunheng.wang/tools/micromamba'
         myenv="wofs_an"
     else
         micromamba_dir='/home/yunheng.wang/y'
-        myenv="myenv"
+        myenv="/home/brian.matilla/micromamba/envs/wofs-func"
     fi
 
     # >>> mamba initialize >>>
@@ -202,10 +203,11 @@ for ((s=start_s;s<=end_s;s+=900)); do
     datestr=$(date -u -d @$s +%Y%m%d%H%M)
 
     seq_file="${rundir}/${eventdate}/${dadir}/${timestr}/obs_seq.final.${datestr}.nc"
+    donefile="${rundir}/${eventdate}/${dadir}/${timestr}/done.filter"
 
-    if [[ ! -f ${seq_file} ]]; then
-        echo "Waiting for ${seq_file} ...."
-        while [[ ! -e ${seq_file} ]]; do
+    if [[ ! -f ${donefile} ]]; then
+        echo "Waiting for ${donefile} ...."
+        while [[ ! -e ${donefile} ]]; do
             sleep 10
         done
     fi
@@ -228,6 +230,19 @@ done
 
 if [[ ! -e done.zigzag ]]; then
     ${show} ${rootdir}/python/plot_dartzig.py ${eventdate} -d ${rundir}/${eventdate}/${dadir} -r 300 2>/dev/null
+
+    cd ${rundir}/${eventdate}/${dadir}/obs_diag || exit 1
+
+    image_destdir="${imagedir}/20240410_mpasV8.0/1500"
+    if [[ ! -d ${image_destdir} ]]; then
+        mkdir -p ${image_destdir}
+    fi
+
+    for fn in rms_*.png ratio_*.png number_*.png; do
+        destfn="${fn%_*}_f360.png"
+        convert $fn -resize 1100x1100 -trim ${image_destdir}/${destfn}
+    done
+
     if [[ $? -eq 0 ]]; then
         ${show} touch "done.zigzag"
     fi

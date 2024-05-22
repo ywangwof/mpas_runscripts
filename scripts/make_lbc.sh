@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2317,SC1090,SC1091,SC2086
+# shellcheck disable=SC2317,SC1090,SC1091,SC2086,SC2154
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
@@ -54,7 +54,7 @@ function usage {
     echo " "
     echo "    DATETIME - Case date and time in YYYYMMDD, Default for today"
     echo "    WORKDIR  - Run Directory"
-    echo "    JOBS     - One or more jobs from [ungrib,init,clean,cleanungrib]"
+    echo "    JOBS     - One or more jobs from [ungrib,init,clean]"
     echo "               Default all jobs in sequence"
     echo " "
     echo "    OPTIONS:"
@@ -63,6 +63,7 @@ function usage {
     echo "              -v                  Verbose mode"
     echo "              -k  [0,1,2]         Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
     echo "                                  Default is 0 for ungrib, mpassit, upp and 1 for others"
+    echo "              -a                  Clean the \"ungrib\" directory completely when JOBS contain \"clean\""
     echo "              -t  DIR             Template directory for runtime files"
     echo "              -w                  Hold script to wait for all job conditions are satified and submitted (for mpassit & upp)."
     echo "                                  By default, the script will exit after submitting all possible jobs."
@@ -187,7 +188,7 @@ EOF
 
     if [[ $dorun == true && $jobwait -eq 1 ]]; then
         #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-        check_and_resubmit "ungrib" $wrkdir $nenslbc $jobscript 2
+        check_job_status "ungrib" $wrkdir $nenslbc $jobscript 2
     fi
 }
 
@@ -198,7 +199,7 @@ function run_lbc {
     if [[ -d $init_dir ]]; then  # link it from somewhere
 
         if [[ $dorun == true ]]; then
-            donefile="$init_dir/lbc/done.lbc"
+            donefile="$init_dir/lbc/done.${domname}"
             echo "$$: Checking: $donefile"
             while [[ ! -e $donefile ]]; do
                 if [[ $verb -eq 1 ]]; then
@@ -237,8 +238,8 @@ function run_lbc {
                 fi
 
                 # shellcheck disable=SC2154
-                check_and_resubmit "init" $rundir/init $nensics
-                check_and_resubmit "ungrib" $rundir/lbc/ungrib $nenslbc
+                check_job_status "${domname}" $rundir/init $nensics
+                check_job_status "ungrib" $rundir/lbc/ungrib $nenslbc
                 sleep 10
             done
         done
@@ -247,7 +248,7 @@ function run_lbc {
     fi
 
     wrkdir=$rundir/lbc
-    if [[ -f $wrkdir/running.lbc || -f $wrkdir/done.lbc || -f $wrkdir/queue.lbc ]]; then
+    if [[ -f $wrkdir/running.${domname} || -f $wrkdir/done.${domname} || -f $wrkdir/queue.${domname} ]]; then
         return 0
     fi
 
@@ -257,7 +258,7 @@ function run_lbc {
     jobarrays=()
     for mem in $(seq 1 $nenslbc); do
         memstr=$(printf "%02d" $mem)
-        memwrkdir="$wrkdir/lbc_$memstr"
+        memwrkdir="$wrkdir/${domname}_$memstr"
 
         mkwrkdir $memwrkdir 1
         cd $memwrkdir || return
@@ -379,7 +380,7 @@ EOF
     # Create job script and submit it
     #
     if [[ ${#jobarrays[@]} -gt 0 ]]; then
-        jobscript="run_lbc.${mach}"
+        jobscript="run_lbc_${domname}.${mach}"
         jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
         sedfile=$(mktemp -t lbc_${jobname}.sed_XXXX)
@@ -395,7 +396,7 @@ s/MODULE/${modulename}/g
 s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
 s#EXEDIR#${exedir}#
-s#PREFIX#${domname}#
+s#PREFIX#${domname}#g
 s/ACCTSTR/${job_account_str}/
 s/EXCLSTR/${job_exclusive_str}/
 s/RUNMPCMD/${job_runmpexe_str}/
@@ -407,13 +408,13 @@ EOF
         fi
 
         # shellcheck disable=SC2154
-        submit_a_jobscript $wrkdir "lbc" $sedfile $TEMPDIR/run_lbc_array.${mach} $jobscript ${jobarraystr}
+        submit_a_jobscript $wrkdir "${domname}" $sedfile $TEMPDIR/run_lbc_array.${mach} $jobscript ${jobarraystr}
     fi
 
     if [[ $dorun == true && $jobwait -eq 1 ]]; then
 
         #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-        check_and_resubmit "lbc" $wrkdir $nenslbc $jobscript 2
+        check_job_status "${domname}" $wrkdir $nenslbc $jobscript 2
     fi
 }
 
@@ -436,17 +437,10 @@ function run_clean {
         lbc )
             cd "$rundir/lbc" || return
             #jobname=$1 mywrkdir=$2 nummem=$3
-            clean_mem_runfiles "lbc" "$rundir/lbc" "$nenslbc"
+            clean_mem_runfiles "${domname}" "$rundir/lbc" "$nenslbc"
             ;;
         esac
     done
-}
-
-########################################################################
-
-function run_cleanungrib {
-    cd $rundir/lbc || return
-    rm -rf ungrib
 }
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -487,6 +481,8 @@ else
     machine="Jet"
 fi
 
+source $scpdir/Common_Utilfuncs.sh || exit $?
+
 #-----------------------------------------------------------------------
 #
 # Handle command line arguments
@@ -517,7 +513,7 @@ while [[ $# -gt 0 ]]
                 overwrite=$2
                 shift
             else
-                echo "ERROR: option for '-k' can only be [0-2], but got \"$2\"."
+                echo -e "${RED}ERROR${NC}: option for '-k' can only be [0-2], but got \"$2\"."
                 usage 1
             fi
             ;;
@@ -528,7 +524,7 @@ while [[ $# -gt 0 ]]
             if [[ -d $2 ]]; then
                 TEMPDIR=$2
             else
-                echo "ERROR: Template directory \"$2\" does not exist."
+                echo -e "${RED}ERROR${NC}: Template directory \"$2\" does not exist."
                 usage 1
             fi
             shift
@@ -543,7 +539,7 @@ while [[ $# -gt 0 ]]
             elif [[ ${2^^} == "CHEYENNE" ]]; then
                 machine=Cheyenne
             else
-                echo "ERROR: Unsupported machine name, got \"$2\"."
+                echo -e "${RED}ERROR${NC}: Unsupported machine name, got \"$2\"."
                 usage 1
             fi
             shift
@@ -565,7 +561,7 @@ while [[ $# -gt 0 ]]
                     sleep 10
                 done
             else
-                echo "ERROR: initialization directory  \"$2\" not exists."
+                echo -e "${RED}ERROR${NC}: initialization directory  \"$2\" not exists."
                 usage 1
             fi
             shift
@@ -593,7 +589,7 @@ while [[ $# -gt 0 ]]
                 #echo $WORKDIR,${jobs[*]},$eventdate,$eventtime
             else
                  echo ""
-                 echo "ERROR: unknown argument, get [$key]."
+                 echo -e "${RED}ERROR${NC}: unknown argument, get [$key]."
                  usage 3
             fi
             ;;
@@ -603,6 +599,35 @@ done
 
 if [[ $init_dir != false ]]; then
     jobs=( "${jobs[@]/ungrib}" )          # drop ungrib from the jobs list
+fi
+
+#
+# read configurations that is not set from command line
+#
+if [[ -z $config_file ]]; then
+    config_file="$WORKDIR/config.${eventdate}"
+else
+    if [[ -e ${WORKDIR}/${config_file} ]]; then
+        config_file="${WORKDIR}/${config_file}"
+    else
+        echo -e "${RED}ERROR${NC}: file ${config_file} not exist."
+        usage 1
+    fi
+fi
+
+if [[ ! -r ${config_file} ]]; then
+    echo -e "${RED}ERROR${NC}: Configuration file ${config_file} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
+    exit 2
+fi
+readconf ${config_file} COMMON lbc || exit $?
+# get ENS_SIZE, EXTINVL, LBCIOTYPE
+
+if [[ -e ${vertLevel_file} ]]; then
+    nvertlevels=$(cat ${vertLevel_file} | sed '/^\s*$/d' | wc -l)
+    (( nvertlevels -= 1 ))
+else
+    echo -e "${RED}ERROR${NC}: vertLevel_file=\"${vertLevel_file}\" not exist."
+    usage 1
 fi
 
 #-----------------------------------------------------------------------
@@ -636,8 +661,6 @@ else    # Vecna at NSSL
     source ${rootdir}/modules/${modulename}
 fi
 
-source $scpdir/Common_Utilfuncs.sh || exit $?
-
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
 # Perform each task
@@ -665,37 +688,6 @@ jobname="${eventdate:4:4}"
 
 exedir="$rootdir/exec"
 
-#
-# read configurations that is not set from command line
-#
-if [[ -z $config_file ]]; then
-    config_file="$WORKDIR/config.${eventdate}"
-else
-    if [[ ! -e ${config_file} ]]; then
-        if [[ -e ${WORKDIR}/${config_file} ]]; then
-            config_file="${WORKDIR}/${config_file}"
-        else
-            echo "ERROR: file ${config_file} not exist."
-            usage 1
-        fi
-    fi
-fi
-
-if [[ ! -r ${config_file} ]]; then
-    echo "ERROR: Configuration file ${config_file} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
-    exit 2
-fi
-readconf ${config_file} COMMON lbc || exit $?
-# get ENS_SIZE, EXTINVL, LBCIOTYPE
-
-if [[ -e ${vertLevel_file} ]]; then
-    nvertlevels=$(cat ${vertLevel_file} | sed '/^\s*$/d' | wc -l)
-    (( nvertlevels -= 1 ))
-else
-    echo "ERROR: ${vertLevel_file} not exist."
-    usage 1
-fi
-
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 
 #
@@ -703,7 +695,7 @@ EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 #
 
 declare -A jobargs=([ungrib]="${hrrr_dir} ${hrrr_time}"                 \
-                    [lbc]="lbc/ungrib/done.ungrib init/done.init"       \
+                    [lbc]="lbc/ungrib/done.ungrib init/done.${domname}" \
                     [clean]="ungrib lbc"                                \
                     [cleanungrib]=""                                    \
                    )

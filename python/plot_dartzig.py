@@ -472,7 +472,9 @@ QCValMeta = { '0' : 'assimilated successfully',
               '5' : 'not used because not selected in namelist',
               '6' : 'incoming qc value was larger than threshold',
               '7' : 'Outlier threshold test failed',
-              '8' : 'vertical location conversion failed'
+              '8' : 'vertical location conversion failed',
+              '10' : 'Inlier threshold test failed',
+              '14' : 'Unknown'
             }
 
 def print_meta(wargs,obsfile):
@@ -932,6 +934,7 @@ if __name__ == "__main__":
 
         filelist1 = []; filelist2 = []
         filelist  = []
+        print(f"Reading obs_seq files from {dadir} ...")
         for item in os.listdir(dadir):
             dirmatch = re.match('^\d{4,4}$',item)
             dirtime = os.path.join(dadir,item)

@@ -33,7 +33,7 @@ SHELL=/bin/bash
 40      12-23  * * * $rootdir/observations/prepbufr_wofs.sh
 
 # DA cycles
-27      23      * * * $rootdir/scripts/runmpas.sh dacycles
+27      23      * * * $rootdir/scripts/runmpasjobs.sh dacycles
 
 # Fcst
-55      23      * * * $rootdir/scripts/runmpas.sh fcst
+55      23      * * * $rootdir/scripts/runmpasjobs.sh fcst

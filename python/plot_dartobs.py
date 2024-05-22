@@ -1569,14 +1569,18 @@ def make_scatter(cargs,wargs,obstype,wobj):
     plot_meta, dta_s = retrieve_scattervar(cargs,obstype,wobj)
 
     if cargs.scatter == "mean":
-        # Plot prior points
-        dats = dta_s['0']
-        countstr = get_array_lenstr(dats['prior'])
-        priorlabel = f"Prior ensembe mean ({countstr})"
-        plt.scatter(dats['obs'], dats['prior'], c='k', marker='*', label=priorlabel,alpha=0.6)
-        xlabel = 'Observed Values'
-        ylabel = 'Posterior/Prior Ensemble Mean'
-        xobs_ax = 'obs'
+        if '0' in dta_s.keys():
+            # Plot prior points
+            dats = dta_s['0']
+            countstr = get_array_lenstr(dats['prior'])
+            priorlabel = f"Prior ensembe mean ({countstr})"
+            plt.scatter(dats['obs'], dats['prior'], c='k', marker='*', label=priorlabel,alpha=0.6)
+            xlabel = 'Observed Values'
+            ylabel = 'Posterior/Prior Ensemble Mean'
+            xobs_ax = 'obs'
+        else:
+            print(f"Observation {plot_meta.type_label} not assimilated.")
+            return
     elif cargs.scatter == "spread":
         xlabel = 'Prior Spread'
         ylabel = 'Posterior Spread'

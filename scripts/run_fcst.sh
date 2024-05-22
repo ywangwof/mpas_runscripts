@@ -107,7 +107,7 @@ function usage {
     echo "               YYYYmmdd:     run all cycles from $eventtime to 0300. Or use options \"-s\" & \"-e\" to specify cycles."
     echo "               YYYYmmddHHMM: run this forecast cycle only."
     echo "    WORKDIR  - Run Directory"
-    echo "    JOBS     - One or more jobs from [mpas,mpassit,upp] or [clean_fcst,clean_mpassit, clean_upp]"
+    echo "    JOBS     - One or more jobs from [mpas,mpassit,upp,clean] or [clean_fcst,clean_mpassit,clean_upp]"
     echo "               Default all jobs in sequence"
     echo " "
     echo "    OPTIONS:"
@@ -165,11 +165,11 @@ function run_mpas {
     #
     # Waiting for job conditions
     #
-    conditions=("${rundir}/lbc/done.lbc" "${dawrkdir}/done.update_states" "${dawrkdir}/done.update_bc")
+    conditions=("${rundir}/lbc/done.${domname}" "${dawrkdir}/done.update_states" "${dawrkdir}/done.update_bc")
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            echo "$$-${FUNCNAME[0]}: Checking $cond"
+            echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking $cond"
             while [[ ! -e $cond ]]; do
                 #if [[ $verb -eq 1 ]]; then
                 #    echo "Waiting for file: $cond"
@@ -269,7 +269,7 @@ function run_mpas {
         ln -sf $rundir/$domname/$domname.graph.info.part.${npefcst} .
 
 
-        streamlists=(stream_list.atmosphere.diagnostics stream_list.atmosphere.output stream_list.atmosphere.surface)
+        streamlists=(stream_list.atmosphere.diagnostics_fcst stream_list.atmosphere.output stream_list.atmosphere.surface)
         for fn in "${streamlists[@]}"; do
             cp -f ${FIXDIR}/$fn .
         done
@@ -438,7 +438,7 @@ EOF
                   clobber_mode="replace_files"
                   output_interval="${OUTINVL_STR}" >
 
-    <file name="stream_list.atmosphere.diagnostics"/>
+    <file name="stream_list.atmosphere.diagnostics_fcst"/>
 </stream>
 
 <stream name="surface"
@@ -541,17 +541,17 @@ function run_mpassit {
     # Check MPASSIT status
     #
     if [[ -f done.mpassit ]]; then
-        echo "$$-${FUNCNAME[0]}: MPASSIT done for all forecast minutes"
+        echo -e "${DARK}${FUNCNAME[0]}:${NC} MPASSIT done for all forecast minutes"
         return
     fi
 
     if [[ -f running.mpassit || -f queue.mpassit ]]; then
-        echo "$$-${FUNCNAME[0]}: MPASSIT is running/queued for all forecast minutes"
+        echo -e "${DARK}${FUNCNAME[0]}:${NC} MPASSIT is running/queued for all forecast minutes"
         return
     fi
 
     if [[ -f error.mpassit ]]; then
-        echo "$$-${FUNCNAME[0]}: MPASSIT failed for all forecast minutes "
+        echo -e "${DARK}${FUNCNAME[0]}:${NC} MPASSIT failed for all forecast minutes "
         return
     fi
 
@@ -560,18 +560,18 @@ function run_mpassit {
         minstr=$(printf "%03d" $((i/60)))
 
         if [[ -f done.mpassit$minstr ]]; then
-            echo "$$-${FUNCNAME[0]}: MPASSIT done for forecast at ${minstr}"
+            echo -e "${DARK}${FUNCNAME[0]}:${NC} MPASSIT done for forecast at ${minstr}"
             (( n+=1 ))
             continue
         fi
 
         if [[ -f running.mpassit$minstr || -f queue.mpassit$minstr ]]; then
-            echo "$$-${FUNCNAME[0]}: MPASSIT is running/queued for forecast at ${minstr}"
+            echo -e "${DARK}${FUNCNAME[0]}:${NC} MPASSIT is running/queued for forecast at ${minstr}"
             continue
         fi
 
         if [[ -f error.mpassit$minstr ]]; then
-            echo "$$-${FUNCNAME[0]}: MPASSIT failed for forecast at ${minstr}"
+            echo -e "${DARK}${FUNCNAME[0]}:${NC} MPASSIT failed for forecast at ${minstr}"
             continue
         fi
 
@@ -582,7 +582,7 @@ function run_mpassit {
     if [[ $n -eq $n_fcst ]]; then
         touch done.mpassit
         rm -rf done.mpassit???
-        echo "$$-${FUNCNAME[0]}: MPASSIT done for all forecast minutes"
+        echo -e "${DARK}${FUNCNAME[0]}:${NC} MPASSIT done for all forecast minutes"
     fi
 
     #
@@ -614,7 +614,7 @@ function run_mpassit {
                     elif [[ -e $FIXDIR/MPASSIT/${fn} ]]; then
                         ln -sf $FIXDIR/MPASSIT/$fn .
                     else
-                        echo "ERROR: file \"$FIXDIR/MPASSIT/${fn}\" not exist."
+                        echo -e "${RED}ERROR${NC}: file \"$FIXDIR/MPASSIT/${fn}\" not exist."
                         return
                     fi
                 fi
@@ -627,7 +627,7 @@ function run_mpassit {
         cd $wrkdir || return
 
         if [[ $rt_run == true ]]; then
-            run_mpassit_oneAtime "${wrkdir}" "${iseconds}" "${fcst_minutes[*]}" "${jobarrays_str}"
+            run_mpassit_onetime "${wrkdir}" "${iseconds}" "${fcst_minutes[*]}" "${jobarrays_str}"
         else
             run_mpassit_alltimes "${wrkdir}" "${iseconds}" "${fcst_minutes[*]}" "${jobarrays_str}"
         fi
@@ -636,7 +636,7 @@ function run_mpassit {
 
 ########################################################################
 
-function run_mpassit_oneAtime {
+function run_mpassit_onetime {
     # $1        $2
     # wrkdir    iseconds
     local -r wrkdir=$1
@@ -652,7 +652,7 @@ function run_mpassit_oneAtime {
     for minstr in "${fcsttimes[@]}"; do
 
         (( i=10#${minstr}*60 ))
-        mpassit_wait_create_nml_onetime $wrkdir ${iseconds} $i 30
+        prepare_mpassit_onetime $wrkdir ${iseconds} $i 30
         local estatus=$?               # number of missing members
         if [[ ${estatus} -gt 0 ]]; then
             continue
@@ -716,10 +716,10 @@ function run_mpassit_alltimes {
         (( i > maxsec )) && maxsec=$i
         (( i < minsec )) && minsec=$i
 
-        mpassit_wait_create_nml_onetime $wrkdir ${iseconds} $i 2
+        prepare_mpassit_onetime $wrkdir ${iseconds} $i 2
         local estatus=$?               # number of missing members
         if [[ ${estatus} -gt 0 ]]; then
-            echo "$$-${FUNCNAME[0]}: ${estatus} files missing"
+            echo -e "${DARK}${FUNCNAME[0]}:${NC} ${estatus} files missing"
             missed=true
             continue
         fi
@@ -763,7 +763,7 @@ EOF
 
 ########################################################################
 
-function mpassit_wait_create_nml_onetime {
+function prepare_mpassit_onetime {
     # Work for one forecast time and all ensemble members
     # 1. Wait for the history/diag files
     # 2. Create namelist files
@@ -800,9 +800,9 @@ function mpassit_wait_create_nml_onetime {
 
         if [[ $dorun == true ]]; then
             for fn in $histfile $diagfile; do
-                #echo "$$-${FUNCNAME[0]}: Checking ${fn##$rundir/} ..."
+                #echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking ${fn##$rundir/} ..."
                 if [[ $outdone == false ]]; then
-                    echo "$$-${FUNCNAME[0]}: Checking forecast files at $minstr for all $ENS_SIZE memebers from fcst/${fcst_lauch_time} ..."
+                    echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking forecast files at $minstr for all $ENS_SIZE memebers from fcst/${fcst_lauch_time} ..."
                     outdone=true
                 fi
                 while [[ ! -f $fn ]]; do
@@ -818,7 +818,7 @@ function mpassit_wait_create_nml_onetime {
                 done
                 fileage=$(( $(date +%s) - $(stat -c %Y -- "$fn") ))
                 if [[ $fileage -lt $waitseconds ]]; then
-                    if [[ $verb -eq 1 ]]; then echo "$$-${FUNCNAME[0]}: Waiting for $fn ..."; fi
+                    if [[ $verb -eq 1 ]]; then echo -e "${DARK}${FUNCNAME[0]}:${NC} Waiting for $fn ..."; fi
                     sleep "$waitseconds"
                 fi
             done
@@ -937,7 +937,7 @@ function run_upp {
         donefile="$mpassitdir/mpassit/done.mpassit$minstr"
 
         if [[ $dorun == true ]]; then
-            echo "$$-${FUNCNAME[0]}: Checking $donefile ...."
+            echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking $donefile ...."
             while [[ ! -f $donefile && ! -f "$mpassitdir/mpassit/done.mpassit" ]]; do
                 if [[ $jobwait -eq 0 ]]; then     # do not wait
                     continue 2                    # go ahread to process next forecast hour
@@ -1068,7 +1068,7 @@ function fcst_driver() {
     date_beg=$(date -u -d @$start_sec +%Y%m%d%H%M)
     date_end=$(date -u -d @$end_sec +%Y%m%d%H%M)
 
-    echo "Forecasting cycles from $date_beg to $date_end ...."
+    echo -e "Forecasting cycles from ${GREEN}$date_beg${NC} to ${LIGHT_BLUE}$date_end${NC} ...."
 
     # fcst_length_seconds/fcst_launch_intvl from the config file
     for ilaunch in $(seq $start_sec ${fcst_launch_intvl} $end_sec ); do
@@ -1103,7 +1103,7 @@ function fcst_driver() {
             run_mpas $fcstwrkdir $ilaunch
 
             #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-            check_and_resubmit "fcst" $fcstwrkdir $ENS_SIZE $mpas_jobscript ${num_resubmit}
+            check_job_status "fcst" $fcstwrkdir $ENS_SIZE $mpas_jobscript ${num_resubmit}
         fi
 
         if [[ " ${jobs[*]} " =~ " mpassit " ]]; then
@@ -1118,10 +1118,10 @@ function fcst_driver() {
                 for ((i=diag_start;i<=fcst_seconds;i+=OUTINVL)); do
                     minstr=$(printf "%03d" $((i/60)))
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                    check_and_resubmit "mpassit$minstr mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit_$minstr.${mach} ${num_resubmit}
+                    check_job_status "mpassit$minstr mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit_$minstr.${mach} ${num_resubmit}
                 done
             else
-                check_and_resubmit "mpassit mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit.${mach} ${num_resubmit}
+                check_job_status "mpassit mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit.${mach} ${num_resubmit}
             fi
         fi
 
@@ -1135,11 +1135,11 @@ function fcst_driver() {
                         minstr=$(printf "%03d" $((i/60)))
                         if [[ ! -e $fcstwrkdir/mpassit/done.mpassit$minstr ]]; then
                             #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                            check_and_resubmit "mpassit$minstr mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit_$minstr.slurm 0
+                            check_job_status "mpassit$minstr mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit_$minstr.slurm 0
                         fi
                     done
                 else
-                    check_and_resubmit "mpassit mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit.slurm 0
+                    check_job_status "mpassit mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit.slurm 0
                 fi
             fi
 
@@ -1151,7 +1151,7 @@ function fcst_driver() {
                 for ((i=diag_start;i<=fcst_seconds;i+=OUTINVL)); do
                     minstr=$(printf "%03d" $((i/60)))
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                    check_and_resubmit "upp$minstr mem" $fcstwrkdir/upp $ENS_SIZE run_upp_$minstr.slurm  2
+                    check_job_status "upp$minstr mem" $fcstwrkdir/upp $ENS_SIZE run_upp_$minstr.slurm  2
                 done
             fi
         fi
@@ -1191,8 +1191,8 @@ function run_clean {
 
                 case $dirname in
                 mpas )
-                    rm -f error.fcst_* log.????.abort
-                    #rm -f log.atmosphere.????.out log.atmosphere.????.err fcst_*_*.log
+                    rm -f fcst_??/error.fcst_* fcst_??/log.????.abort fcst_??/dart_log.*
+                    rm -f fcst_??/log.atmosphere.????.{out,err}  fcst_??/namelist.output fcst_*_*.log
                     #echo "clean mpas in $fcstwrkdir"
                     #clean_mem_runfiles "fcst" $fcstwrkdir $ENS_SIZE
                     done=0
@@ -1211,6 +1211,8 @@ function run_clean {
                                 #rm $donefile
                                 (( done+=1 ))
                             fi
+                            #ls $memdir/${domname}_??.{diag,history}.*.nc
+                            rm -f $memdir/${domname}_??.{diag,history}.*.nc
                         fi
                     done
                     if [[ $done -eq $ENS_SIZE ]]; then
@@ -1222,35 +1224,35 @@ function run_clean {
                 mpassit )
                     mywrkdir=$fcstwrkdir/mpassit
                     if [[ -d $mywrkdir ]]; then
-                        cd $mywrkdir || return
-                        for ((i=diag_start;i<=fcst_seconds;i+=OUTINVL)); do
-                            minstr=$(printf "%03d" $((i/60)))
+                        if [[ "$what" == "clean_mpassit" ]]; then
+                            cd $fcstwrkdir || return
+                            rm -rf mpassit
+                        else
+                            cd $mywrkdir || return
+                            for ((i=diag_start;i<=fcst_seconds;i+=OUTINVL)); do
+                                minstr=$(printf "%03d" $((i/60)))
 
-                            done=0
-                            for mem in $(seq 1 $ENS_SIZE); do
-                                memstr=$(printf "%02d" $mem)
-                                memdir="$mywrkdir/mem$memstr"
+                                done=0
+                                for mem in $(seq 1 $ENS_SIZE); do
+                                    memstr=$(printf "%02d" $mem)
+                                    memdir="$mywrkdir/mem$memstr"
 
-                                if [[ "$what" == "clean_mpassit" ]]; then
-                                    rm -rf $memdir
-                                    rm -f $mywrkdir/mpassit${minstr}_${mem}_*.log
-                                    (( done+=1 ))
-                                else
                                     donefile="$memdir/done.mpassit${minstr}_$memstr"
                                     if [[ -e $donefile ]]; then
                                         rm -f $mywrkdir/mpassit${minstr}_${mem}_*.log
                                         #rm $donefile
                                         (( done+=1 ))
                                     fi
+                                done
+
+                                if [[ $done -eq $ENS_SIZE ]]; then
+                                    rm -f queue.mpassit${minstr} running.mpassit$minstr
+                                    rm -f mem*/done.mpassit${minstr}_*
+                                    touch done.mpassit${minstr}
                                 fi
                             done
-
-                            if [[ $done -eq $ENS_SIZE ]]; then
-                                rm -f queue.mpassit${minstr} running.mpassit$minstr
-                                rm -f mem*/done.mpassit${minstr}_*
-                                touch done.mpassit${minstr}
-                            fi
-                        done
+                            rm -f ${mywrkdir}/mem??/MPASSIT_*.nc
+                        fi
                     fi
                     ;;
                 upp )
@@ -1360,7 +1362,7 @@ while [[ $# -gt 0 ]]
                 overwrite=$2
                 shift
             else
-                echo "ERROR: option for '-k' can only be [0-2], but got \"$2\"."
+                echo -e "${RED}ERROR${NC}: option for '-k' can only be [0-2], but got \"$2\"."
                 usage 1
             fi
             ;;
@@ -1371,7 +1373,7 @@ while [[ $# -gt 0 ]]
             if [[ -d $2 ]]; then
                 TEMPDIR=$2
             else
-                echo "ERROR: Template directory \"$2\" does not exist."
+                echo -e "${RED}ERROR${NC}: Template directory \"$2\" does not exist."
                 usage 1
             fi
             shift
@@ -1386,7 +1388,7 @@ while [[ $# -gt 0 ]]
             elif [[ ${2^^} == "CHEYENNE" ]]; then
                 machine=Cheyenne
             else
-                echo "ERROR: Unsupported machine name, got \"$2\"."
+                echo -e "${RED}ERROR${NC}: Unsupported machine name, got \"$2\"."
                 usage 1
             fi
             shift
@@ -1395,7 +1397,7 @@ while [[ $# -gt 0 ]]
             if [[ $2 =~ ^[0-9]{12}$ ]]; then
                 initdatetime=$2
             else
-                echo "ERROR: Initial time should be YYYYmmddHHMM, got \"$2\"."
+                echo -e "${RED}ERROR${NC}: Initial time should be YYYYmmddHHMM, got \"$2\"."
                 usage 1
             fi
             shift
@@ -1412,7 +1414,7 @@ while [[ $# -gt 0 ]]
             elif [[ $2 =~ ^[0-9]{4}$ ]]; then
                 eventtime=${2}
             else
-                echo "ERROR: Start time should be in YYYYmmddHHMM or HHMM, got \"$2\"."
+                echo -e "${RED}ERROR${NC}: Start time should be in YYYYmmddHHMM or HHMM, got \"$2\"."
                 usage 1
             fi
             shift
@@ -1423,7 +1425,7 @@ while [[ $# -gt 0 ]]
             elif [[ $2 =~ ^[0-9]{4}$ ]]; then
                 endhrmin=$2
             else
-                echo "ERROR: End time should be in YYYYmmddHHMM or HHMM, got \"$2\"."
+                echo -e "${RED}ERROR${NC}: End time should be in YYYYmmddHHMM or HHMM, got \"$2\"."
                 usage 1
             fi
             shift
@@ -1472,7 +1474,7 @@ while [[ $# -gt 0 ]]
                 #echo $WORKDIR,$eventdate,$eventtime
             else
                 echo ""
-                echo "ERROR: unknown argument, get [$key]."
+                echo -e "${RED}ERROR${NC}: unknown argument, get [$key]."
                 usage 3
             fi
             ;;
@@ -1544,18 +1546,16 @@ stoptime_sec=$(date  -u -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
 if [[ -z $config_file ]]; then
     config_file="$WORKDIR/config.${eventdate}"
 else
-    if [[ ! -e ${config_file} ]]; then
-        if [[ -e ${WORKDIR}/${config_file} ]]; then
-            config_file="${WORKDIR}/${config_file}"
-        else
-            echo "ERROR: file ${config_file} not exist."
-            usage 1
-        fi
+    if [[ -e ${WORKDIR}/${config_file} ]]; then
+        config_file="${WORKDIR}/${config_file}"
+    else
+        echo -e "${RED}ERROR${NC}: file ${config_file} not exist."
+        usage 1
     fi
 fi
 
 if [[ ! -r ${config_file} ]]; then
-    echo "ERROR: Configuration file ${config_file} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
+    echo -e "${RED}ERROR${NC}: Configuration file ${config_file} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
     exit 2
 fi
 readconf ${config_file} COMMON fcst || exit $?
@@ -1569,14 +1569,14 @@ if [[ "${damode}" == "restart" ]]; then
 elif [[ "${damode}" == "init" ]]; then
     diag_start=0
 else
-    echo "ERROR: damode=${damode} is not supported."
+    echo -e "${RED}ERROR${NC}: damode=${damode} is not supported."
     usage 1
 fi
 
 if [[ "${mpscheme}" == "mp_nssl2m" || "${mpscheme}" == "Thompson" ]]; then
     :
 else
-    echo "ERROR: mpscheme=${mpscheme} is not supported."
+    echo -e "${RED}ERROR${NC}: mpscheme=${mpscheme} is not supported."
     usage 1
 fi
 
@@ -1623,12 +1623,12 @@ elif [[ "${jobs[*]}" == @(clean_fcst|clean_mpassit|clean_upp) ]]; then
     )
     cleanjob="${jobs[*]}"
 
-    echo -e "\nWARNING: Clean ${cleanmsg[$cleanjob]} from $(date -u -d @${starttime_sec} +%Y%m%d_%H:%M:%S) to $(date -u -d @${stoptime_sec} +%Y%m%d_%H:%M:%S)"
+    echo -e "\n${BROWN}WARNING${NC}: Clean ${cleanmsg[$cleanjob]} from $(date -u -d @${starttime_sec} +%Y%m%d_%H:%M:%S) to $(date -u -d @${stoptime_sec} +%Y%m%d_%H:%M:%S)"
     echo -e   "         in ${WORKDIR}/${eventdate}/fcst?\n"
     echo -n "[YES,NO]? "
     read -r doit
     if [[ ${doit^^} == "YES" ]]; then
-        echo -e "\nWARNING: ${cleanmsg[$cleanjob]} will be cleaned."
+        echo -e "\n${BROWN}WARNING${NC}: ${cleanmsg[$cleanjob]} will be cleaned."
         run_clean $starttime_sec $stoptime_sec ${cleanjob}
     else
         echo -e "\nGot \"${doit^^}\", do nothing."

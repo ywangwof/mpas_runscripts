@@ -1123,6 +1123,21 @@ function write_runtimeconfig {
 # Except for comments which must start with "# " in this file, the syntax
 # will be the same as a Bash shell script.
 #
+# [COMMON] variables
+#
+#   daffix:     DA & fcst cycle work directory affix, default: dacycles/fcst
+#               if not empty, use dacyles.\${daffix}/fcst.\${daffix}
+#   damode:     DA cycles mode, either "restart" or "init"
+#
+#   mpscheme:   Microphysics scheme, valid values are ('mp_nssl2m', 'Thompson')
+#   sfclayer_schemes:   suite,sf_monin_obukhov_rev,sf_monin_obukhov,sf_mynn,off
+#   pbl_schemes:        suite,bl_ysu,bl_myj,bl_mynn,off
+#
+#        Note: Please keep "sfclayer_schemes" & "pbl_schemes" to be 3-element arrays,
+#              Otherwise, a script change will be needed
+#
+#   vertLevel_file:  File name for the vertical coordonates, works with "make_ics.sh" & "make_lbc.sh" only
+#
 
 [COMMON]
     nensics=36
@@ -1130,21 +1145,17 @@ function write_runtimeconfig {
     EXTINVL=3600
 
     domname="${domname}"
-    daffix="${affix}"           # DA & fcst cycle work directory affix, default: dacycles/fcst
-                                # otherwise dacyles.\${daffix}/fcst.\${daffix}
-    damode="${damode}"          # DA cycles mode, either "restart" or "init"
+    daffix="${affix}"
+    damode="${damode}"
 
     MPASLSM='sf_ruc'
     MPASNFLS=9
 
-    mpscheme='mp_nssl2m'                        # Microphysics scheme, valid values are ('mp_nssl2m', 'Thompson')
+    mpscheme='mp_nssl2m'
     sfclayer_schemes=('sf_monin_obukhov_rev' 'sf_monin_obukhov' 'sf_mynn')
-                                                # suite,sf_monin_obukhov_rev,sf_monin_obukhov,sf_mynn,off (default: suite)
-                                                # Keep its 3-elements, Otherwise, need a script change
-    pbl_schemes=('bl_ysu' 'bl_myj' 'bl_mynn')   # suite,bl_ysu,bl_myj,bl_mynn,off  (default: suite)
-                                                # Keep its 3-elements
+    pbl_schemes=('bl_ysu' 'bl_myj' 'bl_mynn')
 
-    vertLevel_file="${fixed_level}"             # works make_ics.sh & make_lbc.sh only
+    vertLevel_file="${fixed_level}"
 
     WPSGEOG_PATH="${WPSGEOG_PATH}"
 
@@ -1344,7 +1355,7 @@ while [[ $# -gt 0 ]]
             shift
             ;;
         -x)
-            affix=".$2"
+            affix="$2"
             shift
             ;;
         -l)
@@ -1533,8 +1544,8 @@ else    # Vecna at NSSL
     modulename="env.mpas_smiol"
     #source ${rootdir}/modules/${modulename}
     WPSGEOG_PATH="/scratch/ywang/MPAS/WPS_GEOG/"
-    wgrib2path="/scratch/ywang/tools/hpc-stack/intel-2021.8.0/wgrib2/2.0.8/bin/wgrib2"
-    nckspath="/scratch/software/miniconda3/bin/ncks"
+    wgrib2path="/scratch/ywang/tools/gnu/bin/wgrib2"
+    nckspath="/home/yunheng.wang/tools/micromamba/envs/wofs_an/bin/ncks"
     gpmetis="/scratch/ywang/tools/bin/gpmetis"
     export LD_LIBRARY_PATH=/scratch/ywang/MPAS/tools/lib
     nclpath="/scratch/software/miniconda3/bin/ncl"
@@ -1610,7 +1621,7 @@ exedir="$rootdir/exec"
 #
 # write runtime configuration file
 #
-caseconfig="${WORKDIR}/${caseconfig-config.${eventdate}}"
+caseconfig="${WORKDIR}/${caseconfig-config.${eventdate}${affix}}"
 write_runtimeconfig "$caseconfig"
 
 if [[ " ${jobs[*]} " == " setup " ]]; then exit 0; fi

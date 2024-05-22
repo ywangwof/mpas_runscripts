@@ -5,9 +5,9 @@
 #
 # o mkwrkdir
 # o submit_a_jobscript
-# o check_and_resubmit
+# o check_job_status
 # o get_jobarray_str         # Retrieve job array option string based on job scheduler
-# o group_jobs_for_pbs       # Group job numbers for PBS job array option "-J X-Y[:Z]%num"
+# o group_numbers_by_steps   # Group job numbers for PBS job array option "-J X-Y[:Z]%num"
 # o join_by                  # Join array into a string by a separator
 # o readconf                 # Read config file, written from "setup_mpas-wofs_grid.sh"
 # o convert2days             # Convert date/time strings to days/seconds since 1601-01-01
@@ -31,7 +31,7 @@ function mkwrkdir {
     #    X starts from 0, the less the number, the backup directory is newer.
     #
     if [[ $# -ne 2 ]]; then
-        echo "ERROR: argument in mkwrkdir, get \"$*\"."
+        echo -e "${RED}ERROR${NC}: argument in mkwrkdir, get \"$*\"."
         exit 0
     fi
 
@@ -59,7 +59,7 @@ function mkwrkdir {
                 mv $olddir $bakdir
             done
             bakdir="$basedir/${namedir}.bak0"
-            echo "Baking $mydir --> $bakdir ..."
+            echo "Backing $mydir --> $bakdir ..."
             mv $mydir $bakdir
         fi
     fi
@@ -99,7 +99,7 @@ function submit_a_jobscript {
     sed -f $sedscript $myjobtemp > $myjobscript
     # shellcheck disable=SC2154
     if [[ ${verb} -eq 1 ]]; then
-        echo "$$-${FUNCNAME[0]}: Generated job script: \"$myjobscript\" "
+        echo -e "${DARK}${FUNCNAME[1]}:${NC} Generated job script: \"$myjobscript\" "
         echo "                   from template: \"$myjobtemp\" "
         echo "                   with sed file: \"$sedscript\"  "
     else
@@ -107,7 +107,7 @@ function submit_a_jobscript {
     fi
 
     # shellcheck disable=SC2154
-    if [[ $dorun == true ]]; then echo -n "Submitting $myjobscript .... "; fi
+    if [[ $dorun == true ]]; then echo -en "${DARK}${FUNCNAME[1]}:${NC} Submitting $myjobscript .... "; fi
     # shellcheck disable=SC2154
     $runcmd ${myjoboption} "$myjobscript"
     if [[ $dorun == true && $? -eq 0 ]]; then touch $mywrkdir/queue.$myjobname; fi
@@ -116,7 +116,7 @@ function submit_a_jobscript {
 
 ########################################################################
 
-function check_and_resubmit {
+function check_job_status {
     #local jobnames=$1                  # Comment out, read $1 as an array below
     local mywrkdir=$2
     local donenum=$3                    # total number of jobs
@@ -156,7 +156,7 @@ function check_and_resubmit {
         runjobs+=("$line");
     done < <(seq 1 $donenum)
 
-    echo "$$-${FUNCNAME[0]}: Waiting for ensemble jobs of \"${jobname}\" in ${mywrkdir}"
+    echo -e "${DARK}${FUNCNAME[1]}:${NC} Waiting for ensemble jobs of ${WHITE}${jobname}${NC} in ${mywrkdir}"
     numtry=0
     done=0; error=0; running=0
     while [[ $numtry -le $numtries ]]; do
@@ -167,7 +167,7 @@ function check_and_resubmit {
             donefile="$memdir/done.${jobname}_$memstr"
             errorfile="$memdir/error.${jobname}_$memstr"
 
-            if [[ $verb -eq 1 ]]; then echo "$$-${FUNCNAME[0]}: Checking $donefile"; fi
+            if [[ $verb -eq 1 ]]; then echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking $donefile"; fi
             while [[ ! -e $donefile ]]; do
                 if [[ -e $errorfile ]]; then
                     jobarrays+=("$mem")
@@ -195,14 +195,14 @@ function check_and_resubmit {
         elif [[ ${#jobarrays[@]} -gt 0 && $numtry -lt $numtries ]]; then    # failed jobs found
             if [[ $myjobscript == *.slurm ]]; then
                 runjobs=( "${jobarrays[@]}" )
-                echo "$$-${FUNCNAME[0]}: ${numtry}/${numtries} - Try these failed jobs again: ${runjobs[*]}"
+                echo -e "${DARK}${FUNCNAME[1]}:${NC} ${numtry}/${numtries} - Try these failed jobs again: ${runjobs[*]}"
                 jobs_str=$(get_jobarray_str 'slurm' "${runjobs[@]}")
                 $runcmd ${jobs_str} $myjobscript
                 error=0                            # Perform another try
             else
-                jobgroupstr=$(group_jobs_for_pbs "${runjobs[@]}")
+                jobgroupstr=$(group_numbers_by_steps "${runjobs[@]}")
                 IFS=";" read -r -a jobgroups <<< "${jobgroupstr}"; unset IFS  # convert string to array
-                #while IFS=';' read -r line; do jobgroups+=("$line"); done < <(group_jobs_for_pbs "${runjobs[*]}")
+                #while IFS=';' read -r line; do jobgroups+=("$line"); done < <(group_numbers_by_steps "${runjobs[*]}")
                 for jobg in "${jobgroups[@]}"; do
                     IFS=" " read -r -a jobgar <<< "${jobg}"; unset IFS        # convert string to array
                     jobgstr=$(get_jobarray_str 'pbs' "${jobgar[@]}")
@@ -224,16 +224,16 @@ function check_and_resubmit {
     #
     # Output a message and then return or exit
     #
-    outmessage="Status of $jobname: done: $done"
+    outmessage="Status of $jobname: done: ${GREEN}$done${NC}"
     if [[ $running -gt 0 ]]; then
-        outmessage="$outmessage; queued/running: $running"
+        outmessage="$outmessage; queued/running: ${BROWN}$running${NC}"
     fi
 
     if [[ ${#jobarrays[@]} -gt 0 ]]; then
-        outmessage="$outmessage; failed: ${#jobarrays[@]} - [${jobarrays[*]}]"
+        outmessage="$outmessage; failed: ${#jobarrays[@]} - [${LIGHT_RED}${jobarrays[*]}${NC}]"
     fi
 
-    echo "$$-${FUNCNAME[0]}: $outmessage"
+    echo -e "${DARK}${FUNCNAME[1]}:${NC} $outmessage"
     if [[ $done -lt $donenum ]]; then
         if $checkonly; then
             return
@@ -245,34 +245,34 @@ function check_and_resubmit {
 
 ########################################################################
 
-function group_jobs_for_pbs {
-    local jobnos=("${@}")
+function group_numbers_by_steps {
+    local orgnumbers=("${@}")
 
-    # Sort job nos
-    IFS=$'\n' origjobstr="${jobnos[*]}"; unset IFS
-    #mapfile -t sortedjobno < <(sort -g <<<"${origjobstr}")
-    local sortedjobno=()
+    # Sort the original number array
+    IFS=$'\n' orgnumberstr="${orgnumbers[*]}"; unset IFS
+    #mapfile -t sortednumbers < <(sort -g <<<"${orgnumberstr}")
+    local sortednumbers=()
     while IFS='' read -r line; do
-        sortedjobno+=("$line")
-    done < <(sort -g <<<"${origjobstr}")
+        sortednumbers+=("$line")
+    done < <(sort -g <<<"${orgnumberstr}")
 
     # Find continous job nos
-    local ars=()
-    local sortedar=("${sortedjobno[@]}")
+    local retarray=()
+    local workarray=("${sortednumbers[@]}")
 
-    local ar2=("${sortedar[@]}")
+    local ar2=("${workarray[@]}")
     for step in $(seq 1 10); do
 
-        if [[ ${#sortedar[@]} -lt 3 ]]; then break; fi
+        if [[ ${#workarray[@]} -lt 3 ]]; then break; fi
 
-        #echo "step=${step}: ${sortedar[*]}"
-        for cidx in "${!sortedar[@]}"; do
+        #echo "step=${step}: ${workarray[*]}"
+        for idx in "${!workarray[@]}"; do
 
-            local prev=${sortedar[$cidx]}
+            local prev=${workarray[$idx]}
 
             #echo "    prev=$prev: ${ar2[*]}"
 
-            if [[ " ${ar2[*]} " =~ \ ${prev}\  ]]; then   # the number is still in the left set
+            if [[ " ${ar2[*]} " =~ \ ${prev}\  ]]; then   # the number is still in the remain set
 
                 local ar1=("$prev")
                 local dropset=()
@@ -290,7 +290,7 @@ function group_jobs_for_pbs {
                 done
 
                 if [[ ${#ar1[@]} -ge 3 ]]; then
-                    ars+=("${ar1[*]}")
+                    retarray+=("${ar1[*]}")
                     for didx in "${dropset[@]}"; do
                         unset -v "ar2[$didx]"
                     done
@@ -299,17 +299,17 @@ function group_jobs_for_pbs {
                 fi
             fi
         done
-        sortedar=("${ar2[@]}")
+        workarray=("${ar2[@]}")
     done
 
     # every element contains at least two jobs numbers even they are not continous
-    for ((i=0;i<${#ar2[@]};i+=2)); do
+    for ((i=0;i<${#workarray[@]};i+=2)); do
         (( j=i+1 ))
-        ars+=("${ar2[$i]} ${ar2[$j]}")
+        retarray+=("${workarray[$i]} ${workarray[$j]}")
     done
 
-    IFS=$';' retjobstr="${ars[*]}"; unset IFS    # convert array to string
-    echo "${retjobstr}"
+    IFS=$';' retnumberstr="${retarray[*]}"; unset IFS
+    echo "${retnumberstr}"
 }
 
 ########################################################################
@@ -355,7 +355,7 @@ function join_by {
 
 function readconf {
     if [[ $# -lt 2 ]]; then
-        echo "ERROR: No enough argument to function \"readconf\"."
+        echo -e "${RED}ERROR${NC}: No enough argument to function \"readconf\"."
         exit 1
     fi
     local configfile=$1
@@ -365,7 +365,7 @@ function readconf {
     local debug=0
 
     if [[ ! -e $configfile ]]; then
-        echo "ERROR: Case configuration file: $configfile not exist. Have you run setup_mpas-wofs_grid.sh?"
+        echo -e "${RED}ERROR${NC}: Case configuration file: $configfile not exist. Have you run setup_mpas-wofs_grid.sh?"
         exit 1
     fi
 
@@ -602,11 +602,18 @@ function clean_mem_runfiles {
         memdir="${jobname}_$memstr"
         donefile="$memdir/done.${jobname}_$memstr"
 
-        #echo $donefile
+        #echo $donefile, $memdir
         if [[ -e $donefile ]]; then
+            if [[ $verb -eq 1 ]]; then
+                echo "$donefile exist, delete \"$memdir\" & \"${jobname}_${mem}_*.log\" ...."
+            fi
             rm -rf $memdir
             rm -f  ${jobname}_${mem}_*.log
             (( done+=1 ))
+        else
+            if [[ $verb -eq 1 ]]; then
+                echo "$donefile not found. Skip deleting \"$memdir\" & \"${jobname}_${mem}_*.log\"."
+            fi
         fi
     done
 
@@ -618,3 +625,39 @@ function clean_mem_runfiles {
 
 ########################################################################
 
+# Black        0;30     Dark Gray     1;30
+# Red          0;31     Light Red     1;31
+# Green        0;32     Light Green   1;32
+# Brown/Orange 0;33     Yellow        1;33
+# Blue         0;34     Light Blue    1;34
+# Purple       0;35     Light Purple  1;35
+# Cyan         0;36     Light Cyan    1;36
+# Light Gray   0;37     White         1;37
+# ---------- constant part!
+
+# shellcheck disable=SC2034
+if [ -t 1 ]; then
+    NC='\033[0m'            # No Color
+    BLACK='\033[0;30m';     DARK='\033[1;30m'
+    RED='\033[0;31m';       LIGHT_RED='\033[1;31m'
+    GREEN='\033[0;32m';     LIGHT_GREEN='\033[1;32m'
+    BROWN='\033[0;33m';     YELLOW='\033[1;33m'
+    BLUE='\033[0;34m';      LIGHT_BLUE='\033[1;34m'
+    PURPLE='\033[0;35m';    LIGHT_PURPLE='\033[1;35m'
+    CYAN='\033[0;36m';      LIGHT_CYAN='\033[1;36m'
+    LIGHT='\033[0;37m';     WHITE='\033[1;37m'
+else
+    NC=''
+    BLACK='';     DARK=''
+    RED='';       LIGHT_RED=''
+    GREEN='';     LIGHT_GREEN=''
+    BROWN='';     YELLOW=''
+    BLUE='';      LIGHT_BLUE=''
+    PURPLE='';    LIGHT_PURPLE=''
+    CYAN='';      LIGHT_CYAN=''
+    LIGHT='';     WHITE=''
+fi
+#    vvvv vvvv -- EXAMPLES -- vvvv vvvv
+# echo -e "I ${RED}love${NC} Stack Overflow"
+# printf "I ${RED}love${NC} Stack Overflow\n"
+#

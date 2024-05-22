@@ -8,7 +8,10 @@ eventdateDF=$(date -u +%Y%m%d%H%M)
 run_dir=${top_dir}/run_dirs
 script_dir=${top_dir}/scripts
 post_dir=${run_dir}/summary_files
+image_dir=${run_dir}/image_files
+FCST_dir=${run_dir}/FCST
 
+source ${script_dir}/Common_Utilfuncs.sh
 #-----------------------------------------------------------------------
 
 function usage {
@@ -24,7 +27,6 @@ function usage {
     echo "               mpas:     Delete run-time file in a MPAS run direcotry"
     echo "               mpasm:    Delete MPAS run-time files for all ensemble members in \"fcst_??\""
     echo "               dacycles: Delete wofs_mpas_??.restart.* at all DA cycles except for the top hour (00)"
-    echo "               fcst:     Delete wofs_mpas_??.{history,diag}.* at all forecast cycles"
     echo "               post:     Delate all summary files for this time"
     echo " "
     echo "    OPTIONS:"
@@ -32,7 +34,7 @@ function usage {
     echo "              -c                  To do the task, otherwise show the command to be run only"
     echo "              -v                  Verbose mode"
     echo "              -r  run_dir         Working directory"
-#    echo "              -d  wofs_mpas       Domain name to be used"
+    echo "              -d  wofs_mpas       Domain name to be used"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt    = $eventdateDF"
@@ -58,7 +60,7 @@ if [[ $((10#$eventhour)) -lt 12 ]]; then
 fi
 
 runtime=""
-#domname="wofs_mpas"
+domname="wofs_mpas"
 taskname=""
 
 #-----------------------------------------------------------------------
@@ -83,10 +85,10 @@ while [[ $# -gt 0 ]]; do
         -v)
             verb=true
             ;;
-        #-d)
-        #    domname=$2
-        #    shift
-        #    ;;
+        -d)
+            domname=$2
+            shift
+            ;;
         -r)
             run_dir=$2
             shift
@@ -141,7 +143,7 @@ mpas )
 
     cd "${run_dir}" || usage 1
     ${show} rm -rf log.{atmosphere,init_atmosphere}.*.{err,out} namelist.output core*
-    ${show} rm -rf ./wofs_mpas_??.{diag,history}.*.nc  # *.restart.*
+    ${show} rm -rf ./${domname}_??.{diag,history}.*.nc  # *.restart.*
     ${show} rm -rf error.* done.fcst_?? dart_log.{nml,out}
     echo ""
     ;;
@@ -161,16 +163,19 @@ dacycles )
         echo "Remove MPAS restart files in ${run_dir}/${eventdate}/dacycles/${wrksubdir} ${jobsubstr} ..."
     fi
 
+    show="echo"
+    echo -e "${LIGHT_RED}WARNING${NC}: Please use ${BROWN}${script_dir}/run_dacycles.sh${NC} ${LIGHT_BLUE}${eventdate}${runtime}${NC} ${GREEN}clean${NC} for this task"
+
     cd "${run_dir}/${eventdate}/dacycles/${wrksubdir}" || usage 1
     if [[ -z ${runtime} ]]; then             # All time cycles
-        $show find ??[134]? -name "wofs_mpas_??.restart.*" -exec rm {} \;
-        $show find ??[134]? -name "wofs_mpas_??.analysis" -exec rm {} \;
-        $show find ??[134]? -name "preassim_member_00??.nc" -exec rm {} \;
-        $show find ??[134]? -name "output_*.nc" -exec rm {} \;
+        $show find ./??[134]? -name "${domname}_??.{restart,diag,history}.*" -exec rm {} \;
+        $show find ./??[134]? -name "${domname}_??.analysis" -exec rm {} \;
+        $show find ./??[134]? -name "preassim_*.nc" -exec rm {} \;
+        $show find ./??[134]? -name "output_*.nc" -exec rm {} \;
     else
-        $show find . -name "wofs_mpas_??.restart.*" -exec rm {} \;
-        $show find . -name "wofs_mpas_??.analysis" -exec rm {} \;
-        $show find . -name "preassim_member_00??.nc" -exec rm {} \;
+        $show find . -name "${domname}_??.{restart,diag,history}.*" -exec rm {} \;
+        $show find . -name "${domname}_??.analysis" -exec rm {} \;
+        $show find . -name "preassim_*.nc" -exec rm {} \;
         $show find . -name "output_*.nc" -exec rm {} \;
     fi
     ;;
@@ -178,17 +183,37 @@ fcst )
     if [[ $verb == true ]]; then
         echo "Remove MPAS history/diag files in ${run_dir}/${eventdate}fcst/${wrksubdir} ${jobsubstr} ..."
     fi
+    show="echo"
+    echo -e "${LIGHT_RED}WARNING${NC}: Please use ${BROWN}${script_dir}/run_fcst.sh${NC} ${LIGHT_BLUE}${eventdate}${runtime}${NC} ${GREEN}clean${NC} for this task"
 
     cd "${run_dir}/${eventdate}/fcst/${wrksubdir}" || usage 1
     $show find . -name "wofs_mpas_??.{history,diag}.*" -exec rm {} \;
     ;;
 post )
+    #-------------------------------------------------------------------
     if [[ $verb == true ]]; then
-        echo "Remove Summary files in ${post_dir}/${eventdate}/${wrksubdir} ${jobsubstr} ..."
+        echo "Delete FCST ${eventdate} files from ${FCST_dir} ..."
     fi
 
-    cd "${post_dir}/${eventdate}/${wrksubdir}" || usage 1
-    $show rm -rf ./*
+    cd "${FCST_dir}" || usage 1
+    $show rm -rf ${eventdate}
+
+    #-------------------------------------------------------------------
+    if [[ $verb == true ]]; then
+        echo "Delete Summary files ${eventdate} from ${post_dir} ..."
+    fi
+
+    cd "${post_dir}" || usage 1
+    $show rm -rf ${eventdate}
+
+    #-------------------------------------------------------------------
+    if [[ $verb == true ]]; then
+        echo "Delete Image files ${eventdate}_mpasV8.0 from ${image_dir} ..."
+    fi
+
+    cd "${image_dir}" || usage 1
+    $show rm -rf ${eventdate}_mpasV8.0
+
     ;;
 * )
     echo "ERROR: unsuported task: \"${taskname}\"."

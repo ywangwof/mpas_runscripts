@@ -52,7 +52,6 @@ fi
 inv_file="INVFILE"
 eventdays="EVENTDAYS"
 eventsecs="EVENTSECS"
-time_str="MPASTIME"
 
 export PYTHONPATH="WAN_PATH"
 
@@ -66,7 +65,7 @@ for mem in "${mem_arr[@]}"; do
 
     # Run the python programs
 
-    bkg_file="wofs_mpas_${memstr}.restart.${time_str}.nc"
+    bkg_file=$(<update_states_out.txt)
     RUNCMD python WAN_PATH/add_pert_where_high_refl.py ${inv_file} ${bkg_file} 9000.0 3000.0 0.50 0.50 0.0 0.50 0.50 0.0 ${eventsecs} ${eventdays} ${mem} mpas &
 
     #if [[ $? -eq 0 ]]; then
