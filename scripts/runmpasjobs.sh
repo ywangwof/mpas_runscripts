@@ -154,17 +154,19 @@ esac
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-log_dir="${run_dir}/${eventdate}"
+if [[ -z $show ]]; then                 # Not show jobs only
+    log_dir="${run_dir}/${eventdate}"
 
-if [[ ! -d ${log_dir} ]]; then
-    echo "ERROR: ${log_dir} not exists."
-    exit 1
-fi
+    if [[ ! -d ${log_dir} ]]; then
+        echo "ERROR: ${log_dir} not exists."
+        exit 1
+    fi
 
-if [ -t 1 ]; then       # interactive
-    exec > >(tee -ia "${log_dir}/log.${cmd}${affix}") 2>&1
-else                    # "at job"
-    exec 1>> "${log_dir}/log.${cmd}${affix}" 2>&1
+    if [ -t 1 ]; then       # interactive
+        exec > >(tee -ia "${log_dir}/log.${cmd}${affix}") 2>&1
+    else                    # "at job"
+        exec 1>> "${log_dir}/log.${cmd}${affix}" 2>&1
+    fi
 fi
 
 echo "=== $(date +%Y%m%d_%H:%M:%S) - $0 ${saved_args} ==="
@@ -175,19 +177,19 @@ dacycles )
     if [ -t 1 ]; then # "interactive"
         echo "$cmd $runtime in $(pwd)"
     fi
-    ${show} "${script_dir}/run_dacycles.sh" "${runtime}" -r
+    ${show} "${script_dir}/run_dacycles.sh" -f config.${eventdate}${affix} "${runtime}" -r
     ;;
 fcst )
     cd "${script_dir}" || exit 1
     if [ -t 1 ]; then # "interactive"
         echo "$cmd $runtime in $(pwd)"
     fi
-    ${show} "${script_dir}/run_fcst.sh" "${runtime}" -r -w
+    ${show} "${script_dir}/run_fcst.sh" -f config.${eventdate}${affix} "${runtime}" -r -w
     ;;
 
 post )
     enddate=${eventdate}
-    if [[ $((10#endtime)) -lt 1200 ]]; then
+    if [[ $((10#$endtime)) -lt 1200 ]]; then
         enddate=$(date -d "${eventdate} 1 day" +%Y%m%d)
     fi
 

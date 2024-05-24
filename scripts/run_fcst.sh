@@ -95,6 +95,17 @@ eventdateDF=$(date -u +%Y%m%d)
 #
 #     4. run_fcst.sh [YYYYmmddHH] [run_dirs] [jobnames]
 #
+# HOW CLEAN COMMAND WORKS:
+#
+#     1. By default "clean" will only delete working files, log files and
+#        intermediated files for each task (both mpas and mpassit), but leave
+#        the output file from these tasks as is.
+#     2. "-c" option will delete the output files from this task, but
+#        leave the runtime file and job script. So that user can run this
+#        task again manually. By default it works for both tasks (mpas and mpassit),
+#        if a task name is given, it will clean that task only.
+#     3. "-a" option will clean the whole work directory for the corresponding task.
+#
 #-----------------------------------------------------------------------
 
 function usage {
@@ -107,7 +118,7 @@ function usage {
     echo "               YYYYmmdd:     run all cycles from $eventtime to 0300. Or use options \"-s\" & \"-e\" to specify cycles."
     echo "               YYYYmmddHHMM: run this forecast cycle only."
     echo "    WORKDIR  - Run Directory"
-    echo "    JOBS     - One or more jobs from [mpas,mpassit,upp,clean] or [clean_fcst,clean_mpassit,clean_upp]"
+    echo "    JOBS     - One or more jobs from [mpas,mpassit,upp,clean]"
     echo "               Default all jobs in sequence"
     echo " "
     echo "    OPTIONS:"
@@ -119,6 +130,10 @@ function usage {
     echo "              -t  DIR             Template directory for runtime files"
     echo "              -w                  Hold script to wait for all job conditions are satified and submitted (for mpassit & upp)."
     echo "                                  By default, the script will exit after submitting all possible jobs."
+    echo "              -c                  Works with Clean command only"
+    echo "                                  None (default): Delete output files also."
+    echo "                                  mpas/mpassit:    Delete output files from the specific task only."
+    echo "              -a                  Works with Clean command only. Same as -c for deep clean the whole directory"
     echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
     echo "              -i  YYYYmmddHHMM    Initial time, default: same as start time from the command line argument"
     echo "              -s  YYYYmmddHHMM    Start date & time of the forecast cycles"
@@ -1162,13 +1177,40 @@ function fcst_driver() {
 ########################################################################
 
 function run_clean {
-    # $1     $2    $3
-    # start  end   what
+    # $1     $2    $3      $4
+    # start  end   option  tasks
     local start_sec=$1
     local end_sec=$2
-    local what=$3
+    local coption=$3
+    local jobs
+    read -r -a jobs <<< "$4"
 
     wrkdir=$rundir/fcst${daffix}
+
+    if [[ "$coption" == "-a" ]]; then
+        declare -A cleanmsg=(
+            [mpas]="all MPAS forecast files"
+            [mpassit]="all MPASSIT converted files on WRF grid"
+            [upp]="all UPP converted grib2 files"
+        )
+        for job in "${jobs[@]}"; do
+            echo -e "\n${BROWN}WARNING${NC}: Delete ${cleanmsg[$job]} from $(date -u -d @${start_sec} +%Y%m%d_%H:%M:%S) to $(date -u -d @${end_sec} +%Y%m%d_%H:%M:%S)"
+            echo -e "         in ${wrkdir} ?\n"
+            echo -n "[YES,NO]? "
+            read -r doit
+            if [[ ${doit^^} == "YES" ]]; then
+                echo -e "\n${BROWN}WARNING${NC}: ${cleanmsg[$job]} will be cleaned."
+            else
+                echo -e "\nGot \"${doit^^}\", do nothing."
+                return
+            fi
+        done
+    fi
+
+    local show="echo"
+    if [[ $dorun == true ]]; then
+        show=""
+    fi
 
     for isec in $(seq ${start_sec} ${fcst_launch_intvl} ${end_sec} ); do
         #timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
@@ -1185,14 +1227,14 @@ function run_clean {
 
             if [[ $verb -eq 1 ]]; then echo "    Cleaning working directory $fcstwrkdir"; fi
 
-            for dirname in mpas mpassit upp; do
+            for dirname in "${jobs[@]}"; do
 
                 cd $fcstwrkdir || return
 
                 case $dirname in
                 mpas )
-                    rm -f fcst_??/error.fcst_* fcst_??/log.????.abort fcst_??/dart_log.*
-                    rm -f fcst_??/log.atmosphere.????.{out,err}  fcst_??/namelist.output fcst_*_*.log
+                    ${show} rm -f fcst_??/error.fcst_* fcst_??/log.????.abort fcst_??/dart_log.*
+                    ${show} rm -f fcst_??/log.atmosphere.????.{out,err}  fcst_??/namelist.output fcst_*_*.log
                     #echo "clean mpas in $fcstwrkdir"
                     #clean_mem_runfiles "fcst" $fcstwrkdir $ENS_SIZE
                     done=0
@@ -1200,19 +1242,21 @@ function run_clean {
                         memstr=$(printf "%02d" $mem)
                         memdir="$fcstwrkdir/fcst_$memstr"
 
-                        if [[ "$what" == "clean_fcst" ]]; then
-                            rm -rf $memdir
-                            rm -f fcst_${mem}_*.log
+                        if [[ "$coption" == "-a" ]]; then
+                            ${show} rm -rf $memdir
+                            ${show} rm -f fcst_${mem}_*.log
                             (( done+=1 ))
                         else
                             donefile="$memdir/done.fcst_$memstr"
                             if [[ -e $donefile ]]; then
-                                rm -f fcst_${mem}_*.log
+                                ${show} rm -f fcst_${mem}_*.log
                                 #rm $donefile
                                 (( done+=1 ))
                             fi
                             #ls $memdir/${domname}_??.{diag,history}.*.nc
-                            rm -f $memdir/${domname}_??.{diag,history}.*.nc
+                            if [[ "$coption" == "-c" ]]; then
+                                ${show} rm -f $memdir/${domname}_??.{diag,history}.*.nc
+                            fi
                         fi
                     done
                     if [[ $done -eq $ENS_SIZE ]]; then
@@ -1224,9 +1268,9 @@ function run_clean {
                 mpassit )
                     mywrkdir=$fcstwrkdir/mpassit
                     if [[ -d $mywrkdir ]]; then
-                        if [[ "$what" == "clean_mpassit" ]]; then
+                        if [[ "$coption" == "-a" ]]; then
                             cd $fcstwrkdir || return
-                            rm -rf mpassit
+                            ${show} rm -rf mpassit
                         else
                             cd $mywrkdir || return
                             for ((i=diag_start;i<=fcst_seconds;i+=OUTINVL)); do
@@ -1239,7 +1283,7 @@ function run_clean {
 
                                     donefile="$memdir/done.mpassit${minstr}_$memstr"
                                     if [[ -e $donefile ]]; then
-                                        rm -f $mywrkdir/mpassit${minstr}_${mem}_*.log
+                                        ${show} rm -f $mywrkdir/mpassit${minstr}_${mem}_*.log
                                         #rm $donefile
                                         (( done+=1 ))
                                     fi
@@ -1251,7 +1295,9 @@ function run_clean {
                                     touch done.mpassit${minstr}
                                 fi
                             done
-                            rm -f ${mywrkdir}/mem??/MPASSIT_*.nc
+                            if [[ "$coption" == "-c" ]]; then
+                                ${show} rm -f ${mywrkdir}/mem??/MPASSIT_*.nc
+                            fi
                         fi
                     fi
                     ;;
@@ -1269,15 +1315,15 @@ function run_clean {
 
                                 postdir="$memdir/post_${minstr}"
 
-                                if [[ "$what" == "clean_mpassit" ]]; then
-                                    rm -rf $memdir
-                                    rm -f $mywrkdir/upp${minstr}_${mem}_*.log
+                                if [[ "$coption" == "-a" ]]; then
+                                    ${show} rm -rf $memdir
+                                    ${show} rm -f $mywrkdir/upp${minstr}_${mem}_*.log
                                     (( done+=1 ))
                                 else
                                     donefile="$memdir/done.upp${minstr}_$memstr"
                                     if [[ -e $donefile ]]; then
-                                        rm -f $mywrkdir/upp${minstr}_${mem}_*.log
-                                        rm -rf $postdir
+                                        ${show} rm -f $mywrkdir/upp${minstr}_${mem}_*.log
+                                        ${show} rm -rf $postdir
                                         (( done+=1 ))
                                     fi
                                 fi
@@ -1317,6 +1363,9 @@ jobwait=0
 runcmd="sbatch"
 dorun=true
 rt_run=false            # realtime run?
+
+cleanjobs=()
+cleanoption="clean"
 
 myhostname=$(hostname)
 if [[ "${myhostname}" == ln? ]]; then
@@ -1368,6 +1417,13 @@ while [[ $# -gt 0 ]]
             ;;
         -w)
             jobwait=1
+            ;;
+        -c | -a)
+            cleanoption="$key"
+            if [[ "$2" == "mpas" || "$2" == "mpassit" ]]; then
+                cleanjobs+=("$2")
+                shift
+            fi
             ;;
         -t)
             if [[ -d $2 ]]; then
@@ -1610,29 +1666,12 @@ RSTINVL_STR="10:00:00"         # turn off restart file output
 # Start the forecast driver
 #
 if [[ " ${jobs[*]} " =~ " mpas " || " ${jobs[*]} " =~ " mpassit " || " ${jobs[*]} " =~ " upp " ]]; then
-    # $1    $2    $3
-    # init start  end
-    fcst_driver $starttime_sec $stoptime_sec
+    fcst_driver $starttime_sec $stoptime_sec          #  $1: start     $2: end      in seconds
 elif [[ " ${jobs[*]} " =~ " clean " ]]; then
-    run_clean $starttime_sec $stoptime_sec
-elif [[ "${jobs[*]}" == @(clean_fcst|clean_mpassit|clean_upp) ]]; then
-    declare -A cleanmsg=(
-        [clean_fcst]="all MPAS forecast files"
-        [clean_mpassit]="all MPASSIT converted files on WRF grid"
-        [clean_upp]="all UPP converted grib2 files"
-    )
-    cleanjob="${jobs[*]}"
-
-    echo -e "\n${BROWN}WARNING${NC}: Clean ${cleanmsg[$cleanjob]} from $(date -u -d @${starttime_sec} +%Y%m%d_%H:%M:%S) to $(date -u -d @${stoptime_sec} +%Y%m%d_%H:%M:%S)"
-    echo -e   "         in ${WORKDIR}/${eventdate}/fcst?\n"
-    echo -n "[YES,NO]? "
-    read -r doit
-    if [[ ${doit^^} == "YES" ]]; then
-        echo -e "\n${BROWN}WARNING${NC}: ${cleanmsg[$cleanjob]} will be cleaned."
-        run_clean $starttime_sec $stoptime_sec ${cleanjob}
-    else
-        echo -e "\nGot \"${doit^^}\", do nothing."
+    if [[ ${#cleanjobs[@]} -eq 0 ]]; then
+        cleanjobs=("mpas" "mpassit" "upp")
     fi
+    run_clean "${starttime_sec}" "${stoptime_sec}" "${cleanoption}" "${cleanjobs[*]}"
 fi
 
 

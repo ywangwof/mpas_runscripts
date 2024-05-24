@@ -79,6 +79,17 @@ eventdateDF=$(date -u +%Y%m%d)
 #
 #     4. run_dacycles.sh [YYYYmmddHH] [run_dirs] [jobnames]
 #
+# HOW CLEAN COMMAND WORKS:
+#
+#     1. By default "clean" will only delete working files, log files and
+#        intermediated files for each task (both filter and mpas), but leave
+#        the output file from these tasks as is.
+#     2. "-c" option will delete the output files from this task, but
+#        leave the runtime file and job script. So that user can run this
+#        task again manually. By default it works for both tasks (filter and mpas),
+#        if a task name is given, it will clean that task only.
+#     3. "-a" option will clean the whole work directory for the corresponding task.
+
 #-----------------------------------------------------------------------
 
 function usage {
@@ -100,6 +111,10 @@ function usage {
     echo "              -v                  Verbose mode"
     echo "              -k  [0,1,2]         Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
     echo "                                  Default is 0 for ungrib, mpassit, upp and 1 for others"
+    echo "              -c                  Works with Clean command only"
+    echo "                                  None (default): Delete output files also."
+    echo "                                  filter/mpas:    Delete output files from the specific task only."
+    echo "              -a                  Works with Clean command only. Same as -c for deep clean the whole directory"
     echo "              -t  DIR             Template directory for runtime files"
     echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
     echo "              -i  YYYYmmddHHMM    Initial time, default: same as start time from the command line argument"
@@ -3190,14 +3205,40 @@ EOF
 ########################################################################
 
 function run_clean {
-    # $1    $2    $3
-    # start  end
+    # $1     $2    $3      $4
+    # start  end   option  tasks
     local start_sec=$1
     local end_sec=$2
-
-    local isec
+    local coption=$3
+    local jobs
+    read -r -a jobs <<< "$4"
 
     wrkdir="$rundir/dacycles${daffix}"
+
+    if [[ "$coption" == "-a" ]]; then
+        declare -A cleanmsg=(
+            [mpas]="all MPAS forecast files"
+            [filter]="the whole DA cycle directory"
+        )
+        for job in "${jobs[@]}"; do
+            echo -e "\n${BROWN}WARNING${NC}: Delete ${cleanmsg[$job]} from $(date -u -d @${start_sec} +%Y%m%d_%H:%M:%S) to $(date -u -d @${end_sec} +%Y%m%d_%H:%M:%S)"
+            echo -e "         in ${wrkdir} ?\n"
+            echo -n "[YES,NO]? "
+            read -r doit
+            if [[ ${doit^^} == "YES" ]]; then
+                echo -e "\n${BROWN}WARNING${NC}: ${cleanmsg[$job]} will be cleaned."
+            else
+                echo -e "\nGot \"${doit^^}\", do nothing."
+                return
+            fi
+        done
+    fi
+
+    local isec
+    local show="echo"
+    if [[ $dorun == true ]]; then
+        show=""
+    fi
 
     for isec in $(seq $start_sec $intvl_sec $end_sec ); do
         timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
@@ -3210,44 +3251,52 @@ function run_clean {
 
             if [[ $verb -eq 1 ]]; then echo "    Cleaning working directory $dawrkdir"; fi
 
-            for dirname in mpas filter update_states update_bc; do
+            for dirname in "${jobs[@]}"; do
 
                 cd $dawrkdir || return
 
                 case $dirname in
                 mpas )
-                    rm -f fcst_??/error.fcst_* fcst_??/log.????.abort fcst_??/dart_log.*
-                    rm -f fcst_??/log.atmosphere.????.{out,err}  fcst_??/namelist.output fcst_*_*.log
-                    rm -f fcst_??/${domname}_??.{diag,history}.*.nc
+                    ${show} rm -f fcst_??/error.fcst_* fcst_??/log.????.abort fcst_??/dart_log.*
+                    ${show} rm -f fcst_??/log.atmosphere.????.{out,err}  fcst_??/namelist.output fcst_*_*.log
+                    ${show} rm -f fcst_??/${domname}_??.{diag,history}.*.nc
 
                     if [[ "${eventtime}" =~ ??00 ]]; then
                         :       # keep lbc/{restart,init} for run MPAS free forecasts later
                     else
-                        rm -f fcst_??/${domname}_??.lbc.${timestr_file}.nc
-                        rm -f fcst_??/${domname}_??.{restart,init}.${timestr_file}.nc
+                        ${show} rm -f fcst_??/${domname}_??.lbc.${timestr_file}.nc
+                        ${show} rm -f fcst_??/${domname}_??.{restart,init}.${timestr_file}.nc
                     fi
 
-                    rm -f fcst_??/mpas_XYZ.pkl fcst_??/wofs_mpas_grid_kdtree.pkl fcst_??/refl_*.{txt,pkl}
-                    #if [[ $verb -eq 1 ]]; then echo "    clean mpas in $dawrkdir"; fi
-                    #clean_mem_runfiles "fcst" $dawrkdir $ENS_SIZE
+                    ${show} rm -f fcst_??/mpas_XYZ.pkl fcst_??/wofs_mpas_grid_kdtree.pkl fcst_??/refl_*.{txt,pkl}
+                    if [[ "$coption" == "-c" ]]; then
+                        ${show} rm -f fcst_??/${domname}_??.{restart,init}.*.nc
+                    elif [[ "$coption" == "-a" ]]; then
+                        ${show} rm -rf fcst_??
+                    fi
                     ;;
                 filter )
                     if [[ -e done.filter ]]; then
-                        rm -f error.filter dart_log.{nml,out} obs_seq_to_netcdf.log filter_*.log obs_diag.log
-                        rm -f preassim_*.nc output_*.nc
-                        find OBSDIR -type f -not -name "obs_seq.${timestr_curr}" -exec rm -f {} \;
-                        rm -f noise_mask_*.log noise_pert_*.log mpas_XYZ.pkl wofs_mpas_grid_kdtree.pkl refl_*.{txt,pkl}
-                        rm -f ${domname}_??.analysis
+                        ${show} rm -f error.filter dart_log.{nml,out} obs_seq_to_netcdf.log filter_*.log obs_diag.log
+                        ${show} rm -f preassim_*.nc output_*.nc
+                        ${show} find OBSDIR -type f -not -name "obs_seq.${timestr_curr}" -exec rm -f {} \;
+                        ${show} rm -f noise_mask_*.log noise_pert_*.log mpas_XYZ.pkl wofs_mpas_grid_kdtree.pkl refl_*.{txt,pkl}
+                        if [[ "$coption" == "-c" ]]; then
+                            ${show} rm -f ${domname}_??.analysis
+                        elif [[ "$coption" == "-a" ]]; then
+                            cd $wrkdir || return
+                            ${show} rm -rf $eventtime
+                        fi
                     fi
                     ;;
                 update_states )
                     if [[ -e done.update_states ]]; then
-                        rm -f error.update_states update_states_*.log
+                        ${show} rm -f error.update_states update_states_*.log
                     fi
                     ;;
                 update_bc )
                     if [[ -e done.update_bc ]]; then
-                        rm -f error.update_bc update_bc_*.log
+                        ${show} rm -f error.update_bc update_bc_*.log
                     fi
                     ;;
                 esac
@@ -3275,6 +3324,9 @@ overwrite=0
 runcmd="sbatch"
 dorun=true
 rt_run=false            # realtime run?
+
+cleanoption="clean"
+cleanjobs=()
 
 machine="Jet"
 
@@ -3323,6 +3375,13 @@ while [[ $# -gt 0 ]]; do
             else
                 echo -e "${RED}ERROR${NC}: option for '-k' can only be [0-2], but got \"$2\"."
                 usage 1
+            fi
+            ;;
+        -c | -a)
+            cleanoption="$key"
+            if [[ "$2" == "filter" || "$2" == "mpas" ]]; then
+                cleanjobs+=("$2")
+                shift
             fi
             ;;
         -t)
@@ -3599,7 +3658,11 @@ elif [[ " ${jobs[*]} " =~ " "(obs_diag|obs_final2nc)" " ]]; then
         run_${job} ${begin_sec} ${stoptime_sec}
     done
 elif [[ " ${jobs[*]} " =~ " clean " ]]; then
-    run_clean $starttime_sec $stoptime_sec
+
+    if [[ ${#cleanjobs[@]} -eq 0 ]]; then
+        cleanjobs=(mpas filter update_states update_bc)
+    fi
+    run_clean "${starttime_sec}" "${stoptime_sec}" "${cleanoption}" "${cleanjobs[*]}"
 fi
 
 echo -e "\n==== Jobs done $(date +%m-%d_%H:%M:%S) ====\n"
