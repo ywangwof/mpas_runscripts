@@ -39,7 +39,7 @@ function usage {
     echo " "
     echo "                                     -- By Y. Wang (2024.04.17)"
     echo " "
-    exit $1
+    exit "$1"
 }
 
 #-----------------------------------------------------------------------
@@ -172,7 +172,7 @@ for ((s=start_s;s<=end_s;s+=3600)); do
 
     evttime_dir="${fcst_root}/${eventdate}/${fcstdir}/${evtime}/mpassit"
     for mem in $(seq 1 $fcstmems); do
-        memstr=$(printf "%02d" $mem)
+        memstr=$(printf "%02d" "$mem")
         memdir="${evttime_dir}/mem$memstr"
 
         desdir="${dest_root}/${eventdate}/${evtime}/ENS_MEM_${memstr}"
@@ -191,12 +191,11 @@ for ((s=start_s;s<=end_s;s+=3600)); do
             if [[ ! -f ${desfile} || ${force_clean} == true ]]; then
                 if [[ ! -e ${memdir}/${memfile} ]]; then
                     echo "Waiting for ${memdir}/${memfile} ...."
-                    #exit 1
                     while [[ ! -e ${memdir}/${memfile} ]]; do
                         sleep 10
                     done
                 fi
-                ln -sf ${memdir}/${memfile} ${desfile}
+                ln -sf "${memdir}/${memfile}" "${desfile}"
             else
                 :
                 #echo "${desfile} exists"
@@ -207,11 +206,11 @@ for ((s=start_s;s<=end_s;s+=3600)); do
             (( begs = s + fcstbeg*60 ))
             wrftimestr0=$(date -u -d @$s    +%Y-%m-%d_%H:%M:%S)
             wrftimestr1=$(date -u -d @$begs +%Y-%m-%d_%H:%M:%S)
-            ln -sf wrfwof_d01_${wrftimestr1} wrfwof_d01_${wrftimestr0}
+            ln -sf "wrfwof_d01_${wrftimestr1}" "wrfwof_d01_${wrftimestr0}"
         fi
     done
 
-    touch ${dest_root}/${eventdate}/fcst_${evttime_str}_start
+    touch "${dest_root}/${eventdate}/fcst_${evttime_str}_start"
 done
 
 exit 0

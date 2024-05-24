@@ -7,7 +7,7 @@ top_dir=$(realpath "$(dirname "${script_dir}")")
 eventdateDF=$(date -u +%Y%m%d%H%M)
 
 #
-# To run MPAS-WoFS tasks interactively or using at/cron scheduler
+# To run MPAS-WoFS tasks interactively or using at/cron at background
 #
 
 run_dir=${top_dir}/run_dirs
@@ -24,6 +24,7 @@ function usage {
     echo "    USAGE: $0 [options] DATETIME [TASK]"
     echo " "
     echo "    PURPOSE: Run MPAS-WOFS tasks interactively or using Linux at/cron facility."
+    echo "             It will always log the outputs to a file."
     echo " "
     echo "    DATETIME - Case date and time in YYYYmmdd/YYYYmmddHHMM."
     echo "               YYYYmmdd:     run the task for this event date."
@@ -32,10 +33,10 @@ function usage {
     echo " "
     echo "    OPTIONS:"
     echo "              -h                  Display this message"
-    echo "              -n                  Show command to be run and generate job scripts only"
+    echo "              -n                  Show command to be run, but not run it"
     echo "              -v                  Verbose mode"
     echo "              -e                  Last time in HHMM format"
-    echo "              -x                  Directory affix (for post & diag only)"
+    echo "              -x                  Directory affix"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt    = $eventdateDF"
@@ -46,7 +47,7 @@ function usage {
     echo " "
     echo "                                     -- By Y. Wang (2024.04.17)"
     echo " "
-    exit $1
+    exit "$1"
 }
 
 ########################################################################
@@ -55,7 +56,7 @@ show=""
 verb=false
 eventdate=${eventdateDF:0:8}
 eventhour=${eventdateDF:8:2}
-cmd=""
+task=""
 
 if [[ $((10#$eventhour)) -lt 12 ]]; then
     eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
@@ -65,6 +66,8 @@ runtime="$eventdate"
 
 affix=""
 endtime="0300"
+
+noscript=false
 
 #-----------------------------------------------------------------------
 #
@@ -101,7 +104,10 @@ while [[ $# -gt 0 ]]; do
             usage 2
             ;;
         dacycles | fcst | post | plot | diag )
-            cmd=$key
+            task=$key
+            ;;
+        noscript )
+            noscript=true
             ;;
         *)
             if [[ $key =~ ^[0-9]{12}$ ]]; then
@@ -126,19 +132,20 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Load Python environment as needed
-case $cmd in
+case $task in
 post | plot | diag )
     if [[ ! "$host" =~ ^wof-epyc.*$ ]]; then
-        echo "ERROR: Please run $cmd on wof-epyc8 only".
+        echo "ERROR: Please run $task on wof-epyc8 only".
         exit 1
     fi
 
-    if [[ -z ${MAMBA_EXE} || -t 0 ]]; then   # not set micromamba, load Python environment
+    if [[ -z ${MAMBA_EXE} || ! -t 0 ]]; then   # not set micromamba, load Python environment
         # >>> mamba initialize >>>
         # !! Contents within this block are managed by 'mamba init' !!
         export MAMBA_EXE='/home/yunheng.wang/y/bin/micromamba';
         export MAMBA_ROOT_PREFIX='/home/yunheng.wang/y';
         __mamba_setup="$("$MAMBA_EXE" shell hook --shell bash --root-prefix "$MAMBA_ROOT_PREFIX" 2> /dev/null)"
+        # shellcheck disable=SC2181
         if [ $? -eq 0 ]; then
             eval "$__mamba_setup"
         else
@@ -149,85 +156,93 @@ post | plot | diag )
         micromamba activate "/home/brian.matilla/micromamba/envs/wofs-func"
     fi
     #echo "Activated Python environment on ${host} ..."
+
+    donepost="${run_dir}/summary_files/${eventdate}/${endtime}/wofs_postswt_${endtime}_finished"
+    doneplot="${run_dir}/image_files/${eventdate}_mpasV8.0/${endtime}/wofs_plotpbl_${endtime}_finished"
     ;;
 esac
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-if [[ -z $show ]]; then                 # Not show jobs only
-    log_dir="${run_dir}/${eventdate}"
+log_dir="${run_dir}/${eventdate}"
+if [[ ! -d ${log_dir} ]]; then
+    echo "ERROR: ${log_dir} not exists."
+    exit 1
+fi
 
-    if [[ ! -d ${log_dir} ]]; then
-        echo "ERROR: ${log_dir} not exists."
-        exit 1
-    fi
+log_file="${log_dir}/log${affix}.${task}"
 
-    if [ -t 1 ]; then       # interactive
-        exec > >(tee -ia "${log_dir}/log.${cmd}${affix}") 2>&1
-    else                    # "at job"
-        exec 1>> "${log_dir}/log.${cmd}${affix}" 2>&1
+if [[ -z $show ]]; then                 # Actually run the task
+    if [[ ! -t 1 ]]; then                       # at, batch or cron job
+        exec 1>> "${log_file}" 2>&1
+    elif [[ ${noscript} == false ]]; then       # interactive
+        #exec > >(tee -ia ${log_file} 2>&1
+        ## execute self with the noscript special arg so that the second execution DOES NOT start script again.
+        script -aefq "${log_file}" -c "$0 noscript ${saved_args}"
+        exit $?
+    else                                        # interactive
+        echo -e "\nLogging to file: ${log_file} ....\n"
     fi
 fi
 
 echo "=== $(date +%Y%m%d_%H:%M:%S) - $0 ${saved_args} ==="
 
-case $cmd in
+case $task in
 dacycles )
     cd "${script_dir}" || exit 1
-    if [ -t 1 ]; then # "interactive"
-        echo "$cmd $runtime in $(pwd)"
-    fi
-    ${show} "${script_dir}/run_dacycles.sh" -f config.${eventdate}${affix} "${runtime}" -r
+    cmds=("${script_dir}/run_dacycles.sh" -f "config.${eventdate}${affix}" -e "${endtime}" "${runtime}" -r)
     ;;
 fcst )
     cd "${script_dir}" || exit 1
-    if [ -t 1 ]; then # "interactive"
-        echo "$cmd $runtime in $(pwd)"
-    fi
-    ${show} "${script_dir}/run_fcst.sh" -f config.${eventdate}${affix} "${runtime}" -r -w
+    cmds=("${script_dir}/run_fcst.sh" -f "config.${eventdate}${affix}" -e "${endtime}" "${runtime}" -r -w)
     ;;
 
 post )
-    enddate=${eventdate}
-    if [[ $((10#$endtime)) -lt 1200 ]]; then
-        enddate=$(date -d "${eventdate} 1 day" +%Y%m%d)
-    fi
 
-    if [[ ! -e "${run_dir}/FCST/${eventdate}/fcst_${enddate}${endtime}_start" ]]; then
-        "${script_dir}/lnmpasfcst.sh" -fcst fcst${affix} "${eventdate}"
-    fi
+    if [[ ! -e ${donepost} ]]; then
+        # To make sure the correct FCST files are used, "-c"
+        "${script_dir}/lnmpasfcst.sh" -fcst "fcst${affix}" -c -e "${endtime}" "${eventdate}"
 
-    cd "${post_dir}" || exit 1
-    if [ -t 1 ]; then # "interactive"
-        echo "$cmd $eventdate in $(pwd)"
+        cd "${post_dir}" || exit 1
+        cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${eventdate}")
+    else
+        echo "File $donepost exist"
+        echo "Please clean them using \"${script_dir}/cleanmpas.sh ${eventdate} post\" before reprocessing."
+        exit 1
     fi
-    ${show} time "./wofs_${cmd}_summary_files_MPAS.py" "${eventdate}"
     ;;
 
 plot )
+    if [[ ! -e ${doneplot} ]]; then
+        echo "Waiting for ${run_dir}/summary_files/${eventdate}/${endtime}/wofs_postswt_${endtime}_finished ..."
+        while [[ ! -e "${run_dir}/summary_files/${eventdate}/${endtime}/wofs_postswt_${endtime}_finished" ]]; do
+            sleep 10
+        done
 
-    echo "Waiting for ${run_dir}/summary_files/${eventdate}/${endtime}/wofs_postswt_${endtime}_finished ..."
-    while [[ ! -e "${run_dir}/summary_files/${eventdate}/${endtime}/wofs_postswt_${endtime}_finished" ]]; do
-        sleep 10
-    done
-
-    cd "${post_dir}" || exit 1
-    if [ -t 1 ]; then # "interactive"
-        echo "$cmd $eventdate in $(pwd)"
+        cd "${post_dir}" || exit 1
+        cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${eventdate}")
+    else
+        echo "File $doneplot exist"
+        echo "Please clean them using \"${script_dir}/cleanmpas.sh ${eventdate} post\" before reprocessing."
+        exit 2
     fi
-    ${show} time "./wofs_${cmd}_summary_files_MPAS.py" "${eventdate}"
     ;;
-
 diag )
     cd "${script_dir}" || exit 1
-    if [ -t 1 ]; then # "interactive"
-        echo "$cmd $eventdate in $(pwd)"
-    fi
-    ${show} "${script_dir}/plot_allobs.sh" -d dacycles${affix} -e ${endtime} "${eventdate}"
+    cmds=("${script_dir}/plot_allobs.sh" -d "dacycles${affix}" -e "${endtime}" "${eventdate}")
     ;;
 * )
-    echo "Unknown command: $cmd"
+    echo "ERROR: Unknown task: $task"
     ;;
 esac
+
+if [ -t 1 ]; then # "interactive"
+    echo -e "\nInteractivly running: ${task} ${runtime} in $(pwd)\n"
+else
+    echo -e "\nBackground   running: ${task} ${runtime} in $(pwd)\n"
+fi
+
+if [[ $verb == true && -z ${show} ]]; then echo "${cmds[*]}"; fi
+${show} "${cmds[@]}"
 
 exit 0

@@ -11,7 +11,8 @@ post_dir=${run_dir}/summary_files
 image_dir=${run_dir}/image_files
 FCST_dir=${run_dir}/FCST
 
-source ${script_dir}/Common_Utilfuncs.sh
+# shellcheck disable=SC1091
+source "${script_dir}/Common_Utilfuncs.sh"
 #-----------------------------------------------------------------------
 
 function usage {
@@ -45,7 +46,7 @@ function usage {
     echo " "
     echo "                                     -- By Y. Wang (2024.04.19)"
     echo " "
-    exit $1
+    exit "$1"
 }
 
 ########################################################################
@@ -143,7 +144,7 @@ mpas )
 
     cd "${run_dir}" || usage 1
     ${show} rm -rf log.{atmosphere,init_atmosphere}.*.{err,out} namelist.output core*
-    ${show} rm -rf ./${domname}_??.{diag,history}.*.nc  # *.restart.*
+    ${show} rm -rf ./"${domname}"_??.{diag,history}.*.nc  # *.restart.*
     ${show} rm -rf error.* done.fcst_?? dart_log.{nml,out}
     echo ""
     ;;
@@ -154,7 +155,7 @@ mpasm )
 
     cd "${run_dir}" || usage 1
     for mdir in fcst_??; do
-        $0 -r ${run_dir}/${mdir} mpas
+        $0 -r "${run_dir}/${mdir}" mpas
     done
     ;;
 
@@ -196,7 +197,7 @@ post )
     fi
 
     cd "${FCST_dir}" || usage 1
-    $show rm -rf ${eventdate}
+    $show rm -rf "${eventdate}"
 
     #-------------------------------------------------------------------
     if [[ $verb == true ]]; then
@@ -204,7 +205,7 @@ post )
     fi
 
     cd "${post_dir}" || usage 1
-    $show rm -rf ${eventdate}
+    $show rm -rf "${eventdate}"
 
     #-------------------------------------------------------------------
     if [[ $verb == true ]]; then
@@ -212,7 +213,7 @@ post )
     fi
 
     cd "${image_dir}" || usage 1
-    $show rm -rf ${eventdate}_mpasV8.0
+    $show rm -rf "${eventdate}_mpasV8.0"
 
     ;;
 * )
