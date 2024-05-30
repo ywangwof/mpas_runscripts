@@ -237,9 +237,9 @@ diag )
 esac
 
 if [ -t 1 ]; then # "interactive"
-    echo -e "\nInteractivly running: ${task} ${runtime} in $(pwd)\n"
+    echo -e "\nInteractivly running: ${task} ${runtime} from $(pwd)\n"
 else
-    echo -e "\nBackground   running: ${task} ${runtime} in $(pwd)\n"
+    echo -e "\nBackground   running: ${task} ${runtime} from $(pwd)\n"
 fi
 
 if [[ $verb == true && -z ${show} ]]; then echo "${cmds[*]}"; fi

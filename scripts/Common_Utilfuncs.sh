@@ -18,7 +18,61 @@
 # o clean_mem_runfiles       # Clean the runtime files of an ensemble task
 # o wait_for_file_size       # Hold the task until the file size exceeds the give number of bytes
 # o wait_for_file_age        # Hold the task until the file age is older than the give number of seconds
+# o mecho/mecho0/mecho1/mecho2    # Print text with function name prefix
+
+########################################################################
+
+# Black        0;30     Dark Gray     1;30
+# Red          0;31     Light Red     1;31
+# Green        0;32     Light Green   1;32
+# Brown/Orange 0;33     Yellow        1;33
+# Blue         0;34     Light Blue    1;34
+# Purple       0;35     Light Purple  1;35
+# Cyan         0;36     Light Cyan    1;36
+# Light Gray   0;37     White         1;37
+# ---------- constant part!
+
+# shellcheck disable=SC2034
+if [ -t 1 ]; then
+    NC='\033[0m'            # No Color
+    BLACK='\033[0;30m';     DARK='\033[1;30m'
+    RED='\033[0;31m';       LIGHT_RED='\033[1;31m'
+    GREEN='\033[0;32m';     LIGHT_GREEN='\033[1;32m'
+    BROWN='\033[0;33m';     YELLOW='\033[1;33m'
+    BLUE='\033[0;34m';      LIGHT_BLUE='\033[1;34m'
+    PURPLE='\033[0;35m';    LIGHT_PURPLE='\033[1;35m'
+    CYAN='\033[0;36m';      LIGHT_CYAN='\033[1;36m'
+    LIGHT='\033[0;37m';     WHITE='\033[1;37m'
+else
+    NC=''
+    BLACK='';     DARK=''
+    RED='';       LIGHT_RED=''
+    GREEN='';     LIGHT_GREEN=''
+    BROWN='';     YELLOW=''
+    BLUE='';      LIGHT_BLUE=''
+    PURPLE='';    LIGHT_PURPLE=''
+    CYAN='';      LIGHT_CYAN=''
+    LIGHT='';     WHITE=''
+fi
+#    vvvv vvvv -- EXAMPLES -- vvvv vvvv
+# echo -e "I ${RED}love${NC} Stack Overflow"
+# printf "I ${RED}love${NC} Stack Overflow\n"
 #
+
+########################################################################
+
+function mecho {
+    funstr=$(printf "%-18.17s" "${FUNCNAME[$1]}")
+    echo $2 "${DARK}${funstr}${NC}: ${*:3}"
+}
+
+function mecho0 { mecho 2 -e "${*}"; }
+function mecho1 { mecho 3 -e "${*}"; }
+function mecho2 { mecho 4 -e "${*}"; }
+
+function mecho0n { mecho 2 -ne "${*}"; }
+function mecho1n { mecho 3 -ne "${*}"; }
+function mecho2n { mecho 4 -ne "${*}"; }
 
 ########################################################################
 
@@ -99,15 +153,15 @@ function submit_a_jobscript {
     sed -f $sedscript $myjobtemp > $myjobscript
     # shellcheck disable=SC2154
     if [[ ${verb} -eq 1 ]]; then
-        echo -e "${DARK}${FUNCNAME[1]}:${NC} Generated job script: \"$myjobscript\" "
-        echo "                   from template: \"$myjobtemp\" "
-        echo "                   with sed file: \"$sedscript\"  "
+        mecho1 "Generated job script: ${WHITE}$myjobscript${NC}"
+        mecho1 "from template:  ${BLUE}$myjobtemp${NC} "
+        mecho1 "using sed file: ${DARK}$sedscript${NC}  "
     else
         rm -f $sedscript
     fi
 
     # shellcheck disable=SC2154
-    if [[ $dorun == true ]]; then echo -en "${DARK}${FUNCNAME[1]}:${NC} Submitting $myjobscript .... "; fi
+    if [[ $dorun == true ]]; then mecho1n "Submitting $myjobscript .... "; fi
     # shellcheck disable=SC2154
     $runcmd ${myjoboption} "$myjobscript"
     if [[ $dorun == true && $? -eq 0 ]]; then touch $mywrkdir/queue.$myjobname; fi
@@ -156,7 +210,7 @@ function check_job_status {
         runjobs+=("$line");
     done < <(seq 1 $donenum)
 
-    echo -e "${DARK}${FUNCNAME[1]}:${NC} Waiting for ensemble jobs of ${WHITE}${jobname}${NC} in ${mywrkdir}"
+    mecho1 "Waiting for ensemble jobs of ${WHITE}${jobname}${NC} in ${BROWN}${mywrkdir##"${WORKDIR}"/}${NC}"
     numtry=0
     done=0; error=0; running=0
     while [[ $numtry -le $numtries ]]; do
@@ -167,7 +221,7 @@ function check_job_status {
             donefile="$memdir/done.${jobname}_$memstr"
             errorfile="$memdir/error.${jobname}_$memstr"
 
-            if [[ $verb -eq 1 ]]; then echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking $donefile"; fi
+            if [[ $verb -eq 1 ]]; then mecho1 "Checking $donefile"; fi
             while [[ ! -e $donefile ]]; do
                 if [[ -e $errorfile ]]; then
                     jobarrays+=("$mem")
@@ -195,7 +249,7 @@ function check_job_status {
         elif [[ ${#jobarrays[@]} -gt 0 && $numtry -lt $numtries ]]; then    # failed jobs found
             if [[ $myjobscript == *.slurm ]]; then
                 runjobs=( "${jobarrays[@]}" )
-                echo -e "${DARK}${FUNCNAME[1]}:${NC} ${numtry}/${numtries} - Try these failed jobs again: ${runjobs[*]}"
+                mecho1 "${numtry}/${numtries} - Try these failed jobs again: ${PURPLE}${runjobs[*]}${NC}"
                 jobs_str=$(get_jobarray_str 'slurm' "${runjobs[@]}")
                 $runcmd ${jobs_str} $myjobscript
                 error=0                            # Perform another try
@@ -233,7 +287,7 @@ function check_job_status {
         outmessage="$outmessage; failed: ${#jobarrays[@]} - [${LIGHT_RED}${jobarrays[*]}${NC}]"
     fi
 
-    echo -e "${DARK}${FUNCNAME[1]}:${NC} $outmessage"
+    mecho1 "$outmessage"
     if [[ $done -lt $donenum ]]; then
         if $checkonly; then
             return
@@ -622,42 +676,3 @@ function clean_mem_runfiles {
         touch done.$jobname
     fi
 }
-
-########################################################################
-
-# Black        0;30     Dark Gray     1;30
-# Red          0;31     Light Red     1;31
-# Green        0;32     Light Green   1;32
-# Brown/Orange 0;33     Yellow        1;33
-# Blue         0;34     Light Blue    1;34
-# Purple       0;35     Light Purple  1;35
-# Cyan         0;36     Light Cyan    1;36
-# Light Gray   0;37     White         1;37
-# ---------- constant part!
-
-# shellcheck disable=SC2034
-if [ -t 1 ]; then
-    NC='\033[0m'            # No Color
-    BLACK='\033[0;30m';     DARK='\033[1;30m'
-    RED='\033[0;31m';       LIGHT_RED='\033[1;31m'
-    GREEN='\033[0;32m';     LIGHT_GREEN='\033[1;32m'
-    BROWN='\033[0;33m';     YELLOW='\033[1;33m'
-    BLUE='\033[0;34m';      LIGHT_BLUE='\033[1;34m'
-    PURPLE='\033[0;35m';    LIGHT_PURPLE='\033[1;35m'
-    CYAN='\033[0;36m';      LIGHT_CYAN='\033[1;36m'
-    LIGHT='\033[0;37m';     WHITE='\033[1;37m'
-else
-    NC=''
-    BLACK='';     DARK=''
-    RED='';       LIGHT_RED=''
-    GREEN='';     LIGHT_GREEN=''
-    BROWN='';     YELLOW=''
-    BLUE='';      LIGHT_BLUE=''
-    PURPLE='';    LIGHT_PURPLE=''
-    CYAN='';      LIGHT_CYAN=''
-    LIGHT='';     WHITE=''
-fi
-#    vvvv vvvv -- EXAMPLES -- vvvv vvvv
-# echo -e "I ${RED}love${NC} Stack Overflow"
-# printf "I ${RED}love${NC} Stack Overflow\n"
-#

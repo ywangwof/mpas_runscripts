@@ -146,7 +146,7 @@ function run_obsmerge {
     local iseconds=$2
 
     if [[ ! -d $wrkdir ]]; then
-        echo "run_obsmerge: Working directory $wrkdir not exist"
+        mecho0 "run_obsmerge: Working directory $wrkdir not exist"
         exit 1
     fi
 
@@ -177,8 +177,8 @@ function run_obsmerge {
 
     input_base="${wrkdir}/input.nml"
 
-    echo -e "${DARK}${FUNCNAME[0]}:${NC} OBS Preprocessing for analysis time: ${anlys_time}, days: ${g_date}, seconds: ${g_sec}"
-    echo -e "${DARK}${FUNCNAME[0]}:${NC} OBS_DIR=${OBS_DIR}"
+    mecho0 "OBS Preprocessing for analysis time: ${anlys_time}, days: ${g_date}, seconds: ${g_sec}"
+    mecho0 "OBS_DIR=${OBS_DIR}"
 
     obsflists=()
     k=1
@@ -543,7 +543,7 @@ function run_obsmerge {
         vrj_file=${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out
 
         if [[ $verb -eq 1 ]]; then
-            echo "         Checking VEL data in ${vrj_file}"
+            echo "    Checking VEL data in ${vrj_file}"
         fi
 
         if [[ -e ${vrj_file} ]]; then
@@ -648,10 +648,10 @@ EOF
     ${runcmd_str} ${exedir}/dart/obs_sequence_tool >& ${srunout}_sequence_tool
 
     if [[ $? -eq 0 && -e obs_seq.${anlys_date}${anlys_time} ]]; then
-        echo -e "\n    Observation file ${wrkdir}/OBSDIR/obs_seq.${anlys_date}${anlys_time} created"
+        mecho0 "Observation file ${CYAN}${wrkdir##"$WORKDIR"/}/OBSDIR/obs_seq.${anlys_date}${anlys_time}${NC} created"
         mv input.nml input.nml.sequence_tool
     else
-        echo -e "${RED}ERROR${NC}: ${runcmd_str} ${exedir}/dart/obs_sequence_tool"
+        mecho0 "${RED}ERROR${NC}: ${runcmd_str} ${exedir}/dart/obs_sequence_tool"
     fi
 
     #rm -f ./obs_seq.hfmetar ./obs_seq.meso ./obs_seq.cwp ./obs_seq.mrms ./obs_seq.rad ./obs_seq.vr*
@@ -659,7 +659,6 @@ EOF
     #rm -f dart_log.* obsflist* init.nc
     #rm -f obsflist* wrfinput_d0*
 
-    echo " "
     cd $wrkdir || return
 }
 
@@ -720,10 +719,10 @@ function run_filter {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking $cond"
+            mecho0 "Checking $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for file: $cond"
+                    mecho0 "Waiting for file: $cond"
                 fi
                 sleep 10
             done
@@ -785,6 +784,10 @@ function run_filter {
     #------------------------------------------------------
     # 3. Prepare namelist file
     #------------------------------------------------------
+    # Debug configuration:
+    #
+    #   stages_to_write          = 'preassim', 'output'
+
     cat << EOF > input.nml
 &perfect_model_obs_nml
    read_input_state_from_file = .true.
@@ -841,7 +844,7 @@ function run_filter {
    trace_execution          = .true.
    silence                  = .false.
 
-   stages_to_write          = 'preassim', 'output'
+   stages_to_write          = 'output'
    output_mean              = .true.
    output_sd                = .true.
    write_all_stages_at_end  = .false.
@@ -1633,16 +1636,16 @@ EOF
     #------------------------------------------------------
 
     if [[ -e OBSDIR/obs_seq.${timestr_cur} ]]; then
-        echo "    Using observation file: OBSDIR/obs_seq.${timestr_cur} as obs_seq.in"
+        mecho0 "Using observation file: ${CYAN}OBSDIR/obs_seq.${timestr_cur}${NC} as ${BROWN}obs_seq.in${NC}"
         ln -sf OBSDIR/obs_seq.${timestr_cur} obs_seq.in
     else
-        if [[ $verb -eq 1 ]]; then echo "run_obsmerge $wrkdir $iseconds"; fi
+        if [[ $verb -eq 1 ]]; then mecho0 "run_obsmerge $wrkdir $iseconds"; fi
         run_obsmerge $wrkdir $iseconds |& tee ${wrkdir}/observations.log
 
         if [[ -e OBSDIR/obs_seq.${timestr_cur} ]]; then
             ln -sf OBSDIR/obs_seq.${timestr_cur} obs_seq.in
         else
-            echo -e "$$-${FUNCNAME[0]}: ${BROWN}WARNING${NC}:: Observation file \"OBSDIR/obs_seq.${timestr_cur}\" not found"
+            mecho0 "${BROWN}WARNING${NC}: Observation file ${CYAN}OBSDIR/obs_seq.${timestr_cur}${NC} not found"
             touch done.filter
             no_observation=true
             return
@@ -1778,7 +1781,7 @@ function run_update_states {
     cd $wrkdir || return
 
     if [[ $no_observation == true ]]; then
-        echo -e "$$-${FUNCNAME[0]}:${BROWN}WARNING${NC}: no observation skipping ...."
+        mecho0 "${BROWN}WARNING${NC}: no observation skipping ...."
         touch done.update_states
         return
     fi
@@ -1790,10 +1793,10 @@ function run_update_states {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking $cond"
+            mecho0 "Checking $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for file: $cond"
+                    mecho0 "Waiting for file: $cond"
                 fi
                 sleep 10
             done
@@ -1866,10 +1869,10 @@ function run_update_bc {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking $cond"
+            mecho0 "Checking $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for file: $cond"
+                    mecho0 "Waiting for file: $cond"
                 fi
                 sleep 10
             done
@@ -1903,7 +1906,7 @@ function run_update_bc {
         rm -rf ${update_input_file_list}
 
         if [[ ! -e input.nml ]]; then
-            echo -e "${RED}ERROR${NC}: ${FUNCNAME[0]} should have run mpas_update_states first."
+            mecho0 "Should have run mpas_update_states first."
         else
             state_output_file=$(awk '/update_output_file_list/{print $3}' input.nml)
             readarray -t input_file_array < ${state_output_file:1:${#state_output_file}-2}
@@ -1936,9 +1939,8 @@ function run_update_bc {
             icycle_lbcgap=${EXTINVL}
         fi
         if [[ $verb -eq 1 ]]; then
-            echo "Member: $iens use lbc files from $rundir/lbc:"
-            echo "       ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc";
-            echo "       ${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc";
+            mecho0 "Member: $iens use lbc files from $rundir/lbc:"
+            mecho0 "        ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc  ${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc";
         fi
         #ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc ${domname}_${memstr}.lbc.${mpastime_str1}.nc
         lbc_file0="$rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc"
@@ -1966,7 +1968,7 @@ function run_update_bc {
     cd $wrkdir || return
 
     if [[ ${no_observation} == true ]]; then
-        echo -e "$$-${FUNCNAME[0]}:${BROWN}WARNING${NC}: no observation skipping ...."
+        mecho0 "${BROWN}WARNING${NC}: no observation, skipping ...."
         touch done.update_bc
         return
     fi
@@ -2049,7 +2051,7 @@ function run_add_noise {
     #------------------------------------------------------
 
     if [[ ${no_observation} == true ]]; then
-        echo -e "$$-${FUNCNAME[0]}:${BROWN}WARNING${NC}: no observation skipping ...."
+        mecho0 "${BROWN}WARNING${NC}: no observation, skipping ...."
         touch done.add_noise done.noise_mask
         return
     fi
@@ -2239,10 +2241,10 @@ function run_mpas {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking $cond"
+            mecho0 "Checking $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for file: $cond"
+                    mecho0 "Waiting for file: $cond"
                 fi
                 sleep 10
             done
@@ -2308,7 +2310,10 @@ function run_mpas {
             mpas_inputfile_template="${domname}_${memstr}.init.nc"
             initfile="./${domname}_${memstr}.restart.${currtime_fil}.nc"
         fi
-        if [[ $verb -eq 1 ]]; then echo "Member: $iens use init file: ${initfile}"; fi
+        if [[ $verb -eq 1 ]]; then
+            realinit=$(realpath ${initfile})
+            mecho0 "Member: $iens init file: ${realinit##"${WORKDIR}"/}";
+        fi
         if [[ ! -e ${initfile} && ${dorun} == true ]]; then
             echo -e "${RED}ERROR${NC}: ${damode} file: ${initfile} not exists"
             exit 1              # something wrong should never happen
@@ -2317,7 +2322,12 @@ function run_mpas {
         ln -sf $rundir/$domname/$domname.graph.info.part.${npefcst} .
         ln -sf $rundir/init/${domname}.invariant.nc .
 
-        streamlists=(stream_list.atmosphere.diagnostics_da stream_list.atmosphere.output stream_list.atmosphere.surface)
+        diag_stream="stream_list.atmosphere.diagnostics_da"
+        if [[ ${outwrf} == true ]]; then
+            diag_stream="stream_list.atmosphere.diagnostics_fcst"
+        fi
+
+        streamlists=("${diag_stream}" stream_list.atmosphere.output stream_list.atmosphere.surface)
         for fn in "${streamlists[@]}"; do
             cp -f ${FIXDIR}/$fn .
         done
@@ -2376,10 +2386,10 @@ function run_mpas {
     config_smdiv                    = 0.1
 /
 &damping
-    config_mpas_cam_coef            = 2.0
-    config_rayleigh_damp_u          = true
-    config_zd                       = 16000.0
-    config_xnutr                    = 0.2
+    config_mpas_cam_coef             = 2.0
+    config_rayleigh_damp_u           = true
+    config_zd                        = 16000.0
+    config_xnutr                     = 0.2
     config_number_cam_damping_levels = 8
 /
 &limited_area
@@ -2492,7 +2502,7 @@ EOF
                   clobber_mode="replace_files"
                   output_interval="${RSTINVL_STR}" >
 
-                <file name="stream_list.atmosphere.diagnostics_da"/>
+                <file name="${diag_stream}"/>
 </stream>
 
 <stream name="surface"
@@ -2655,7 +2665,7 @@ function dacycle_driver() {
         # 1. Run filter
         #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " filter " ]]; then
-            if [[ $verb -eq 1 ]]; then echo ""; echo "    Run filter at $eventtime"; fi
+            if [[ $verb -eq 1 ]]; then echo "  Run filter at $eventtime"; fi
             run_filter $dawrkdir $icyc $isec
         fi
 
@@ -2663,7 +2673,7 @@ function dacycle_driver() {
         # 2. Run update_states for all ensemble members
         #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " update_states " ]]; then
-            if [[ $verb -eq 1 ]]; then echo ""; echo "    Run update_mpas_state at $eventtime"; fi
+            if [[ $verb -eq 1 ]]; then echo "  Run update_mpas_state at $eventtime"; fi
             run_update_states $dawrkdir $isec
         fi
 
@@ -2680,7 +2690,7 @@ function dacycle_driver() {
                 fi
             fi
 
-            if [[ $verb -eq 1 ]]; then echo ""; echo "    Run add_noise at $eventtime"; fi
+            if [[ $verb -eq 1 ]]; then echo "  Run add_noise at $eventtime"; fi
             run_add_noise $dawrkdir $isec
         fi
 
@@ -2702,7 +2712,7 @@ function dacycle_driver() {
                 fi
             fi
 
-            if [[ $verb -eq 1 ]]; then echo ""; echo "    Run update_bc at $eventtime"; fi
+            if [[ $verb -eq 1 ]]; then echo "  Run update_bc at $eventtime"; fi
             run_update_bc $dawrkdir $icyc $isec
         fi
 
@@ -2720,7 +2730,7 @@ function dacycle_driver() {
             fi
 
             if [[ "${eventtime}" != "0300" ]]; then
-                if [[ $verb -eq 1 ]]; then echo ""; echo "    Run advance model at $eventtime"; fi
+                if [[ $verb -eq 1 ]]; then echo "  Run advance model at $eventtime"; fi
 
                 mpas_jobscript="run_mpas.${mach}"
                 run_mpas $dawrkdir $icyc $isec
@@ -2739,7 +2749,7 @@ function dacycle_driver() {
         # Interpolate the forecast datasets to a virtual WRF grid
 
         if [[ " ${jobs[*]} " =~ " mpassit " ]]; then
-            if [[ $verb -eq 1 ]]; then echo "    Run MPASSIT at $eventtime"; fi
+            if [[ $verb -eq 1 ]]; then echo "  Run MPASSIT at $eventtime"; fi
 
             run_mpassit $dawrkdir ${isec}
 
@@ -2991,24 +3001,24 @@ function run_mpassit {
     # Check MPASSIT status
     #
     if [[ -f done.mpassit ]]; then
-        echo -e "${DARK}${FUNCNAME[0]}:${NC} MPASSIT done for all forecast minutes"
+        mecho0 "MPASSIT done for all forecast minutes"
         return
     fi
 
     if [[ -f running.mpassit || -f queue.mpassit ]]; then
-        echo -e "${DARK}${FUNCNAME[0]}:${NC} MPASSIT is running/queued for all forecast minutes"
+        mecho0 "MPASSIT is running/queued for all forecast minutes"
         return
     fi
 
     if [[ -f error.mpassit ]]; then
-        echo -e "${DARK}${FUNCNAME[0]}:${NC} MPASSIT failed for all forecast minutes "
+        mecho0 "MPASSIT failed for all forecast minutes "
         return
     fi
 
     minstr=$(printf "%02d" $((intvl_sec/60)) )
     #minstr="00"
     fcst_minutes=()
-    if [[ ${damode} == "init" ]]; then
+    if [[ ${damode} == "init" || $icyc -eq 0 ]]; then
         fcst_minutes=("00")
     fi
     fcst_minutes+=("${minstr}")
@@ -3162,19 +3172,18 @@ function prepare_mpassit_onetime {
         if [[ $dorun == true ]]; then
             for fn in $histfile $diagfile; do
                 if [[ $outdone == false ]]; then
-                    #echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking ${fn##$rundir/} ..."
-                    echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking forecast files at $fminstr for all $ENS_SIZE memebers from dacycles${daffix}/${fcst_lauch_time} ..."
+                    mecho0 "Checking forecast files at $fminstr for all $ENS_SIZE memebers from dacycles${daffix}/${fcst_lauch_time} ..."
                     outdone=true
                 fi
                 while [[ ! -f $fn ]]; do
                     if [[ $verb -eq 1 ]]; then
-                        echo "Waiting for $fn ..."
+                        mecho0 "Waiting for $fn ..."
                     fi
                     sleep 10
                 done
                 fileage=$(( $(date +%s) - $(stat -c %Y -- "$fn") ))
                 if [[ $fileage -lt $waitseconds ]]; then
-                    if [[ $verb -eq 1 ]]; then echo -e "${DARK}${FUNCNAME[0]}:${NC} Waiting for $fn ..."; fi
+                    if [[ $verb -eq 1 ]]; then mecho0 "Waiting for $fn ..."; fi
                     sleep "$waitseconds"
                 fi
             done
@@ -3630,7 +3639,7 @@ exedir="$rootdir/exec"
 
 echo ""
 echo "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
-echo -e "     Event date : ${GREEN}$eventdate${NC} ${eventtime}"
+echo -e "     Event date : ${GREEN}$eventdate${NC} ${LIGHT_BLUE}${eventtime}${NC}"
 echo    "     Root    dir: $rootdir"
 echo    "     Working dir: $WORKDIR"
 echo -e "     Domain name: ${PURPLE}$domname${NC};  MP scheme: ${BROWN}${mpscheme}${NC}"

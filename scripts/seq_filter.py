@@ -55,6 +55,41 @@ def make_namespace(d: dict,lvl=0,level=None):
 
 ########################################################################
 
+def color_text(field, color = 'white', darkness='dark', length=None, ):
+    """Return the 'field' in collored terminal form"""
+
+    Term_colors = {
+      'black'  : 30,
+      'red'    : 31,
+      'green'  : 32,
+      'yellow' : 33,
+      'blue'   : 34,
+      'magenta': 35,
+      'cyan'   : 36,
+      'white'  : 37,
+    }
+
+    bgcolor="00"
+    if darkness == "light":
+        bgcolor="01"
+
+    outfield = field
+    if length :
+        if len(field) > length :
+            outfield = field[:length-4]+' ...'
+        else:
+            outfield = field.ljust(length)
+
+    if sys.stdout.isatty():    # You're running in a real terminal
+        outfield = f'\x1B[{bgcolor};{Term_colors[color]}m{outfield}\x1B[00m'
+    #else:                     # You're being piped or redirected
+
+    return outfield
+
+#enddef color_text
+
+########################################################################
+
 def update_progress(job_title, progress):
     length = 40
     block = int(round(length*progress))
@@ -116,7 +151,7 @@ def load_obs_seq(filename,cloud_types,verbose):
                     obs = decode_one_obs(fh,iobs,ncopy,nqc,cloud_types,verbose)
                     obs_list.append(obs)
     else:
-        print(f"ERROR: file {filename} not found")
+        print(f"{color_text('ERROR','red')}: file {filename} not found")
         return None
 
     #print(f"nobs = {nobs}")
@@ -254,14 +289,24 @@ def decode_one_obs(fhandle,iobs,ncopy,nqc,cloud_types,verbose):
     # 1970 01 01 00:00:00 is 134774 days 00 seconds
     # one day is 86400 seconds
 
+    lonr = decimal.Decimal(lon)
+    latr = decimal.Decimal(lat)
+    lond = decimal.Decimal(math.degrees(lonr)).quantize(decimal.Decimal('.01'), rounding=decimal.ROUND_HALF_DOWN)
+    latd = decimal.Decimal(math.degrees(latr)).quantize(decimal.Decimal('.01'), rounding=decimal.ROUND_HALF_DOWN)
+    if lond > 180.:
+        lond -= decimal.Decimal(360.)
+
     obsobj = {'iobs'      : iobs,
               'kind'      : otype,
               'values'    : values,
               'qcs'       : qcs,
-              'location'  : {'lon'        : decimal.Decimal(lon),
-                             'lat'        : decimal.Decimal(lat),
-                             'level'      : decimal.Decimal(alt),
-                             'level_type' : int(vert)
+              'location'  : {
+                            'lonr'       : lonr,
+                            'latr'       : latr,
+                            'lat'        : latd,
+                            'lon'        : lond,
+                            'level'      : decimal.Decimal(alt),
+                            'level_type' : int(vert)
                             },
               'time'      : { 'days'        : int(days),
                               'seconds'     : int(secs),
@@ -335,7 +380,7 @@ def write_obs_seq(obs, filename, number=0 ):
 
                 fi.write("obdef\n")
                 fi.write("loc3d\n")
-                fi.write(f"  {it.location.lon}      {it.location.lat}      {it.location.level}      {it.location.level_type:d}\n")
+                fi.write(f"  {it.location.lonr}      {it.location.latr}      {it.location.level}      {it.location.level_type:d}\n")
 
                 fi.write("kind\n")
                 fi.write(f"          {it.kind}\n")
@@ -414,20 +459,31 @@ def print_obs(obs_in,rargs):
 
     else:
 
-        print(f" {rargs.t_type}: {obs_in.types[rargs.t_type]}")
+        print("")
+        for t_type in rargs.t_types:
+            k_type = str(t_type)
+            if  k_type not in obs_in.types.keys():
+                print(f"{color_text('ERROR','red')}: kind = {color_text(k_type,'yellow')} not in the file.")
+                return
+            else:
+                print(f"{t_type}: {obs_in.types[k_type]}")
+        print("")
 
         n = 0
         for it in obs_in.obs:
 
-            if "location" in rargs.t_var:
-                it.location.lon = math.degrees(it.location.lon)
-                it.location.lat = math.degrees(it.location.lat)
+            if rargs.range is not None:
+                if it.location.lat < rargs.range[0] or it.location.lat > rargs.range[1]:
+                    continue
+                #print(it.location.lat,it.location.lon)
+                if it.location.lon < rargs.range[2] or it.location.lon > rargs.range[3]:
+                    continue
 
             # print(f"Available attributes: {vars(it)}")
             # 'values', 'qcs', {'lon', 'lat', 'level', 'level_type'}, 'links', 'kind', 'platform', {'days', 'seconds', 'time'}, 'variance', 'mask', 'visir', 'clouds'
-            if it.kind == int(rargs.t_type):
+            if it.kind in rargs.t_types:
                 print(f"iobs = {it.iobs:6d}, ", end="")
-                for varname in rargs.t_var:
+                for varname in rargs.t_vars:
                     value = getattr(it,varname)
                     if isinstance(value,list):
                         valuestr=','.join([str(x) for x in value])
@@ -463,20 +519,33 @@ def process_obs(obs_in, obs_out, cargs,rargs):
                     it.mask = True
 
     #
-    # 2. Mask observations for unwanted types
+    # 2. Mask observations for unwanted types and wanted types
     #
-    if len(rargs.xtypes) > 0:
-        obs_out.types = {}
-        for type,label in obs_in.types.items():
-            if int(type) not in rargs.xtypes:
-                obs_out.types[type] = label
+    obs_out.types = {}
+    for type,label in obs_in.types.items():
+        if int(type) not in rargs.xtypes and int(type) in rargs.t_types:
+            obs_out.types[type] = label
 
+    for it in obs_out.obs:
+        if it.kind in rargs.xtypes:
+            it.mask = True
+
+        if it.kind not in rargs.t_types:
+            it.mask = True
+
+    #
+    # 3. Mask observations outside of location range
+    #
+    if rargs.range is not None:
         for it in obs_out.obs:
-            if it.kind in rargs.xtypes:
+            if it.location.lat < rargs.range[0] or it.location.lat > rargs.range[1]:
+                it.mask = True
+                #print(it.location.lat,it.location.lon)
+            if it.location.lon < rargs.range[2] or it.location.lon > rargs.range[3]:
                 it.mask = True
 
     #
-    # 3. Filter out unwanted observations
+    # 4. Filter out unwanted observations
     #
     obs_records = []
     masked_obs  = []
@@ -490,7 +559,7 @@ def process_obs(obs_in, obs_out, cargs,rargs):
     if cargs.verbose: print(f"INFO: Dropped observations: {masked_obs}")
 
     #
-    # 4. Fix the linked list
+    # 5. Fix the linked list
     #
     if cargs.keep:
         for it in obs_records:
@@ -527,7 +596,7 @@ def process_obs(obs_in, obs_out, cargs,rargs):
             it.links[1] = -1
 
     #
-    # 5. From Craig on Jan 19, 2024
+    # 6. From Craig on Jan 19, 2024
     #
     # I'm a bit more concerned about your surface observation types having a
     # "which_vert" of -1 (obs_seq.bufr), which is VERTISSURFACE.  When computing
@@ -551,60 +620,122 @@ def process_obs(obs_in, obs_out, cargs,rargs):
 def parse_args():
     """ Parse command line arguments
     """
+    obs_fields=("values","variance","time","location","qcs","platform","clouds","visir","mask")
+
     parser = argparse.ArgumentParser(description='Trim DART obs_seq file with nan values',
                                      epilog="""        ---- Yunheng Wang (2024-01-24).
                                             """)
                                      #formatter_class=CustomFormatter)
 
-    parser.add_argument('files',nargs='+',help='DART obs_seq files')
+    parser.add_argument('files',nargs='+',help=f'DART obs_seq files, "list", or one or more from {obs_fields}')
 
-    parser.add_argument('-v','--verbose', help='Verbose output',                                  action="store_true", default=False)
-    parser.add_argument('-o','--outdir' , help='Name of the output file or an output directory',  default='./',        type=str)
-    parser.add_argument('-x','--xtypes' , help='Type Numbers of observation to be removed',       default=None,        type=str)
-    parser.add_argument('-c','--ctypes' , help='Type Numbers of observation that contains cloud lines', default="124,125,126", type=str)
-    parser.add_argument('-t','--type'   , help='''Type Numbers of observation to be print, for examples,
-                        44                 : Show observaiton value of observation type 44;
-                        44,variance        : Show variance;
-                        44,values,variance : Show value and variance; Valid names are: time,location,qcs,platform,clouds,visir,mask''',
-                                                                                                       default=None,        type=str)
+    parser.add_argument('-v','--verbose', help='Verbose output',                                    action="store_true", default=False)
+    parser.add_argument('-o','--outdir' , help='Name of the output file or an output directory',    default='./',        type=str)
+    parser.add_argument('-x','--xtypes' , help='Type Numbers of observation to be removed',         default=None,        type=str)
+    parser.add_argument('-c','--ctypes' , help='Type Numbers of observation that contains cloud lines',
+                                                                                                    default="124,125,126", type=str)
+    parser.add_argument('-t','--type'   , help='''Type Numbers of observation to be kept, for examples, 44 or 44,42''',
+                                                                                                    default=None,        type=str)
+    parser.add_argument('-r','--range' ,  help='Filter records by location range, [lat1-lat2,lon1-lon2]', default=None, type=str)
     parser.add_argument('-k','--keep' ,   help='After drop observations, keep it links as possible',   action="store_true", default=False)
     parser.add_argument('-n','--number' , help='Fist N number of observations to be written',          default=0,           type=int)
     parser.add_argument('-N','--notrim' , help='Do not trim NaN in observations (default: Trim obs_seq for NaNs)', action="store_true", default=False)
 
     args = parser.parse_args()
 
-    rargs = {'files': [], 'outfile': None, 'xtypes' : [], 't_type': None, 'metaonly': False, 'number': args.number }
+    rargs = {'files': [], 'outfile': None, 'xtypes' : [], 't_types': [],
+             'metaonly': False, 't_vars': None, 'number': args.number,
+             'range': None }
 
+    #
+    # Process multiple files
+    #
     for fn in args.files:
         if fn == "list":
             rargs['metaonly'] = True
+        elif ',' in fn or fn in obs_fields:
+            rargs['t_vars'] = [item for item in fn.split(',')]
         elif os.path.lexists(fn):
             rargs['files'].append(fn)
         else:
-            print(f"ERROR: unknow argument: {fn}")
+            print(f"{color_text('ERROR','red')}: unknow argument: {color_text(fn,'yellow')}")
             sys.exit(1)
 
+    #
+    # Exclude these types
+    #
     if args.xtypes is not None:
         rargs['xtypes'] = [int(x) for x in args.xtypes.split(',')]
 
+    #
+    # Types with cloud bottone/top records
+    #
+    typerange = re.compile("(\d+)-(\d+)")
+    ctypes=[]
     if args.ctypes is not None:
-        rargs['ctypes'] = [int(x) for x in args.ctypes.split(',')]
-
-    if args.type is not None:
-        rlist = [item for item in args.type.split(',')]
-        rargs['t_type'] = rlist[0]
-        if len(rlist) > 1:
-            rargs['t_var'] = rlist[1:]              # [value, variance]
-        else:                                       # by default, print the obervation value only
-            rargs['t_var'] = ['values']
-    else:
-        if not os.path.isdir(args.outdir):
-            outdir_par = os.path.dirname(args.outdir)
-            if os.path.isdir(outdir_par) or outdir_par == "":
-                rargs['outfile'] = args.outdir
+        rargs['ctypes'] = []
+        ctypes = [x for x in args.ctypes.split(',')]
+        for typestr in ctypes:
+            typematch = typerange.match(typestr)
+            if typematch:
+                for t in range(int(typematch[1]),int(typematch[2])+1):
+                    rargs['ctypes'].append(t)
             else:
-                print(f"ERROR: output directory {args.outdir} not exist.")
-                sys.exit(1)
+                rargs['ctypes'].append(int(typestr))
+
+    #
+    # Included types
+    #
+    if args.type is not None:
+        rlist = [int(item) for item in args.type.split(',')]
+        rargs['t_types'] = rlist
+
+    #
+    # Range filter
+    #
+    loc2drange = re.compile(r"^(\d+[.]?\d*)-(\d+[.]?\d*),([-]?\d+[.]?\d*)-([-]?\d+[.]?\d*)$")
+    if args.range is not None:
+        locmatch = loc2drange.match(args.range)
+        if locmatch:
+            rargs['range'] = [float(locmatch[1]),float(locmatch[2]),float(locmatch[3]),float(locmatch[4])]
+        else:
+            print(f"{color_text('ERROR','red')}: location range should be [lat1-lat2,lon1-lon2], got: {color_text(args.range,'yellow')}")
+            sys.exit(1)
+
+        if rargs['range'][0] < -90.0 or rargs['range'][0] > 90.0:
+            print(f"{color_text('ERROR','red')}: The first value is not a valid latitude: {color_text(args.range,'yellow')}")
+            sys.exit(1)
+
+        if rargs['range'][1] < -90.0 or rargs['range'][1] > 90.0:
+            print(f"{color_text('ERROR','red')}: The second value is not a valid latitude: {color_text(args.range,'yellow')}")
+            sys.exit(1)
+
+        if rargs['range'][1] < rargs['range'][0]:
+            print(f"{color_text('ERROR','red')}: The latitudes are not in right order: {color_text(args.range,'yellow')}")
+            sys.exit(1)
+
+        if rargs['range'][2] < -180.0 or rargs['range'][2] > 180.0:
+            print(f"{color_text('ERROR','red')}: The 3rd value is not a valid longitude: {color_text(args.range,'yellow')}")
+            sys.exit(1)
+
+        if rargs['range'][3] < -180.0 or rargs['range'][3] > 180.0:
+            print(f"{color_text('ERROR','red')}: The 4th value is not a valid longitude: {color_text(args.range,'yellow')}")
+            sys.exit(1)
+
+        if rargs['range'][3] < rargs['range'][2]:
+            print(f"{color_text('ERROR','red')}: The longitudes are not in right order: {color_text(args.range,'yellow')}")
+            sys.exit(1)
+
+    #
+    # Make sure output direcotry exist
+    #
+    if not os.path.isdir(args.outdir):
+        outdir_par = os.path.dirname(args.outdir)
+        if os.path.isdir(outdir_par) or outdir_par == "":
+            rargs['outfile'] = args.outdir
+        else:
+            print(f"{color_text('ERROR','red')}: output directory {color_text(args.outdir,'yellow')} not exist.")
+            sys.exit(1)
 
     return args,make_namespace(rargs)
 
@@ -622,7 +753,13 @@ if __name__ == "__main__":
         if cargs.verbose: print(f" load_obs_seq: Reading {filename}\n")
         obs_in = load_obs_seq(filename,rargs.ctypes,cargs.verbose)
 
-        if rargs.metaonly or rargs.t_type is not None:  # Show its values
+        if len(rargs.t_types) == 0:
+            for key in obs_in.types.keys():
+                rargs.t_types.append(int(key))
+
+        if rargs.metaonly or rargs.t_vars is not None:  # Show its values
+
+            print(f"\n--- File: {color_text(filename,'cyan')} ---")
 
             print_obs(obs_in,rargs)
 

@@ -84,6 +84,7 @@ function usage {
     echo "    WORKDIR  - Run Directory"
     echo "    JOBS     - One or more jobs from [geogrid,ungrib_hrrr,rotate,meshplot_py,static,createWOFS,meshplot_ncl,clean] or [check,setup]."
     echo "               setup - just write set up configuration file"
+    echo "               check - Check the availability of the HRRRE datasets"
     echo "               Default all jobs in sequence"
     echo " "
     echo "    OPTIONS:"
@@ -132,13 +133,12 @@ function run_geogrid {
     cd "$wrkdir" || return
 
     if [[ -f done.geogrid ]]; then
-        echo "Found file \"done.geogrid\", skipping run_geogrid ...."
-        echo ""
+        mecho0 "Found file \"done.geogrid\", skipping run_geogrid ...."
         return
     fi
 
     if ! [[ $cen_lat && $cen_lon ]]; then
-        echo "ERROR: Domain center is required as command line option \"-c lat,lon\"."
+        mecho0 "${RED}ERROR${NC}: Domain center is required as command line option ${BLUE}-c lat,lon${NC}."
         exit 0
     fi
 
@@ -392,10 +392,10 @@ function run_static {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            echo "$$: Checking: $cond"
+            mecho0 "Checking: $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for file: $cond"
+                    mecho0 "Waiting for file: $cond"
                 fi
                 sleep 10
             done
@@ -407,7 +407,7 @@ function run_static {
     cd $wrkdir || return
 
     if [[ -f done.static ]]; then
-        echo "Found file \"done.static\", skipping run_static ...."
+        mecho0 "Found file \"done.static\", skipping run_static ...."
         echo ""
         return
     elif [[ -f running.static || -f queue.static ]]; then
@@ -416,12 +416,12 @@ function run_static {
 
     if [[ ! -f $domname.graph.info.part.${npestatic} ]]; then
         if [[ $verb -eq 1 ]]; then
-            echo "Generating ${domname}.graph.info.part.${npestatic} in $wrkdir using ${gpmetis}"
+            mecho0 "Generating ${domname}.graph.info.part.${npestatic} in $wrkdir using ${gpmetis}"
         fi
         ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npestatic} > gpmetis.out$npestatic
         estatus=$?
         if [[ ${estatus} -ne 0 ]]; then
-            echo "${estatus}: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npestatic}"
+            mecho0 "${estatus}: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npestatic}"
             exit ${estatus}
         fi
     fi
@@ -433,7 +433,7 @@ function run_static {
 
     initfile="../ungrib/${EXTHEAD}:$inittime_str"
     if [[ ! -f $initfile ]]; then
-        echo "Initial file (for extracting time): $initfile not found"
+        mecho0 "Initial file (for extracting time): $initfile not found"
         exit 0
     fi
     ln -sf $initfile .
@@ -574,10 +574,10 @@ function run_rotate {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            echo "$$: Checking: $cond"
+            mecho0 "Checking: $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for file: $cond"
+                    mecho0 "Waiting for file: $cond"
                 fi
                 sleep 10
             done
@@ -589,8 +589,7 @@ function run_rotate {
     cd $wrkdir || return
 
     if [[ -f done.rotate ]]; then
-        echo "Found file \"done.rotate\", skipping run_rotate ...."
-        echo ""
+        mecho0 "Found file \"done.rotate\", skipping run_rotate ...."
         return
     elif [[ -f running.rotate || -f queue.rotate ]]; then
         return                   # skip
@@ -695,8 +694,7 @@ function run_ungrib_hrrr {
     cd $wrkdir || return
 
     if [[ -f done.ungrib ]]; then
-        echo "Found file \"done.ungrib\", skipping run_ungrib_hrrr ...."
-        echo ""
+        mecho0 "Found file \"done.ungrib\", skipping run_ungrib_hrrr ...."
         return                   # skip
     elif [[ -f running.ungrib || -f queue.ungrib ]]; then
         return                   # skip
@@ -722,7 +720,7 @@ function run_ungrib_hrrr {
     if [[ $verb -eq 1 ]]; then echo "HRRR file: $hrrrfile"; fi
     while [[ ! -f $hrrrfile && ! -f $basefn ]]; do
         if [[ $verb -eq 1 ]]; then
-            echo "Waiting for $hrrrfile ..."
+            mecho0 "Waiting for $hrrrfile ..."
         fi
         sleep 10
     done
@@ -790,10 +788,10 @@ function run_meshplot_ncl {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            echo "$$: Checking: $cond"
+            mecho0 "Checking: $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for file: $cond"
+                    mecho0 "Waiting for file: $cond"
                 fi
                 sleep 10
             done
@@ -802,7 +800,7 @@ function run_meshplot_ncl {
 
     wrkdir="$rundir/$domname"
     if [[ ! -f $wrkdir/$domname.grid.nc ]]; then
-        echo "Working file: $wrkdir/$domname.grid.nc not exist."
+        mecho0 "Working file: $wrkdir/$domname.grid.nc not exist."
         return
     fi
     cd $wrkdir || return
@@ -825,7 +823,7 @@ EOF
     $nclpath $jobscript
 
     if [[ -f $domname.png ]]; then
-        echo "Domain on ${starttime_str:0:10} is saved as $wrkdir/$domname.png."
+        mecho0 "Domain on ${starttime_str:0:10} is saved as $wrkdir/$domname.png."
     fi
 }
 
@@ -849,10 +847,10 @@ function run_meshplot_py {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            echo "$$: Checking: $cond"
+            mecho0 "Checking: $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for file: $cond"
+                    mecho0 "Waiting for file: $cond"
                 fi
                 sleep 10
             done
@@ -861,14 +859,13 @@ function run_meshplot_py {
 
     wrkdir="$rundir/$domname"
     if [[ ! -f $wrkdir/$domname.grid.nc ]]; then
-        echo "Working file: $wrkdir/$domname.grid.nc not exist."
+        mecho0 "Working file: $wrkdir/$domname.grid.nc not exist."
         return
     fi
     cd $wrkdir  || return
 
     if [[ -f "${domname}.radars.${eventdate}.sh" ]]; then
-        echo "Found file \"${domname}.radars.${eventdate}.sh\", skipping run_run_meshplot_py ...."
-        echo ""
+        mecho0 "Found file \"${domname}.radars.${eventdate}.sh\", skipping run_run_meshplot_py ...."
         return
     fi
 
@@ -892,7 +889,7 @@ function run_meshplot_py {
     #                        When "True", retrieve grid from command line.
     #
     jobcmdstr="$jobscript -o $wrkdir -e ${eventdate} -name ${domname} -outgrid ${output_grid} -g ${FIXDIR}/nexrad_stations.txt ${domname}.grid.nc"
-    echo "Running $jobcmdstr"
+    mecho0 "Running $jobcmdstr"
     python $jobcmdstr
 
     ls -l ${domname}.radars.${eventdate}.sh
@@ -946,25 +943,27 @@ function run_clean {
 
 function write_runtimeconfig {
     if [[ $# -ne 1 ]]; then
-        echo "ERROR: No enough argument to function \"write_runtimeconfig\"."
+        mecho0 "${RED}ERROR${NC}: No enough argument to function ${BROWN}write_runtimeconfig${NC}."
         exit 1
     fi
     local configname=$1
 
     if [[ -e $configname ]]; then
-        echo -n "Case configuration file: $configname exist. Overwrite, [yes,no,skip,bak]? "
+        mecho0  "Case configuration file: ${CYAN}$configname${NC} exist."
+        mecho0n "Overwrite, [${BROWN}yes,no,skip,bak${NC}]? "
         read -r doit
         if [[ ${doit^^} == "YES" ]]; then
-            echo -e "\nWARNING: $configname will be replaced."
+            mecho0 "${BROWN}WARNING${NC}: ${CYAN}$configname${NC} will be replaced."
         elif [[ ${doit^^} == "SKIP" ]]; then
-            echo -e "\nWARNING: $configname will be kept. Skip setup."
+            mecho0 "${BROWN}WARNING${NC}: ${CYAN}$configname${NC} will be kept. Skip ${BROWN}setup${NC}."
             return
         elif [[ ${doit^^} == "BAK" ]]; then
             datestr=$(date +%Y%m%d_%H%M%S)
-            echo -e "\nWARNING: Orignal \"$configname\" is backuped as \"${configname}.bak${datestr}\"."
+            mecho0 "${BROWN}WARNING${NC}: Orignal ${CYAN}$configname${NC} is backuped as"
+            mecho0 "         ${PURPLE}${configname}.bak${datestr}${NC}"
             mv ${configname} ${configname}.bak${datestr}
         else
-            echo -e "\nGot \"${doit^^}\", exit the program."
+            mecho0 "Got ${PURPLE}${doit^^}${NC}, exit the program."
             exit 1
         fi
     fi
@@ -1174,9 +1173,9 @@ function write_runtimeconfig {
     EXTNFGL=51
     EXTNFLS=9
     EXTHEAD="HRRRE"
-    hrrrvtable="Vtable.HRRRE.2018"
+    hrrrvtable="${hrrrvtable}"
     hrrr_dir="${hrrr_dir}"
-    hrrr_time="1400"
+    hrrr_time="${hrrr_time_ics}"
 
     partition_ics="${partition_ics}"
     claim_cpu_ics="${claim_cpu_ics}"
@@ -1188,9 +1187,9 @@ function write_runtimeconfig {
     EXTNFGL=51
     EXTNFLS=9
     EXTHEAD="HRRRE"
-    hrrrvtable="Vtable.HRRRE.2018"
+    hrrrvtable="${hrrrvtable}"
     hrrr_dir="${hrrr_dir}"
-    hrrr_time="1200"
+    hrrr_time="${hrrr_time_lbc}"
 
     npelbc="${npelbc}"; ncores_lbc="${ncores_lbc}"
     partition_lbc="${partition_lbc}"
@@ -1262,9 +1261,57 @@ EOF
 
 }
 
+########################################################################
+
+function check_hrrr_files {
+    #
+    # Check the external grib2 files availability for providing the system ICS/LBCs
+    #
+
+    echo -ne "Checking ${CYAN}$hrrrfile${NC} ... "
+    if ls $hrrrfile > /dev/null 2>&1; then
+        echo -e "${GREEN}Found${NC}"
+    else
+        echo -e "${RED}Missing${NC}"
+    fi
+
+    echo -ne "Checking ${CYAN}${hrrr_dir}/${eventdate}/${hrrr_time_ics}${NC} .... "
+    if ls ${hrrr_dir}/${eventdate}/${hrrr_time_ics} > /dev/null 2>&1; then
+        echo -e "${GREEN}Found${NC}"
+        for mdir in "${hrrr_dir}/${eventdate}/${hrrr_time_ics}"/postprd_mem00??; do
+            if [[ -d $mdir ]]; then
+                subdir=$(basename $mdir)
+                fcount=("$mdir"/wrfnat_hrrre_newse_mem00??_01.grib2)
+                echo -e "\t$subdir .... ${GREEN}${#fcount[@]}${NC}"
+            else
+                echo -e "\tMember directories ${RED}missing${NC}"
+            fi
+        done
+    else
+        echo -e "${RED}Missing${NC}"
+    fi
+
+    echo -ne "Checking ${CYAN}${hrrr_dir}/${eventdate}/${hrrr_time_lbc}${NC} .... "
+
+    if ls ${hrrr_dir}/${eventdate}/${hrrr_time_lbc} > /dev/null 2>&1; then
+        echo -e "${GREEN}Found${NC}"
+        for mdir in "${hrrr_dir}/${eventdate}/${hrrr_time_lbc}"/postprd_mem00??; do
+            if [[ -d $mdir ]]; then
+                subdir=$(basename $mdir)
+                fcount=("$mdir"/wrfnat_pert_hrrr_mem00??_??.grib2)
+                echo -e "\t$subdir .... ${GREEN}${#fcount[@]}${NC}"
+            else
+                echo -e "\tMember directories ${RED}missing${NC}"
+            fi
+        done
+    else
+        echo -e "${RED}Missing${NC}"
+    fi
+}
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #
-# Default values
+# Default settings
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #@ MAIN
@@ -1300,6 +1347,8 @@ fi
 
 fixed_level="${FIXDIR}/L60.txt"
 damode="restart"
+
+source "${scpdir}/Common_Utilfuncs.sh" || exit $?
 
 #-----------------------------------------------------------------------
 #
@@ -1374,7 +1423,7 @@ while [[ $# -gt 0 ]]
                 cen_lat=${latlons[0]}
                 cen_lon=${latlons[1]}
             else
-                echo "ERROR: Domain center is required as \"lat,lon\", get: $2."
+                echo -e "${RED}ERROR${NC}: Domain center is required as ${BLUE}-c lat,lon${NC}, get: ${BROWN}$2${NC}."
                 usage 1
             fi
             shift
@@ -1563,8 +1612,6 @@ else    # Vecna at NSSL
     fi
 fi
 
-source "${scpdir}/Common_Utilfuncs.sh" || exit $?
-
 #
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
@@ -1582,30 +1629,23 @@ EXTINVL=10800
 EXTHEAD="HRRRE"
 #hrrrvtable="Vtable.raphrrr"
 hrrrvtable="Vtable.HRRRE.2018"
-#hrrrfile="${hrrr_dir}/${eventdate}/1400/mem01/wrfnat_hrrre_newse_mem0001_01.grib2"
-hrrrfile="${hrrr_dir}/${eventdate}/1400/postprd_mem0001/wrfnat_hrrre_newse_mem0001_01.grib2"
+hrrr_time_ics="1400"
+hrrr_time_lbc="1200"
+hrrrfile="${hrrr_dir}/${eventdate}/${hrrr_time_ics}/postprd_mem0001/wrfnat_hrrre_newse_mem0001_01.grib2"
 hrrrdate="${eventdate}"
 hrrrtime="${eventtime}"
 
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 
 if [[ " ${jobs[*]} " == " check " ]]; then
-    echo "Checking $hrrrfile ..."
-    ls -l --color $hrrrfile
-    echo ""
-    echo "Checking ${hrrr_dir}/${eventdate}/1400 ...."
-    ls -lF --color -I "HRRRE_mem*" -I "HRRR*" ${hrrr_dir}/${eventdate}/1400
-    echo ""
-    echo "Checking ${hrrr_dir}/${eventdate}/1200 ...."
-    ls -lF --color -I "HRRRE_mem*" -I "HRRR*" ${hrrr_dir}/${eventdate}/1200
-    exit 0
+    check_hrrr_files; exit 0
 fi
 
 echo "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
-echo "     Event date : ${eventdate} ${eventtime}"
-echo "     Root    dir: $rootdir"
-echo "     Working dir: $WORKDIR"
-echo " "
+echo -e "     Event date : ${GREEN}$eventdate${NC} ${LIGHT_BLUE}${eventtime}${NC}"
+echo    "     Root    dir: $rootdir"
+echo    "     Working dir: $WORKDIR"
+echo    " "
 
 starttime_str=$(date -u -d "${eventdate} ${eventtime}" +%Y-%m-%d_%H:%M:%S)
 

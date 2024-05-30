@@ -119,7 +119,7 @@ function usage {
     echo "               YYYYmmddHHMM: run this forecast cycle only."
     echo "    WORKDIR  - Run Directory"
     echo "    JOBS     - One or more jobs from [mpas,mpassit,upp,clean]"
-    echo "               Default all jobs in sequence"
+    echo "               Default all jobs in sequence."
     echo " "
     echo "    OPTIONS:"
     echo "              -h                  Display this message"
@@ -131,8 +131,8 @@ function usage {
     echo "              -w                  Hold script to wait for all job conditions are satified and submitted (for mpassit & upp)."
     echo "                                  By default, the script will exit after submitting all possible jobs."
     echo "              -c                  Works with Clean command only"
-    echo "                                  None (default): Delete output files also."
-    echo "                                  mpas/mpassit:    Delete output files from the specific task only."
+    echo "                                  None (default): Delete log/standard output files only."
+    echo "                                  mpas/mpassit:   Delete netCDF output files also from the specific task."
     echo "              -a                  Works with Clean command only. Same as -c for deep clean the whole directory"
     echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
     echo "              -i  YYYYmmddHHMM    Initial time, default: same as start time from the command line argument"
@@ -184,7 +184,7 @@ function run_mpas {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking $cond"
+            mecho0 "Checking $cond"
             while [[ ! -e $cond ]]; do
                 #if [[ $verb -eq 1 ]]; then
                 #    echo "Waiting for file: $cond"
@@ -207,12 +207,12 @@ function run_mpas {
     if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npefcst} ]]; then
         cd $rundir/$domname || return
         if [[ $verb -eq 1 ]]; then
-            echo "Generating ${domname}.graph.info.part.${npefcst} in $rundir/$domname using $exedir/gpmetis"
+            mecho0 "Generating ${domname}.graph.info.part.${npefcst} in $rundir/$domname using $exedir/gpmetis"
         fi
         $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst} > gpmetis.out$npefcst
         estatus=$?
         if [[ ${estatus} -ne 0 ]]; then
-            echo "${estatus}: $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst}"
+            mecho0 "${estatus}: $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst}"
             exit ${estatus}
         fi
         cd $wrkdir || return
@@ -267,7 +267,7 @@ function run_mpas {
         lbc_myfile=${domname}_${memstr}.lbc.${mpastime_str}.nc
         if [[ $dorun == true ]]; then
             if [[ ! -e ${lbc_dafile} ]]; then     # impossible condition unless not actual run
-                echo "File: ${lbc_dafile} not exist."
+                mecho0 "File: ${lbc_dafile} not exist."
                 exit 1
             fi
         fi
@@ -556,17 +556,21 @@ function run_mpassit {
     # Check MPASSIT status
     #
     if [[ -f done.mpassit ]]; then
-        echo -e "${DARK}${FUNCNAME[0]}:${NC} MPASSIT done for all forecast minutes"
+        mecho0 "MPASSIT done for all forecast minutes"
         return
     fi
 
     if [[ -f running.mpassit || -f queue.mpassit ]]; then
-        echo -e "${DARK}${FUNCNAME[0]}:${NC} MPASSIT is running/queued for all forecast minutes"
+        mecho0 "MPASSIT is running/queued for all forecast minutes"
+        #check_job_status "mpassit mem" $wrkdir $ENS_SIZE run_mpassit.${mach} ${num_resubmit}
+        #if [[ -f done.mpassit ]]; then
+        #    mecho0 "MPASSIT done for all forecast minutes"
+        #fi
         return
     fi
 
     if [[ -f error.mpassit ]]; then
-        echo -e "${DARK}${FUNCNAME[0]}:${NC} MPASSIT failed for all forecast minutes "
+        mecho0 "MPASSIT failed for all forecast minutes "
         return
     fi
 
@@ -574,30 +578,41 @@ function run_mpassit {
     for ((i=diag_start;i<=fcst_seconds;i+=OUTINVL)); do
         minstr=$(printf "%03d" $((i/60)))
 
+        if [[ -f running.mpassit$minstr || -f queue.mpassit$minstr ]]; then
+            check_job_status "mpassit$minstr mem" $wrkdir $ENS_SIZE run_mpassit_$minstr.${mach} ${num_resubmit}
+            if [[ -f done.mpassit$minstr ]]; then
+                mecho0 "MPASSIT done for ensemble forecasts at ${minstr}"
+                (( n+=1 ))
+            else
+                mecho0 "MPASSIT is running/queued for ensemble forecasts at ${minstr}"
+            fi
+            continue
+        fi
+
         if [[ -f done.mpassit$minstr ]]; then
-            echo -e "${DARK}${FUNCNAME[0]}:${NC} MPASSIT done for forecast at ${minstr}"
+            mecho0 "MPASSIT done for ensemble forecasts at ${minstr}"
+            #done_mins+=("${minstr}")
             (( n+=1 ))
             continue
         fi
 
-        if [[ -f running.mpassit$minstr || -f queue.mpassit$minstr ]]; then
-            echo -e "${DARK}${FUNCNAME[0]}:${NC} MPASSIT is running/queued for forecast at ${minstr}"
-            continue
-        fi
-
         if [[ -f error.mpassit$minstr ]]; then
-            echo -e "${DARK}${FUNCNAME[0]}:${NC} MPASSIT failed for forecast at ${minstr}"
+            mecho0 "MPASSIT failed for forecast at ${minstr}"
             continue
         fi
 
         fcst_minutes+=("${minstr}")
     done
 
+    #if [[ ${#done_mins[@]} -gt 0 ]]; then
+    #    mecho0 "MPASSIT done: [${done_mins[*]}]"
+    #fi
+
     n_fcst=$(( (fcst_seconds-diag_start)/OUTINVL+1 ))
     if [[ $n -eq $n_fcst ]]; then
         touch done.mpassit
         rm -rf done.mpassit???
-        echo -e "${DARK}${FUNCNAME[0]}:${NC} MPASSIT done for all forecast minutes"
+        mecho0 "MPASSIT done for all forecast minutes"
     fi
 
     #
@@ -670,7 +685,10 @@ function run_mpassit_onetime {
         prepare_mpassit_onetime $wrkdir ${iseconds} $i 30
         local estatus=$?               # number of missing members
         if [[ ${estatus} -gt 0 ]]; then
+            echo -e " ${PURPLE}${estatus}${NC} files missing"
             continue
+        else
+            echo -e " ${GREEN}Ready${NC}"
         fi
 
         #
@@ -734,9 +752,11 @@ function run_mpassit_alltimes {
         prepare_mpassit_onetime $wrkdir ${iseconds} $i 2
         local estatus=$?               # number of missing members
         if [[ ${estatus} -gt 0 ]]; then
-            echo -e "${DARK}${FUNCNAME[0]}:${NC} ${estatus} files missing"
+            echo -e " ${PURPLE}${estatus}${NC} files missing"
             missed=true
             continue
+        else
+            echo -e " ${GREEN}done${NC}"
         fi
     done
 
@@ -815,9 +835,9 @@ function prepare_mpassit_onetime {
 
         if [[ $dorun == true ]]; then
             for fn in $histfile $diagfile; do
-                #echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking ${fn##$rundir/} ..."
+                #mecho0 "Checking ${fn##$rundir/} ..."
                 if [[ $outdone == false ]]; then
-                    echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking forecast files at $minstr for all $ENS_SIZE memebers from fcst/${fcst_lauch_time} ..."
+                    mecho0n "Checking forecast files at ${WHITE}$minstr${NC} for all $ENS_SIZE memebers from fcst${daffix}/${fcst_lauch_time} ..."
                     outdone=true
                 fi
                 while [[ ! -f $fn ]]; do
@@ -833,7 +853,7 @@ function prepare_mpassit_onetime {
                 done
                 fileage=$(( $(date +%s) - $(stat -c %Y -- "$fn") ))
                 if [[ $fileage -lt $waitseconds ]]; then
-                    if [[ $verb -eq 1 ]]; then echo -e "${DARK}${FUNCNAME[0]}:${NC} Waiting for $fn ..."; fi
+                    if [[ $verb -eq 1 ]]; then mecho0 "Waiting for $fn ..."; fi
                     sleep "$waitseconds"
                 fi
             done
@@ -952,7 +972,7 @@ function run_upp {
         donefile="$mpassitdir/mpassit/done.mpassit$minstr"
 
         if [[ $dorun == true ]]; then
-            echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking $donefile ...."
+            mecho0 "Checking $donefile ...."
             while [[ ! -f $donefile && ! -f "$mpassitdir/mpassit/done.mpassit" ]]; do
                 if [[ $jobwait -eq 0 ]]; then     # do not wait
                     continue 2                    # go ahread to process next forecast hour
@@ -1112,7 +1132,7 @@ function fcst_driver() {
             #------------------------------------------------------
             # 1. Model forecast for all members
             #------------------------------------------------------
-            if [[ $verb -eq 1 ]]; then echo "    Run MPAS model at $eventtime"; fi
+            if [[ $verb -eq 1 ]]; then echo "  Run MPAS model at $eventtime"; fi
 
             mpas_jobscript="run_mpas.${mach}"
             run_mpas $fcstwrkdir $ilaunch
@@ -1125,7 +1145,7 @@ function fcst_driver() {
             #------------------------------------------------------
             # 2. Interpolate the forecast datasets to a virtual WRF grid
             #------------------------------------------------------
-            if [[ $verb -eq 1 ]]; then echo "    Run MPASSIT at $eventtime"; fi
+            if [[ $verb -eq 1 ]]; then echo "  Run MPASSIT at $eventtime"; fi
 
             run_mpassit $fcstwrkdir $ilaunch
 
@@ -1158,7 +1178,7 @@ function fcst_driver() {
                 fi
             fi
 
-            if [[ $verb -eq 1 ]]; then echo "    Run UPP at $eventtime"; fi
+            if [[ $verb -eq 1 ]]; then echo "  Run UPP at $eventtime"; fi
 
             run_upp $fcstwrkdir $ilaunch
 
@@ -1611,8 +1631,11 @@ else
 fi
 
 if [[ ! -r ${config_file} ]]; then
-    echo -e "${RED}ERROR${NC}: Configuration file ${config_file} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
+    echo -e "${RED}ERROR${NC}: Configuration file ${CYAN}${config_file}${NC} is not found."
+    echo -e "       Please run ${BROWN}setup_mpas-wofs_grid.sh${NC} first or use option ${BLUE}-h${NC} option to show usage."
     exit 2
+else
+    echo -e "Reading case (${GREEN}${eventdate}${NC}) configuration file: ${CYAN}${config_file}${NC} ...."
 fi
 readconf ${config_file} COMMON fcst || exit $?
 # get ENS_SIZE, time_step, EXTINVL, OUTINVL, OUTIOTYPE
@@ -1652,10 +1675,10 @@ fi
 exedir="$rootdir/exec"
 
 echo "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
-echo "     Event date : $eventdate ${eventtime} UTC"
-echo "     Root    dir: $rootdir"
-echo "     Working dir: $WORKDIR"
-echo "     Domain name: $domname;  MP scheme: ${mpscheme}"
+echo -e "     Event date : ${GREEN}$eventdate${NC} ${LIGHT_BLUE}${eventtime}${NC}"
+echo    "     Root    dir: $rootdir"
+echo    "     Working dir: $WORKDIR"
+echo -e "     Domain name: ${PURPLE}$domname${NC};  MP scheme: ${BROWN}${mpscheme}${NC}"
 echo " "
 
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
