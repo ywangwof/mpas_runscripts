@@ -191,7 +191,7 @@ function check_job_status {
     # $runcmd, $verb
 
     local numtry "done" memdir runjobs jobarrays mem memstr
-    local donefile errorfile
+    local memdonefile memerrorfile donefile
 
     cd $mywrkdir  || return
 
@@ -211,6 +211,7 @@ function check_job_status {
     done < <(seq 1 $donenum)
 
     mecho1 "Waiting for ensemble jobs of ${WHITE}${jobname}${NC} in ${BROWN}${mywrkdir##"${WORKDIR}"/}${NC}"
+    donefile="$mywrkdir/done.${jobname}"
     numtry=0
     done=0; error=0; running=0
     while [[ $numtry -le $numtries ]]; do
@@ -218,12 +219,12 @@ function check_job_status {
         for mem in "${runjobs[@]}"; do
             memstr=$(printf "%02d" $mem)
             memdir="$mywrkdir/${memname}$memstr"
-            donefile="$memdir/done.${jobname}_$memstr"
-            errorfile="$memdir/error.${jobname}_$memstr"
+            memdonefile="$memdir/done.${jobname}_$memstr"
+            memerrorfile="$memdir/error.${jobname}_$memstr"
 
-            if [[ $verb -eq 1 ]]; then mecho1 "Checking $donefile"; fi
-            while [[ ! -e $donefile ]]; do
-                if [[ -e $errorfile ]]; then
+            if [[ $verb -eq 1 ]]; then mecho1 "Checking $memdonefile"; fi
+            while [[ ! -e $memdonefile && ! -e $donefile ]]; do
+                if [[ -e $memerrorfile ]]; then
                     jobarrays+=("$mem")
                     (( error+=1 ))
                     break
@@ -235,7 +236,12 @@ function check_job_status {
                 #if [[ $verb -eq 1 ]]; then echo "Waiting for $donefile"; fi
                 sleep 10
             done
-            if [[ -e $donefile ]]; then (( done+=1 )); fi
+            if [[ -e $donefile ]]; then
+                done=$donenum
+                break
+            elif [[ -e $memdonefile ]]; then
+                (( done+=1 ))
+            fi
         done
 
         (( numtry+=1 ))
@@ -659,14 +665,14 @@ function clean_mem_runfiles {
         #echo $donefile, $memdir
         if [[ -e $donefile ]]; then
             if [[ $verb -eq 1 ]]; then
-                echo "$donefile exist, delete \"$memdir\" & \"${jobname}_${mem}_*.log\" ...."
+                mecho1 "${CYAN}$donefile${NC} exist, delete ${BROWN}$memdir${NC} & ${BROWN}${jobname}_${mem}_*.log${NC}."
             fi
             rm -rf $memdir
             rm -f  ${jobname}_${mem}_*.log
             (( done+=1 ))
         else
             if [[ $verb -eq 1 ]]; then
-                echo "$donefile not found. Skip deleting \"$memdir\" & \"${jobname}_${mem}_*.log\"."
+                mecho1 "${CYAN}$donefile${NC} not found. Skip deleting ${BROWN}$memdir${NC} & ${BROWN}${jobname}_${mem}_*.log${NC}."
             fi
         fi
     done

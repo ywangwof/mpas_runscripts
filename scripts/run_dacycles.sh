@@ -134,7 +134,7 @@ function usage {
     echo " "
     echo "                                     -- By Y. Wang (2023.05.31)"
     echo " "
-    exit $1
+    exit "$1"
 }
 
 ########################################################################
@@ -178,7 +178,7 @@ function run_obsmerge {
     input_base="${wrkdir}/input.nml"
 
     mecho0 "OBS Preprocessing for analysis time: ${anlys_time}, days: ${g_date}, seconds: ${g_sec}"
-    mecho0 "OBS_DIR=${OBS_DIR}"
+    mecho0 "OBS_DIR=${LIGHT_BLUE}${OBS_DIR}${NC}"
 
     obsflists=()
     k=1
@@ -191,11 +191,11 @@ function run_obsmerge {
     bufr_file="${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}"
     if [[ $rt_run == true && ${use_BUFR} == true && "${anlys_time:2:2}" == "00" ]]; then
         if [[ ! -e ${bufr_file} ]]; then
-            echo "    Waiting for ${bufr_file} ...."
+            echo "    Waiting for ${bufr_file##"${OBS_DIR}"/} ...."
         fi
         while [[ ! -e ${bufr_file} ]]; do
             if [[ -e "${bufr_file}.missed" ]]; then
-                echo "    Not found. Skip ${bufr_file} ...."
+                echo "    Not found. Skip ${bufr_file##"${OBS_DIR}"/} ...."
                 break
             fi
             sleep 10
@@ -203,7 +203,7 @@ function run_obsmerge {
     fi
 
     if [[ -e ${bufr_file} ]]; then
-        echo "    $((k++)): Using PrepBufr observations in ${bufr_file}"
+        echo -e "    ${PURPLE}$((k++))${NC}: Using PrepBufr observations in ${LIGHT_BLUE}${bufr_file##"${OBS_DIR}"/}${NC}"
         #echo "${bufr_file}" > obsflist.bufr
         #obsflists+=(obsflist.bufr)
 
@@ -212,7 +212,7 @@ function run_obsmerge {
         sed "/obsdistbdy/s/=.*/= 90000/;/obs_boundary/s/=.*/= 21000/" ${input_base} > input.nml
 
         if [[ $verb -eq 1 ]]; then
-            echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
+            mecho0 "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
         fi
 
         { echo "Run command ${obspreprocess} as:";
@@ -233,11 +233,11 @@ function run_obsmerge {
 
             obsflists+=(obsflist.bufr)
         else
-            echo -e "${RED}ERROR${NC}: command ${obspreprocess} for PREPBUFR data"
+            mecho0 -e "${RED}ERROR${NC}: command ${BROWN}${obspreprocess}${NC} for PREPBUFR data"
         fi
     else
         if [[ "${anlys_time:2:2}" == "00" ]]; then
-            echo "    PrepBufr data not found: ${bufr_file}"
+            echo "    PrepBufr data not found: ${bufr_file##"${OBS_DIR}"/}"
         fi
     fi
 
@@ -249,11 +249,11 @@ function run_obsmerge {
     meso_file="${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time}"
     if [[ $rt_run == true && ${use_MESO} == true ]]; then
         if [[ ! -e ${meso_file} ]]; then
-            echo "    Waiting for ${meso_file} ...."
+            echo "    Waiting for ${meso_file##"${OBS_DIR}"/} ...."
         fi
         while [[ ! -e ${meso_file} ]]; do
             if [[ -e "${meso_file}.missed" ]]; then
-                echo "    Not found. Skip ${meso_file} ...."
+                echo "    Not found. Skip ${meso_file##"${OBS_DIR}"/} ...."
                 break
             fi
             sleep 10
@@ -261,7 +261,7 @@ function run_obsmerge {
     fi
 
     if [[ -e ${meso_file} ]]; then
-        echo "    $((k++)): Using Mesonet observations in ${meso_file}"
+        echo -e "    ${PURPLE}$((k++))${NC}: Using Mesonet observations in ${LIGHT_BLUE}${meso_file##"${OBS_DIR}"/}${NC}"
         #echo "${meso_file}" > obsflist.meso
         #obsflists+=(obsflist.meso)
 
@@ -270,7 +270,7 @@ function run_obsmerge {
         sed "/obsdistbdy/s/=.*/= 15000/;/obs_boundary/s/=.*/= 5000/" ${input_base} > input.nml
 
         if [[ $verb -eq 1 ]]; then
-            echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
+            mecho0 "Run command ${BROWN}${obspreprocess}${NC} with parameters: ${BLUE}${g_date} ${g_sec}${NC}"
         fi
         { echo "Run command ${obspreprocess} as:";
           echo "echo  \"${g_date} ${g_sec}\" | ${obspreprocess}";
@@ -289,11 +289,11 @@ function run_obsmerge {
 
             obsflists+=(obsflist.meso)
         else
-            echo -e "${RED}ERROR${NC}: command ${obspreprocess} for MESONET data"
+            mech0 "${RED}ERROR${NC}: command ${BROWN}${obspreprocess}${NC} for MESONET data"
         fi
     else
         if [[ ${use_MESO} == true ]]; then
-            echo "    Mesonet not found: ${meso_file}"
+            echo "    Mesonet not found: ${meso_file##"${OBS_DIR}"/}"
         fi
     fi
 
@@ -308,11 +308,11 @@ function run_obsmerge {
 
     if [[ $rt_run == true && ${use_CWP} == true ]]; then
         if [[ ! -e ${cwp_file} ]]; then
-            echo "    Waiting for ${cwp_file} ...."
+            echo "    Waiting for ${cwp_file##"${OBS_DIR}"/} ...."
         fi
         while [[ ! -e ${cwp_file} ]]; do
             if [[ -e "${cwp_file}.missed" ]]; then
-                echo "    Not found. Skip ${cwp_file} ...."
+                echo "    Not found. Skip ${cwp_file##"${OBS_DIR}"/} ...."
                 break
             fi
             sleep 10
@@ -320,14 +320,14 @@ function run_obsmerge {
     fi
 
     if [[ -e ${cwp_file} ]]; then
-        echo "    $((k++)): Using CWP data in ${cwp_file}"
+        echo -e "    ${PURPLE}$((k++))${NC}: Using CWP data in ${LIGHT_BLUE}${cwp_file##"${OBS_DIR}"/}${NC}"
 
         cp ${cwp_file} ./obs_seq.old
 
         sed "/obsdistbdy/s/=.*/= 15000/;/obs_boundary/s/=.*/= 5000/" ${input_base} > input.nml
 
         if [[ $verb -eq 1 ]]; then
-            echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
+            mecho0 "Run command ${BROWN}${obspreprocess}${NC} with parameters: ${BLUE}${g_date} ${g_sec}${NC}"
         fi
         { echo "Run command ${obspreprocess} as:";
           echo "echo  \"${g_date} ${g_sec}\" | ${obspreprocess}";
@@ -345,11 +345,11 @@ function run_obsmerge {
 
             obsflists+=(obsflist.cwp)
         else
-            echo -e "${RED}ERROR${NC}: command ${obspreprocess} for CWP data"
+            mech0 "${RED}ERROR${NC}: command ${BROWN}${obspreprocess}${NC} for CWP data"
         fi
     else
         if [[ ${use_CWP} == true && "${anlys_time:3:1}" == "0" ]]; then
-            echo "    CWP not found: ${cwp_file}"
+            echo "    CWP not found: ${cwp_file##"${OBS_DIR}"/}"
         fi
     fi
 
@@ -368,13 +368,13 @@ function run_obsmerge {
 
         numrad=$(find ${RAD_DIR}/ -name "${rad_files}" | wc -l)
         if [[ $numrad -ne ${#channels[@]} ]]; then
-            echo "    Waiting for ${RAD_DIR}/${rad_files} ...."
+            echo "    Waiting for Radiance/${rad_files} ...."
         fi
         while [[ $numrad -ne ${#channels[@]} ]]; do
             sleep 10
             numrad=$(find ${RAD_DIR}/ -name "${rad_files}" | wc -l)
             if [[ -e "${RAD_DIR}/${rad_files}.missed" ]]; then
-                echo "    Not found. Skip ${rad_files} ...."
+                echo "    Not found. Skip Radiance/${rad_files} ...."
                 break
             fi
         done
@@ -400,13 +400,13 @@ function run_obsmerge {
             chan=${a##obs_seq_abi.G16_C}
             chan=${chan%%."${anlys_date}${anlys_time}"}
             if [[ " ${channels[*]} " == *" $chan "* ]]; then
-                echo "    $k-$i: Using Radiance data in ${abifile}"
+                echo -e "    ${PURPLE}$k-$i${NC}: Using Radiance data in ${LIGHT_BLUE}${abifile##"${OBS_DIR}"/}${NC}"
                 cp ${abifile} ./obs_seq.old
 
                 sed "/obsdistbdy/s/=.*/= 15000/;/obs_boundary/s/=.*/= 5000/" ${input_base} > input.nml
 
                 if [[ $verb -eq 1 ]]; then
-                    echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
+                    mecho0 "Run command ${BROWN}${obspreprocess}${NC} with parameters: ${BLUE}${g_date} ${g_sec}${NC}"
                 fi
                 ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >> ${srunout}_ABI 2>&1
 
@@ -417,14 +417,14 @@ function run_obsmerge {
                     rm ./obs_seq.old
                     echo $wrkdir/OBSDIR/obs_seq.abiC$chan >> obsflist.abi
                 else
-                    echo -e "${RED}ERROR${NC}: command ${obspreprocess} for Radiance data"
+                    mech0 "${RED}ERROR${NC}: command ${BROWN}${obspreprocess}${NC} for Radiance data"
                     exit 1
                 fi
             else
-                echo " Radiance file ${abifile} is on Channel $chan, ignoring currently."
+                echo "    Radiance file ${abifile##"${OBS_DIR}"/} is on Channel $chan, ignoring currently."
             fi
         else
-            echo "    Radiance not found: ${abifile}"
+            echo "    Radiance not found: ${abifile##"${OBS_DIR}"/}"
         fi
     done
 
@@ -449,11 +449,11 @@ function run_obsmerge {
 
     if [[ $rt_run == true ]]; then
         if [[ ! -e ${dbz_file} ]]; then
-            echo "    Waiting for ${dbz_file} ...."
+            echo "    Waiting for ${dbz_file##"${OBS_DIR}"/} ...."
         fi
         while [[ ! -e ${dbz_file} ]]; do
             if [[ -e "${dbz_file}.missed" ]]; then
-                echo "    Not found. Skip ${dbz_file} ...."
+                echo "    Not found. Skip ${dbz_file##"${OBS_DIR}"/} ...."
                 break
             fi
             sleep 10
@@ -463,14 +463,14 @@ function run_obsmerge {
     if [[ -e ${dbz_file} ]]; then
         wait_for_file_age ${dbz_file} 30
 
-        echo "    $((k++)): Using REF data in ${dbz_file}"
+        echo -e "    ${PURPLE}$((k++))${NC}: Using REF data in ${LIGHT_BLUE}${dbz_file##"${OBS_DIR}"/}${NC}"
 
         cp ${dbz_file} ./obs_seq.old
 
         sed "/obsdistbdy/s/=.*/= 15000/;/obs_boundary/s/=.*/= 5000/" ${input_base} > input.nml
 
         if [[ $verb -eq 1 ]]; then
-            echo "    Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
+            mecho0 "    Run command ${BROWN}${obspreprocess}${NC} with parameters: ${BLUE}${g_date} ${g_sec}${NC}"
         fi
         { echo "Run command ${obspreprocess} as:";
           echo "echo  \"${g_date} ${g_sec}\" | ${obspreprocess}";
@@ -489,12 +489,11 @@ function run_obsmerge {
 
             obsflists+=(obsflist.mrms)
         else
-            echo -e "${RED}ERROR${NC}: command ${obspreprocess} for REF data"
+            mech0 "${RED}ERROR${NC}: command ${BROWN}${obspreprocess}${NC} for REF data"
         fi
     else
-        echo "    REF data not found: ${dbz_file}"
+        echo "    REF data not found: ${dbz_file##"${OBS_DIR}"/}"
     fi
-    echo "    "
 
     ########################
     ### Radial Velocity  ###
@@ -510,7 +509,7 @@ function run_obsmerge {
     if [[ -e $rundir/$domname/${domname}.radars.${eventdate}.sh ]]; then
         source $rundir/$domname/${domname}.radars.${eventdate}.sh || exit $?
     else
-        echo -e "${RED}ERROR${NC}: File $rundir/$domname/${domname}.radars.${eventdate}.sh not exist"
+        mech0 "${RED}ERROR${NC}: File ${CYAN}$rundir/$domname/${domname}.radars.${eventdate}.sh${NC} not exist"
         exit 0
     fi
 
@@ -522,9 +521,9 @@ function run_obsmerge {
 
         if [[ $numrad -lt ${num_rad} ]]; then
             if [[ $currsecs -lt ${wait_seconds} ]]; then
-                echo "    Waiting for ${VR_DIR}/${eventdate}/obs_seq_????_VR_${anlys_date}_${anlys_time}.out ...."
+                echo "    Waiting for ${VR_DIR##"${OBS_DIR}"/}/${eventdate}/obs_seq_????_VR_${anlys_date}_${anlys_time}.out ...."
             else
-                echo "    Not found. Skip ${VR_DIR}/${eventdate}/obs_seq_????_VR_${anlys_date}_${anlys_time}.out ...."
+                echo "    Not found. Skip ${VR_DIR##"${OBS_DIR}"/}/${eventdate}/obs_seq_????_VR_${anlys_date}_${anlys_time}.out ...."
             fi
         fi
 
@@ -543,7 +542,7 @@ function run_obsmerge {
         vrj_file=${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out
 
         if [[ $verb -eq 1 ]]; then
-            echo "    Checking VEL data in ${vrj_file}"
+            mecho0 "    Checking VEL data in ${vrj_file##"${OBS_DIR}"/}"
         fi
 
         if [[ -e ${vrj_file} ]]; then
@@ -552,7 +551,7 @@ function run_obsmerge {
 
             if [[ ${run_trimvr} == true ]]; then
                 trimvr_cmd="${scpdir}/seq_filter.py -k -o ./obs_seq.old ${vrj_file}"
-                echo -e "    --- ${BROWN}${trimvr_cmd}${NC}" | sed "s#${scpdir}/##;s#${OBS_DIR}#\${OBS_DIR}#g"      # just to get a short message line
+                mech0 "    --- ${BROWN}${trimvr_cmd}${NC}" | sed "s#${scpdir}/##;s#${OBS_DIR}#\${OBS_DIR}#g"      # just to get a short message line
 
                 if ! ${trimvr_cmd}; then
                     #echo "        Failed. Ignore ${vrj_file}"
@@ -568,7 +567,7 @@ function run_obsmerge {
             #echo "    $k-$n: Using VEL data in ${vrj_file}"
 
             if [[ $verb -eq 1 ]]; then
-                echo "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
+                mecho0 "Run command ${BROWN}${obspreprocess}${NC} with parameters: ${BLUE}${g_date} ${g_sec}${NC}"
             fi
             { echo "Run command ${obspreprocess} as:";
               echo "echo  \"${g_date} ${g_sec}\" | ${obspreprocess}";
@@ -610,7 +609,7 @@ function run_obsmerge {
         fi
         cat "${obsflists[@]}" > obsflist
     else
-        echo "    No valid observation was found"
+        mecho0 "${YELLOW}No valid observation was found${NC}."
         exit 0
     fi
 
@@ -747,7 +746,7 @@ function run_filter {
         fi
 
         if [[ $dorun == true && ! -f $input_file ]]; then
-            echo "File $input_file not exist."
+            mecho0 "${RED}ERROR${NC}: File ${CYAN}$input_file${NC} not exist."
             exit 1
         fi
         echo $input_file >> filter_in.txt
@@ -765,7 +764,6 @@ function run_filter {
     # 2. Adaptive inflation
     #------------------------------------------------------
 
-    inf_flavors=(0 0)
     inf_initial_restart=(".false." ".false.")
     if [[ $ADAPTIVE_INF == true ]]; then
         if [[ -e ${parentdir}/${event_pre}/output_priorinf_mean.nc ]]; then
@@ -773,11 +771,10 @@ function run_filter {
             ln -sf ${parentdir}/${event_pre}/output_priorinf_sd.nc   input_priorinf_sd.nc
 
             inf_initial_restart=(".true." ".false.")
-            inf_flavors=(2 0)
-        #else
-        #    echo "File ${parentdir}/${event_pre}/output_priorinf_mean.nc does not exist."
-        #    echo -e "$$-${FUNCNAME[0]} ${BROWN}WARNING${NC}:: Do not use adaptive inflation for this cycle."
-        #    #exit 2
+        else
+            mecho0 "File ${CYAN}${parentdir}/${event_pre}/output_priorinf_mean.nc${NC} does not exist."
+            mecho0 "${YELLOW}WARNING${NC}:: Do not use adaptive inflation for this cycle."
+            #exit 2
         fi
     fi
 
@@ -849,7 +846,7 @@ function run_filter {
    output_sd                = .true.
    write_all_stages_at_end  = .false.
 
-   inf_flavor                  = $(join_by ',' "${inf_flavors[@]}"),
+   inf_flavor                  = 2, 0,
    inf_initial_from_restart    = $(join_by ',' "${inf_initial_restart[@]}"),
    inf_sd_initial_from_restart = $(join_by ',' "${inf_initial_restart[@]}"),
    inf_deterministic           = .true.,                  .true.,
@@ -1645,7 +1642,7 @@ EOF
         if [[ -e OBSDIR/obs_seq.${timestr_cur} ]]; then
             ln -sf OBSDIR/obs_seq.${timestr_cur} obs_seq.in
         else
-            mecho0 "${BROWN}WARNING${NC}: Observation file ${CYAN}OBSDIR/obs_seq.${timestr_cur}${NC} not found"
+            mecho0 "${YELLOW}WARNING${NC}: Observation file ${CYAN}OBSDIR/obs_seq.${timestr_cur}${NC} not found"
             touch done.filter
             no_observation=true
             return
@@ -1781,7 +1778,7 @@ function run_update_states {
     cd $wrkdir || return
 
     if [[ $no_observation == true ]]; then
-        mecho0 "${BROWN}WARNING${NC}: no observation skipping ...."
+        mecho0 "${YELLOW}WARNING${NC}: no observation, skipping ...."
         touch done.update_states
         return
     fi
@@ -1946,7 +1943,7 @@ function run_update_bc {
         lbc_file0="$rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc"
         lbc_filem="${domname}_${memstr}.lbc.${mpastime_str1}.nc"
 
-        if [[ ${run_updatebc} == true && ${no_observation} == false ]]; then
+        if [[ ${run_updatebc} == true ]]; then
             echo "$lbc_filem" >> ${update_output_file_list}
             sed -i "/update_boundary_file_list/s/=.*/= '${update_output_file_list}'/" input.nml
             echo "${input_file_array[0]}" >> ${update_input_file_list}
@@ -1959,19 +1956,12 @@ function run_update_bc {
             touch "$memwrkdir/done.update_bc_${memstr}"
         fi
 
-        #echo -e "${DARK}${FUNCNAME[0]}:${NC} Using lbc file: $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc ..."
         ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc ${domname}_${memstr}.lbc.${mpastime_str2}.nc
 
         jobarrays+=("$iens")
     done
 
     cd $wrkdir || return
-
-    if [[ ${no_observation} == true ]]; then
-        mecho0 "${BROWN}WARNING${NC}: no observation, skipping ...."
-        touch done.update_bc
-        return
-    fi
 
     #------------------------------------------------------
     # Run update_bc for all ensemble members as a job array
@@ -2035,12 +2025,12 @@ function run_add_noise {
     # Return if is running or is done
     #
     if [[ -f $wrkdir/done.add_noise ]]; then
-        #echo -e "${DARK}${FUNCNAME[0]}:${NC} add_noise is already done"
+        #mech0 "add_noise is already done"
         return
     fi
 
     if [[ -f $wrkdir/running.noise_pert || -f $wrkdir/queue.noise_pert ]]; then
-        #echo -e "${DARK}${FUNCNAME[0]}:${NC} add_noise is running/queued."
+        #mech0 "add_noise is running/queued."
         return
     fi
 
@@ -2051,7 +2041,7 @@ function run_add_noise {
     #------------------------------------------------------
 
     if [[ ${no_observation} == true ]]; then
-        mecho0 "${BROWN}WARNING${NC}: no observation, skipping ...."
+        mecho0 "${YELLOW}WARNING${NC}: no observation, skipping ...."
         touch done.add_noise done.noise_mask
         return
     fi
@@ -2063,10 +2053,10 @@ function run_add_noise {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking $cond"
+            mecho0 "Checking ${CYAN}$cond${NC} ...."
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for file: $cond"
+                    mecho0 "Waiting for file: ${CYAN}$cond${NC}"
                 fi
                 sleep 10
             done
@@ -2074,7 +2064,7 @@ function run_add_noise {
     fi
 
     if [[ ! -e done.noise_mask && ! -e running.noise_mask && ! -e queue.noise_mask ]]; then
-        if [[ $verb -eq 1 ]]; then echo ""; echo "    Running grid_refl_obs.py at $timestr_cur"; fi
+        if [[ $verb -eq 1 ]]; then mecho0 "Running ${WHITE}grid_refl_obs.py${NC} at ${YELLOW}${timestr_cur}${NC}"; fi
 
         invfile="$rundir/init/${domname}.invariant.nc"
         #
@@ -2111,7 +2101,7 @@ EOF
 
         if [[ -n "${python_machine}" ]]; then    # run the job on the submitted machine
             sed -f "$sedfile" "$TEMPDIR/$jobscript" > "$jobscript"
-            echo "Running ${jobscript} on ${python_machine} at $(date +%H:%M:%S)..."
+            mecho0 "Running ${BROWN}${jobscript}${NC} on ${LIGHT_BLUE}${python_machine}${NC} at $(date +%H:%M:%S)..."
             # shellcheck disable=SC2029
             ssh ${python_machine} "cd ${wrkdir};bash ${jobscript} &> noise_mask.log" &>/dev/null
         else
@@ -2130,17 +2120,17 @@ EOF
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            echo -e "${DARK}${FUNCNAME[0]}:${NC} Checking $cond"
+            mecho0 "Checking ${CYAN}$cond${NC} ...."
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for file: $cond"
+                    mecho0 "Waiting for file: ${CYAN}$cond${NC}"
                 fi
                 sleep 10
             done
         done
     fi
 
-    if [[ $verb -eq 1 ]]; then echo ""; echo "    Running add_pert_where_high_refl.py at $timestr_cur"; fi
+    if [[ $verb -eq 1 ]]; then mecho0 "Running ${WHITE}add_pert_where_high_refl.py${NC} at ${YELLOW}${timestr_cur}${NC}"; fi
 
     invfile="$rundir/init/${domname}.invariant.nc"
 
@@ -2198,7 +2188,7 @@ EOF
         if [[ -n "${python_machine}" ]]; then
             sed -f "$sedfile" "$TEMPDIR/$jobscript" > "$jobscript"
             sed -i "s/MEMARRAY/${jobarrays[*]}/" "$jobscript"
-            echo "Running ${jobscript} on ${python_machine} at $(date +%H:%M:%S)..."
+            mecho0 "Running ${BROWN}${jobscript}${NC} on ${LIGHT_BLUE}${python_machine}${NC} at $(date +%H:%M:%S)..."
             # shellcheck disable=SC2029
             ssh ${python_machine} "cd ${wrkdir};bash ${jobscript} &> noise_pert.log" &>/dev/null
         else
@@ -2257,12 +2247,12 @@ function run_mpas {
     if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npefcst} ]]; then
         cd "${rundir}/${domname}" || exit $?
         if [[ $verb -eq 1 ]]; then
-            echo "Generating ${domname}.graph.info.part.${npefcst} in $rundir/$domname using $exedir/gpmetis"
+            mecho0 "Generating ${CYAN}${domname}.graph.info.part.${npefcst}${NC} in ${BLUE}${rundir##"${WORKDIR}"/}/$domname${NC} using ${GREEN}${gpmetis}${NC}"
         fi
-        $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst} > $rundir/$domname/gpmetis.out$npefcst
+        ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npefcst} > $rundir/$domname/gpmetis.out$npefcst
         estatus=$?
         if [[ ${estatus} -ne 0 ]]; then
-            echo "${estatus}: $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst}"
+            mecho0 "${estatus}: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npefcst}"
             exit ${estatus}
         fi
         cd "${wrkdir}" || exit $?
@@ -2310,12 +2300,14 @@ function run_mpas {
             mpas_inputfile_template="${domname}_${memstr}.init.nc"
             initfile="./${domname}_${memstr}.restart.${currtime_fil}.nc"
         fi
+
         if [[ $verb -eq 1 ]]; then
             realinit=$(realpath ${initfile})
             mecho0 "Member: $iens init file: ${realinit##"${WORKDIR}"/}";
         fi
+
         if [[ ! -e ${initfile} && ${dorun} == true ]]; then
-            echo -e "${RED}ERROR${NC}: ${damode} file: ${initfile} not exists"
+            mecho0 "${RED}ERROR${NC}: ${damode} file: ${CYAN}${initfile}${NC} not exists"
             exit 1              # something wrong should never happen
         fi
 
@@ -2790,7 +2782,7 @@ function run_obs_diag {
     #
     dawrkdir="$rundir/dacycles${daffix}"
     if [[ ! -d $dawrkdir ]]; then
-        echo -e "${RED}ERROR${NC}: $dawrkdir not exsit."
+        mecho0 "${RED}ERROR${NC}: ${CYAN}$dawrkdir${NC} not exsit."
         exit 1
     fi
     wrkdir=$dawrkdir/obs_diag
@@ -2836,7 +2828,7 @@ function run_obs_diag {
     #
 
     if [[ ${#obs_final_files[@]} -ne ${n_cycles} ]]; then
-        echo -e "${RED}ERROR${NC}: found  ${#obs_final_files[@]} \"obs_seq.final\" files, expected ${n_cycles}."
+        mecho0 "${RED}ERROR${NC}: found ${YELLOW}${#obs_final_files[@]}${NC} ${CYAN}obs_seq.final${NC} files, expected ${WHITE}${n_cycles}${NC}."
         exit 1
     fi
 
@@ -2900,7 +2892,7 @@ function run_obs_final2nc {
     #
     dawrkdir="$rundir/dacycles${daffix}"
     if [[ ! -d $dawrkdir ]]; then
-        echo -e "${RED}ERROR${NC}: $dawrkdir not exsit."
+        mecho0 "${RED}ERROR${NC}: ${CYAN}$dawrkdir${NC} not exsit."
         exit 1
     fi
     wrkdir=$dawrkdir/obs_diag
@@ -2940,7 +2932,7 @@ function run_obs_final2nc {
     #
 
     if [[ ${#obs_final_files[@]} -lt ${n_cycles} ]]; then
-        echo -e "${RED}ERROR${NC}: found  ${#obs_final_files[@]} \"obs_seq.final\" files, expected ${n_cycles}."
+        mecho0 "${RED}ERROR${NC}: found ${YELLOW}${#obs_final_files[@]}${NC} ${CYAN}obs_seq.final${NC} files, expected ${WHITE}${n_cycles}${NC}."
         exit 1
     fi
 
@@ -3052,7 +3044,7 @@ function run_mpassit {
                     elif [[ -e $FIXDIR/MPASSIT/${fn} ]]; then
                         ln -sf $FIXDIR/MPASSIT/$fn .
                     else
-                        echo -e "${RED}ERROR${NC}: file \"$FIXDIR/MPASSIT/${fn}\" not exist."
+                        mecho0 "${RED}ERROR${NC}: file ${BLUE}$FIXDIR/MPASSIT/${fn}${NC} not exist."
                         return
                     fi
                 fi
@@ -3094,7 +3086,7 @@ function run_mpassit_alltimes {
         prepare_mpassit_onetime $wrkdir ${iseconds} $i 5
         local estatus=$?               # number of missing members
         if [[ ${estatus} -gt 0 ]]; then
-            echo -e "${DARK}${FUNCNAME[0]}:${NC} ${estatus} files missing"
+            echo -e "${PURPLE}${estatus}${NC} files missing"
             exit 1
         fi
     done
@@ -3230,14 +3222,14 @@ function run_clean {
             [filter]="the whole DA cycle directory"
         )
         for job in "${jobs[@]}"; do
-            echo -e "\n${BROWN}WARNING${NC}: Delete ${cleanmsg[$job]} from $(date -u -d @${start_sec} +%Y%m%d_%H:%M:%S) to $(date -u -d @${end_sec} +%Y%m%d_%H:%M:%S)"
-            echo -e "         in ${wrkdir} ?\n"
-            echo -n "[YES,NO]? "
+            mecho0  "${YELLOW}WARNING${NC}: Delete ${cleanmsg[$job]} from $(date -u -d @${start_sec} +%Y%m%d_%H:%M:%S) to $(date -u -d @${end_sec} +%Y%m%d_%H:%M:%S)"
+            mecho0  "         in ${CYAN}${wrkdir}${NC}\n"
+            mecho0n "[${YELLOW}YES,NO${NC}]? "
             read -r doit
             if [[ ${doit^^} == "YES" ]]; then
-                echo -e "\n${BROWN}WARNING${NC}: ${cleanmsg[$job]} will be cleaned."
+                mecho0 "${YELLOW}WARNING${NC}: ${cleanmsg[$job]} will be cleaned."
             else
-                echo -e "\nGot \"${doit^^}\", do nothing."
+                mecho0 "Got ${PURPLE}${doit^^}${NC}, do nothing."
                 return
             fi
         done
@@ -3258,7 +3250,7 @@ function run_clean {
         if [[ -d $dawrkdir ]]; then
             cd $dawrkdir || return
 
-            if [[ $verb -eq 1 ]]; then echo "    Cleaning working directory $dawrkdir"; fi
+            if [[ $verb -eq 1 ]]; then mecho0 "Cleaning working directory ${CYAN}$dawrkdir${NC}"; fi
 
             for dirname in "${jobs[@]}"; do
 
@@ -3382,7 +3374,7 @@ while [[ $# -gt 0 ]]; do
                 overwrite=$2
                 shift
             else
-                echo -e "${RED}ERROR${NC}: option for '-k' can only be [0-2], but got \"$2\"."
+                echo -e "${RED}ERROR${NC}: option for ${BLUE}-k${NC} can only be [${YELLOW}0-2${NC}], but got ${PURPLE}$2${NC}."
                 usage 1
             fi
             ;;
@@ -3397,7 +3389,7 @@ while [[ $# -gt 0 ]]; do
             if [[ -d $2 ]]; then
                 TEMPDIR=$2
             else
-                echo -e "${RED}ERROR${NC}: Template directory \"$2\" does not exist."
+                echo -e "${RED}ERROR${NC}: Template directory ${BLUE}$2${NC} does not exist."
                 usage 1
             fi
             shift
@@ -3412,7 +3404,7 @@ while [[ $# -gt 0 ]]; do
             elif [[ ${2^^} == "CHEYENNE" || ${2^^} == "DERECHO" ]]; then
                 machine=Cheyenne
             else
-                echo -e "${RED}ERROR${NC}: Unsupported machine name, got \"$2\"."
+                echo -e "${RED}ERROR${NC}: Unsupported machine name, got ${PURPLE}$2${NC}."
                 usage 1
             fi
             shift
@@ -3425,7 +3417,7 @@ while [[ $# -gt 0 ]]; do
             if [[ $2 =~ ^[0-9]{12}$ ]]; then
                 initdatetime=$2
             else
-                echo -e "${RED}ERROR${NC}: Initial time should be YYYYmmddHHMM, got \"$2\"."
+                echo -e "${RED}ERROR${NC}: Initial time should be ${GREEN}YYYYmmddHHMM${NC}, got ${PURPLE}$2${NC}."
                 usage 1
             fi
             shift
@@ -3442,7 +3434,7 @@ while [[ $# -gt 0 ]]; do
             elif [[ $2 =~ ^[0-9]{4}$ ]]; then
                 eventtime="${2}"
             else
-                echo -e "${RED}ERROR${NC}: Start time should be in YYYYmmddHHMM or HHMM, got \"$2\"."
+                echo -e "${RED}ERROR${NC}: Start time should be in ${GREEN}YYYYmmddHHMM${NC} or ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
                 usage 1
             fi
             shift
@@ -3453,13 +3445,13 @@ while [[ $# -gt 0 ]]; do
             elif [[ $2 =~ ^[0-9]{4}$ ]]; then
                 endhrmin=$2
             else
-                echo -e "${RED}ERROR${NC}: End time should be in YYYYmmddHHMM or HHMM, got \"$2\"."
+                echo -e "${RED}ERROR${NC}: End time should be in ${GREEN}YYYYmmddHHMM${NC} or ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
                 usage 1
             fi
             shift
             ;;
         -*)
-            echo "Unknown option: $key"
+            echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
             usage 2
             ;;
         filter* | mpas* | update_states* | update_bc* | clean* | obs_diag* | obs_final2nc )
@@ -3497,8 +3489,7 @@ while [[ $# -gt 0 ]]; do
                 fi
                 #echo $WORKDIR,$eventdate,$eventtime
             else
-                echo ""
-                echo -e "${RED}ERROR${NC}: unknown argument, get [$key]."
+                echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}$key${NC}."
                 usage 3
             fi
             ;;
@@ -3541,13 +3532,14 @@ else
     if [[ -e ${WORKDIR}/${config_file} ]]; then
         config_file="${WORKDIR}/${config_file}"
     else
-        echo -e "${RED}ERROR${NC}: file ${config_file} not exist."
+        echo -e "${RED}ERROR${NC}: file ${CYAN}${config_file}${NC} not exist."
         usage 1
     fi
 fi
 
 if [[ ! -r ${config_file} ]]; then
-    echo -e "${RED}ERROR${NC}: Configuration file ${config_file} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
+    echo -e "${RED}ERROR${NC}: Configuration file ${CYAN}${config_file}${NC} is not found."
+    echo -e "       Please run ${GREEN}setup_mpas-wofs_grid.sh${NC} first."
     exit 2
 else
     echo -e "Reading case (${GREEN}${eventdate}${NC}) configuration file: ${CYAN}${config_file}${NC} ...."
@@ -3637,13 +3629,13 @@ fi
 
 exedir="$rootdir/exec"
 
-echo ""
-echo "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
+echo    ""
+echo    "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
 echo -e "     Event date : ${GREEN}$eventdate${NC} ${LIGHT_BLUE}${eventtime}${NC}"
 echo    "     Root    dir: $rootdir"
 echo    "     Working dir: $WORKDIR"
 echo -e "     Domain name: ${PURPLE}$domname${NC};  MP scheme: ${BROWN}${mpscheme}${NC}"
-echo " "
+echo    " "
 
 RSTINVL_STR=$(printf "00:%02d:00" $((intvl_sec/60)) )
 OUTINVL_STR=$(printf "00:%02d:00" $((OUTINVL/60)) )
@@ -3657,14 +3649,8 @@ OUTINVL_STR=$(printf "00:%02d:00" $((OUTINVL/60)) )
 if [[ " ${jobs[*]} " =~ " "(filter|mpas|update_states|update_bc)" " ]]; then
     dacycle_driver $inittime_sec $starttime_sec $stoptime_sec
 elif [[ " ${jobs[*]} " =~ " "(obs_diag|obs_final2nc)" " ]]; then
-    if [[ ${starttime_sec} -le ${inittime_sec} ]]; then
-        begin_sec=$((starttime_sec+intvl_sec))
-    else
-        begin_sec=${starttime_sec}
-    fi
-
     for job in "${jobs[@]}"; do
-        run_${job} ${begin_sec} ${stoptime_sec}
+        run_${job} ${starttime_sec} ${stoptime_sec}
     done
 elif [[ " ${jobs[*]} " =~ " clean " ]]; then
 

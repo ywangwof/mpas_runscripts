@@ -234,7 +234,7 @@ def load_mpas_patches(pickle_fname):
 
 ########################################################################
 
-def get_var_contours(varname,var2d,cntlevels):
+def get_var_contours(varname,var2d,cargs):
     '''set contour specifications'''
     #
     # set color map to be used
@@ -291,6 +291,7 @@ def get_var_contours(varname,var2d,cntlevels):
     #
     # set contour levels
     #
+    cntlevels = cargs.cntlevel
     if cntlevels is not None:
         if len(cntlevels) > 3:
             cmin = cntlevels[0]
@@ -305,7 +306,7 @@ def get_var_contours(varname,var2d,cntlevels):
         ticks_list = None
         cmin = var2d.min()
         cmax = var2d.max()
-        if varname.startswith('refl'):    # Use reflectivity color map and range
+        if varname.startswith('refl') and cargs.diffstr == "":    # Use reflectivity color map and range
             cmin = 0.0
             cmax = 80.0
             cinc = 5.0
@@ -857,7 +858,7 @@ if __name__ == "__main__":
             print(f"Variable {variable.varname} is in wrong shape: {variable.varshapes}.")
             sys.exit(0)
 
-        color_map, normc,cmin, cmax, ticks_list = get_var_contours(variable.varname,varplt,args.cntlevel)
+        color_map, normc,cmin, cmax, ticks_list = get_var_contours(variable.varname,varplt,args)
 
         plt_attribs = { 'out_title':  outtlt,
                         'out_level':  outlvl,

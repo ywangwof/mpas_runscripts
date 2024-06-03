@@ -146,6 +146,7 @@ mpas )
     ${show} rm -rf log.{atmosphere,init_atmosphere}.*.{err,out} namelist.output core*
     ${show} rm -rf ./"${domname}"_??.{diag,history}.*.nc  # *.restart.*
     ${show} rm -rf error.* done.fcst_?? dart_log.{nml,out}
+    ${show} rm -rf restart_timestamp ./"${domname}"_??.restart.*.nc
     echo ""
     ;;
 mpasm )

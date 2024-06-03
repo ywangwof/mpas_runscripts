@@ -252,9 +252,14 @@ function run_mpas {
             do_restart="true"
             do_dacyle="true"
         fi
-        ln -sf $dawrkdir/fcst_${memstr}/${domname}_${memstr}.${damode}.${currtime_fil}.nc .
-
+        initfile="$dawrkdir/fcst_${memstr}/${domname}_${memstr}.${damode}.${currtime_fil}.nc"
+        ln -sf  ${inifile} .
         ln -sf $rundir/init/${domname}.invariant.nc .
+
+        if [[ $verb -eq 1 ]]; then
+            realinit=$(realpath ${initfile})
+            mecho0 "Member: $iens init file: ${realinit##"${WORKDIR}"/}";
+        fi
 
         #
         # lbc files
@@ -273,16 +278,25 @@ function run_mpas {
         fi
         ln -sf ${lbc_dafile} ${lbc_myfile}
 
+        if [[ $verb -eq 1 ]]; then
+            realdalbc=$(realpath ${lbc_dafile})
+            mecho0 "Member: $iens lbc file ${mpastime_str}: ${realdalbc##"${WORKDIR}"/}";
+        fi
+
         for ((i=EXTINVL;i<=fcst_seconds;i+=EXTINVL)); do
             isec=$(( iseconds+i ))           # MPAS expects time string
             jsec=$(( iseconds/3600*3600+i )) # External GRIB file provided around to whole hour
             lbctime_str=$(date -u -d @$jsec +%Y-%m-%d_%H.%M.%S)
             mpastime_str=$(date -u -d @$isec +%Y-%m-%d_%H.%M.%S)
-            ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str}.nc ${domname}_${memstr}.lbc.${mpastime_str}.nc
+            lbc_file="$rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str}.nc"
+            ln -sf $lbc_file ${domname}_${memstr}.lbc.${mpastime_str}.nc
+            if [[ $verb -eq 1 ]]; then
+                reallbc=$(realpath ${lbc_file})
+                mecho0 "Member: $iens lbc file ${mpastime_str}: ${reallbc##"${WORKDIR}"/}";
+            fi
         done
 
         ln -sf $rundir/$domname/$domname.graph.info.part.${npefcst} .
-
 
         streamlists=(stream_list.atmosphere.diagnostics_fcst stream_list.atmosphere.output stream_list.atmosphere.surface)
         for fn in "${streamlists[@]}"; do
@@ -644,7 +658,7 @@ function run_mpassit {
                     elif [[ -e $FIXDIR/MPASSIT/${fn} ]]; then
                         ln -sf $FIXDIR/MPASSIT/$fn .
                     else
-                        echo -e "${RED}ERROR${NC}: file \"$FIXDIR/MPASSIT/${fn}\" not exist."
+                        mecho0 "${RED}ERROR${NC}: file ${BLUE}$FIXDIR/MPASSIT/${fn}${NC} not exist."
                         return
                     fi
                 fi
@@ -847,7 +861,7 @@ function prepare_mpassit_onetime {
                     fi
 
                     if [[ $verb -eq 1 ]]; then
-                        echo "Waiting for $fn ..."
+                        mecho0 "Waiting for $fn ..."
                     fi
                     sleep 10
                 done
@@ -1214,14 +1228,14 @@ function run_clean {
             [upp]="all UPP converted grib2 files"
         )
         for job in "${jobs[@]}"; do
-            echo -e "\n${BROWN}WARNING${NC}: Delete ${cleanmsg[$job]} from $(date -u -d @${start_sec} +%Y%m%d_%H:%M:%S) to $(date -u -d @${end_sec} +%Y%m%d_%H:%M:%S)"
-            echo -e "         in ${wrkdir} ?\n"
-            echo -n "[YES,NO]? "
+            mecho0  "\n${BROWN}WARNING${NC}: Delete ${cleanmsg[$job]} from $(date -u -d @${start_sec} +%Y%m%d_%H:%M:%S) to $(date -u -d @${end_sec} +%Y%m%d_%H:%M:%S)"
+            mecho0  "         in ${CYAN}${wrkdir}${NC} ?\n"
+            mecho0n "[${YELLOW}YES,NO${NC}]? "
             read -r doit
             if [[ ${doit^^} == "YES" ]]; then
-                echo -e "\n${BROWN}WARNING${NC}: ${cleanmsg[$job]} will be cleaned."
+                mecho0 "${BROWN}WARNING${NC}: ${cleanmsg[$job]} will be cleaned."
             else
-                echo -e "\nGot \"${doit^^}\", do nothing."
+                mecho0 "Got ${PURPLE}${doit^^}${NC}, do nothing."
                 return
             fi
         done
@@ -1245,7 +1259,7 @@ function run_clean {
         if [[ -d $fcstwrkdir ]]; then
             cd $fcstwrkdir || return
 
-            if [[ $verb -eq 1 ]]; then echo "    Cleaning working directory $fcstwrkdir"; fi
+            if [[ $verb -eq 1 ]]; then mecho0 "    Cleaning working directory ${CYAN}${fcstwrkdir}${NC}"; fi
 
             for dirname in "${jobs[@]}"; do
 
@@ -1431,7 +1445,7 @@ while [[ $# -gt 0 ]]
                 overwrite=$2
                 shift
             else
-                echo -e "${RED}ERROR${NC}: option for '-k' can only be [0-2], but got \"$2\"."
+                echo -e "${RED}ERROR${NC}: option for ${BLUE}-k${NC} can only be [${YELLOW}0-2${NC}], but got ${PURPLE}$2${NC}."
                 usage 1
             fi
             ;;
@@ -1449,7 +1463,7 @@ while [[ $# -gt 0 ]]
             if [[ -d $2 ]]; then
                 TEMPDIR=$2
             else
-                echo -e "${RED}ERROR${NC}: Template directory \"$2\" does not exist."
+                echo -e "${RED}ERROR${NC}: Template directory ${BLUE}$2${NC} does not exist."
                 usage 1
             fi
             shift
@@ -1464,7 +1478,7 @@ while [[ $# -gt 0 ]]
             elif [[ ${2^^} == "CHEYENNE" ]]; then
                 machine=Cheyenne
             else
-                echo -e "${RED}ERROR${NC}: Unsupported machine name, got \"$2\"."
+                echo -e "${RED}ERROR${NC}: Unsupported machine name, got ${PURPLE}$2${NC}."
                 usage 1
             fi
             shift
@@ -1473,7 +1487,7 @@ while [[ $# -gt 0 ]]
             if [[ $2 =~ ^[0-9]{12}$ ]]; then
                 initdatetime=$2
             else
-                echo -e "${RED}ERROR${NC}: Initial time should be YYYYmmddHHMM, got \"$2\"."
+                echo -e "${RED}ERROR${NC}: Initial time should be ${GREEN}YYYYmmddHHMM${NC}, got ${PURPLE}$2${NC}."
                 usage 1
             fi
             shift
@@ -1490,7 +1504,7 @@ while [[ $# -gt 0 ]]
             elif [[ $2 =~ ^[0-9]{4}$ ]]; then
                 eventtime=${2}
             else
-                echo -e "${RED}ERROR${NC}: Start time should be in YYYYmmddHHMM or HHMM, got \"$2\"."
+                echo -e "${RED}ERROR${NC}: Start time should be in ${GREEN}YYYYmmddHHMM${NC} or ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
                 usage 1
             fi
             shift
@@ -1501,7 +1515,7 @@ while [[ $# -gt 0 ]]
             elif [[ $2 =~ ^[0-9]{4}$ ]]; then
                 endhrmin=$2
             else
-                echo -e "${RED}ERROR${NC}: End time should be in YYYYmmddHHMM or HHMM, got \"$2\"."
+                echo -e "${RED}ERROR${NC}: End time should be in ${GREEN}YYYYmmddHHMM${NC} or ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
                 usage 1
             fi
             shift
@@ -1511,7 +1525,7 @@ while [[ $# -gt 0 ]]
             shift
             ;;
         -*)
-            echo "Unknown option: $key"
+            echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
             usage 2
             ;;
         mpassit* | mpas* | upp* | clean* )
@@ -1549,8 +1563,7 @@ while [[ $# -gt 0 ]]
                 fi
                 #echo $WORKDIR,$eventdate,$eventtime
             else
-                echo ""
-                echo -e "${RED}ERROR${NC}: unknown argument, get [$key]."
+                echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}$key${NC}."
                 usage 3
             fi
             ;;
@@ -1625,14 +1638,14 @@ else
     if [[ -e ${WORKDIR}/${config_file} ]]; then
         config_file="${WORKDIR}/${config_file}"
     else
-        echo -e "${RED}ERROR${NC}: file ${config_file} not exist."
+        echo -e "${RED}ERROR${NC}: file ${CYAN}${config_file}${NC} not exist."
         usage 1
     fi
 fi
 
 if [[ ! -r ${config_file} ]]; then
     echo -e "${RED}ERROR${NC}: Configuration file ${CYAN}${config_file}${NC} is not found."
-    echo -e "       Please run ${BROWN}setup_mpas-wofs_grid.sh${NC} first or use option ${BLUE}-h${NC} option to show usage."
+    echo -e "       Please run ${GREEN}setup_mpas-wofs_grid.sh${NC} first or use ${BLUE}-h${NC} to show help."
     exit 2
 else
     echo -e "Reading case (${GREEN}${eventdate}${NC}) configuration file: ${CYAN}${config_file}${NC} ...."
@@ -1674,12 +1687,12 @@ fi
 
 exedir="$rootdir/exec"
 
-echo "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
+echo    "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
 echo -e "     Event date : ${GREEN}$eventdate${NC} ${LIGHT_BLUE}${eventtime}${NC}"
 echo    "     Root    dir: $rootdir"
 echo    "     Working dir: $WORKDIR"
 echo -e "     Domain name: ${PURPLE}$domname${NC};  MP scheme: ${BROWN}${mpscheme}${NC}"
-echo " "
+echo    " "
 
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 OUTINVL_STR=$(printf "00:%02d:00" $((OUTINVL/60)) )

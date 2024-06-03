@@ -133,7 +133,7 @@ function run_geogrid {
     cd "$wrkdir" || return
 
     if [[ -f done.geogrid ]]; then
-        mecho0 "Found file \"done.geogrid\", skipping run_geogrid ...."
+        mecho0 "Found file ${CYAN}done.geogrid${NC}, skipping ${WHITE}run_geogrid${NC} ...."
         return
     fi
 
@@ -244,10 +244,10 @@ function run_createWOFS {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            echo "$$: Checking: $cond"
+            mecho0 "Checking: ${CYAN}$cond"${NC}
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for file: $cond"
+                    mecho0 "Waiting for file: ${CYAN}$cond"${NC}
                 fi
                 sleep 10
             done
@@ -259,8 +259,7 @@ function run_createWOFS {
     cd $wrkdir || return
 
     if [[ -f done.create ]]; then
-        echo "Found file \"done.create\", skipping run_createWOFS ...."
-        echo ""
+        mecho0 "Found file ${CYAN}done.create${NC}, skipping ${WHITE}run_createWOFS${NC} ...."
         return
     elif [[ -f running.create || -f queue.create ]]; then
         return                   # skip
@@ -271,7 +270,7 @@ function run_createWOFS {
     # Check MPAS-Limited-Area
     mrpythondir="$rootdir/MPAS-Limited-Area"
     if [[ ! -r $mrpythondir ]]; then
-        echo "MPAS-Limited-Area directory not found in $mrpythondir"
+        mecho0 "MPAS-Limited-Area directory not found in ${BLUE}$mrpythondir${NC}"
         exit 0
     fi
 
@@ -280,7 +279,7 @@ function run_createWOFS {
 
     # Check x1.65536002.grid.nc, global 3 km mesh grid
     if [[ ! -f $FIXDIR/x1.65536002.grid.nc ]]; then
-        echo "File x1.65536002.grid.nc not found in $FIXDIR"
+        mecho0 "File ${CYAN}x1.65536002.grid.nc${NC} not found in ${BLUE}$FIXDIR${NC}."
         exit 0
     fi
     ln -sf $FIXDIR/x1.65536002.grid.nc .
@@ -392,10 +391,10 @@ function run_static {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking: $cond"
+            mecho0 "Checking: ${CYAN}$cond"${NC}
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: $cond"
+                    mecho0 "Waiting for file: ${CYAN}$cond"${NC}
                 fi
                 sleep 10
             done
@@ -407,8 +406,7 @@ function run_static {
     cd $wrkdir || return
 
     if [[ -f done.static ]]; then
-        mecho0 "Found file \"done.static\", skipping run_static ...."
-        echo ""
+        mecho0 "Found file ${CYAN}done.static${NC}, skipping ${WHITE}run_static${NC} ...."
         return
     elif [[ -f running.static || -f queue.static ]]; then
         return                   # skip
@@ -416,7 +414,7 @@ function run_static {
 
     if [[ ! -f $domname.graph.info.part.${npestatic} ]]; then
         if [[ $verb -eq 1 ]]; then
-            mecho0 "Generating ${domname}.graph.info.part.${npestatic} in $wrkdir using ${gpmetis}"
+            mecho0 "Generating ${CYAN}${domname}.graph.info.part.${npestatic}${NC} in ${BROWN}${wrkdir##"$WORKDIR"/}${NC} using ${GREEN}${gpmetis}${NC}."
         fi
         ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npestatic} > gpmetis.out$npestatic
         estatus=$?
@@ -574,10 +572,10 @@ function run_rotate {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking: $cond"
+            mecho0 "Checking: ${CYAN}$cond"${NC}
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: $cond"
+                    mecho0 "Waiting for file: ${CYAN}$cond"${NC}
                 fi
                 sleep 10
             done
@@ -589,7 +587,7 @@ function run_rotate {
     cd $wrkdir || return
 
     if [[ -f done.rotate ]]; then
-        mecho0 "Found file \"done.rotate\", skipping run_rotate ...."
+        mecho0 "Found file ${CYAN}done.rotate${NC}, skipping ${WHITE}run_rotate${NC} ...."
         return
     elif [[ -f running.rotate || -f queue.rotate ]]; then
         return                   # skip
@@ -684,7 +682,7 @@ EOF
 
 function run_ungrib_hrrr {
     if [[ $# -ne 1 ]]; then
-        echo "ERROR: run_ungrib require 1 arguments."
+        mecho0 "${RED}ERROR${NC}: ${BROWN}run_ungrib${NC} require ${YELLOW}1${NC} arguments."
         exit 2
     fi
     hrrr_grib_dir=$1
@@ -694,7 +692,7 @@ function run_ungrib_hrrr {
     cd $wrkdir || return
 
     if [[ -f done.ungrib ]]; then
-        mecho0 "Found file \"done.ungrib\", skipping run_ungrib_hrrr ...."
+        mecho0 "Found file ${CYAN}done.ungrib${NC}, skipping ${WHITE}run_ungrib_hrrr${NC} ...."
         return                   # skip
     elif [[ -f running.ungrib || -f queue.ungrib ]]; then
         return                   # skip
@@ -717,7 +715,7 @@ function run_ungrib_hrrr {
     basefn=$(basename $hrrrfile)
     basefn="NSSL_$basefn"
 
-    if [[ $verb -eq 1 ]]; then echo "HRRR file: $hrrrfile"; fi
+    if [[ $verb -eq 1 ]]; then mecho0 "HRRR file: ${BLUE}$hrrrfile${NC}"; fi
     while [[ ! -f $hrrrfile && ! -f $basefn ]]; do
         if [[ $verb -eq 1 ]]; then
             mecho0 "Waiting for $hrrrfile ..."
@@ -788,10 +786,10 @@ function run_meshplot_ncl {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking: $cond"
+            mecho0 "Checking: ${CYAN}$cond"${NC}
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: $cond"
+                    mecho0 "Waiting for file: ${CYAN}$cond"${NC}
                 fi
                 sleep 10
             done
@@ -847,10 +845,10 @@ function run_meshplot_py {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking: $cond"
+            mecho0 "Checking: ${CYAN}$cond"${NC}
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: $cond"
+                    mecho0 "Waiting for file: ${CYAN}$cond"${NC}
                 fi
                 sleep 10
             done
@@ -865,11 +863,11 @@ function run_meshplot_py {
     cd $wrkdir  || return
 
     if [[ -f "${domname}.radars.${eventdate}.sh" ]]; then
-        mecho0 "Found file \"${domname}.radars.${eventdate}.sh\", skipping run_run_meshplot_py ...."
+        mecho0 "Found file ${CYAN}${domname}.radars.${eventdate}.sh${NC}, skipping ${WHITE}run_run_meshplot_py${NC} ...."
         return
     fi
 
-    output_grid="../geo_${domname##*_}/${domname}_output.json"
+    output_grid="$(dirname $wrkdir)/geo_${domname##*_}/${domname}_output.json"
 
     #
     # Run job script and submit it
@@ -889,10 +887,10 @@ function run_meshplot_py {
     #                        When "True", retrieve grid from command line.
     #
     jobcmdstr="$jobscript -o $wrkdir -e ${eventdate} -name ${domname} -outgrid ${output_grid} -g ${FIXDIR}/nexrad_stations.txt ${domname}.grid.nc"
-    mecho0 "Running $jobcmdstr"
+    mecho0 "Running ${BROWN}$jobcmdstr${NC}"
     python $jobcmdstr
 
-    ls -l ${domname}.radars.${eventdate}.sh
+    #ls -l ${domname}.radars.${eventdate}.sh
     #echo "Waiting for ${domname}.radars.${eventdate}.sh ...."
     #while [[ ! -e ${domname}.radars.${eventdate}.sh  ]]; do
     #    sleep 10
@@ -1268,14 +1266,14 @@ function check_hrrr_files {
     # Check the external grib2 files availability for providing the system ICS/LBCs
     #
 
-    echo -ne "Checking ${CYAN}$hrrrfile${NC} ... "
+    mecho0n "Checking ${CYAN}$hrrrfile${NC} ... "
     if ls $hrrrfile > /dev/null 2>&1; then
         echo -e "${GREEN}Found${NC}"
     else
         echo -e "${RED}Missing${NC}"
     fi
 
-    echo -ne "Checking ${CYAN}${hrrr_dir}/${eventdate}/${hrrr_time_ics}${NC} .... "
+    mecho0 "Checking ${CYAN}${hrrr_dir}/${eventdate}/${hrrr_time_ics}${NC} .... "
     if ls ${hrrr_dir}/${eventdate}/${hrrr_time_ics} > /dev/null 2>&1; then
         echo -e "${GREEN}Found${NC}"
         for mdir in "${hrrr_dir}/${eventdate}/${hrrr_time_ics}"/postprd_mem00??; do
@@ -1291,7 +1289,7 @@ function check_hrrr_files {
         echo -e "${RED}Missing${NC}"
     fi
 
-    echo -ne "Checking ${CYAN}${hrrr_dir}/${eventdate}/${hrrr_time_lbc}${NC} .... "
+    mecho0n "Checking ${CYAN}${hrrr_dir}/${eventdate}/${hrrr_time_lbc}${NC} .... "
 
     if ls ${hrrr_dir}/${eventdate}/${hrrr_time_lbc} > /dev/null 2>&1; then
         echo -e "${GREEN}Found${NC}"
@@ -1377,7 +1375,7 @@ while [[ $# -gt 0 ]]
                 overwrite=$2
                 shift
             else
-                echo "ERROR: option for '-k' can only be [0-2], but got \"$2\"."
+                echo -e "${RED}ERROR${NC}: option for ${BLUE}-k${NC} can only be [${YELLOW}0-2${NC}], but got ${PURPLE}$2${NC}."
                 usage 1
             fi
             ;;
@@ -1385,7 +1383,7 @@ while [[ $# -gt 0 ]]
             if [[ -d $2 ]]; then
                 TEMPDIR=$2
             else
-                echo "ERROR: Template directory \"$2\" does not exist."
+                echo -e "${RED}ERROR${NC}: Template directory ${BLUE}$2${NC} does not exist."
                 usage 1
             fi
             shift
@@ -1394,7 +1392,7 @@ while [[ $# -gt 0 ]]
             if [[ ${2,,} == "init" || ${2,,} == "restart" ]]; then
                 damode="${2,,}"
             else
-                echo "ERROR: unknow argument. Expect: \"init\" or \"restart\". Got: ${2,,}"
+                echo -e "${RED}ERROR${NC}: unknow argument. Expect: ${YELLOW}init${NC} or ${YELLOW}restart${NC}. Got: ${PURPLE}${2,,}${NC}"
                 usage 1
             fi
             shift
@@ -1410,7 +1408,7 @@ while [[ $# -gt 0 ]]
         -l)
             fixed_level="${FIXDIR}/$2"
             if [[ ! -e ${fixed_level} ]]; then
-                echo "ERROR: ${fixed_level} not exist."
+                echo -e "${RED}ERROR${NC}: ${BLUE}${fixed_level}${NC} not exist."
                 usage 1
             fi
             shift
@@ -1423,7 +1421,7 @@ while [[ $# -gt 0 ]]
                 cen_lat=${latlons[0]}
                 cen_lon=${latlons[1]}
             else
-                echo -e "${RED}ERROR${NC}: Domain center is required as ${BLUE}-c lat,lon${NC}, get: ${BROWN}$2${NC}."
+                echo -e "${RED}ERROR${NC}: Domain center is required as ${BLUE}-c lat,lon${NC}, get: ${PURPLE}$2${NC}."
                 usage 1
             fi
             shift
@@ -1438,7 +1436,7 @@ while [[ $# -gt 0 ]]
             elif [[ ${2^^} == "HERCULES" ]]; then
                 machine=Hercules
             else
-                echo "ERROR: Unsupported machine name, got \"$2\"."
+                echo -e "${RED}ERROR${NC}: Unsupported machine name, got ${PURPLE}$2${NC}."
                 usage 1
             fi
             shift
@@ -1452,7 +1450,7 @@ while [[ $# -gt 0 ]]
             shift
             ;;
         -*)
-            echo "Unknown option: $key"
+            echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
             usage 2
             ;;
         static* | geogrid* | createWOFS | meshplot* | clean* | setup | check)
@@ -1475,8 +1473,7 @@ while [[ $# -gt 0 ]]
                 fi
                 #echo $WORKDIR,${jobs[*]},$eventdate,$eventtime
             else
-                 echo ""
-                 echo "ERROR: unknown argument, get [$key]."
+                 echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}$key${NC}."
                  usage 3
             fi
             ;;
@@ -1605,9 +1602,9 @@ else    # Vecna at NSSL
 
     # Load Python Enviroment if necessary
     if [[ " ${jobs[*]} " =~ " meshplot_py " ]]; then
-        echo ""
-        echo "Enabling Python micromamba environment - wofs_an ...."
-        echo ""
+        echo    ""
+        echo -e "Enabling Python micromamba environment - ${BROWN}wofs_an${NC} ...."
+        echo    ""
         source /home/yunheng.wang/.pythonrc  || exit $?
     fi
 fi
@@ -1641,7 +1638,7 @@ if [[ " ${jobs[*]} " == " check " ]]; then
     check_hrrr_files; exit 0
 fi
 
-echo "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
+echo    "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
 echo -e "     Event date : ${GREEN}$eventdate${NC} ${LIGHT_BLUE}${eventtime}${NC}"
 echo    "     Root    dir: $rootdir"
 echo    "     Working dir: $WORKDIR"
@@ -1683,7 +1680,7 @@ declare -A jobargs=([geogrid]="${rundir}/geo_${domname##*_}"            \
 for job in "${jobs[@]}"; do
     if [[ $verb -eq 1 ]]; then
         echo " "
-        echo "run_$job ${jobargs[$job]}"
+        echo "    run_$job ${jobargs[$job]}"
     fi
 
     "run_$job" ${jobargs[$job]}

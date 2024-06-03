@@ -54,6 +54,41 @@ def make_namespace(d: dict):
 
 ########################################################################
 
+def color_text(field, color = 'white', darkness='dark', length=None, ):
+    """Return the 'field' in collored terminal form"""
+
+    Term_colors = {
+      'black'  : 30,
+      'red'    : 31,
+      'green'  : 32,
+      'yellow' : 33,
+      'blue'   : 34,
+      'magenta': 35,
+      'cyan'   : 36,
+      'white'  : 37,
+    }
+
+    bgcolor="00"
+    if darkness == "light":
+        bgcolor="01"
+
+    outfield = field
+    if length :
+        if len(field) > length :
+            outfield = field[:length-4]+' ...'
+        else:
+            outfield = field.ljust(length)
+
+    if sys.stdout.isatty():    # You're running in a real terminal
+        outfield = f'\x1B[{bgcolor};{Term_colors[color]}m{outfield}\x1B[00m'
+    #else:                     # You're being piped or redirected
+
+    return outfield
+
+#enddef color_text
+
+########################################################################
+
 def read_radar_location(radar_filename):
 
     radar_locations_dict = {}
@@ -363,7 +398,7 @@ def search_radars(radars,grid):
             #radcords.append(y)
             radar_within_domain[key] = radars[key]
 
-    print(f"\n  Found {len(radar_within_domain)} radars within domain\n")
+    print(f"\n    Found {color_text(len(radar_within_domain),'green')} radars within domain\n")
 
     return radar_within_domain
 
@@ -462,6 +497,8 @@ def write_envfile(outfilename,outradars,grid):
 
 if __name__ == "__main__":
 
+    script_path = os.path.realpath(__file__)
+
     parser = argparse.ArgumentParser(description='Plot MPAS grid outlines using Cartopy',
                                      epilog='''        ---- Yunheng Wang (2020-11-25).
                                             ''')
@@ -550,7 +587,7 @@ if __name__ == "__main__":
         else:
             ranges = [ min(lons)-2.0, max(lons)+2.0, min(lats)-2.0, max(lats)+2.0]
 
-    print(f"ranges = {ranges}")
+    print(f"    ranges = {color_text(ranges,'cyan')}")
 
     #
     # Decode output grid parameters
@@ -602,7 +639,7 @@ if __name__ == "__main__":
             #sys.exit(1)
         else:
             radar_locations = read_radar_location(args.radar_file)
-            print(f"  Read in radar file {args.radar_file} successfully\n")
+            print(f"    Read in radar file {color_text(args.radar_file,'blue')} successfully\n")
 
             if len(radar_locations) > 0:
                 plt_radar = True
@@ -650,7 +687,7 @@ if __name__ == "__main__":
     #
     # WoFS domain size
     #
-    print(f"Set WOFS grid width {args.width} km.")
+    print(f"    Set WOFS grid width {color_text(args.width,'cyan')} km.")
     WOFS_size = 1000. * args.width
     ogrid['sizeinm'] = WOFS_size
 
@@ -788,8 +825,11 @@ if __name__ == "__main__":
             radars = search_radars(radar_locations,grid_out)
             attach_radar_rings(grid_out,radars,ax)
 
+            commonprefix = os.path.commonprefix([script_path,envfilename])
+            short_envfilename = envfilename[len(commonprefix):]
+
             write_envfile(envfilename,radars,grid_out)
-            print(f"\nWrote out environment file for radars: {envfilename}")
+            print(f"    Wrote out environment file for radars: {color_text(short_envfilename,'cyan')}")
     #
     #-------------------------------------------------------------------
     #
@@ -797,7 +837,9 @@ if __name__ == "__main__":
     #
     #-------------------------------------------------------------------
 
-    print(f"Saving figure to {figname} ...")
+    commonprefix  =  os.path.commonprefix([script_path,figname])
+    short_figname = figname[len(commonprefix):]
+    print(f"    Saving figure to {color_text(short_figname,'magenta')} ...")
     figure.savefig(figname, format='png')
 
 

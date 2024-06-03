@@ -82,7 +82,7 @@ function usage {
     echo " "
     echo "                                     -- By Y. Wang (2023.05.25)"
     echo " "
-    exit $1
+    exit "$1"
 }
 
 ########################################################################
@@ -103,15 +103,17 @@ function run_ungrib {
 
         jobarrays=()
         # shellcheck disable=SC2154
+        mecho0 "GRIB files from ${grib_dir}:"
         for mem in $(seq 1 "$nensics"); do
             memstr=$(printf "%02d" "$mem")
             #gribfile=$grib_dir/$eventdate/${gribtime}/mem${memstr}/wrfnat_hrrre_newse_mem00${memstr}_${hstr}.grib2
-            gribfile=$grib_dir/$eventdate/${gribtime}/postprd_mem00${memstr}/wrfnat_hrrre_newse_mem00${memstr}_${hstr}.grib2
+            gribfilename="$eventdate/${gribtime}/postprd_mem00${memstr}/wrfnat_hrrre_newse_mem00${memstr}_${hstr}.grib2"
+            gribfile="${grib_dir}/${gribfilename}"
 
-            echo "GRIB file: $gribfile"
+            mecho0 "mem $memstr GRIB file: ${gribfilename}"
             while [[ ! -f $gribfile ]]; do
                 if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for $gribfile ..."
+                    mecho0 "Waiting for $gribfilename ..."
                 fi
                 sleep 10
             done
@@ -188,10 +190,10 @@ function run_init4invariant {
 
         if [[ $dorun == true ]]; then
             donefile="$init_dir/init/done.${domname}"
-            echo "$$: Checking: $donefile"
+            mecho0 "Checking: ${CYAN}$donefile${NC} ...."
             while [[ ! -e $donefile ]]; do
                 if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for file: $donefile"
+                    mecho0 "Waiting for file: ${CYAN}$donefile${NC}"
                 fi
 
                 sleep 10
@@ -219,11 +221,11 @@ function run_init4invariant {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            echo "$$: Checking $cond"
+            mecho0 "Checking: ${CYAN}$cond${NC} ...."
             while [[ ! -e $cond ]]; do
                 check_job_status "ungrib" "$rundir/init/ungrib" "$nensics"
                 if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for file: $cond"
+                    mecho0 "Waiting for file: ${CYAN}$cond${NC}"
                 fi
                 sleep 10
             done
@@ -252,12 +254,12 @@ function run_init4invariant {
         cd "$rundir/$domname" || return
         # shellcheck disable=SC2154
         if [[ $verb -eq 1 ]]; then
-            echo "Generating ${domname}.graph.info.part.${npeics} in $rundir/$domname using ${gpmetis}"
+            mecho0 "Generating ${CYAN}${domname}.graph.info.part.${npeics}${NC} in ${BLUE}${rundir##"${WORKDIR}"/}/$domname${NC} using ${GREEN}${gpmetis}${NC}"
         fi
         ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npeics} > gpmetis.out$npeics
         estatus=$?
         if [[ ${estatus} -ne 0 ]]; then
-            echo "${estatus}: $${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npeics}"
+            mecho0 "${estatus}: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npeics}"
             exit ${estatus}
         fi
         cd $mywrkdir || return
@@ -393,10 +395,10 @@ function run_init {
 
         if [[ $dorun == true ]]; then
             donefile="$init_dir/init/done.${domname}"
-            echo "$$: Checking: $donefile"
+            mecho0 "Checking: ${CYAN}$donefile${NC} ...."
             while [[ ! -e $donefile ]]; do
                 if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for file: $donefile"
+                    mecho0 "Waiting for file: ${CYAN}$donefile${NC}"
                 fi
 
                 sleep 10
@@ -424,11 +426,11 @@ function run_init {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            echo "$$: Checking $cond"
+            mecho0 "Checking: ${CYAN}$cond${NC} ...."
             while [[ ! -e $cond ]]; do
                 check_job_status "ungrib" "$rundir/init/ungrib" "$nensics"
                 if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for file: $cond"
+                    mecho0 "Waiting for file: ${CYAN}$cond${NC}"
                 fi
                 sleep 10
             done
@@ -459,12 +461,12 @@ function run_init {
             cd "$rundir/$domname" || return
             # shellcheck disable=SC2154
             if [[ $verb -eq 1 ]]; then
-                echo "Generating ${domname}.graph.info.part.${npeics} in $rundir/$domname using ${gpmetis}"
+                mecho0 "Generating ${CYAN}${domname}.graph.info.part.${npeics}${NC} in ${BLUE}${rundir##"${WORKDIR}"/}/$domname${NC} using ${GREEN}${gpmetis}${NC}"
             fi
             ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npeics} > gpmetis.out$npeics
             estatus=$?
             if [[ ${estatus} -ne 0 ]]; then
-                echo "${estatus}: $${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npeics}"
+                mecho0 "${estatus}: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npeics}"
                 exit ${estatus}
             fi
             cd $mywrkdir || return
@@ -614,14 +616,18 @@ function run_clean {
                 rm -rf ungrib
             else
                 cd "$rundir/init/ungrib"  || return
-                #jobname=$1 mywrkdir=$2 nummem=$3
-                clean_mem_runfiles "ungrib" "$rundir/init/ungrib" "$nensics"
+                if [[ -e done.ungrib ]]; then
+                    #jobname=$1 mywrkdir=$2 nummem=$3
+                    clean_mem_runfiles "ungrib" "$rundir/init/ungrib" "$nensics"
+                fi
             fi
             ;;
         init )
             cd "$rundir/init"  || return
             #jobname=$1 mywrkdir=$2 nummem=$3
-            clean_mem_runfiles "${domname}" "$rundir/init" "$nensics"
+            if [[ -e done.${domnane} ]]; then
+                clean_mem_runfiles "${domname}" "$rundir/init" "$nensics"
+            fi
             ;;
         esac
     done
@@ -695,7 +701,7 @@ while [[ $# -gt 0 ]]
                 overwrite=$2
                 shift
             else
-                echo -e "${RED}ERROR${NC}: option for '-k' can only be [0-2], but got \"$2\"."
+                echo -e "${RED}ERROR${NC}: option for ${BLUE}-k${NC} can only be [${YELLOW}0-2${NC}], but got ${PURPLE}$2${NC}."
                 usage 1
             fi
             ;;
@@ -706,7 +712,7 @@ while [[ $# -gt 0 ]]
             if [[ -d $2 ]]; then
                 TEMPDIR=$2
             else
-                echo -e "${RED}ERROR${NC}: Template directory \"$2\" does not exist."
+                echo -e "${RED}ERROR${NC}: Template directory ${BLUE}$2${NC} does not exist."
                 usage 1
             fi
             shift
@@ -721,7 +727,7 @@ while [[ $# -gt 0 ]]
             elif [[ ${2^^} == "CHEYENNE" || ${2^^} == "DERECHO" ]]; then
                 machine=Cheyenne
             else
-                echo -e "${RED}ERROR${NC}: Unsupported machine name, got \"$2\"."
+                echo -e "${RED}ERROR${NC}: Unsupported machine name, got ${PURPLE}$2${NC}."
                 usage 1
             fi
             shift
@@ -734,22 +740,22 @@ while [[ $# -gt 0 ]]
             if [[ -d ${2} ]]; then        # use init & lbc from another run directory
                 init_dir=$2
                 while [[ ! -d $init_dir/init ]]; do
-                    echo "Waiting for $init_dir/init"
+                    echo -e "Waiting for ${CYAN}$init_dir/init${NC} ...."
                     sleep 10
                 done
 
                 while [[ ! -d $init_dir/lbc ]]; do
-                    echo "Waiting for $init_dir/lbc"
+                    echo -e "Waiting for ${CYAN}$init_dir/lbc${NC} ...."
                     sleep 10
                 done
             else
-                echo -e "${RED}ERROR${NC}: initialization directory  \"$2\" not exists."
+                echo -e "${RED}ERROR${NC}: initialization directory  ${PURPLE}$2${NC} not exists."
                 usage 1
             fi
             shift
             ;;
          -*)
-            echo "Unknown option: $key"
+            echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
             usage 2
             ;;
         ungrib* | init* | clean* )
@@ -771,9 +777,8 @@ while [[ $# -gt 0 ]]
 
                 #echo $WORKDIR,${jobs[*]},$eventdate,$eventtime
             else
-                 echo ""
-                 echo -e "${RED}ERROR${NC}: unknown argument, get [$key]."
-                 usage 3
+                echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}$key${NC}."
+                usage 3
             fi
             ;;
     esac
@@ -793,13 +798,14 @@ else
     if [[ -e ${WORKDIR}/${config_file} ]]; then
         config_file="${WORKDIR}/${config_file}"
     else
-        echo -e "${RED}ERROR${NC}: file ${config_file} not exist."
+        echo -e "${RED}ERROR${NC}: file ${CYAN}${config_file}${NC} not exist."
         usage 1
     fi
 fi
 
 if [[ ! -r ${config_file} ]]; then
-    echo -e "${RED}ERROR${NC}: Configuration file ${config_file} is not found. Please run \"setup_mpas-wofs_grid.sh\" first."
+    echo -e "${RED}ERROR${NC}: Configuration file ${CYAN}${config_file}${NC} is not found."
+    echo -e "       Please run ${GREEN}setup_mpas-wofs_grid.sh${NC} first."
     exit 2
 fi
 readconf ${config_file} COMMON init || exit $?
@@ -809,7 +815,7 @@ if [[ -e ${vertLevel_file} ]]; then
     nvertlevels=$(cat ${vertLevel_file} | sed '/^\s*$/d' | wc -l)
     (( nvertlevels -= 1 ))
 else
-    echo -e "${RED}ERROR${NC}: vertLevel_file=\"${vertLevel_file}\" not exist."
+    echo -e "${RED}ERROR${NC}: vertLevel_file=${BLUE}${vertLevel_file}${NC} not exist."
     usage 1
 fi
 
@@ -853,12 +859,12 @@ fi
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
 
-echo "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
-echo "     Event date : $eventdate ${eventtime}"
-echo "     Root    dir: $rootdir"
-echo "     Working dir: $WORKDIR"
-echo "     Domain name: $domname"
-echo " "
+echo    "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
+echo -e "     Event date : ${GREEN}$eventdate${NC} ${LIGHT_BLUE}${eventtime}${NC}"
+echo    "     Root    dir: $rootdir"
+echo    "     Working dir: $WORKDIR"
+echo -e "     Domain name: ${PURPLE}$domname${NC};  MP scheme: ${BROWN}${mpscheme}${NC}"
+echo    " "
 
 starttime_str=$(date -u -d "$eventdate ${eventtime}" +%Y-%m-%d_%H:%M:%S)
 stoptime_str=$(date -u -d "$eventdate  ${eventtime}" +%Y-%m-%d_%H:%M:%S)
@@ -889,7 +895,7 @@ declare -A jobargs=([ungrib]="$hrrr_dir $hrrr_time"                     \
 for job in "${jobs[@]}"; do
     if [[ $verb -eq 1 ]]; then
         echo " "
-        echo "run_$job ${jobargs[$job]}"
+        echo "    run_$job ${jobargs[$job]}"
     fi
 
     run_$job ${jobargs[$job]}
