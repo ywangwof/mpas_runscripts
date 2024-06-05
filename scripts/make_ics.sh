@@ -16,6 +16,7 @@ eventdateDF=$(date -u +%Y%m%d)
 #
 # 0. module files in modules
 #     build_jet_Rocky8_intel_smiol
+#     env.mpas_smiol
 #
 # 1. exec                                   # The executables
 #     init_atmosphere_model
@@ -39,7 +40,7 @@ eventdateDF=$(date -u +%Y%m%d)
 #
 # INSTRUCTIONS:
 #
-#  Use existing domain (wofs_mpas)
+#  Use an existing domain (wofs_mpas)
 #
 #     0. It should be run after "setup_mpas-wofs_grid.sh"
 #     1. make_ics.sh [YYYYmmddHH] [run_dirs] [jobnames]
@@ -68,8 +69,6 @@ function usage {
     echo "              -w                  Hold script to wait for all job conditions are satified and submitted (for mpassit & upp)."
     echo "                                  By default, the script will exit after submitting all possible jobs."
     echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
-    echo "              -s  init_dir        Directory name from which init & lbc subdirectories are used to initialize this run"
-    echo "                                  which avoids runing duplicated preprocessing jobs (ungrib, init/lbc) again. default: false"
     echo "              -a                  Clean \"ungrib\" subdirectory"
     echo "              -f conf_file        Configuration file for this case. Default: ${WORKDIR}/config.${eventdate}"
     echo " "
@@ -185,25 +184,6 @@ EOF
 ########################################################################
 
 function run_init4invariant {
-
-    if [[ -d $init_dir ]]; then  # link it from somewhere
-
-        if [[ $dorun == true ]]; then
-            donefile="$init_dir/init/done.${domname}"
-            mecho0 "Checking: ${CYAN}$donefile${NC} ...."
-            while [[ ! -e $donefile ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: ${CYAN}$donefile${NC}"
-                fi
-
-                sleep 10
-            done
-        fi
-
-        cd "$rundir" || return
-        ln -sf "$init_dir/init" .
-        return
-    fi
 
     # Otherwise, run init normally for invariant stream
     conditions=()
@@ -390,25 +370,6 @@ EOF
 ########################################################################
 
 function run_init {
-
-    if [[ -d $init_dir ]]; then  # link it from somewhere
-
-        if [[ $dorun == true ]]; then
-            donefile="$init_dir/init/done.${domname}"
-            mecho0 "Checking: ${CYAN}$donefile${NC} ...."
-            while [[ ! -e $donefile ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: ${CYAN}$donefile${NC}"
-                fi
-
-                sleep 10
-            done
-        fi
-
-        cd "$rundir" || return
-        ln -sf "$init_dir/init" .
-        return
-    fi
 
     # Otherwise, run init normally
     conditions=()
@@ -648,7 +609,6 @@ FIXDIR="${rootdir}/fix_files"
 eventdate="$eventdateDF"
 eventtime="1500"
 
-init_dir=false
 runcmd="sbatch"
 dorun=true
 verb=0
@@ -736,25 +696,7 @@ while [[ $# -gt 0 ]]
             config_file="$2"
             shift
             ;;
-        -s )
-            if [[ -d ${2} ]]; then        # use init & lbc from another run directory
-                init_dir=$2
-                while [[ ! -d $init_dir/init ]]; do
-                    echo -e "Waiting for ${CYAN}$init_dir/init${NC} ...."
-                    sleep 10
-                done
-
-                while [[ ! -d $init_dir/lbc ]]; do
-                    echo -e "Waiting for ${CYAN}$init_dir/lbc${NC} ...."
-                    sleep 10
-                done
-            else
-                echo -e "${RED}ERROR${NC}: initialization directory  ${PURPLE}$2${NC} not exists."
-                usage 1
-            fi
-            shift
-            ;;
-         -*)
+        -*)
             echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
             usage 2
             ;;
@@ -766,6 +708,9 @@ while [[ $# -gt 0 ]]
         *)
             if [[ $key =~ ^[0-9]{8}$ ]]; then
                 eventdate="$key"
+            elif [[ $key =~ ^[0-9]{12}$ ]]; then
+                eventtime=${key:8:4}
+                eventdate=${key:0:8}
             elif [[ -d $key ]]; then
                 WORKDIR=$key
                 lastdir=$(basename $WORKDIR)
@@ -774,8 +719,6 @@ while [[ $# -gt 0 ]]
                     WORKDIR=${WORKDIR%%/"$lastdir"}
                     eventdate=${eventstr:0:8}
                 fi
-
-                #echo $WORKDIR,${jobs[*]},$eventdate,$eventtime
             else
                 echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}$key${NC}."
                 usage 3
@@ -784,10 +727,6 @@ while [[ $# -gt 0 ]]
     esac
     shift # past argument or value
 done
-
-if [[ $init_dir != false ]]; then
-    jobs=( "${jobs[@]/ungrib}" )          # drop ungrib from the jobs list
-fi
 
 #
 # read configurations that is not set from command line
@@ -859,11 +798,11 @@ fi
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
 
-echo    "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
-echo -e "     Event date : ${GREEN}$eventdate${NC} ${LIGHT_BLUE}${eventtime}${NC}"
-echo    "     Root    dir: $rootdir"
-echo    "     Working dir: $WORKDIR"
-echo -e "     Domain name: ${PURPLE}$domname${NC};  MP scheme: ${BROWN}${mpscheme}${NC}"
+echo -e "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----\n"
+echo -e "  Event date : ${GREEN}$eventdate${NC} ${YELLOW}${eventtime}${NC}"
+echo -e "  Root    dir: $rootdir${GREEN}/exec${NC}|${PURPLE}/templates${NC}|${DARK}/fix_files${NC}|${BROWN}/scripts${NC}"
+echo -e "  Working dir: $WORKDIR${LIGHT_BLUE}/${eventdate}/init${NC}"
+echo -e "  Domain name: ${PURPLE}$domname${NC}; HRRRE time: ${DARK}${hrrr_time}${NC}; NENSIC: ${WHITE}${nensics}${NC}"
 echo    " "
 
 starttime_str=$(date -u -d "$eventdate ${eventtime}" +%Y-%m-%d_%H:%M:%S)

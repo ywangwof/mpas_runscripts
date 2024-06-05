@@ -213,7 +213,7 @@ function check_job_status {
     mecho1 "Waiting for ensemble jobs of ${WHITE}${jobname}${NC} in ${BROWN}${mywrkdir##"${WORKDIR}"/}${NC}"
     donefile="$mywrkdir/done.${jobname}"
     numtry=0
-    done=0; error=0; running=0
+    done=0; error=0; running=0; unknown=0
     while [[ $numtry -le $numtries ]]; do
         jobarrays=()
         for mem in "${runjobs[@]}"; do
@@ -229,7 +229,11 @@ function check_job_status {
                     (( error+=1 ))
                     break
                 elif $checkonly; then
-                    (( running+=1 ))
+                    if [[ -e $mywrkdir/queue.${jobname} || -e running.${jobname}_$memstr ]]; then
+                        (( running+=1 ))
+                    else
+                        (( unknown+=1 ))
+                    fi
                     break
                 fi
 
@@ -287,6 +291,10 @@ function check_job_status {
     outmessage="Status of $jobname: done: ${GREEN}$done${NC}"
     if [[ $running -gt 0 ]]; then
         outmessage="$outmessage; queued/running: ${BROWN}$running${NC}"
+    fi
+
+    if [[ $unknown -gt 0 ]]; then
+        outmessage="$outmessage; unknown: ${DARK}$unknown${NC}"
     fi
 
     if [[ ${#jobarrays[@]} -gt 0 ]]; then

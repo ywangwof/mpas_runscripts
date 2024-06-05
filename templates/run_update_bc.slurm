@@ -67,7 +67,11 @@ done
 # Run the job itself
 #-----------------------------------------------------------------------
 
-RUNMPCMD -n NOPART EXEDIR/update_bc
+if [[ "MPSCHEME" == "Thompson" ]]; then
+    RUNMPCMD -n NOPART EXEDIR/update_bc.Thompson
+else
+    RUNMPCMD -n NOPART EXEDIR/update_bc
+fi
 
 if [[ $? -eq 0 ]]; then
     touch done.update_bc_${memstr}

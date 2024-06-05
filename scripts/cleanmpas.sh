@@ -142,6 +142,7 @@ if [[ -z $show ]]; then
 fi
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#% ENTRY
 
 if [[ -z ${runtime} ]]; then             # All time cycles
     jobsubstr="for all ${taskname} cycles"
@@ -155,6 +156,7 @@ else                                     # only one time cycle
 fi
 
 case $taskname in
+#1. mpas
 mpas )
     if [[ $verb == true ]]; then
         echo "Remove MPAS run-time files in ${run_dir} ..."
@@ -167,6 +169,7 @@ mpas )
     ${show} rm -rf restart_timestamp ./"${domname}"_??.restart.*.nc
     echo ""
     ;;
+#2. mpasm
 mpasm )
     if [[ $verb == true ]]; then
         echo "Remove all MPAS ensemble run-time files in ${run_dir} ..."
@@ -180,6 +183,7 @@ mpasm )
     done
     ;;
 
+#3. dacycles
 dacycles )
     if [[ $verb == true ]]; then
         echo "Remove MPAS restart files in ${run_dir}/${eventdate}/dacycles/${wrksubdir} ${jobsubstr} ..."
@@ -202,6 +206,7 @@ dacycles )
         $show find . -name "output_*.nc" -exec rm {} \;
     fi
     ;;
+#4. fcst
 fcst )
     if [[ $verb == true ]]; then
         echo "Remove MPAS history/diag files in ${run_dir}/${eventdate}/fcst/${wrksubdir} ${jobsubstr} ..."
@@ -213,6 +218,7 @@ fcst )
     cd "${run_dir}/${eventdate}/fcst/${wrksubdir}" || exit 1
     $show find . -name "wofs_mpas_??.{history,diag}.*" -exec rm {} \;
     ;;
+#5. post
 post )
     #-------------------------------------------------------------------
     cd "${FCST_dir}" || exit 1
@@ -257,12 +263,13 @@ post )
     ;;
 esac
 
+#6. confirm
 if [[ $askconfirm == true ]]; then
     echo -ne  "\n${BROWN}WARNING${NC}: Do you want to execute the tasks. [${YELLOW}YES,NO${NC}]? "
     read -r doit
     if [[ ${doit^^} == "YES" ]]; then
         echo -e "${BROWN}WARNING${NC}: Cleaning in process ...\n"
-        saved_args+=("-c")
+        saved_args+=("-c" "-noask")
         $0 "${saved_args[@]}"
     else
         echo -e "Get ${PURPLE}${doit^^}${NC}, do nothing."

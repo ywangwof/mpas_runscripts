@@ -204,6 +204,7 @@ ln -sf ${tool_dir}/bin/gpmetis  .
 for pkg in "${packages[@]}"; do
     case ${pkg^^} in
 
+    #1. MPASSIT
     "MPASSIT" )
         srcmpassit=${srcdir-$srcmpassitdir}
 
@@ -217,6 +218,7 @@ for pkg in "${packages[@]}"; do
         run_cmd "${runcmd}" "$srcmpassit/build" mpassit
         ;;
 
+    #2. WRF
     "WRF" )
         srcwps=${srcdir-$srcwpsdir}
         srcwrf=${srcdir-$srcwrfdir}
@@ -235,6 +237,7 @@ for pkg in "${packages[@]}"; do
         run_cmd "${runcmd}" "$srcwps/geogrid/src" geogrid.exe
         ;;
 
+    #3. UPP
     "UPP" )
         srcupp=${srcdir-$srcuppdir}
 
@@ -257,6 +260,7 @@ for pkg in "${packages[@]}"; do
         run_cmd "${runcmd}" "${srcupp}/bin" unipost.exe
         ;;
 
+    #4. DART
     "DART" )
         srcdart=${srcdir-$srcdartdir}
 
@@ -275,8 +279,13 @@ for pkg in "${packages[@]}"; do
 
             echo "  -- ${cmdnote} DART programs to $(pwd) ...."
             run_cmd "${runcmd}" "$srcdart/models/mpas_atm/work" "${dartprograms[*]}"
+
+            cd "${desdir}" || exit 1
+            echo "  -- ${cmdnote} DART static to $(pwd) ...."
+            run_cmd "${runcmd}" "$srcdart/assimilation_code/programs/gen_sampling_err_table/work" "sampling_error_correction_table.nc"
         fi
         ;;
+    #5. MPASREGION
     "MPASREGION" )
         if [[ $realrun == false ]]; then
             cd "$(dirname" ${desdir}")" || exit 1
@@ -286,6 +295,8 @@ for pkg in "${packages[@]}"; do
             run_cmd "${runcmd}" "${srcmpasregion}" MPAS-Limited-Area
         fi
         ;;
+
+    #6. MPAS
     "MPAS" )
 
         srcmodel=${srcdir-$srcmodeldir}

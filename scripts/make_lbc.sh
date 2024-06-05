@@ -16,6 +16,7 @@ eventdateDF=$(date -u +%Y%m%d)
 #
 # 0. module files in modules
 #     build_jet_Rocky8_intel_smiol
+#     env.mpas_smiol
 #
 # 1. exec                                   # The executables
 #     init_atmosphere_model
@@ -52,10 +53,10 @@ function usage {
     echo " "
     echo "    PURPOSE: Make ensemble boundary files before the MPAS-WOFS DA cycles"
     echo " "
-    echo "    DATETIME - Case date and time in YYYYMMDD, Default for today"
+    echo "    DATETIME - Case date and time in YYYYMMDD, Default: today"
     echo "    WORKDIR  - Run Directory"
-    echo "    JOBS     - One or more jobs from [ungrib,init,clean]"
-    echo "               Default all jobs in sequence"
+    echo "    JOBS     - One or more jobs from [ungrib,lbc,clean]"
+    echo "               Default: all jobs in the proper order."
     echo " "
     echo "    OPTIONS:"
     echo "              -h                  Display this message"
@@ -67,9 +68,11 @@ function usage {
     echo "              -t  DIR             Template directory for runtime files"
     echo "              -w                  Hold script to wait for all job conditions are satified and submitted (for mpassit & upp)."
     echo "                                  By default, the script will exit after submitting all possible jobs."
+    echo "              -s  YYYYmmddHHMM    Start date & time for the LBC preparation"
+    echo "                  HHMM            Start time"
+    echo "              -e  YYYYmmddHHMM    End date & time for the LBC preparation"
+    echo "                  HHMM            End time"
     echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
-    echo "              -s  init_dir        Directory name from which init & lbc subdirectories are used to initialize this run"
-    echo "                                  which avoids runing duplicated preprocessing jobs (ungrib, init/lbc) again. default: false"
     echo "              -f conf_file        Configuration file for this case. Default: ${WORKDIR}/config.${eventdate}"
     echo " "
     echo "   DEFAULTS:"
@@ -105,7 +108,7 @@ function run_ungrib {
         starthr=$(((eventtime-gribtime)/100))
 
         starts=$(date -u -d "$eventdate $gribtime" +%s)
-        ends=$(date -u -d "$eventdate $eventend 1 day" +%s)
+        ends=$(date -u   -d "${enddatetime:0:8} ${enddatetime:8:4}" +%s)
         endhr=$(( (ends-starts)/3600 ))
 
         gribstart_str=$(date -u -d "$eventdate $gribtime $starthr hours" +%Y-%m-%d_%H:%M:%S )
@@ -197,26 +200,6 @@ EOF
 ########################################################################
 
 function run_lbc {
-
-    if [[ -d $init_dir ]]; then  # link it from somewhere
-
-        if [[ $dorun == true ]]; then
-            donefile="$init_dir/lbc/done.${domname}"
-            mecho0 "Checking: ${CYAN}$donefile${NC} ...."
-            while [[ ! -e $donefile ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: ${CYAN}$donefile${NC}"
-                fi
-                sleep 10
-            done
-        fi
-
-        cd $rundir || return
-        ln -sf $init_dir/lbc .
-        return
-    fi
-
-    # otherwise, run lbc normally
 
     conditions=()
     while [[ $# -gt 0 ]]; do
@@ -465,7 +448,6 @@ eventdate="$eventdateDF"
 eventtime="1500"
 eventend="0900"
 
-init_dir=false
 runcmd="sbatch"
 dorun=true
 verb=0
@@ -535,6 +517,34 @@ while [[ $# -gt 0 ]]
             fi
             shift
             ;;
+        -s )
+            if [[ $2 =~ ^[0-9]{12}$ ]]; then
+                eventtime=${2:8:4}
+                eventhour=${2:8:2}
+                if [[ $((10#$eventhour)) -lt 12 ]]; then
+                    eventdate=$(date -u -d "${2:0:8} 1 day ago" +%Y%m%d)
+                else
+                    eventdate=${2:0:8}
+                fi
+            elif [[ $2 =~ ^[0-9]{4}$ ]]; then
+                eventtime=${2}
+            else
+                echo -e "${RED}ERROR${NC}: Start time should be in ${GREEN}YYYYmmddHHMM${NC} or ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
+                usage 1
+            fi
+            shift
+            ;;
+        -e )
+            if [[ $2 =~ ^[0-9]{12}$ ]]; then
+                enddatetime=$2
+            elif [[ $2 =~ ^[0-9]{4}$ ]]; then
+                endhrmin=$2
+            else
+                echo -e "${RED}ERROR${NC}: End time should be in ${GREEN}YYYYmmddHHMM${NC} or ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
+                usage 1
+            fi
+            shift
+            ;;
         -m)
             if [[ ${2^^} == "JET" ]]; then
                 machine=Jet
@@ -554,25 +564,7 @@ while [[ $# -gt 0 ]]
             config_file="$2"
             shift
             ;;
-        -s )
-            if [[ -d ${2} ]]; then        # use init & lbc from another run directory
-                init_dir=$2
-                while [[ ! -d $init_dir/init ]]; do
-                    echo -e "Waiting for ${CYAN}$init_dir/init${NC} ...."
-                    sleep 10
-                done
-
-                while [[ ! -d $init_dir/lbc ]]; do
-                    echo -e "Waiting for ${CYAN}$init_dir/lbc${NC} ...."
-                    sleep 10
-                done
-            else
-                echo -e "${RED}ERROR${NC}: initialization directory ${PURPLE}$2${NC} not exists."
-                usage 1
-            fi
-            shift
-            ;;
-         -*)
+        -*)
             echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
             usage 2
             ;;
@@ -583,6 +575,9 @@ while [[ $# -gt 0 ]]
         *)
             if [[ $key =~ ^[0-9]{8}$ ]]; then
                 eventdate="$key"
+            elif [[ $key =~ ^[0-9]{12}$ ]]; then
+                eventtime=${key:8:4}
+                eventdate=${key:0:8}
             elif [[ -d $key ]]; then
                 WORKDIR=$key
                 lastdir=$(basename $WORKDIR)
@@ -591,8 +586,6 @@ while [[ $# -gt 0 ]]
                     WORKDIR=${WORKDIR%%/"$lastdir"}
                     eventdate=${eventstr:0:8}
                 fi
-
-                #echo $WORKDIR,${jobs[*]},$eventdate,$eventtime
             else
                 echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}$key${NC}."
                 usage 3
@@ -602,8 +595,15 @@ while [[ $# -gt 0 ]]
     shift # past argument or value
 done
 
-if [[ $init_dir != false ]]; then
-    jobs=( "${jobs[@]/ungrib}" )          # drop ungrib from the jobs list
+if [[ -n ${endhrmin} ]]; then
+    endhour=${endhrmin:0:2}
+    if [[ $((10#$endhour)) -lt 12 ]]; then
+        enddatetime=$(date -u -d "$eventdate $endhrmin 1 day" +%Y%m%d%H%M)
+    else
+        enddatetime=$(date -u -d "$eventdate $endhrmin" +%Y%m%d%H%M)
+    fi
+elif [[ -z ${enddatetime} ]]; then
+    enddatetime=$(date -u -d "${eventdate} ${eventend} 1 day" +%Y%m%d%H%M)
 fi
 
 #
@@ -674,15 +674,15 @@ fi
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
 
-echo    "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
-echo -e "     Event date : ${GREEN}$eventdate${NC} ${LIGHT_BLUE}${eventtime}${NC}"
-echo    "     Root    dir: $rootdir"
-echo    "     Working dir: $WORKDIR"
-echo -e "     Domain name: ${PURPLE}$domname${NC};  MP scheme: ${BROWN}${mpscheme}${NC}"
+echo -e "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----\n"
+echo -e "  Event date : ${GREEN}$eventdate${NC} ${YELLOW}${eventtime}${NC} --> ${LIGHT_BLUE}${enddatetime:0:8}${NC} ${YELLOW}${enddatetime:8:4}${NC}"
+echo -e "  Root    dir: $rootdir${GREEN}/exec${NC}|${PURPLE}/templates${NC}|${DARK}/fix_files${NC}|${BROWN}/scripts${NC}"
+echo -e "  Working dir: $WORKDIR${LIGHT_BLUE}/${eventdate}/lbc${NC}"
+echo -e "  Domain name: ${PURPLE}$domname${NC}; HRRRE time: ${DARK}${hrrr_time}${NC}; NENSLBC: ${WHITE}${nenslbc}${NC}"
 echo    " "
 
-starttime_str=$(date -u -d "$eventdate ${eventtime}"      +%Y-%m-%d_%H:%M:%S)
-stoptime_str=$(date -u -d "$eventdate  ${eventend} 1 day" +%Y-%m-%d_%H:%M:%S)
+starttime_str=$(date -u -d "$eventdate ${eventtime}"               +%Y-%m-%d_%H:%M:%S)
+stoptime_str=$(date -u  -d "${enddatetime:0:8} ${enddatetime:8:4}" +%Y-%m-%d_%H:%M:%S)
 
 rundir="$WORKDIR/${eventdate}"
 

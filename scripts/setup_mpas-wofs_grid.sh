@@ -46,12 +46,13 @@ eventdateDF=$(date -u +%Y%m%d)
 #        WRFV4.0/Vtable.HRRRE.2018
 #
 #    3.2 The global 3-km mesh grid
-#        x1.65536002.grid.nc
+#        *x1.65536002.grid.nc
+#        *WOFSdomain.grid.nc
 #
 # 4. scripts                                # this scripts
 #    4.1 setup_mpas-wofs_grid.sh
 #
-# 5. /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG
+# 5. /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG*
 #
 #    NOTE: It can be anywhere, but should modify "run_geogrid"
 #          and "run_static" below whenever the directory is changed.
@@ -70,7 +71,7 @@ eventdateDF=$(date -u +%Y%m%d)
 #     2. make a run directory under rootdir
 #        run_dirs
 #
-#     3. setup_mpas-wofs_grid.sh[YYYYmmddHHMM] [run_dirs] [jobnames]
+#     3. setup_mpas-wofs_grid.sh [YYYYmmddHHMM] [run_dirs] [jobnames]
 #
 #-----------------------------------------------------------------------
 
@@ -85,7 +86,7 @@ function usage {
     echo "    JOBS     - One or more jobs from [geogrid,ungrib_hrrr,rotate,meshplot_py,static,createWOFS,meshplot_ncl,clean] or [check,setup]."
     echo "               setup - just write set up configuration file"
     echo "               check - Check the availability of the HRRRE datasets"
-    echo "               Default all jobs in sequence"
+    echo "               Default all jobs in the proper order."
     echo " "
     echo "    OPTIONS:"
     echo "              -h              Display this message"
@@ -426,8 +427,8 @@ function run_static {
 
     # The program needs a time string in file $domname.grid.nc
     #
-    inittime_str=$(date -u -d "$hrrrdate ${hrrrtime}" +%Y-%m-%d_%H)
-    starttime_str=$(date -u -d "$hrrrdate ${hrrrtime}" +%Y-%m-%d_%H:%M:%S)
+    inittime_str=$(date -u  -d "${eventdate} ${eventtime}" +%Y-%m-%d_%H)
+    starttime_str=$(date -u -d "${eventdate} ${eventtime}" +%Y-%m-%d_%H:%M:%S)
 
     initfile="../ungrib/${EXTHEAD}:$inittime_str"
     if [[ ! -f $initfile ]]; then
@@ -698,17 +699,12 @@ function run_ungrib_hrrr {
         return                   # skip
     fi
 
-    h=${hrrrtime:0:2}
+    h=${eventtime:0:2}
     hstr=$(printf "%02d" ${h#0})
     if [[ -f $hrrr_grib_dir ]]; then
         hrrrfile=$hrrr_grib_dir
-        #vtime=$($wgrib2path $hrrrfile -for 1:1 -vt)
-        #gribtime=${vtime##*=}
-        #hrrrdate=${gribtime:0:8}
-        #hrrrtime=${gribtime:8:2}
-        #echo $hrrrtime, $hrrrdate, $vtime, $gribtime
     else
-        julday=$(date -u -d "$hrrrdate ${hrrrtime}" +%y%j%H)
+        julday=$(date -u -d "${eventdate} ${eventtime}" +%y%j%H)
         hrrrbase="${julday}0000"
         hrrrfile="$hrrr_grib_dir/${hrrrbase}$hstr"
     fi
@@ -726,8 +722,8 @@ function run_ungrib_hrrr {
     ln -sf ${hrrrfile} GRIBFILE.AAA
     ln -sf $FIXDIR/WRFV4.0/${hrrrvtable} Vtable
 
-    hrrrtime_str=$(date -u -d "$hrrrdate ${hrrrtime}" +%Y-%m-%d_%H:%M:%S)
-    #echo "$hrrrdate ${hrrrtime}"
+    hrrrtime_str=$(date -u -d "${eventdate} ${eventtime}" +%Y-%m-%d_%H:%M:%S)
+
     cat << EOF > namelist.wps
 &share
   wrf_core = 'ARW',
@@ -1630,8 +1626,6 @@ hrrrvtable="Vtable.HRRRE.2018"
 hrrr_time_ics="1400"
 hrrr_time_lbc="1200"
 hrrrfile="${hrrr_dir}/${eventdate}/${hrrr_time_ics}/postprd_mem0001/wrfnat_hrrre_newse_mem0001_01.grib2"
-hrrrdate="${eventdate}"
-hrrrtime="${eventtime}"
 
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 
@@ -1639,10 +1633,12 @@ if [[ " ${jobs[*]} " == " check " ]]; then
     check_hrrr_files; exit 0
 fi
 
-echo    "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----"
-echo -e "     Event date : ${GREEN}$eventdate${NC} ${LIGHT_BLUE}${eventtime}${NC}"
-echo    "     Root    dir: $rootdir"
-echo    "     Working dir: $WORKDIR"
+echo -e "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----\n"
+echo -e "  Event date : ${GREEN}$eventdate${NC} ${YELLOW}${eventtime}${NC}"
+echo -e "  Root    dir: $rootdir${GREEN}/exec${NC}|${PURPLE}/templates${NC}|${DARK}/fix_files${NC}|${BROWN}/scripts${NC}"
+echo -e "  Working dir: $WORKDIR${LIGHT_BLUE}/${eventdate}${NC}"
+echo -e "  Domain name: ${PURPLE}$domname${NC};  MP scheme: ${BROWN}mp_nssl2m${NC}; Domain Center: ${WHITE}${cen_lat}${NC},${WHITE}${cen_lon}${NC}"
+
 echo    " "
 
 starttime_str=$(date -u -d "${eventdate} ${eventtime}" +%Y-%m-%d_%H:%M:%S)

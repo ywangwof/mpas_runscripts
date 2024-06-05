@@ -1,6 +1,5 @@
-#!/bin/sh
-#SBATCH -A hpc-wof1
-#SBATCH --partition=xjet,ujet,vjet,tjet,kjet
+#!/bin/bash
+#SBATCH --partition=batch
 #SBATCH -J build_tables
 #SBATCH --ntasks=1 --cpus-per-task=12
 #SBATCH --exclusive
@@ -13,11 +12,9 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-module use ROOTDIR/modules
-module load build_jet_intelTed
+source "/scratch/ywang/MPAS/gnu/mpas_scripts/modules/env.mpas_smiol"
 
-
-srun -n 1 /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MPAS-Model/build_tables
+srun -n 1 /scratch/ywang/MPAS/gnu/frdd-MPAS-Model/build_tables
 
 time2=$(date '+%s')
 
