@@ -747,6 +747,9 @@ def parse_args():
 
 if __name__ == "__main__":
 
+    script_path = os.path.realpath(__file__)
+    work_path   = os.getcwd()
+
     cargs,rargs = parse_args()
 
     for filename in rargs.files:
@@ -764,6 +767,10 @@ if __name__ == "__main__":
             print_obs(obs_in,rargs)
 
         else:  # processs the sequence file to get a new one
+
+            commonprefix = os.path.commonprefix([work_path,filename])
+            short_filename = filename[len(commonprefix):]
+
             obs_out = copy(obs_in)
             #obs_out = deepcopy(obs_in)
 
@@ -774,7 +781,7 @@ if __name__ == "__main__":
             if cargs.verbose: print(" Number of good observations:  %d\n" % obs_out.nobs)
 
             if obs_out.nobs < 1:
-                print(f"        Number of good observations: {obs_out.nobs}, skip {filename}")
+                print(f"        Number of good observations: {obs_out.nobs}, skip {short_filename}")
                 sys.exit(1)
 
             #
@@ -797,6 +804,6 @@ if __name__ == "__main__":
             if cargs.verbose:
                 print(f" write_obs_seq: Writing to {outfilename}\n")
             else:
-                print(f"        {filename} -> {outfilename}\n        Number of good observations: {obs_out.nobs}")
+                print(f"        {short_filename} -> {outfilename}\n        Number of good observations: {obs_out.nobs}")
 
             write_obs_seq(obs_out, outfilename, rargs.number)

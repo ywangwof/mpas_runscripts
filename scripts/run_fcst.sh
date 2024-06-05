@@ -253,7 +253,7 @@ function run_mpas {
             do_dacyle="true"
         fi
         initfile="$dawrkdir/fcst_${memstr}/${domname}_${memstr}.${damode}.${currtime_fil}.nc"
-        ln -sf  ${inifile} .
+        ln -sf ${initfile} .
         ln -sf $rundir/init/${domname}.invariant.nc .
 
         if [[ $verb -eq 1 ]]; then
@@ -277,7 +277,6 @@ function run_mpas {
             fi
         fi
         ln -sf ${lbc_dafile} ${lbc_myfile}
-
         if [[ $verb -eq 1 ]]; then
             realdalbc=$(realpath ${lbc_dafile})
             mecho0 "Member: $iens lbc file ${mpastime_str}: ${realdalbc##"${WORKDIR}"/}";

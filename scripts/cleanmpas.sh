@@ -13,6 +13,7 @@ FCST_dir=${run_dir}/FCST
 
 # shellcheck disable=SC1091
 source "${script_dir}/Common_Utilfuncs.sh"
+
 #-----------------------------------------------------------------------
 
 function usage {
@@ -46,11 +47,13 @@ function usage {
     echo " "
     echo "                                     -- By Y. Wang (2024.04.19)"
     echo " "
+    askconfirm=false
     exit "$1"
 }
 
 ########################################################################
 
+askconfirm=true
 show="echo"
 verb=true
 eventdate=${eventdateDF:0:8}
@@ -71,7 +74,8 @@ taskname=""
 #-----------------------------------------------------------------------
 #% ARGS
 
-#saved_args="$*"
+saved_args=()          # Pass after confirmation for deleting
+pass_args=()           # Pass to each member for \"mpasm\"
 
 while [[ $# -gt 0 ]]; do
     key="$1"
@@ -82,16 +86,23 @@ while [[ $# -gt 0 ]]; do
             ;;
         -c)
             show=""
+            pass_args+=("$key")
             ;;
         -v)
             verb=true
+            pass_args+=("$key")
+            ;;
+        -noask)
+            askconfirm=false
             ;;
         -d)
             domname=$2
+            pass_args+=("$key" "$2")
             shift
             ;;
         -r)
-            run_dir=$2
+            run_dir=$(realpath "$2")
+            saved_args+=("$key" "${run_dir}")
             shift
             ;;
         -*)
@@ -100,6 +111,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         dacycles | fcst | post | mpas | mpasm )
             taskname=$key
+            saved_args+=("$key")
             ;;
         *)
             if [[ $key =~ ^[0-9]{12}$ ]]; then
@@ -118,10 +130,16 @@ while [[ $# -gt 0 ]]; do
                 echo "ERROR: unknown argument, get [$key]."
                 usage 3
             fi
+            pass_args+=("$key")
             ;;
     esac
     shift # past argument or value
 done
+
+saved_args+=("${pass_args[@]}")
+if [[ -z $show ]]; then
+    askconfirm=false
+fi
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
@@ -142,7 +160,7 @@ mpas )
         echo "Remove MPAS run-time files in ${run_dir} ..."
     fi
 
-    cd "${run_dir}" || usage 1
+    cd "${run_dir}" || exit 1
     ${show} rm -rf log.{atmosphere,init_atmosphere}.*.{err,out} namelist.output core*
     ${show} rm -rf ./"${domname}"_??.{diag,history}.*.nc  # *.restart.*
     ${show} rm -rf error.* done.fcst_?? dart_log.{nml,out}
@@ -154,9 +172,11 @@ mpasm )
         echo "Remove all MPAS ensemble run-time files in ${run_dir} ..."
     fi
 
-    cd "${run_dir}" || usage 1
+    cd "${run_dir}" || exit 1
     for mdir in fcst_??; do
-        $0 -r "${run_dir}/${mdir}" mpas
+        mpas_args=("${pass_args[@]}")
+        mpas_args+=("-noask" "-r" "${run_dir}/${mdir}" "mpas")
+        $0 "${mpas_args[@]}"
     done
     ;;
 
@@ -166,9 +186,10 @@ dacycles )
     fi
 
     show="echo"
+    askconfirm=false
     echo -e "${LIGHT_RED}WARNING${NC}: Please use ${BROWN}${script_dir}/run_dacycles.sh${NC} ${LIGHT_BLUE}${eventdate}${runtime}${NC} ${GREEN}clean${NC} for this task"
 
-    cd "${run_dir}/${eventdate}/dacycles/${wrksubdir}" || usage 1
+    cd "${run_dir}/${eventdate}/dacycles/${wrksubdir}" || exit 1
     if [[ -z ${runtime} ]]; then             # All time cycles
         $show find ./??[134]? -name "${domname}_??.{restart,diag,history}.*" -exec rm {} \;
         $show find ./??[134]? -name "${domname}_??.analysis" -exec rm {} \;
@@ -183,44 +204,69 @@ dacycles )
     ;;
 fcst )
     if [[ $verb == true ]]; then
-        echo "Remove MPAS history/diag files in ${run_dir}/${eventdate}fcst/${wrksubdir} ${jobsubstr} ..."
+        echo "Remove MPAS history/diag files in ${run_dir}/${eventdate}/fcst/${wrksubdir} ${jobsubstr} ..."
     fi
     show="echo"
+    askconfirm=false
     echo -e "${LIGHT_RED}WARNING${NC}: Please use ${BROWN}${script_dir}/run_fcst.sh${NC} ${LIGHT_BLUE}${eventdate}${runtime}${NC} ${GREEN}clean${NC} for this task"
 
-    cd "${run_dir}/${eventdate}/fcst/${wrksubdir}" || usage 1
+    cd "${run_dir}/${eventdate}/fcst/${wrksubdir}" || exit 1
     $show find . -name "wofs_mpas_??.{history,diag}.*" -exec rm {} \;
     ;;
 post )
     #-------------------------------------------------------------------
-    if [[ $verb == true ]]; then
-        echo "Delete FCST ${eventdate} files from ${FCST_dir} ..."
-    fi
+    cd "${FCST_dir}" || exit 1
 
-    cd "${FCST_dir}" || usage 1
-    $show rm -rf "${eventdate}"
+    askconfirm=false
+    if [[ -d ${eventdate} ]]; then
+        if [[ $verb == true ]]; then
+            echo "Delete ${eventdate} FCST files from ${FCST_dir} ..."
+        fi
+        askconfirm=true
+
+        $show rm -rf "${eventdate}"
+    fi
 
     #-------------------------------------------------------------------
-    if [[ $verb == true ]]; then
-        echo "Delete Summary files ${eventdate} from ${post_dir} ..."
-    fi
+    cd "${post_dir}" || exit 1
 
-    cd "${post_dir}" || usage 1
-    $show rm -rf "${eventdate}"
+    if [[ -d ${eventdate} ]]; then
+        if [[ $verb == true ]]; then
+            echo "Delete ${eventdate} Summary files from ${post_dir} ..."
+        fi
+        askconfirm=true
+
+        $show rm -rf "${eventdate}"
+    fi
 
     #-------------------------------------------------------------------
-    if [[ $verb == true ]]; then
-        echo "Delete Image files ${eventdate}_mpasV8.0 from ${image_dir} ..."
+    cd "${image_dir}" || exit 1
+
+    if [[ -d ${eventdate}_mpasV8.0 ]]; then
+        if [[ $verb == true ]]; then
+            echo "Delete ${eventdate} Image files ${eventdate}_mpasV8.0 from ${image_dir} ..."
+        fi
+        askconfirm=true
+
+        $show rm -rf "${eventdate}_mpasV8.0"
     fi
-
-    cd "${image_dir}" || usage 1
-    $show rm -rf "${eventdate}_mpasV8.0"
-
     ;;
 * )
     echo "ERROR: unsuported task: \"${taskname}\"."
     usage 2
     ;;
 esac
+
+if [[ $askconfirm == true ]]; then
+    echo -ne  "\n${BROWN}WARNING${NC}: Do you want to execute the tasks. [${YELLOW}YES,NO${NC}]? "
+    read -r doit
+    if [[ ${doit^^} == "YES" ]]; then
+        echo -e "${BROWN}WARNING${NC}: Cleaning in process ...\n"
+        saved_args+=("-c")
+        $0 "${saved_args[@]}"
+    else
+        echo -e "Get ${PURPLE}${doit^^}${NC}, do nothing."
+    fi
+fi
 
 exit 0

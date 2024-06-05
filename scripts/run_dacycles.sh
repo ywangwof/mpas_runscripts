@@ -178,7 +178,7 @@ function run_obsmerge {
     input_base="${wrkdir}/input.nml"
 
     mecho0 "OBS Preprocessing for analysis time: ${anlys_time}, days: ${g_date}, seconds: ${g_sec}"
-    mecho0 "OBS_DIR=${LIGHT_BLUE}${OBS_DIR}${NC}"
+    mecho0 "OBS_DIR=${BLUE}${OBS_DIR}${NC}"
 
     obsflists=()
     k=1
@@ -289,7 +289,7 @@ function run_obsmerge {
 
             obsflists+=(obsflist.meso)
         else
-            mech0 "${RED}ERROR${NC}: command ${BROWN}${obspreprocess}${NC} for MESONET data"
+            mecho0 "${RED}ERROR${NC}: command ${BROWN}${obspreprocess}${NC} for MESONET data"
         fi
     else
         if [[ ${use_MESO} == true ]]; then
@@ -345,7 +345,7 @@ function run_obsmerge {
 
             obsflists+=(obsflist.cwp)
         else
-            mech0 "${RED}ERROR${NC}: command ${BROWN}${obspreprocess}${NC} for CWP data"
+            mecho0 "${RED}ERROR${NC}: command ${BROWN}${obspreprocess}${NC} for CWP data"
         fi
     else
         if [[ ${use_CWP} == true && "${anlys_time:3:1}" == "0" ]]; then
@@ -417,7 +417,7 @@ function run_obsmerge {
                     rm ./obs_seq.old
                     echo $wrkdir/OBSDIR/obs_seq.abiC$chan >> obsflist.abi
                 else
-                    mech0 "${RED}ERROR${NC}: command ${BROWN}${obspreprocess}${NC} for Radiance data"
+                    mecho0 "${RED}ERROR${NC}: command ${BROWN}${obspreprocess}${NC} for Radiance data"
                     exit 1
                 fi
             else
@@ -489,7 +489,7 @@ function run_obsmerge {
 
             obsflists+=(obsflist.mrms)
         else
-            mech0 "${RED}ERROR${NC}: command ${BROWN}${obspreprocess}${NC} for REF data"
+            mecho0 "${RED}ERROR${NC}: command ${BROWN}${obspreprocess}${NC} for REF data"
         fi
     else
         echo "    REF data not found: ${dbz_file##"${OBS_DIR}"/}"
@@ -509,7 +509,7 @@ function run_obsmerge {
     if [[ -e $rundir/$domname/${domname}.radars.${eventdate}.sh ]]; then
         source $rundir/$domname/${domname}.radars.${eventdate}.sh || exit $?
     else
-        mech0 "${RED}ERROR${NC}: File ${CYAN}$rundir/$domname/${domname}.radars.${eventdate}.sh${NC} not exist"
+        mecho0 "${RED}ERROR${NC}: File ${CYAN}$rundir/$domname/${domname}.radars.${eventdate}.sh${NC} not exist"
         exit 0
     fi
 
@@ -551,7 +551,7 @@ function run_obsmerge {
 
             if [[ ${run_trimvr} == true ]]; then
                 trimvr_cmd="${scpdir}/seq_filter.py -k -o ./obs_seq.old ${vrj_file}"
-                mech0 "    --- ${BROWN}${trimvr_cmd}${NC}" | sed "s#${scpdir}/##;s#${OBS_DIR}#\${OBS_DIR}#g"      # just to get a short message line
+                echo -e "    --- ${BROWN}${trimvr_cmd}${NC}" | sed "s#${scpdir}/##;s#${OBS_DIR}#\${OBS_DIR}#g"      # just to get a short message line
 
                 if ! ${trimvr_cmd}; then
                     #echo "        Failed. Ignore ${vrj_file}"
@@ -580,7 +580,7 @@ function run_obsmerge {
 
             if [[ -e ./obs_seq.new ]]; then
                 (( n++ ))
-                echo "    $k-$n: Using VEL data in ${vrj_file}"
+                echo -e "    ${PURPLE}$k-$n${NC}: Using VEL data in ${LIGHT_BLUE}${vrj_file##"${OBS_DIR}"/}${NC}\n"
                 mv ./obs_seq.new ./obs_seq.vr${j}
                 mv input.nml input.nml.VR_${rad_name[$j]}
                 echo $wrkdir/OBSDIR/obs_seq.vr${j} >> obsflist.radvr
@@ -773,9 +773,18 @@ function run_filter {
             inf_initial_restart=(".true." ".false.")
         else
             mecho0 "File ${CYAN}${parentdir}/${event_pre}/output_priorinf_mean.nc${NC} does not exist."
-            mecho0 "${YELLOW}WARNING${NC}:: Do not use adaptive inflation for this cycle."
+            mecho0 "${YELLOW}WARNING${NC}: Not using adaptive inflation for this cycle."
             #exit 2
         fi
+    fi
+
+    if [[ ${sampling_error_correction,,} == ".t." || ${sampling_error_correction,,} == ".true." ]]; then
+        mecho0 "${YELLOW}WARNING${NC}: Turning on ${PURPLE}sampling_error_correction${NC}."
+        ln -sf ${FIXDIR}/sampling_error_correction_table.nc .
+        sampling_error_correction=".true."
+    else
+        mecho0 "${YELLOW}WARNING${NC}: Not using sampling error correction: ${PURPLE}sampling_error_correction${NC}."
+        sampling_error_correction=".false."
     fi
 
     #------------------------------------------------------
@@ -784,6 +793,29 @@ function run_filter {
     # Debug configuration:
     #
     #   stages_to_write          = 'preassim', 'output'
+
+    declare -A mp_state_variables
+
+    mp_state_variables['qc']='QTY_CLOUDWATER_MIXING_RATIO'
+    mp_state_variables['qr']='QTY_RAINWATER_MIXING_RATIO'
+    mp_state_variables['qi']='QTY_ICE_MIXING_RATIO'
+    mp_state_variables['qs']='QTY_SNOW_MIXING_RATIO'
+    mp_state_variables['qg']='QTY_GRAUPEL_MIXING_RATIO'
+    mp_variables_keys=('qc' 'qr' 'qi' 'qs' 'qg')
+    mp_state_bounds="'0.0','NULL','CLAMP'"
+
+    if [[ ${mpscheme} == "mp_nssl2m" ]]; then
+        mp_state_variables['qh']='QTY_HAIL_MIXING_RATIO'
+        mp_state_variables['volg']='QTY_GRAUPEL_VOLUME'
+        mp_state_variables['volh']='QTY_HAIL_VOLUME'
+        mp_state_variables['nc']='QTY_DROPLET_NUMBER_CONCENTR'
+        mp_state_variables['nr']='QTY_RAIN_NUMBER_CONCENTR'
+        mp_state_variables['ni']='QTY_ICE_NUMBER_CONCENTRATION'
+        mp_state_variables['ns']='QTY_SNOW_NUMBER_CONCENTR'
+        mp_state_variables['ng']='QTY_GRAUPEL_NUMBER_CONCENTR'
+        mp_state_variables['nh']='QTY_HAIL_NUMBER_CONCENTR'
+        mp_variables_keys+=('qh' 'nc' 'nr' 'ni' 'ns' 'ng' 'nh' 'volg' 'volh')
+    fi
 
     cat << EOF > input.nml
 &perfect_model_obs_nml
@@ -894,7 +926,7 @@ function run_filter {
    convert_all_state_verticals_first = .true.
    sort_obs_inc                      = .false.
    spread_restoration                = .false.
-   sampling_error_correction         = .false.
+   sampling_error_correction         = ${sampling_error_correction}
    adaptive_localization_threshold   = -1
    output_localization_diagnostics   = .false.
    localization_diagnostics_file     = 'localization_diagnostics'
@@ -1250,38 +1282,22 @@ function run_filter {
                            'q2',                    'QTY_2M_SPECIFIC_HUMIDITY',
                            'surface_pressure',      'QTY_SURFACE_PRESSURE',
                            'rt_diabatic_tend',      'QTY_CONDENSATIONAL_HEATING',
-                           'qv',                    'QTY_VAPOR_MIXING_RATIO',
-                           'qc',                    'QTY_CLOUDWATER_MIXING_RATIO',
-                           'qr',                    'QTY_RAINWATER_MIXING_RATIO',
-                           'qi',                    'QTY_ICE_MIXING_RATIO',
-                           'qs',                    'QTY_SNOW_MIXING_RATIO',
-                           'qg',                    'QTY_GRAUPEL_MIXING_RATIO',
-                           'qh',                    'QTY_HAIL_MIXING_RATIO',
-                           'volg',                  'QTY_GRAUPEL_VOLUME',
-                           'volh',                  'QTY_HAIL_VOLUME',
-                           'nc',                    'QTY_DROPLET_NUMBER_CONCENTR',
-                           'nr',                    'QTY_RAIN_NUMBER_CONCENTR',
-                           'ni',                    'QTY_ICE_NUMBER_CONCENTRATION',
-                           'ns',                    'QTY_SNOW_NUMBER_CONCENTR',
-                           'ng',                    'QTY_GRAUPEL_NUMBER_CONCENTR',
-                           'nh',                    'QTY_HAIL_NUMBER_CONCENTR',
                            'refl10cm',              'QTY_RADAR_REFLECTIVITY',
-    mpas_state_bounds    = 'qv','0.0','NULL','CLAMP',
-                           'qc','0.0','NULL','CLAMP',
-                           'qr','0.0','NULL','CLAMP',
-                           'qi','0.0','NULL','CLAMP',
-                           'qs','0.0','NULL','CLAMP',
-                           'qg','0.0','NULL','CLAMP',
-                           'qh','0.0','NULL','CLAMP',
-                           'volg','0.0','NULL','CLAMP',
-                           'volh','0.0','NULL','CLAMP',
-                           'nc','0.0','NULL','CLAMP',
-                           'nr','0.0','NULL','CLAMP',
-                           'ni','0.0','NULL','CLAMP',
-                           'ns','0.0','NULL','CLAMP',
-                           'ng','0.0','NULL','CLAMP',
-                           'nh','0.0','NULL','CLAMP',
-/
+                           'qv',                    'QTY_VAPOR_MIXING_RATIO',
+EOF
+
+    for var in "${mp_variables_keys[@]}"; do
+        lenstr=$((22-${#var}))
+        printf "%27s%s,%*s%s,\n" ' ' "'${var}'" $lenstr ' ' "'${mp_state_variables[$var]}'" >> input.nml
+    done
+
+    echo "    mpas_state_bounds    = 'qv','0.0','NULL','CLAMP',"     >> input.nml
+    for var in "${mp_variables_keys[@]}"; do
+        printf "%27s%s,%s,\n" ' ' "'${var}'" "${mp_state_bounds}"    >> input.nml
+    done
+    printf "%s\n" "/"                                                >> input.nml
+
+    cat << EOF >> input.nml
 
 &update_mpas_states_nml
     update_input_file_list  = 'filter_out.txt'
@@ -2025,12 +2041,12 @@ function run_add_noise {
     # Return if is running or is done
     #
     if [[ -f $wrkdir/done.add_noise ]]; then
-        #mech0 "add_noise is already done"
+        #mecho0 "add_noise is already done"
         return
     fi
 
     if [[ -f $wrkdir/running.noise_pert || -f $wrkdir/queue.noise_pert ]]; then
-        #mech0 "add_noise is running/queued."
+        #mecho0 "add_noise is running/queued."
         return
     fi
 
@@ -2425,7 +2441,6 @@ function run_mpas {
 EOF
 
         if [[ ${mpscheme} == "mp_nssl2m" ]]; then
-
             cat << EOF >> namelist.atmosphere
     config_microp_scheme             = '${mpscheme}'
 /
@@ -2435,12 +2450,13 @@ EOF
     icefallfac                       = 1.5
     snowfallfac                      = 1.25
     iusewetsnow                      = 0
+/
 EOF
-
+        else
+            echo "/" >> namelist.atmosphere
         fi
 
         cat << EOF >> namelist.atmosphere
-/
 &soundings
     config_sounding_interval         = 'none'
 /
@@ -3560,7 +3576,7 @@ fi
 if [[ "${mpscheme}" == "mp_nssl2m" || "${mpscheme}" == "Thompson" ]]; then
     :
 else
-    echo -e "${RED}ERROR${NC}: mpscheme=${mpscheme} is not supported."
+    echo -e "${RED}ERROR${NC}: mpscheme=${PURPLE}${mpscheme}${NC} is not supported."
     usage 1
 fi
 
