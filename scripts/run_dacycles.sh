@@ -22,7 +22,7 @@ eventdateDF=$(date -u +%Y%m%d)
 #     atmosphere_model
 #     filter
 #     update_mpas_states
-#     update_bc / update_bc.Thompson
+#     update_bc
 #
 # 2. templates                              # templates used in this scripts
 #    README
@@ -808,6 +808,7 @@ function run_filter {
     mp_variables_keys=('qc' 'qr' 'qi' 'qs' 'qg')
     mp_state_bounds="'0.0','NULL','CLAMP'"
 
+    lbc_mp_nssl_variables=".false."
     if [[ ${mpscheme} == "mp_nssl2m" ]]; then
         mp_state_variables['qh']='QTY_HAIL_MIXING_RATIO'
         mp_state_variables['volg']='QTY_GRAUPEL_VOLUME'
@@ -819,6 +820,7 @@ function run_filter {
         mp_state_variables['ng']='QTY_GRAUPEL_NUMBER_CONCENTR'
         mp_state_variables['nh']='QTY_HAIL_NUMBER_CONCENTR'
         mp_variables_keys+=('qh' 'nc' 'nr' 'ni' 'ns' 'ng' 'nh' 'volg' 'volh')
+        lbc_mp_nssl_variables=".true."
     fi
 
     cat << EOF > input.nml
@@ -1314,6 +1316,7 @@ EOF
     update_boundary_file_list           = 'boundary_inout.txt'
     lbc_update_from_reconstructed_winds = .false.
     lbc_update_winds_from_increments    = .false.
+    lbc_mp_nssl_variables               = ${lbc_mp_nssl_variables}
     debug = 0
 /
 
