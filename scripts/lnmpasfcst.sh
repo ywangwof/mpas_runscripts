@@ -24,7 +24,7 @@ function usage {
     echo "              -h                  Display this message"
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
-    echo "              -fcst fcst          FCST cycles subdirectory name. Default: fcst"
+    echo "              -x                  FCST Directory affix. Defaut: empty"
     echo "              -src  fcst_root     FCST cycles directory. Default: ${fcst_root}"
     echo "              -dest dest_root     WRF FCST directory name. Default: \${fcst_root}/FCST"
     echo "              -s starttime        in HHMM. Default: 1700"
@@ -55,7 +55,7 @@ force_clean=false
 eventdate=${eventdateDF}
 starttime="1700"
 endtime="0300"
-fcstdir="fcst"
+affix=""
 fcstbeg="5"
 
 while [[ $# -gt 0 ]]; do
@@ -74,8 +74,8 @@ while [[ $# -gt 0 ]]; do
         -c)
             force_clean=true
             ;;
-        -fcst)
-            fcstdir="$2"
+        -x)
+            affix="$2"
             shift
             ;;
         -src)
@@ -138,6 +138,8 @@ while [[ $# -gt 0 ]]; do
     shift # past argument or value
 done
 
+fcstdir="fcst${affix}"
+
 if [[ ! -d ${fcst_root}/${eventdate}/${fcstdir} ]]; then
     echo "ERROR: ${fcst_root}/${eventdate}/${fcstdir} not exist."
     usage 1
@@ -175,7 +177,7 @@ for ((s=start_s;s<=end_s;s+=3600)); do
         memstr=$(printf "%02d" "$mem")
         memdir="${evttime_dir}/mem$memstr"
 
-        desdir="${dest_root}/${eventdate}/${evtime}/ENS_MEM_${memstr}"
+        desdir="${dest_root}/${eventdate}${affix}/${evtime}/ENS_MEM_${memstr}"
         if [[ ! -d $desdir ]]; then
             mkdir -p "${desdir}"
         fi
@@ -210,7 +212,7 @@ for ((s=start_s;s<=end_s;s+=3600)); do
         fi
     done
 
-    touch "${dest_root}/${eventdate}/fcst_${evttime_str}_start"
+    touch "${dest_root}/${eventdate}${affix}/fcst_${evttime_str}_start"
 done
 
 exit 0

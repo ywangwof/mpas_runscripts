@@ -12,42 +12,86 @@ eventdateDF=$(date -u +%Y%m%d%H%M)
 
 run_dir=${top_dir}/run_dirs
 script_dir=${top_dir}/scripts
-#post_dir=${top_dir}/wofs_post/wofs/scripts
-post_dir="/scratch/ywang/MPAS/gnu/frdd-wofs-post/wofs/scripts"
+post_dir=${top_dir}/wofs_post/wofs/scripts
+#post_dir="/scratch/ywang/MPAS/gnu/frdd-wofs-post/wofs/scripts"
 
 host="$(hostname)"
 
 #-----------------------------------------------------------------------
 
+# Black        0;30     Dark Gray     1;30
+# Red          0;31     Light Red     1;31
+# Green        0;32     Light Green   1;32
+# Brown/Orange 0;33     Yellow        1;33
+# Blue         0;34     Light Blue    1;34
+# Purple       0;35     Light Purple  1;35
+# Cyan         0;36     Light Cyan    1;36
+# Light Gray   0;37     White         1;37
+# ---------- constant part!
+
+# shellcheck disable=SC2034
+#if [ -t 1 ]; then
+    NC='\033[0m'            # No Color
+    BLACK='\033[0;30m';     DARK='\033[1;30m'
+    RED='\033[0;31m';       LIGHT_RED='\033[1;31m'
+    GREEN='\033[0;32m';     LIGHT_GREEN='\033[1;32m'
+    BROWN='\033[0;33m';     YELLOW='\033[1;33m'
+    BLUE='\033[0;34m';      LIGHT_BLUE='\033[1;34m'
+    PURPLE='\033[0;35m';    LIGHT_PURPLE='\033[1;35m'
+    CYAN='\033[0;36m';      LIGHT_CYAN='\033[1;36m'
+    LIGHT='\033[0;37m';     WHITE='\033[1;37m'
+
+    DIR_CLR='\033[0;97;44m'; DIRa_CLR='\033[0;95;44m';
+#else
+#    NC=''
+#    BLACK='';     DARK=''
+#    RED='';       LIGHT_RED=''
+#    GREEN='';     LIGHT_GREEN=''
+#    BROWN='';     YELLOW=''
+#    BLUE='';      LIGHT_BLUE=''
+#    PURPLE='';    LIGHT_PURPLE=''
+#    CYAN='';      LIGHT_CYAN=''
+#    LIGHT='';     WHITE=''
+#fi
+#    vvvv vvvv -- EXAMPLES -- vvvv vvvv
+# echo -e "I ${RED}love${NC} Stack Overflow"
+# printf "I ${RED}love${NC} Stack Overflow\n"
+#
+
+#-----------------------------------------------------------------------
+
 function usage {
-    echo " "
-    echo "    USAGE: $0 [options] DATETIME [TASK]"
-    echo " "
-    echo "    PURPOSE: Run MPAS-WOFS tasks interactively or using Linux at/cron facility."
-    echo "             It will always log the outputs to a file."
-    echo " "
-    echo "    DATETIME - Case date and time in YYYYmmdd/YYYYmmddHHMM."
-    echo "               YYYYmmdd:     run the task for this event date."
-    echo "               YYYYmmddHHMM: run task DA/FCST for one cycle only."
-    echo "    TASK     - One of [dacycles,fcst,post,plot,diag]"
-    echo " "
-    echo "    OPTIONS:"
-    echo "              -h                  Display this message"
-    echo "              -n                  Show command to be run, but not run it"
-    echo "              -v                  Verbose mode"
-    echo "              -e                  Last time in HHMM format"
-    echo "              -x                  Directory affix"
-    echo " "
-    echo "   DEFAULTS:"
-    echo "              eventdt    = $eventdateDF"
-    echo "              rootdir    = $top_dir"
-    echo "              run_dir    = $run_dir"
-    echo "              script_dir = $script_dir"
-    echo "              post_dir   = $post_dir"
-    echo " "
-    echo "                                     -- By Y. Wang (2024.04.17)"
-    echo " "
-    exit "$1"
+    echo    " "
+    echo    "    USAGE: $0 [options] [DATETIME] [WORKDIR] [TASK]"
+    echo    " "
+    echo    "    PURPOSE: Run MPAS-WOFS tasks interactively or using Linux at/cron facility."
+    echo    "             It will always log the outputs to a file."
+    echo    " "
+    echo    "    DATETIME - Case date and time in YYYYmmdd/YYYYmmddHHMM."
+    echo    "               YYYYmmdd:     run the task for this event date."
+    echo    "               YYYYmmddHHMM: run task DA/FCST for one cycle only."
+    echo -e "    WORKDIR  - Top level ${LIGHT_BLUE}run_dir${NC} for all tasks"
+    echo -e "               Normally, it has ${DIR_CLR}YYYYmmdd/dacycles${DIRa_CLR}{x}${NC}; ${DIR_CLR}YYYYmmdd/fcst${DIRa_CLR}{x}${NC}; "
+    echo -e "               ${DIR_CLR}FCST/YYYYmmdd${DIRa_CLR}{x}${NC}; ${DIR_CLR}summary_files/YYYYmmdd${DIRa_CLR}{x}${NC}; ${DIR_CLR}image_files/YYYYmmdd${DIRa_CLR}{x}${NC} etc."
+    echo -e "    TASK     - One of [${YELLOW}dacycles${NC},${YELLOW}fcst${NC},${YELLOW}post${NC},${YELLOW}plot${NC},${YELLOW}diag${NC},${YELLOW}verif${NC}]"
+    echo    " "
+    echo    "    OPTIONS:"
+    echo    "              -h                  Display this message"
+    echo    "              -n                  Show command to be run, but not run it"
+    echo    "              -v                  Verbose mode"
+    echo    "              -e                  Last time in HHMM format"
+    echo    "              -x                  Directory affix"
+    echo    " "
+    echo    "   DEFAULTS:"
+    echo    "              eventdt    = $eventdateDF"
+    echo    "              rootdir    = $top_dir"
+    echo    "              run_dir    = $run_dir"
+    echo    "              script_dir = $script_dir"
+    echo    "              post_dir   = $post_dir"
+    echo    " "
+    echo    "                                     -- By Y. Wang (2024.04.17)"
+    echo    " "
+    exit    "$1"
 }
 
 ########################################################################
@@ -58,7 +102,7 @@ eventdate=${eventdateDF:0:8}
 eventhour=${eventdateDF:8:2}
 task=""
 
-if [[ $((10#$eventhour)) -lt 12 ]]; then
+if ((10#$eventhour < 12)); then
     eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
 fi
 
@@ -100,10 +144,10 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -*)
-            echo "Unknown option: $key"
+            echo -e "${RED}ERROR${NC}: Unknown option: ${YELLOW}$key${NC}"
             usage 2
             ;;
-        dacycles | fcst | post | plot | diag )
+        dacycles | fcst | post | plot | diag | verif)
             task=$key
             ;;
         noscript )
@@ -121,9 +165,11 @@ while [[ $# -gt 0 ]]; do
             elif [[ $key =~ ^[0-9]{8}$ ]]; then
                 eventdate=${key}
                 runtime=${eventdate}
+            elif [[ -d $key ]]; then
+                run_dir=$key
             else
                 echo ""
-                echo "ERROR: unknown argument, get [$key]."
+                echo -e "${RED}ERROR${NC}: unknown argument, get [${YELLOW}$key${NC}]."
                 usage 3
             fi
             ;;
@@ -133,9 +179,9 @@ done
 
 # Load Python environment as needed
 case $task in
-post | plot | diag )
+post | plot | diag | verif)
     if [[ ! "$host" =~ ^wof-epyc.*$ ]]; then
-        echo "ERROR: Please run $task on wof-epyc8 only".
+        echo -e "${RED}ERROR${NC}: Please run ${BROWN}$task${NC} on wof-epyc8 only".
         exit 1
     fi
 
@@ -157,8 +203,9 @@ post | plot | diag )
     fi
     #echo "Activated Python environment on ${host} ..."
 
-    donepost="${run_dir}/summary_files/${eventdate}/${endtime}/wofs_postswt_${endtime}_finished"
-    doneplot="${run_dir}/image_files/${eventdate}_mpasV8.0/${endtime}/wofs_plotpbl_${endtime}_finished"
+    donepost="${run_dir}/summary_files/${eventdate}${affix}/${endtime}/wofs_postswt_${endtime}_finished"
+    doneplot="${run_dir}/image_files/flags/${eventdate}${affix}/${endtime}/wofs_plotpbl_${endtime}_finished"
+    doneverif="${run_dir}/image_files/flags/${eventdate}${affix}/wofs_plotwwa_${endtime}_finished"
     ;;
 esac
 
@@ -166,7 +213,7 @@ esac
 
 log_dir="${run_dir}/${eventdate}"
 if [[ ! -d ${log_dir} ]]; then
-    echo "ERROR: ${log_dir} not exists."
+    echo -e "${RED}ERROR${NC}: ${PURPLE}${log_dir}${NC} not exists."
     exit 1
 fi
 
@@ -181,68 +228,110 @@ if [[ -z $show ]]; then                 # Actually run the task
         script -aefq "${log_file}" -c "$0 noscript ${saved_args}"
         exit $?
     else                                        # interactive
-        echo -e "\nLogging to file: ${log_file} ....\n"
+        echo -e "\nLogging to file: ${CYAN}${log_file}${NC} ....\n"
     fi
 fi
 
-echo "=== $(date +%Y%m%d_%H:%M:%S) - $0 ${saved_args} ==="
+echo -e "${YELLOW}===${NC} ${PURPLE}$(date +%Y%m%d_%H:%M:%S)${NC} - ${BROWN}$0 ${saved_args}${NC} ${YELLOW}===${NC}"
 
 case $task in
+#1. dacycles
 dacycles )
     cd "${script_dir}" || exit 1
     cmds=("${script_dir}/run_dacycles.sh" -f "config.${eventdate}${affix}" -e "${endtime}" "${runtime}" -r)
     ;;
+#2. fcst
 fcst )
     cd "${script_dir}" || exit 1
     cmds=("${script_dir}/run_fcst.sh" -f "config.${eventdate}${affix}" -e "${endtime}" "${runtime}" -r -w)
     ;;
 
+#3. post
 post )
 
     if [[ ! -e ${donepost} ]]; then
-        # To make sure the correct FCST files are used, "-c"
-        "${script_dir}/lnmpasfcst.sh" -fcst "fcst${affix}" -c -e "${endtime}" "${eventdate}"
+        if ((10#$endtime < 1200)); then
+            enddate=$(date -d "$eventdate 1 day" +%Y%m%d)
+        else
+            enddate=${eventdate}
+        fi
+        if [[ ! -e ${run_dir}/FCST/${eventdate}${affix}/fcst_${enddate}${endtime}_start ]]; then
+            # To make sure the correct FCST files are used, "-c"
+            cmds=("${script_dir}/lnmpasfcst.sh" -c -e "${endtime}")
+            if [[ -n ${affix} ]]; then
+                cmds+=(-x "${affix}")
+            fi
+            cmds+=("${eventdate}")
+            ${show} "${cmds[@]}"
+        fi
 
         cd "${post_dir}" || exit 1
         cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${eventdate}")
+        if [[ -n ${affix} ]]; then
+            cmds+=("${affix}")
+        fi
     else
-        echo "File $donepost exist"
-        echo "Please clean them using \"${script_dir}/cleanmpas.sh ${eventdate} post\" before reprocessing."
+        echo -e "File ${CYAN}$donepost${NC} exist"
+        echo -e "Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} post${NC} before reprocessing."
         exit 1
     fi
     ;;
 
+#4. plot
 plot )
     if [[ ! -e ${doneplot} ]]; then
-        echo "Waiting for ${run_dir}/summary_files/${eventdate}/${endtime}/wofs_postswt_${endtime}_finished ..."
-        while [[ ! -e "${run_dir}/summary_files/${eventdate}/${endtime}/wofs_postswt_${endtime}_finished" ]]; do
+        echo -e "Waiting for ${CYAN}${donepost}${NC} ...."
+        while [[ ! -e "${donepost}" ]]; do
             sleep 10
         done
 
         cd "${post_dir}" || exit 1
         cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${eventdate}")
+        if [[ -n ${affix} ]]; then
+            cmds+=("${affix}")
+        fi
     else
-        echo "File $doneplot exist"
-        echo "Please clean them using \"${script_dir}/cleanmpas.sh ${eventdate} post\" before reprocessing."
+        echo -e "File ${CYAN}$doneplot${NC} exist"
+        echo -e "Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} post${NC} before reprocessing."
         exit 2
     fi
     ;;
+#5. verif
+verif )
+    if [[ ! -e ${doneverif} ]]; then
+        echo "Waiting for ${donepost} ...."
+        while [[ ! -e "${donepost}" ]]; do
+            sleep 10
+        done
+
+        cd "${post_dir}" || exit 1
+        cmds=(time "./wofs_plot_verification_MPAS.py" "${eventdate}")
+        if [[ -n ${affix} ]]; then
+            cmds+=("${affix}")
+        fi
+    else
+        echo -e "File ${CYAN}$doneverif${NC} exist"
+        echo -e "Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} post${NC} before reprocessing."
+        exit 2
+    fi
+    ;;
+#6. diag
 diag )
     cd "${script_dir}" || exit 1
     cmds=("${script_dir}/plot_allobs.sh" -d "dacycles${affix}" -e "${endtime}" "${eventdate}")
     ;;
 * )
-    echo "ERROR: Unknown task: $task"
+    echo -e "${RED}ERROR${NC}: Unknown task: ${PURPLE}$task${NC}"
     ;;
 esac
 
 if [ -t 1 ]; then # "interactive"
-    echo -e "\nInteractivly running: ${task} ${runtime} from $(pwd)\n"
+    echo -e "\nInteractivly running: ${BROWN}${task}${NC} ${LIGHT_BLUE}${runtime}${NC} from ${YELLOW}$(pwd)${NC}\n"
 else
-    echo -e "\nBackground   running: ${task} ${runtime} from $(pwd)\n"
+    echo -e "\nBackground   running: ${BROWN}${task}${NC} ${LIGHT_BLUE}${runtime}${NC} from ${BLYELLOWUE}$(pwd)${NC}\n"
 fi
 
-if [[ $verb == true && -z ${show} ]]; then echo "${cmds[*]}"; fi
+if [[ -z ${show} ]]; then echo -e "${GREEN}${cmds[*]}${NC}"; fi
 ${show} "${cmds[@]}"
 
 exit 0

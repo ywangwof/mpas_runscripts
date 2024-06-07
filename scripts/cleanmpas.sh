@@ -35,6 +35,7 @@ function usage {
     echo "              -h                  Display this message"
     echo "              -c                  To do the task, otherwise show the command to be run only"
     echo "              -v                  Verbose mode"
+    echo "              -x                  Directory affix. Defaut: empty"
     echo "              -r  run_dir         Working directory"
     echo "              -d  wofs_mpas       Domain name to be used"
     echo " "
@@ -66,6 +67,7 @@ fi
 runtime=""
 domname="wofs_mpas"
 taskname=""
+affix=""
 
 #-----------------------------------------------------------------------
 #
@@ -103,6 +105,10 @@ while [[ $# -gt 0 ]]; do
         -r)
             run_dir=$(realpath "$2")
             saved_args+=("$key" "${run_dir}")
+            shift
+            ;;
+        -x)
+            affix="$2"
             shift
             ;;
         -*)
@@ -186,14 +192,14 @@ mpasm )
 #3. dacycles
 dacycles )
     if [[ $verb == true ]]; then
-        echo "Remove MPAS restart files in ${run_dir}/${eventdate}/dacycles/${wrksubdir} ${jobsubstr} ..."
+        echo "Remove MPAS restart files in ${run_dir}/${eventdate}/dacycles${affix}/${wrksubdir} ${jobsubstr} ..."
     fi
 
     show="echo"
     askconfirm=false
     echo -e "${LIGHT_RED}WARNING${NC}: Please use ${BROWN}${script_dir}/run_dacycles.sh${NC} ${LIGHT_BLUE}${eventdate}${runtime}${NC} ${GREEN}clean${NC} for this task"
 
-    cd "${run_dir}/${eventdate}/dacycles/${wrksubdir}" || exit 1
+    cd "${run_dir}/${eventdate}/dacycles${affix}/${wrksubdir}" || exit 1
     if [[ -z ${runtime} ]]; then             # All time cycles
         $show find ./??[134]? -name "${domname}_??.{restart,diag,history}.*" -exec rm {} \;
         $show find ./??[134]? -name "${domname}_??.analysis" -exec rm {} \;
@@ -209,13 +215,13 @@ dacycles )
 #4. fcst
 fcst )
     if [[ $verb == true ]]; then
-        echo "Remove MPAS history/diag files in ${run_dir}/${eventdate}/fcst/${wrksubdir} ${jobsubstr} ..."
+        echo "Remove MPAS history/diag files in ${run_dir}/${eventdate}/fcst${affix}/${wrksubdir} ${jobsubstr} ..."
     fi
     show="echo"
     askconfirm=false
     echo -e "${LIGHT_RED}WARNING${NC}: Please use ${BROWN}${script_dir}/run_fcst.sh${NC} ${LIGHT_BLUE}${eventdate}${runtime}${NC} ${GREEN}clean${NC} for this task"
 
-    cd "${run_dir}/${eventdate}/fcst/${wrksubdir}" || exit 1
+    cd "${run_dir}/${eventdate}/fcst${affix}/${wrksubdir}" || exit 1
     $show find . -name "wofs_mpas_??.{history,diag}.*" -exec rm {} \;
     ;;
 #5. post
@@ -224,37 +230,38 @@ post )
     cd "${FCST_dir}" || exit 1
 
     askconfirm=false
-    if [[ -d ${eventdate} ]]; then
+    if [[ -d ${eventdate}${affix} ]]; then
         if [[ $verb == true ]]; then
-            echo "Delete ${eventdate} FCST files from ${FCST_dir} ..."
+            echo "Delete ${eventdate}${affix} FCST files from ${FCST_dir} ..."
         fi
         askconfirm=true
 
-        $show rm -rf "${eventdate}"
+        $show rm -rf "${eventdate}${affix}"
     fi
 
     #-------------------------------------------------------------------
     cd "${post_dir}" || exit 1
 
-    if [[ -d ${eventdate} ]]; then
+    if [[ -d ${eventdate}${affix} ]]; then
         if [[ $verb == true ]]; then
-            echo "Delete ${eventdate} Summary files from ${post_dir} ..."
+            echo "Delete ${eventdate}${affix} Summary files from ${post_dir} ..."
         fi
         askconfirm=true
 
-        $show rm -rf "${eventdate}"
+        $show rm -rf "${eventdate}${affix}"
     fi
 
     #-------------------------------------------------------------------
     cd "${image_dir}" || exit 1
 
-    if [[ -d ${eventdate}_mpasV8.0 ]]; then
+    if [[ -d ${eventdate}${affix} ]]; then
         if [[ $verb == true ]]; then
-            echo "Delete ${eventdate} Image files ${eventdate}_mpasV8.0 from ${image_dir} ..."
+            echo "Delete Image files ${eventdate}${affix} from ${image_dir} ..."
         fi
         askconfirm=true
 
-        $show rm -rf "${eventdate}_mpasV8.0"
+        $show rm -rf "${eventdate}${affix}"
+        $show rm -rf "flags/${eventdate}${affix}"
     fi
     ;;
 * )
