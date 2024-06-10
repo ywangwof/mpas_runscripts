@@ -35,7 +35,7 @@ eventdate=${eventdateDF:0:8}
 eventhour=${eventdateDF:8:2}
 cmd=""
 
-if [[ $((10#$eventhour)) -lt 12 ]]; then
+if ((10#$eventhour < 12 )); then
     eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
     nextday=true
 fi
@@ -88,7 +88,7 @@ done
 
 nextdate=$(date -u -d "${eventdate} 1 day" +%Y%m%d)
 
-if [ ! -t 1 ]; then # "jobs"
+if [[ ! -t 1 && ! "$cmd" == "check" ]]; then # "jobs"
     log_dir="${run_dir}/${eventdate}"
 
     if [[ ! -d ${log_dir} ]]; then
@@ -113,10 +113,18 @@ case $cmd in
         ;;
 
     check )
-        echo "ls -l ${srcdir}/${eventdate}/d1"
-        $show ls -l ${srcdir}/${eventdate}/d1/????-goes.nc
-        if [[ $nextday == true ]]; then
-            $show ls -l ${srcdir}/${nextdate}/d1/????-goes.nc
+        if [[ -t 1 ]]; then
+            echo "ls -l ${srcdir}/${eventdate}/d1"
+            $show ls -l ${srcdir}/${eventdate}/d1/????-goes.nc
+            if [[ $nextday == true ]]; then
+                $show ls -l ${srcdir}/${nextdate}/d1/????-goes.nc
+            fi
+        else
+            goesfiles=()
+            for fn in "${srcdir}/${eventdate}"/d1/????-goes.nc; do
+                goesfiles+=("$(basename $fn)")
+            done
+            echo "${goesfiles[*]}"
         fi
         ;;
     * )

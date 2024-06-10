@@ -141,7 +141,7 @@ else
     timebeg="${nextdate}${start_time}"
 fi
 
-if [ ! -t 1 ]; then # "jobs"
+if [[ ! -t 1  && ! "$cmd" == "check" ]]; then # "jobs"
     log_dir="${run_dir}/${eventdate}"
 
     if [[ ! -d ${log_dir} ]]; then
@@ -175,6 +175,7 @@ cp ${TEMPLATE_FILE} ./input.nml
 timebeg_s=$(date -d "${timebeg:0:8} ${timebeg:8:4}" +%s)
 timeend_s=$(date -d "${timeend:0:8} ${timeend:8:4}" +%s)
 
+mesofiles=()
 for((i=timebeg_s;i<=timeend_s;i+=900)); do
 
     timestr=$(date -d @$i +%Y%m%d%H%M%S)
@@ -204,7 +205,11 @@ for((i=timebeg_s;i<=timeend_s;i+=900)); do
     mesonet_obs_file="${MESO_DIR}/${yyyy}/${mm}/${dd}/mesonet.realtime.${yyyy}${mm}${dd}${hh}${anl_min}.mdf"
 
     if [[ "$cmd" == "check" ]]; then
-        ls -l ${mesonet_obs_file}
+        if [[ -t 1 ]]; then
+            ls -l ${mesonet_obs_file}
+        else
+            mesofiles+=("$(basename ${mesonet_obs_file})")
+        fi
         continue
     fi
 
@@ -268,5 +273,9 @@ for((i=timebeg_s;i<=timeend_s;i+=900)); do
         echo "${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min} exists"
     fi
 done
+
+if [[ "$cmd" == "check" && ! -t 1 ]]; then
+    echo "${mesofiles[*]}"
+fi
 
 exit 0

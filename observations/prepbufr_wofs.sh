@@ -169,7 +169,7 @@ else
     timebeg="${nextdate}${start_time}"
 fi
 
-if [ ! -t 1 ]; then # "jobs"
+if [[ ! -t 1 && ! "$cmd" == "check" ]]; then # "jobs"
     log_dir="${run_dir}/${eventdate}"
 
     if [[ ! -d ${log_dir} ]]; then
@@ -191,6 +191,7 @@ source /scratch/ywang/MPAS/gnu/mpas_scripts/scripts/Common_Utilfuncs.sh
 timebeg_s=$(date -d "${timebeg:0:8} ${timebeg:8:4}" +%s)
 timeend_s=$(date -d "${timeend:0:8} ${timeend:8:4}" +%s)
 
+bufr_files=()
 for((i=timebeg_s;i<=timeend_s;i+=3600)); do
 
     timestr=$(date -d @$i +%Y%m%d%H)
@@ -212,7 +213,11 @@ for((i=timebeg_s;i<=timeend_s;i+=3600)); do
     BUFR_in=${BUFR_dir}/rap.${inyear}${inmonth}${inday}${inhour}.prepbufr.tm00
 
     if [[ "$cmd" == "check" ]]; then
-        ls -l ${BUFR_in}
+        if [[ -t 1 ]]; then
+            ls -l ${BUFR_in}
+        else
+            bufr_files+=("$(basename ${BUFR_in})")
+        fi
         continue
     fi
 
@@ -278,5 +283,9 @@ EOF
         mv obs_seq.bufr  ${WORK_dir}/obs_seq_bufr.${inyear}${inmonth}${inday}${inhour}
     fi
 done
+
+if [[ "$cmd" == "check" && ! -t 1 ]]; then
+    echo "${bufr_files[*]}"
+fi
 
 exit 0

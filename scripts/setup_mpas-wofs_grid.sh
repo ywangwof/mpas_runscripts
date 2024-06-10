@@ -83,9 +83,10 @@ function usage {
     echo " "
     echo "    DATETIME - Case date and time in YYYYmmddHHMM, Default for today"
     echo "    WORKDIR  - Run Directory"
-    echo "    JOBS     - One or more jobs from [geogrid,ungrib_hrrr,rotate,meshplot_py,static,createWOFS,meshplot_ncl,clean] or [check,setup]."
-    echo "               setup - just write set up configuration file"
-    echo "               check - Check the availability of the HRRRE datasets"
+    echo "    JOBS     - One or more jobs from [geogrid,ungrib_hrrr,rotate,meshplot_py,static,createWOFS,meshplot_ncl,clean] or [check,checkbg,checkobs,setup]."
+    echo "               setup    - just write set up configuration file"
+    echo "               checkbg  - Check the availability of the HRRRE datasets"
+    echo "               checkobs - Check the availability of observations"
     echo "               Default all jobs in the proper order."
     echo " "
     echo "    OPTIONS:"
@@ -1270,18 +1271,22 @@ function check_hrrr_files {
         echo -e "${RED}Missing${NC}"
     fi
 
-    mecho0 "Checking ${CYAN}${hrrr_dir}/${eventdate}/${hrrr_time_ics}${NC} .... "
+    mecho0n "Checking ${CYAN}${hrrr_dir}/${eventdate}/${hrrr_time_ics}${NC} .... "
     if ls ${hrrr_dir}/${eventdate}/${hrrr_time_ics} > /dev/null 2>&1; then
         echo -e "${GREEN}Found${NC}"
+        n=0
         for mdir in "${hrrr_dir}/${eventdate}/${hrrr_time_ics}"/postprd_mem00??; do
+            if (( n%4 == 0)); then echo ""; fi
             if [[ -d $mdir ]]; then
                 subdir=$(basename $mdir)
                 fcount=("$mdir"/wrfnat_hrrre_newse_mem00??_01.grib2)
-                echo -e "\t$subdir .... ${GREEN}${#fcount[@]}${NC}"
+                echo -ne "\t$subdir .... ${GREEN}${#fcount[@]}${NC}"
             else
-                echo -e "\tMember directories ${RED}missing${NC}"
+                echo -ne "\t$(basename $mdir) ${RED}missing${NC}"
             fi
+            ((n++))
         done
+        echo -e "\n"
     else
         echo -e "${RED}Missing${NC}"
     fi
@@ -1291,20 +1296,147 @@ function check_hrrr_files {
     if ls ${hrrr_dir}/${eventdate}/${hrrr_time_lbc} > /dev/null 2>&1; then
         echo -e "${GREEN}Found${NC}"
         for mdir in "${hrrr_dir}/${eventdate}/${hrrr_time_lbc}"/postprd_mem00??; do
+            if (( n%4 == 0)); then echo ""; fi
             if [[ -d $mdir ]]; then
                 subdir=$(basename $mdir)
                 fcount=("$mdir"/wrfnat_pert_hrrr_mem00??_??.grib2)
-                echo -e "\t$subdir .... ${GREEN}${#fcount[@]}${NC}"
+                echo -ne "\t$subdir .... ${GREEN}${#fcount[@]}${NC}"
             else
-                echo -e "\tMember directories ${RED}missing${NC}"
+                echo -ne "\t$(basename $mdir) ${RED}missing${NC}"
             fi
+            ((n++))
         done
     else
         echo -e "${RED}Missing${NC}"
     fi
+    echo -e "\n"
 }
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+########################################################################
+
+function check_obs_files {
+    #
+    # Check the PrepBufr files availability
+    #
+    eval "$(sed -n "/BUFR_DIR=/p" ${rootdir}/observations/prepbufr_wofs.sh)"
+    mapfile -t my_array < <( ${rootdir}/observations/prepbufr_wofs.sh -check ${eventdate} )
+    #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/prepbufr_wofs.sh -check ${eventdate} && printf '\0')
+    read -r -a obsfiles <<< "${my_array[-1]}"
+    echo -e "${DARK}observations/prepbufr_wofs.sh${NC}: Found ${GREEN}${#obsfiles[@]}${NC} PrepBufr files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${BUFR_DIR}${NC}."
+    n=0
+    for fn in "${obsfiles[@]}"; do
+        if (( n%4 == 0 )); then echo ""; fi
+        echo -n "    $fn"
+        ((n++))
+    done
+    echo -e "\n"
+
+    #
+    # Check the Mesonet files availability
+    #
+    eval "$(sed -n "/MESO_DIR=/p" ${rootdir}/observations/okmeso_15min.sh)"
+    mapfile -t my_array < <( ${rootdir}/observations/okmeso_15min.sh -check ${eventdate} )
+    #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/prepbufr_wofs.sh -check ${eventdate} && printf '\0')
+    read -r -a obsfiles <<< "${my_array[-1]}"
+    echo -e "${DARK}observations/okmeso_15min.sh${NC}: Found ${GREEN}${#obsfiles[@]}${NC} Mesonet files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${MESO_DIR}${NC}."
+    n=0
+    for fn in "${obsfiles[@]}"; do
+        if (( n%3 == 0 )); then echo ""; fi
+        echo -n "    $fn"
+        ((n++))
+    done
+    echo -e "\n"
+
+    #
+    # Check the CWP files availability
+    #
+    eval "$(sed -n "/srcdir=/p" ${rootdir}/observations/run_cwpobs.sh)"
+    mapfile -t my_array < <( ${rootdir}/observations/run_cwpobs.sh -check ${eventdate} )
+    #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/prepbufr_wofs.sh -check ${eventdate} && printf '\0')
+    read -r -a obsfiles <<< "${my_array[-1]}"
+    echo -e "${DARK}observations/run_cwpobs.sh${NC}: Found ${GREEN}${#obsfiles[@]}${NC} CWP files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${srcdir}${NC}."
+    n=0
+    for fn in "${obsfiles[@]}"; do
+        if (( n%4 == 0 )); then echo ""; fi
+        echo -n "    $fn"
+        ((n++))
+    done
+    echo -e "\n"
+
+    #
+    # Check the GOES files availability
+    #
+    eval "$(sed -n "/srcdir=/p" ${rootdir}/observations/run_radiance.sh)"
+    mapfile -t my_array < <( ${rootdir}/observations/run_radiance.sh -check ${eventdate} )
+    #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/prepbufr_wofs.sh -check ${eventdate} && printf '\0')
+    read -r -a obsfiles <<< "${my_array[-1]}"
+    echo -e "${DARK}observations/run_radiance.sh${NC}: Found ${GREEN}${#obsfiles[@]}${NC} Radiance files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${srcdir}${NC}."
+    n=0
+    for fn in "${obsfiles[@]}"; do
+        if (( n%4 == 0 )); then echo ""; fi
+        echo -n "    $fn"
+        ((n++))
+    done
+    echo -e "\n"
+
+    #
+    # Check the radar files availability
+    #
+    eval "$(sed -n "/srcdir=/p" ${rootdir}/observations/link_radar.sh)"
+    mapfile -t my_array < <( ${rootdir}/observations/link_radar.sh -check ${eventdate} )
+    #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/prepbufr_wofs.sh -check ${eventdate} && printf '\0')
+    read -r -a obsfiles <<< "${my_array[-3]}"
+    echo -e "${DARK}observations/link_radar.sh${NC}: Found ${GREEN}${my_array[-4]}${NC} Reflectivity files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${srcdir}${NC}."
+    n=0
+    for fn in "${obsfiles[@]}"; do
+        if (( n%4 == 0 )); then echo ""; fi
+        if [[ "$fn" =~ "missing:" ]]; then
+            echo -ne "    ${RED}$fn${NC}"
+        else
+            echo -n "    $fn"
+        fi
+        ((n++))
+    done
+    echo -e "\n"
+
+    #
+    # Check the radial velocity files availability
+    #
+
+    declare -A velfiles=()
+    typeset2array "${my_array[-1]}" "velfiles"
+
+    echo -e "${DARK}observations/link_radar.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} Radial Velocity files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${srcdir}${NC}."
+    echo ""
+
+    declare -a radnames
+    for fn in "${!velfiles[@]}"; do
+        string2array "${velfiles[$fn]}" "radnames"
+        if [[ ${#radnames[@]} -ne 0 ]]; then
+            if [[ -z $common ]]; then
+                common=("${radnames[@]}")
+            else
+                mapfile -t common < <( intersection "${common[*]}" "${radnames[*]}" )
+            fi
+        fi
+    done
+
+    echo -e "    Common Radars: ${CYAN}${common[*]}${NC} (${GREEN}${#common[@]}${NC})"
+    echo ""
+
+    for fn in "${!velfiles[@]}"; do
+        string2array "${velfiles[$fn]}" "radnames"
+
+        if [[ ${#radnames[@]} -eq 0 ]]; then
+            echo -e "    $fn: ${RED}Missing${NC}"
+        else
+            mapfile -t radunique < <(setsubtract "${radnames[*]}" "${common[*]}" )
+            echo -e "    $fn: ${radunique[*]} (${GREEN}${#radnames[@]}${NC})"
+        fi
+    done | sort -n -k3
+}
+
+#%%%#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #
 # Default settings
 #
@@ -1450,7 +1582,7 @@ while [[ $# -gt 0 ]]
             echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
             usage 2
             ;;
-        static* | geogrid* | createWOFS | meshplot* | clean* | setup | check)
+        static* | geogrid* | createWOFS | meshplot* | clean* | setup | check*)
             #jobs=(${key//,/ })
             IFS="," read -r -a jobs <<< "$key"
             ;;
@@ -1629,8 +1761,20 @@ hrrrfile="${hrrr_dir}/${eventdate}/${hrrr_time_ics}/postprd_mem0001/wrfnat_hrrre
 
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 
-if [[ " ${jobs[*]} " == " check " ]]; then
-    check_hrrr_files; exit 0
+if [[ " ${jobs[*]} " =~ [[:space:]]check[bgobs]*[[:space:]]  ]]; then
+    if [[ " ${jobs[*]} " == " check " ]]; then
+        checkmodel=true
+        checkobs=true
+    fi
+
+    if [[ " ${jobs[*]} " == " checkbg " || $checkmodel == true ]]; then
+        check_hrrr_files
+    fi
+
+    if [[ " ${jobs[*]} " == " checkobs " || $checkobs == true ]]; then
+        check_obs_files
+    fi
+    exit 0
 fi
 
 echo -e "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----\n"

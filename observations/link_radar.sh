@@ -36,6 +36,13 @@ function usage {
 
 ########################################################################
 
+function join_by {
+    local IFS="$1"
+    echo "${*:2}"
+}
+
+########################################################################
+
 show=""
 verb=false
 eventdate=${eventdateDF:0:8}
@@ -122,7 +129,7 @@ else
     timebeg="${nextdate}${start_time}"
 fi
 
-if [ ! -t 1 ]; then # "jobs"
+if [[ ! -t 1 && ! "$cmd" == "check" ]]; then # "jobs"
     log_dir="${run_dir}/${eventdate}"
 
     if [[ ! -d ${log_dir} ]]; then
@@ -149,23 +156,63 @@ case $cmd in
         ;;
 
     check )
-        for((i=timebeg_s;i<=timeend_s;i+=900)); do
-            timestr=$(date -d @$i +%Y%m%d%H%M)
-            file_name="obs_seq_RF_${timestr:0:8}_${timestr:8:4}.out"
-            #echo ""
-            #echo "ls ${srcdir}/${timestr:0:8}/d1/DART/${file_name}"
-            ls ${srcdir}/${timestr:0:8}/d1/DART/${file_name}
-        done
+        if [[ -t 1 ]]; then
+            for((i=timebeg_s;i<=timeend_s;i+=900)); do
+                timestr=$(date -d @$i +%Y%m%d%H%M)
+                file_name="obs_seq_RF_${timestr:0:8}_${timestr:8:4}.out"
+                #echo ""
+                #echo "ls ${srcdir}/${timestr:0:8}/d1/DART/${file_name}"
+                ls ${srcdir}/${timestr:0:8}/d1/DART/${file_name}
+            done
 
-        echo ""
+            echo ""
 
-        for((i=timebeg_s;i<=timeend_s;i+=900)); do
-            timestr=$(date -d @$i +%Y%m%d%H%M)
-            file_name="obs_seq_????_VR_${timestr:0:8}_${timestr:8:4}.out"
-            #echo ""
-            #echo "ls ${srcdir}/${timestr:0:8}/d1/DART/${file_name}"
-            ls ${srcdir}/${timestr:0:8}/d1/DART/${file_name}
-        done
+            for((i=timebeg_s;i<=timeend_s;i+=900)); do
+                timestr=$(date -d @$i +%Y%m%d%H%M)
+                file_name="obs_seq_????_VR_${timestr:0:8}_${timestr:8:4}.out"
+                #echo ""
+                #echo "ls ${srcdir}/${timestr:0:8}/d1/DART/${file_name}"
+                ls ${srcdir}/${timestr:0:8}/d1/DART/${file_name}
+            done
+        else              # run as a script
+            reffiles=();n=0
+            for((i=timebeg_s;i<=timeend_s;i+=900)); do
+                timestr=$(date -d @$i +%Y%m%d%H%M)
+                file_name="obs_seq_RF_${timestr:0:8}_${timestr:8:4}.out"
+                if [[ -e ${srcdir}/${timestr:0:8}/d1/DART/${file_name} ]]; then
+                    reffiles+=("${file_name}")
+                    ((n++))
+                else
+                    reffiles+=("missing:...${timestr:0:8}_${timestr:8:4}.out")
+                fi
+            done
+            echo "$n"
+            echo "${reffiles[*]}"
+
+            declare -A velfiles=()
+            n=0
+            for((i=timebeg_s;i<=timeend_s;i+=900)); do
+                timestr=$(date -d @$i +%Y%m%d%H%M)
+                file_name="obs_seq_????_VR_${timestr:0:8}_${timestr:8:4}.out"
+                fhead="${srcdir}/${timestr:0:8}/d1/DART/obs_seq_"
+                ftail="_VR_${timestr:0:8}_${timestr:8:4}.out"
+                fkey="obs_seq${ftail}"
+                radnames=()
+                for fn in "${srcdir}/${timestr:0:8}"/d1/DART/${file_name}; do
+                    radname=${fn##"${fhead}"}
+                    radname=${radname%%"${ftail}"}
+                    radnames+=("${radname}")
+                done
+                if [[ "${radnames[*]}" == "????" ]]; then
+                    velfiles["${fkey}"]=""
+                elif [[ ${#radnames[@]} -gt 0 ]]; then
+                    velfiles["${fkey}"]=$(join_by _ ${radnames[@]})
+                    ((n++))
+                fi
+            done
+            echo "$n"
+            typeset -p velfiles
+        fi
         ;;
     * )
 

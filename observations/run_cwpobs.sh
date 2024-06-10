@@ -89,7 +89,7 @@ done
 
 nextdate=$(date -u -d "${eventdate} 1 day" +%Y%m%d)
 
-if [ ! -t 1 ]; then # "jobs"
+if [[ ! -t 1 && ! "$cmd" == "check" ]]; then # "jobs"
     log_dir="${run_dir}/${eventdate}"
 
     if [[ ! -d ${log_dir} ]]; then
@@ -114,10 +114,18 @@ case $cmd in
         ;;
 
     check )
-        echo "ls -l ${srcdir}/${eventdate}/d1"
-        $show ls -l ${srcdir}/${eventdate}/d1/????-cwpobs.nc
-        if [[ $nextday == true ]]; then
-            $show ls -l ${srcdir}/${nextdate}/d1/????-cwpobs.nc
+        if [[ -t 1 ]]; then
+            echo "ls -l ${srcdir}/${eventdate}/d1"
+            $show ls -l ${srcdir}/${eventdate}/d1/????-cwpobs.nc
+            if [[ $nextday == true ]]; then
+                $show ls -l ${srcdir}/${nextdate}/d1/????-cwpobs.nc
+            fi
+        else
+            cwpfiles=()
+            for fn in "${srcdir}/${eventdate}"/d1/????-cwpobs.nc; do
+                cwpfiles+=("$(basename $fn)")
+            done
+            echo "${cwpfiles[*]}"
         fi
         ;;
     * )

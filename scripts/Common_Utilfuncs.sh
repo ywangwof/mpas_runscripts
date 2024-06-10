@@ -9,6 +9,9 @@
 # o get_jobarray_str         # Retrieve job array option string based on job scheduler
 # o group_numbers_by_steps   # Group job numbers for PBS job array option "-J X-Y[:Z]%num"
 # o join_by                  # Join array into a string by a separator
+# o intersection             # Intersection of two arrays, pass in as two strings and pass out as one intersected string
+# o typeset2array            # Typeset output to an associative array
+# o string2array             # '_' separated string to an array
 # o readconf                 # Read config file, written from "setup_mpas-wofs_grid.sh"
 # o convert2days             # Convert date/time strings to days/seconds since 1601-01-01
 # o convertS2days            # Convert epoch seconds to days/seconds since 1601-01-01
@@ -466,6 +469,76 @@ function get_jobarray_str {
 function join_by {
     local IFS="$1"
     echo "${*:2}"
+}
+
+########################################################################
+
+function intersection {
+    read -r -a array_one <<< "$1"
+    read -r -a array_two <<< "$2"
+
+    IFS=$'\n'; set -f
+    mapfile -t common < <( comm -12 <(
+        printf '%s\n' "${array_one[@]}" | sort) <(
+            printf '%s\n' "${array_two[@]}" | sort)
+        )
+
+    echo "${common[*]}"
+}
+
+########################################################################
+
+function typeset2array {
+    #
+    # Set a string returned from 'typeset -p' to an associative array
+    # The associative array name '$2' should have been declared before this call
+    # Neither 'key' nor 'value' of associated array should contain any blank space
+    #
+    local arraystr="$1"
+    local -n arrayname="$2"
+
+    arraystr="${arraystr##declare -A *=(}"
+    arraystr="${arraystr%% )}"
+
+    #echo "$arraystr"
+
+    while IFS="=" read -r key val; do
+        arrayname["$key"]="$val"
+    done < <(
+        echo "${arraystr}" |
+            tr ' ' '\n' |
+            tr -d '[]'
+        )
+}
+
+########################################################################
+
+function string2array {
+    #
+    # '_' separated string to an array
+    #
+    local arraystr="$1"
+    local -n arrname="$2"
+
+
+    arraystr=${arraystr##\"}
+    arraystr=${arraystr%%\"}
+    IFS=$'_' read -r -a arrname <<< "${arraystr}"; unset IFS
+}
+
+########################################################################
+
+function setsubtract {
+    read -r -a array_one <<< "$1"
+    read -r -a array_two <<< "$2"
+
+    IFS=$'\n'; set -f
+    mapfile -t diffset < <( comm -23 <(
+        printf '%s\n' "${array_one[@]}" | sort) <(
+            printf '%s\n' "${array_two[@]}" | sort)
+        )
+
+    echo "${diffset[*]}"
 }
 
 ########################################################################
