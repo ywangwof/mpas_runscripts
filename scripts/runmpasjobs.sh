@@ -318,7 +318,10 @@ verif )
 #6. diag
 diag )
     cd "${script_dir}" || exit 1
-    cmds=("${script_dir}/plot_allobs.sh" -d "dacycles${affix}" -e "${endtime}" "${eventdate}")
+    cmds=("${script_dir}/plot_allobs.sh" -e "${endtime}" "${eventdate}")
+    if [[ -n ${affix} ]]; then
+        cmds+=(-x "${affix}")
+    fi
     ;;
 * )
     echo -e "${RED}ERROR${NC}: Unknown task: ${PURPLE}$task${NC}"

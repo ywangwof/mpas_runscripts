@@ -694,7 +694,7 @@ function run_ungrib_hrrr {
     cd $wrkdir || return
 
     if [[ -f done.ungrib ]]; then
-        mecho0 "Found file ${CYAN}done.ungrib${NC}, skipping ${WHITE}run_ungrib_hrrr${NC} ...."
+        mecho0 "Found file ${CYAN}done.ungrib${NC}, skipping ${WHITE}%0${NC} ...."
         return                   # skip
     elif [[ -f running.ungrib || -f queue.ungrib ]]; then
         return                   # skip
@@ -1170,6 +1170,7 @@ function write_runtimeconfig {
     EXTHEAD="HRRRE"
     hrrrvtable="${hrrrvtable}"
     hrrr_dir="${hrrr_dir}"
+    hrrr_subdir="${hrrr_sub_ics}"         # + 2-digit member string
     hrrr_time="${hrrr_time_ics}"
 
     partition_ics="${partition_ics}"
@@ -1184,6 +1185,7 @@ function write_runtimeconfig {
     EXTHEAD="HRRRE"
     hrrrvtable="${hrrrvtable}"
     hrrr_dir="${hrrr_dir}"
+    hrrr_subdir="${hrrr_sub_lbc}"         # + 2-digit member string
     hrrr_time="${hrrr_time_lbc}"
 
     npelbc="${npelbc}"; ncores_lbc="${ncores_lbc}"
@@ -1214,6 +1216,7 @@ function write_runtimeconfig {
     OUTIOTYPE="netcdf4"
     outwrf=false                        # Run MPASSIT after each data assimilation
     sampling_error_correction=".true."
+    IAU_window_seconds=600
 
     OBS_DIR="${OBS_DIR}"
 
@@ -1259,23 +1262,81 @@ EOF
 
 ########################################################################
 
+function check_hrrr_subdir {
+
+    #
+    # Check the external grib2 files availability for providing the system ICS/LBCs
+    #
+
+    hrrr_sub_ics="postprd_mem00"
+    #mecho0n "Checking ${CYAN}$hrrrfile0${NC} ... "
+    if ls $hrrrfile0 > /dev/null 2>&1; then
+        :
+        #echo -e "${GREEN}Found${NC}"
+    else
+        #echo -e "${RED}Missing${NC}"
+        althrrrfile=${hrrrfile0/postprd_mem00/mem}
+        #mecho0n "Checking ${CYAN}${althrrrfile}${NC} ... "
+        if ls $althrrrfile > /dev/null 2>&1; then
+            #echo -e "${GREEN}Found${NC}"
+            hrrr_sub_ics="mem"
+            hrrrfile0="${althrrrfile}"
+        else
+            #echo -e "${RED}Missing${NC}"
+            :
+        fi
+    fi
+
+    #
+    # Check lbc sub_directory
+    #
+    #mecho0n "Checking ${CYAN}${hrrr_dir}/${eventdate}/${hrrr_time_lbc}${NC} .... "
+
+    if ls ${hrrr_dir}/${eventdate}/${hrrr_time_lbc} > /dev/null 2>&1; then
+        #echo -e "${GREEN}Found${NC}"
+        n=0
+        for mdir in "${hrrr_dir}/${eventdate}/${hrrr_time_lbc}/${hrrr_sub_lbc}"??; do
+            if [[ -d $mdir ]]; then
+                ((n++))
+            elif [[ -d ${mdir//postprd_mem00/mem} ]]; then
+                hrrr_sub_lbc="mem"
+                ((n++))
+            fi
+        done
+    else
+        :
+        #echo -e "${RED}Missing${NC}"
+    fi
+}
+
+########################################################################
+
 function check_hrrr_files {
     #
     # Check the external grib2 files availability for providing the system ICS/LBCs
     #
 
-    mecho0n "Checking ${CYAN}$hrrrfile${NC} ... "
-    if ls $hrrrfile > /dev/null 2>&1; then
+    mecho0n "Checking ${CYAN}$hrrrfile0${NC} ... "
+    if ls $hrrrfile0 > /dev/null 2>&1; then
         echo -e "${GREEN}Found${NC}"
     else
         echo -e "${RED}Missing${NC}"
+        althrrrfile=${hrrrfile0/postprd_mem00/mem}
+        mecho0n "Checking ${CYAN}${althrrrfile}${NC} ... "
+        if ls $althrrrfile > /dev/null 2>&1; then
+            echo -e "${GREEN}Found${NC}"
+            hrrr_sub_ics="mem"
+            hrrrfile0="${althrrrfile}"
+        else
+            echo -e "${RED}Missing${NC}"
+        fi
     fi
 
     mecho0n "Checking ${CYAN}${hrrr_dir}/${eventdate}/${hrrr_time_ics}${NC} .... "
     if ls ${hrrr_dir}/${eventdate}/${hrrr_time_ics} > /dev/null 2>&1; then
         echo -e "${GREEN}Found${NC}"
         n=0
-        for mdir in "${hrrr_dir}/${eventdate}/${hrrr_time_ics}"/postprd_mem00??; do
+        for mdir in "${hrrr_dir}/${eventdate}/${hrrr_time_ics}/${hrrr_sub_ics}"??; do
             if (( n%4 == 0)); then echo ""; fi
             if [[ -d $mdir ]]; then
                 subdir=$(basename $mdir)
@@ -1295,7 +1356,7 @@ function check_hrrr_files {
 
     if ls ${hrrr_dir}/${eventdate}/${hrrr_time_lbc} > /dev/null 2>&1; then
         echo -e "${GREEN}Found${NC}"
-        for mdir in "${hrrr_dir}/${eventdate}/${hrrr_time_lbc}"/postprd_mem00??; do
+        for mdir in "${hrrr_dir}/${eventdate}/${hrrr_time_lbc}/${hrrr_sub_lbc}"??; do
             if (( n%4 == 0)); then echo ""; fi
             if [[ -d $mdir ]]; then
                 subdir=$(basename $mdir)
@@ -1757,7 +1818,12 @@ EXTHEAD="HRRRE"
 hrrrvtable="Vtable.HRRRE.2018"
 hrrr_time_ics="1400"
 hrrr_time_lbc="1200"
-hrrrfile="${hrrr_dir}/${eventdate}/${hrrr_time_ics}/postprd_mem0001/wrfnat_hrrre_newse_mem0001_01.grib2"
+hrrr_sub_ics="postprd_mem00"         # + 2-digit member string
+hrrr_sub_lbc="postprd_mem00"         # + 2-digit member string
+
+check_hrrr_subdir
+
+hrrrfile0="${hrrr_dir}/${eventdate}/${hrrr_time_ics}/${hrrr_sub_ics}01/wrfnat_hrrre_newse_mem0001_01.grib2"
 
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 
@@ -1814,7 +1880,7 @@ declare -A jobargs=([geogrid]="${rundir}/geo_${domname##*_}"            \
                     [meshplot_ncl]="$domname/done.rotate"                         \
                     [meshplot_py]="$domname/done.rotate $domname/$domname.grid.nc" \
                     [static]="$domname/done.rotate ungrib/done.ungrib"  \
-                    [ungrib_hrrr]="${hrrrfile}"                         \
+                    [ungrib_hrrr]="${hrrrfile0}"                         \
                     [clean]="geogrid static createWOFS"                 \
                    )
 

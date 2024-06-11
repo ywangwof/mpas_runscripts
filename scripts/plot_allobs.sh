@@ -25,7 +25,7 @@ function usage {
     echo "              -h                  Display this message"
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
-    echo "              -d dacycles         DA cycles subdirectory name"
+    echo "              -x affix            DA cycles subdirectory name affix, default: empty for \"dacycles\""
     echo "              -m machine          Default: wof-epyc"
     echo "              -obs value          Plot observation value or variance. Default: none"
     echo "                                  This option can repeat multiple times for plot several variables"
@@ -55,7 +55,7 @@ verb=false
 eventdate=${eventdateDF}
 starttime="1500"
 endtime="0300"
-dadir="dacycles"
+affix=""
 machine="wof-epyc"
 obsvalues=()
 
@@ -74,8 +74,8 @@ while [[ $# -gt 0 ]]; do
         -v)
             verb=true
             ;;
-        -d)
-            dadir="$2"
+        -x)
+            affix="$2"
             shift
             ;;
         -m)
@@ -126,6 +126,8 @@ while [[ $# -gt 0 ]]; do
     esac
     shift # past argument or value
 done
+
+dadir="dacycles${affix}"
 
 if [[ ! -d ${rundir}/${eventdate}/${dadir} ]]; then
     echo "ERROR: DA cycles directory: ${rundir}/${eventdate}/${dadir} not exist."
@@ -233,7 +235,7 @@ if [[ ! -e done.zigzag ]]; then
 
     cd ${rundir}/${eventdate}/${dadir}/obs_diag || exit 1
 
-    image_destdir="${imagedir}/20240410_mpasV8.0/1500"
+    image_destdir="${imagedir}/${eventdate}${affix}/1500"
     if [[ ! -d ${image_destdir} ]]; then
         mkdir -p ${image_destdir}
     fi

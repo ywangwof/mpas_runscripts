@@ -105,8 +105,7 @@ function run_ungrib {
         mecho0 "GRIB files from ${grib_dir}:"
         for mem in $(seq 1 "$nensics"); do
             memstr=$(printf "%02d" "$mem")
-            #gribfile=$grib_dir/$eventdate/${gribtime}/mem${memstr}/wrfnat_hrrre_newse_mem00${memstr}_${hstr}.grib2
-            gribfilename="$eventdate/${gribtime}/postprd_mem00${memstr}/wrfnat_hrrre_newse_mem00${memstr}_${hstr}.grib2"
+            gribfilename="$eventdate/${gribtime}/${hrrr_subdir}${memstr}/wrfnat_hrrre_newse_mem00${memstr}_${hstr}.grib2"
             gribfile="${grib_dir}/${gribfilename}"
 
             mecho0 "mem $memstr GRIB file: ${gribfilename}"

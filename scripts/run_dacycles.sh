@@ -3588,13 +3588,6 @@ else
     usage 1
 fi
 
-if [[ ${outwrf} == true ]]; then
-    jobs+=(mpassit)
-    OUTINVL=${intvl_sec}
-else
-    OUTINVL=$((2*intvl_sec))
-fi
-
 #first_cycle_sec=$((inittime_sec+intvl_sec))
 #frsttime_str=$(date -u -d @${first_cycle_sec} +%Y-%m-%d_%H.%M.%S)
 #inittime_str=$(date -u -d @${inittime_sec} +%H%M)
@@ -3661,7 +3654,21 @@ echo -e "  Working dir: $WORKDIR${LIGHT_BLUE}/${eventdate}/dacycles${daffix}${NC
 echo -e "  Domain name: ${PURPLE}$domname${NC};  MP scheme: ${BROWN}${mpscheme}${NC}"
 echo    " "
 
-RSTINVL_STR=$(printf "00:%02d:00" $((intvl_sec/60)) )
+if [[ $IAU_window_seconds -gt 0 ]]; then
+    RSTINVL=$(( IAU_window_seconds/2 ))
+else
+    RSTINVL=${intvl_sec}
+fi
+
+if [[ ${outwrf} == true ]]; then
+    jobs+=(mpassit)
+    OUTINVL=${RSTINVL}
+else
+    OUTINVL=$((2*RSTINVL))
+fi
+
+
+RSTINVL_STR=$(printf "00:%02d:00" $((RSTINVL/60)) )
 OUTINVL_STR=$(printf "00:%02d:00" $((OUTINVL/60)) )
 
 #
