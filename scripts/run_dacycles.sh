@@ -1879,7 +1879,7 @@ function run_update_bc {
     #
     # Waiting for job conditions
     #
-    conditions=("${rundir}"/lbc/done.lbc)
+    conditions=("${rundir}"/lbc/done.${domname})
 
     if [[ $run_addnoise == true ]]; then
         conditions+=("${wrkdir}/done.add_noise")
@@ -2087,7 +2087,7 @@ function run_add_noise {
         done
     fi
 
-    if [[ ! -e done.noise_mask && ! -e running.noise_mask && ! -e queue.noise_mask ]]; then
+    if [[ ! -e done.noise_mask && ! -e running.noise_mask && ! -e queue.noise_mask && ! -e missed.noise_mask ]]; then
         if [[ $verb -eq 1 ]]; then mecho0 "Running ${WHITE}grid_refl_obs.py${NC} at ${YELLOW}${timestr_cur}${NC}"; fi
 
         invfile="$rundir/init/${domname}.invariant.nc"
@@ -2149,6 +2149,11 @@ EOF
                 if [[ $verb -eq 1 ]]; then
                     mecho0 "Waiting for file: ${CYAN}$cond${NC}"
                 fi
+                if [[ -e "${wrkdir}/missed.noise_mask" ]]; then
+                    mecho0 "${YELLOW}WARNING${NC}: No radar reflectivity obs for this cycle. Skip ${WHITE}add_noise${NC}."
+                    touch "${wrkdir}/done.add_noise"
+                    return
+                fi
                 sleep 10
             done
         done
@@ -2168,7 +2173,7 @@ EOF
 
         if [[ ! -e done.add_noise_${memstr} && ! -e running.add_noise_${memstr} ]]; then
             days_str=$(printf "%5.5i_%6.6i" ${days_secs[0]} ${days_secs[1]})
-            ln -sf ../refl_obs_${days_str}.pkl ../${domname}_grid_kdtree.pkl ../mpas_XYZ.pkl .
+            ln -sf ../refl_obs_${days_str}.pkl ../wofs_mpas_grid_kdtree.pkl ../mpas_XYZ.pkl .
             jobarrays+=("$iens")
         fi
     done
@@ -2593,14 +2598,14 @@ function dacycle_driver() {
     #  1. executables:
     #       filter
     #       update_mpas_states
+    #       update_bc
     #       atmosphere_model
     #
     #  Input files to run this script:
     #  A. input_state_file_list  - a list of input ensemble netcdf files for DART/filter
     #  B. output_state_file_list - a list of output ensemble netcdf files from DART/filter
-    #  C. RUN_DIR/member#/${mpas_filename}    - the input file listed in input_state_file_list for each member
+    #  C. RUN_DIR/fcst_??/${mpas_filename}    - the input file listed in input_state_file_list for each member
     #  D. OBS_DIR/${obs_seq_in}.${YYYYMMDDHH} - obs sequence files for each analysis cycle (YYYYMMDDHH)
-    #     for the entire period.
     #
     ##############################################################################################
     # USER SPECIFIED PARAMETERS
@@ -2664,7 +2669,7 @@ function dacycle_driver() {
             if [[ $icyc -eq 0 ]]; then
                 if [[ ! -e $rundir/lbc/done.lbc ]]; then
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                    check_job_status "lbc" $rundir/lbc $nenslbc run_lbc.${mach} 0
+                    check_job_status "${domname}" $rundir/lbc $nenslbc run_lbc.${mach} 0
                 fi
             else   #if [[ $icyc -gt 0 ]]; then
                 timesec_pre=$((isec-intvl_sec))

@@ -61,8 +61,11 @@ rm -rf error.noise_mask queue.noise_mask
 # Run the python programs
 RUNCMD python WAN_PATH/grid_refl_obs.py ${ncseq_file} 35.0 10.0 ${inv_file} ${eventsecs} ${eventdays} mpas
 
-if [[ $? -eq 0 ]]; then
+estatus="$?"
+if [[ $estatus -eq 0 ]]; then
     touch done.noise_mask
+elif [[ $estatus -eq 99 ]]; then
+    touch missed.noise_mask
 else
     touch error.noise_mask
 fi

@@ -43,19 +43,28 @@
 # filenames with the pattern 6Z,12Z,18Z,24Z, so 'no' is right for it.)
 # this variable is ignored completely if
 
+#rootdir="/scratch/ywang/MPAS/mpas_runscripts"
+scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
+rootdir=$(realpath "$(dirname "${scpdir}")")
 
-DART_DIR=/scratch/ywang/MPAS/gnu/frdd-DART
-WORK_dir=/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs/OBS_SEQ/Bufr
-DART_exec_dir=${DART_DIR}/observations/obs_converters/NCEP/prep_bufr/exe
-NML_TEMPLATE=/scratch/ywang/MPAS/gnu/mpas_scripts/observations/input.nml.bufrobs.template
 BUFR_DIR=/work/rt_obs/SBUFR
+DART_DIR=/scratch/ywang/MPAS/gnu/frdd-DART
+
+DART_exec_dir=${DART_DIR}/observations/obs_converters/NCEP/prep_bufr/exe
+NML_TEMPLATE=${scpdir}/input.nml.bufrobs.template
+
 run_dir="/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs"
+WORK_dir=${run_dir}/OBS_SEQ/Bufr
+
 convert=yes
 
 eventdateDF=$(date -u +%Y%m%d%H%M)
 
 starthour=1500
 endhour=0300
+
+source ${rootdir}/modules/env.mpas_smiol
+source ${rootdir}/scripts/Common_Utilfuncs.sh
 
 function usage {
     echo " "
@@ -153,6 +162,8 @@ while [[ $# -gt 0 ]]; do
                 nextdate=$(date -d "$eventdate 1 day" +%Y%m%d)
 
                 timeend="${key}"
+            elif [[ -d $key ]]; then
+                run_dir="$key"
             else
                 echo ""
                 echo "ERROR: unknown argument, get [$key]."
@@ -162,6 +173,15 @@ while [[ $# -gt 0 ]]; do
     esac
     shift # past argument or value
 done
+
+conf_file="${run_dir}/config.${eventdate}"
+if [[ -e ${conf_file} ]]; then
+    eval "$(sed -n "/OBS_DIR=/p" ${conf_file})"
+    WORK_dir=${OBS_DIR}/Bufr
+else
+    echo "${RED}ERROR${NC}: ${CYAN}${conf_file}${NC} not exist."
+    exit 0
+fi
 
 if [[ $((10#$start_time)) -gt 1200 ]]; then
     timebeg="${eventdate}${start_time}"
@@ -181,10 +201,6 @@ if [[ ! -t 1 && ! "$cmd" == "check" ]]; then # "jobs"
 fi
 
 echo "=== $(date +%Y%m%d_%H:%M:%S) - $0 ${saved_args} ==="
-
-source /scratch/ywang/MPAS/gnu/mpas_scripts/modules/env.mpas_smiol
-
-source /scratch/ywang/MPAS/gnu/mpas_scripts/scripts/Common_Utilfuncs.sh
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 

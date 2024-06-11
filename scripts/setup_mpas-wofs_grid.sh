@@ -694,7 +694,7 @@ function run_ungrib_hrrr {
     cd $wrkdir || return
 
     if [[ -f done.ungrib ]]; then
-        mecho0 "Found file ${CYAN}done.ungrib${NC}, skipping ${WHITE}%0${NC} ...."
+        mecho0 "Found file ${CYAN}done.ungrib${NC}, skipping ${WHITE}$0${NC} ...."
         return                   # skip
     elif [[ -f running.ungrib || -f queue.ungrib ]]; then
         return                   # skip
@@ -936,9 +936,9 @@ function run_clean {
 
 ########################################################################
 
-function write_runtimeconfig {
+function write_config {
     if [[ $# -ne 1 ]]; then
-        mecho0 "${RED}ERROR${NC}: No enough argument to function ${BROWN}write_runtimeconfig${NC}."
+        mecho0 "${RED}ERROR${NC}: No enough argument. get:$#."
         exit 1
     fi
     local configname=$1
@@ -1267,17 +1267,14 @@ function check_hrrr_subdir {
     # Check the external grib2 files availability for providing the system ICS/LBCs
     #
 
-    hrrr_sub_ics="postprd_mem00"
-    #mecho0n "Checking ${CYAN}$hrrrfile0${NC} ... "
-    if ls $hrrrfile0 > /dev/null 2>&1; then
-        :
-        #echo -e "${GREEN}Found${NC}"
+    mecho0 "Checking ${CYAN}${hrrrfile0}${NC} ... "
+    if [[ -e ${hrrrfile0} ]]; then
+        mecho0 "Use hrrr_sub_ics='${hrrr_sub_ics}'"
     else
-        #echo -e "${RED}Missing${NC}"
         althrrrfile=${hrrrfile0/postprd_mem00/mem}
         #mecho0n "Checking ${CYAN}${althrrrfile}${NC} ... "
-        if ls $althrrrfile > /dev/null 2>&1; then
-            #echo -e "${GREEN}Found${NC}"
+        if [[ -e ${althrrrfile} ]]; then
+            mecho0 "Use hrrr_sub_ics='${YELLOW}mem${NC}'"
             hrrr_sub_ics="mem"
             hrrrfile0="${althrrrfile}"
         else
@@ -1289,9 +1286,9 @@ function check_hrrr_subdir {
     #
     # Check lbc sub_directory
     #
-    #mecho0n "Checking ${CYAN}${hrrr_dir}/${eventdate}/${hrrr_time_lbc}${NC} .... "
+    mecho0 "Checking ${CYAN}${hrrr_dir}/${eventdate}/${hrrr_time_lbc}${NC} .... "
 
-    if ls ${hrrr_dir}/${eventdate}/${hrrr_time_lbc} > /dev/null 2>&1; then
+    if [[ -d ${hrrr_dir}/${eventdate}/${hrrr_time_lbc} ]]; then
         #echo -e "${GREEN}Found${NC}"
         n=0
         for mdir in "${hrrr_dir}/${eventdate}/${hrrr_time_lbc}/${hrrr_sub_lbc}"??; do
@@ -1302,10 +1299,11 @@ function check_hrrr_subdir {
                 ((n++))
             fi
         done
+        mecho0 "Use hrrr_sub_lbc='${YELLOW}${hrrr_sub_lbc}${NC}'"
     else
-        :
-        #echo -e "${RED}Missing${NC}"
+        mecho0 "Missing ${RED}${hrrr_dir}/${eventdate}/${hrrr_time_lbc}${NC}'"
     fi
+    echo ""
 }
 
 ########################################################################
@@ -1806,6 +1804,18 @@ fi
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
 
+echo -e "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----\n"
+echo -e "  Event date : ${GREEN}$eventdate${NC} ${YELLOW}${eventtime}${NC}"
+echo -e "  Root    dir: $rootdir${GREEN}/exec${NC}|${PURPLE}/templates${NC}|${DARK}/fix_files${NC}|${BROWN}/scripts${NC}"
+echo -e "  Working dir: $WORKDIR${LIGHT_BLUE}/${eventdate}${NC}"
+echo -ne "  Domain name: ${PURPLE}$domname${NC};  MP scheme: ${BROWN}mp_nssl2m${NC}"
+if [[ -n ${cen_lat} || -n ${cen_lon} ]]; then
+    echo -e "; Domain Center: ${WHITE}${cen_lat}${NC},${WHITE}${cen_lon}${NC}"
+else
+    echo " "
+fi
+echo " "
+
 #
 # configurations that is not set from command line
 #
@@ -1820,9 +1830,9 @@ hrrr_time_lbc="1200"
 hrrr_sub_ics="postprd_mem00"         # + 2-digit member string
 hrrr_sub_lbc="postprd_mem00"         # + 2-digit member string
 
-check_hrrr_subdir
-
 hrrrfile0="${hrrr_dir}/${eventdate}/${hrrr_time_ics}/${hrrr_sub_ics}01/wrfnat_hrrre_newse_mem0001_01.grib2"
+
+check_hrrr_subdir
 
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 
@@ -1842,14 +1852,6 @@ if [[ " ${jobs[*]} " =~ [[:space:]]check[bgobs]*[[:space:]]  ]]; then
     exit 0
 fi
 
-echo -e "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----\n"
-echo -e "  Event date : ${GREEN}$eventdate${NC} ${YELLOW}${eventtime}${NC}"
-echo -e "  Root    dir: $rootdir${GREEN}/exec${NC}|${PURPLE}/templates${NC}|${DARK}/fix_files${NC}|${BROWN}/scripts${NC}"
-echo -e "  Working dir: $WORKDIR${LIGHT_BLUE}/${eventdate}${NC}"
-echo -e "  Domain name: ${PURPLE}$domname${NC};  MP scheme: ${BROWN}mp_nssl2m${NC}; Domain Center: ${WHITE}${cen_lat}${NC},${WHITE}${cen_lon}${NC}"
-
-echo    " "
-
 starttime_str=$(date -u -d "${eventdate} ${eventtime}" +%Y-%m-%d_%H:%M:%S)
 
 rundir="$WORKDIR/${eventdate}"
@@ -1865,7 +1867,7 @@ exedir="$rootdir/exec"
 # write runtime configuration file
 #
 caseconfig="${WORKDIR}/${caseconfig-config.${eventdate}${affix}}"
-write_runtimeconfig "$caseconfig"
+write_config "$caseconfig"
 
 if [[ " ${jobs[*]} " == " setup " ]]; then exit 0; fi
 

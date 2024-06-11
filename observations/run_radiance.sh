@@ -1,7 +1,12 @@
 #!/bin/bash
+#rootdir="/scratch/ywang/MPAS/mpas_runscripts"
+scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
+#rootdir=$(realpath "$(dirname "${scpdir}")")
+
 srcdir=/work2/wof/realtime/OBSGEN/CLOUD_OBS
-destdir=/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs/OBS_SEQ/Radiance
+
 run_dir="/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs"
+destdir="${run_dir}/OBS_SEQ/Radiance"
 
 eventdateDF=$(date -u +%Y%m%d%H%M)
 
@@ -76,6 +81,8 @@ while [[ $# -gt 0 ]]; do
             if [[ $key =~ ^[0-9]{8}$ ]]; then
                 eventdate=${key}
                 nextday=true
+            elif [[ -d $key ]]; then
+                run_dir="$key"
             else
                 echo ""
                 echo "ERROR: unknown argument, get [$key]."
@@ -85,6 +92,15 @@ while [[ $# -gt 0 ]]; do
     esac
     shift # past argument or value
 done
+
+conf_file="${run_dir}/config.${eventdate}"
+if [[ -e ${conf_file} ]]; then
+    eval "$(sed -n "/OBS_DIR=/p" ${conf_file})"
+    destdir="${OBS_DIR}/Radiance"
+else
+    echo "${RED}ERROR${NC}: ${CYAN}${conf_file}${NC} not exist."
+    exit 0
+fi
 
 nextdate=$(date -u -d "${eventdate} 1 day" +%Y%m%d)
 
@@ -136,13 +152,13 @@ case $cmd in
         if [ $? -eq 0 ]; then
             eval "$__mamba_setup"
         else
-            alias micromamba="$MAMBA_EXE"  # Fallback on help from mamba activate
+            micromamba() { "$MAMBA_EXE"; }  # Fallback on help from mamba activate
         fi
         unset __mamba_setup
         # <<< mamba initialize <<<
         micromamba activate wofs_an
 
-        cd /scratch/ywang/MPAS/gnu/mpas_scripts/observations || exit 0
+        cd ${scpdir} || exit 0
 
         for channel in 5 7; do
             #python abiobs2dart_tb.py -i /work/rt_obs/Satellite/RADIANCE/2022     \
@@ -158,6 +174,5 @@ case $cmd in
         done
         ;;
 esac
-
 
 exit 0

@@ -68,6 +68,8 @@ for mem in "${mem_arr[@]}"; do
     bkg_file=$(<update_states_out.txt)
     RUNCMD python WAN_PATH/add_pert_where_high_refl.py ${inv_file} ${bkg_file} 9000.0 3000.0 0.50 0.50 0.0 0.50 0.50 0.0 ${eventsecs} ${eventdays} ${mem} mpas &
 
+    # Python program will touch done.add_noise_${memstr}
+
     #if [[ $? -eq 0 ]]; then
     #    touch done.add_noise_${memstr}
     #else

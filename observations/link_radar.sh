@@ -1,9 +1,9 @@
 #!/bin/bash
 
 srcdir="/work2/wof/realtime/OBSGEN/CLOUD_OBS"
-destdir="/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs/OBS_SEQ"
 
 run_dir="/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs"
+destdir="${run_dir}/OBS_SEQ"
 
 eventdateDF=$(date -u +%Y%m%d%H%M)
 
@@ -113,6 +113,8 @@ while [[ $# -gt 0 ]]; do
                 nextdate=$(date -d "$eventdate 1 day" +%Y%m%d)
 
                 timeend="${key}"
+            elif [[ -d $key ]]; then
+                run_dir="$key"
             else
                 echo ""
                 echo "ERROR: unknown argument, get [$key]."
@@ -122,6 +124,15 @@ while [[ $# -gt 0 ]]; do
     esac
     shift # past argument or value
 done
+
+conf_file="${run_dir}/config.${eventdate}"
+if [[ -e ${conf_file} ]]; then
+    eval "$(sed -n "/OBS_DIR=/p" ${conf_file})"
+    destdir=${OBS_DIR}
+else
+    echo "${RED}ERROR${NC}: ${CYAN}${conf_file}${NC} not exist."
+    exit 0
+fi
 
 if [[ $((10#$start_time)) -gt 1200 ]]; then
     timebeg="${eventdate}${start_time}"

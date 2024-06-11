@@ -12,22 +12,29 @@
 #
 #--------------------------------------------------------------
 
-MESO_DIR=/work/rt_obs/Mesonet
-WORK_dir=/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs/OBS_SEQ/Mesonet
+#rootdir="/scratch/ywang/MPAS/mpas_runscripts"
+scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
+rootdir=$(realpath "$(dirname "${scpdir}")")
 
-TEMPLATE_FILE=/scratch/ywang/MPAS/gnu/mpas_scripts/observations/input.nml.mesonet
-MESOINFO_FILE=/scratch/ywang/MPAS/gnu/mpas_scripts/observations/geoinfo.csv
-MPASWoFS_DIR=/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs
-convert_okmeso=/scratch/ywang/MPAS/gnu/frdd-DART/observations/obs_converters/ok_mesonet/work/convert_ok_mesonet
-obs_preprocess=/scratch/ywang/MPAS/gnu/frdd-DART/models/mpas_atm/work/mpas_dart_obs_preprocess
+MESO_DIR=/work/rt_obs/Mesonet
+DART_DIR=/scratch/ywang/MPAS/gnu/frdd-DART
+
+TEMPLATE_FILE=${scpdir}/input.nml.mesonet
+MESOINFO_FILE=${scpdir}/geoinfo.csv
+convert_okmeso=${DART_DIR}/observations/obs_converters/ok_mesonet/work/convert_ok_mesonet
+obs_preprocess=${DART_DIR}/models/mpas_atm/work/mpas_dart_obs_preprocess
 #convert_date=/scratch/ywang/MPAS/gnu/frdd-DART/models/wrf/work/convertdate
 
 run_dir="/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs"
+WORK_dir=${run_dir}/OBS_SEQ/Mesonet
 
 eventdateDF=$(date -u +%Y%m%d%H%M)
 
 starthour=1500
 endhour=0300
+
+source ${rootdir}/modules/env.mpas_smiol
+source ${rootdir}/scripts/Common_Utilfuncs.sh
 
 function usage {
     echo " "
@@ -125,6 +132,8 @@ while [[ $# -gt 0 ]]; do
                 nextdate=$(date -d "$eventdate 1 day" +%Y%m%d)
 
                 timeend="${key}"
+            elif [[ -d $key ]]; then
+                run_dir="$key"
             else
                 echo ""
                 echo "ERROR: unknown argument, get [$key]."
@@ -134,6 +143,15 @@ while [[ $# -gt 0 ]]; do
     esac
     shift # past argument or value
 done
+
+conf_file="${run_dir}/config.${eventdate}"
+if [[ -e ${conf_file} ]]; then
+    eval "$(sed -n "/OBS_DIR=/p" ${conf_file})"
+    WORK_dir=${OBS_DIR}/Mesonet
+else
+    echo "${RED}ERROR${NC}: ${CYAN}${conf_file}${NC} not exist."
+    exit 0
+fi
 
 if [[ $((10#$start_time)) -gt 1200 ]]; then
     timebeg="${eventdate}${start_time}"
@@ -153,10 +171,6 @@ if [[ ! -t 1  && ! "$cmd" == "check" ]]; then # "jobs"
 fi
 
 echo "=== $(date +%Y%m%d_%H:%M:%S) - $0 ${saved_args} ==="
-
-source /scratch/ywang/MPAS/gnu/mpas_scripts/modules/env.mpas_smiol
-
-source /scratch/ywang/MPAS/gnu/mpas_scripts/scripts/Common_Utilfuncs.sh
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
@@ -221,7 +235,7 @@ for((i=timebeg_s;i<=timeend_s;i+=900)); do
     if [[ ! -e ${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min} ]]; then
 
         #MPAS_INITFILE=${MPASWoFS_DIR}/${evty}${evtm}${evtd}/dacycles/${phh}${pmin}/wofs_mpas_01.restart.${mpas_timestr}.nc
-        MPAS_INITFILE=${MPASWoFS_DIR}/${evty}${evtm}${evtd}/init/wofs_mpas.invariant.nc
+        MPAS_INITFILE=${run_dir}/${evty}${evtm}${evtd}/init/wofs_mpas.invariant.nc
         if [[ ! -e ${MPAS_INITFILE} ]]; then
             echo "MPAS restart file: ${MPAS_INITFILE} not exist"
             exit 0
