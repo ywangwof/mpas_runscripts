@@ -1216,7 +1216,6 @@ function write_runtimeconfig {
     OUTIOTYPE="netcdf4"
     outwrf=false                        # Run MPASSIT after each data assimilation
     sampling_error_correction=".true."
-    IAU_window_seconds=600
 
     OBS_DIR="${OBS_DIR}"
 

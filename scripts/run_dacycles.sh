@@ -3654,12 +3654,7 @@ echo -e "  Working dir: $WORKDIR${LIGHT_BLUE}/${eventdate}/dacycles${daffix}${NC
 echo -e "  Domain name: ${PURPLE}$domname${NC};  MP scheme: ${BROWN}${mpscheme}${NC}"
 echo    " "
 
-if [[ $IAU_window_seconds -gt 0 ]]; then
-    RSTINVL=$(( IAU_window_seconds/2 ))
-else
-    RSTINVL=${intvl_sec}
-fi
-
+RSTINVL=${intvl_sec}
 if [[ ${outwrf} == true ]]; then
     jobs+=(mpassit)
     OUTINVL=${RSTINVL}
