@@ -1,5 +1,9 @@
 #!/bin/bash
 
+#rootdir="/scratch/ywang/MPAS/mpas_runscripts"
+scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
+rootdir=$(realpath "$(dirname "${scpdir}")")
+
 srcdir="/work2/wof/realtime/OBSGEN/CLOUD_OBS"
 
 run_dir="/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs"
@@ -10,24 +14,27 @@ eventdateDF=$(date -u +%Y%m%d%H%M)
 starthour=1500
 endhour=0300
 
+source "${rootdir}/scripts/Common_Utilfuncs.sh"
+
 function usage {
     echo " "
-    echo "    USAGE: $0 [options] [DATETIME]"
+    echo "    USAGE: $0 [options] [DATETIME] [WORKDIR] [COMMAND]"
     echo " "
     echo "    PURPOSE: Link radar observation from $srcdir to $destdir."
     echo " "
     echo "    DATETIME - Empty: Current UTC date and time"
     echo "               YYYYmmdd:       run this task for this event date."
     echo "               YYYYmmddHHMM:   run the task from event date $starthour Z up to YYYYmmddHHMM."
+    echo "    COMMAND  - one of [ls, check, fix]"
+    echo "               check    List the observations in the $srcdir"
+    echo "               ls       List the observations in the $destdir"
+    echo "               fix      Added '.missed' tag to missing file for the MPAS-WoFS workflow keeps going"
     echo " "
     echo "    OPTIONS:"
     echo "              -h                  Display this message"
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
-    echo "              -check              List the observations in the $srcdir"
-    echo "              -ls                 List the observations in the $destdir"
     echo "              -s  start_time      Run task from start_time, default $starthour"
-    echo " "
     echo " "
     echo "                                     -- By Y. Wang (2024.04.26)"
     echo " "
@@ -79,12 +86,6 @@ while [[ $# -gt 0 ]]; do
         -v)
             verb=true
             ;;
-        -ls)
-            cmd="ls"
-            ;;
-        -check)
-            cmd="check"
-            ;;
         -s)
             if [[ $2 =~ ^[0-9]{4}$ ]]; then
                 start_time="$2"
@@ -98,6 +99,9 @@ while [[ $# -gt 0 ]]; do
         -*)
             echo "Unknown option: $key"
             usage 2
+            ;;
+        ls | check | fix )
+            cmd="${key}"
             ;;
         *)
             if [[ $key =~ ^[0-9]{8}$ ]]; then
@@ -130,8 +134,12 @@ if [[ -e ${conf_file} ]]; then
     eval "$(sed -n "/OBS_DIR=/p" ${conf_file})"
     destdir=${OBS_DIR}
 else
-    echo "${RED}ERROR${NC}: ${CYAN}${conf_file}${NC} not exist."
-    exit 0
+    if [[ "$cmd" =~ "check" ]]; then
+        :
+    else
+        echo -e "${RED}ERROR${NC}: ${CYAN}${conf_file}${NC} not exist."
+        exit 0
+    fi
 fi
 
 if [[ $((10#$start_time)) -gt 1200 ]]; then
@@ -159,68 +167,106 @@ timebeg_s=$(date -d "${timebeg:0:8} ${timebeg:8:4}" +%s)
 timeend_s=$(date -d "${timeend:0:8} ${timeend:8:4}" +%s)
 
 case $cmd in
-    ls )
-        echo "ls ${destdir}/REF/${eventdate}"
-        $show ls ${destdir}/REF/${eventdate}
-        echo "ls ${destdir}/VEL/${eventdate}"
-        $show ls ${destdir}/VEL/${eventdate}
-        ;;
 
-    check )
-        if [[ -t 1 ]]; then
-            for((i=timebeg_s;i<=timeend_s;i+=900)); do
-                timestr=$(date -d @$i +%Y%m%d%H%M)
-                file_name="obs_seq_RF_${timestr:0:8}_${timestr:8:4}.out"
-                #echo ""
-                #echo "ls ${srcdir}/${timestr:0:8}/d1/DART/${file_name}"
-                ls ${srcdir}/${timestr:0:8}/d1/DART/${file_name}
-            done
+    check | ls | fix )
 
-            echo ""
-
-            for((i=timebeg_s;i<=timeend_s;i+=900)); do
-                timestr=$(date -d @$i +%Y%m%d%H%M)
-                file_name="obs_seq_????_VR_${timestr:0:8}_${timestr:8:4}.out"
-                #echo ""
-                #echo "ls ${srcdir}/${timestr:0:8}/d1/DART/${file_name}"
-                ls ${srcdir}/${timestr:0:8}/d1/DART/${file_name}
-            done
-        else              # run as a script
-            reffiles=();n=0
-            for((i=timebeg_s;i<=timeend_s;i+=900)); do
-                timestr=$(date -d @$i +%Y%m%d%H%M)
-                file_name="obs_seq_RF_${timestr:0:8}_${timestr:8:4}.out"
-                if [[ -e ${srcdir}/${timestr:0:8}/d1/DART/${file_name} ]]; then
-                    reffiles+=("${file_name}")
-                    ((n++))
-                else
-                    reffiles+=("missing:...${timestr:0:8}_${timestr:8:4}.out")
+        reffiles=();n=0
+        for((i=timebeg_s;i<=timeend_s;i+=900)); do
+            timestr=$(date -d @$i +%Y%m%d%H%M)
+            if [[ "$cmd" == "check" ]]; then
+                wrkdir="${srcdir}/${timestr:0:8}/d1/DART"
+            else
+                wrkdir="${destdir}/REF/${eventdate}"
+            fi
+            file_name="obs_seq_RF_${timestr:0:8}_${timestr:8:4}.out"
+            if [[ -e ${wrkdir}/${file_name} ]]; then
+                reffiles+=("${file_name}")
+                ((n++))
+            else
+                reffiles+=("missing:...${timestr:0:8}_${timestr:8:4}.out")
+                if [[ "$cmd" == "fix" ]]; then
+                    touch "${wrkdir}/${file_name}.missed"
                 fi
+            fi
+        done
+        if [[ -t 1 ]]; then
+            echo -e "\n${LIGHT_BLUE}${wrkdir}${NC}:"
+            n=0
+            for filename in "${reffiles[@]}";do
+                if (( n%4 == 0)); then echo ""; fi
+                if [[ $filename =~ "missing:" ]]; then
+                    echo -ne "    ${PURPLE}$filename${NC}"
+                else
+                    echo -ne "    ${GREEN}$filename${NC}"
+                fi
+                ((n++))
             done
+            echo ""
+        else
             echo "$n"
             echo "${reffiles[*]}"
+        fi
 
-            declare -A velfiles=()
-            n=0
-            for((i=timebeg_s;i<=timeend_s;i+=900)); do
-                timestr=$(date -d @$i +%Y%m%d%H%M)
-                file_name="obs_seq_????_VR_${timestr:0:8}_${timestr:8:4}.out"
-                fhead="${srcdir}/${timestr:0:8}/d1/DART/obs_seq_"
-                ftail="_VR_${timestr:0:8}_${timestr:8:4}.out"
-                fkey="obs_seq${ftail}"
-                radnames=()
-                for fn in "${srcdir}/${timestr:0:8}"/d1/DART/${file_name}; do
-                    radname=${fn##"${fhead}"}
-                    radname=${radname%%"${ftail}"}
-                    radnames+=("${radname}")
-                done
-                if [[ "${radnames[*]}" == "????" ]]; then
-                    velfiles["${fkey}"]=""
-                elif [[ ${#radnames[@]} -gt 0 ]]; then
-                    velfiles["${fkey}"]=$(join_by _ ${radnames[@]})
-                    ((n++))
+        declare -A velfiles=()
+        n=0
+        for((i=timebeg_s;i<=timeend_s;i+=900)); do
+            timestr=$(date -d @$i +%Y%m%d%H%M)
+            if [[ "$cmd" == "check" ]]; then
+                wrkdir="${srcdir}/${timestr:0:8}/d1/DART"
+            else
+                wrkdir="${destdir}/VEL/${eventdate}"
+            fi
+            file_name="obs_seq_????_VR_${timestr:0:8}_${timestr:8:4}.out"
+            fhead="${wrkdir}/obs_seq_"
+            ftail="_VR_${timestr:0:8}_${timestr:8:4}.out"
+            fkey="obs_seq${ftail}"
+            radnames=()
+            for fn in ${wrkdir}/${file_name}; do
+                radname=${fn##"${fhead}"}
+                radname=${radname%%"${ftail}"}
+                radnames+=("${radname}")
+            done
+            if [[ "${radnames[*]}" == "????" ]]; then
+                velfiles["${fkey}"]=""
+                if [[ "$cmd" == "fix" ]]; then
+                    touch "${wrkdir}/${fkey}.missed"
+                fi
+            elif [[ ${#radnames[@]} -gt 0 ]]; then
+                velfiles["${fkey}"]=$(join_by _ "${radnames[@]}")
+                ((n++))
+            fi
+        done
+        if [[ -t 1 ]]; then
+
+            echo -e "\n${LIGHT_BLUE}${wrkdir}${NC}:"
+            echo ""
+
+            declare -a radnames
+            for fn in "${!velfiles[@]}"; do
+                string2array "${velfiles[$fn]}" "radnames"
+                if [[ ${#radnames[@]} -ne 0 ]]; then
+                    if [[ -z $common ]]; then
+                        common=("${radnames[@]}")
+                    else
+                        mapfile -t common < <( intersection "${common[*]}" "${radnames[*]}" )
+                    fi
                 fi
             done
+
+            echo -e "    Common Radars: ${CYAN}${common[*]}${NC} (${GREEN}${#common[@]}${NC})"
+            echo ""
+
+            for fn in "${!velfiles[@]}"; do
+                string2array "${velfiles[$fn]}" "radnames"
+
+                if [[ ${#radnames[@]} -eq 0 ]]; then
+                    echo -e "    $fn: ${RED}Missing${NC}"
+                else
+                    mapfile -t radunique < <(setsubtract "${radnames[*]}" "${common[*]}" )
+                    echo -e "    $fn: ${radunique[*]} (${GREEN}${#radnames[@]}${NC})"
+                fi
+            done | sort -n -k3
+        else
             echo "$n"
             typeset -p velfiles
         fi

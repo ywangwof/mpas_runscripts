@@ -2,7 +2,7 @@
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
-#rootdir=$(realpath "$(dirname "${scpdir}")")
+rootdir=$(realpath "$(dirname "${scpdir}")")
 
 srcdir=/work2/wof/realtime/OBSGEN/CLOUD_OBS
 
@@ -11,26 +11,32 @@ destdir="${run_dir}/OBS_SEQ/CWP"
 
 eventdateDF=$(date -u +%Y%m%d%H%M)
 
+source ${rootdir}/scripts/Common_Utilfuncs.sh
+
 function usage {
     echo " "
-    echo "    USAGE: $0 [options] [DATETIME]"
+    echo "    USAGE: $0 [options] [DATETIME] [WORKDIR] [COMMAND]"
     echo " "
     echo "    PURPOSE: Preprocessing CWP data in $srcdir to $destdir."
     echo " "
     echo "    DATETIME - Empty: Current UTC date and time"
     echo "               YYYYmmdd:       run this task for this event date."
     echo " "
+    echo "    COMMAND  - one of [ls, check, fix]"
+    echo "               check    List the observations in the $srcdir"
+    echo "               ls       List the observations in the $destdir"
+    echo "               fix      Added '.missed' tag to missing file for the MPAS-WoFS workflow keeps going"
+    echo " "
     echo "    OPTIONS:"
     echo "              -h                  Display this message"
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
-    echo "              -check              List the observations in the $srcdir"
-    echo "              -ls                 List the observations in the $destdir"
+    echo "              -s  start_time      Run task from start_time, default $starthour"
     echo " "
     echo " "
     echo "                                     -- By Y. Wang (2024.04.26)"
     echo " "
-    exit $1
+    exit "$1"
 }
 
 ########################################################################
@@ -40,6 +46,11 @@ verb=false
 eventdate=${eventdateDF:0:8}
 eventhour=${eventdateDF:8:2}
 cmd=""
+
+starthour=1500
+endhour=0300
+
+timeend=${eventdateDF}
 
 if [[ $((10#$eventhour)) -lt 12 ]]; then
     eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
@@ -68,20 +79,37 @@ while [[ $# -gt 0 ]]; do
         -v)
             verb=true
             ;;
-        -ls)
-            cmd="ls"
-            ;;
-        -check)
-            cmd="check"
+        -s)
+            if [[ $2 =~ ^[0-9]{4}$ ]]; then
+                starthour="$2"
+            else
+                echo ""
+                echo "ERROR: expecting HHMM, get [$key]."
+                usage 3
+            fi
+            shift
             ;;
         -*)
             echo "Unknown option: $key"
             usage 2
             ;;
+        ls | check | fix )
+            cmd="${key}"
+            ;;
         *)
             if [[ $key =~ ^[0-9]{8}$ ]]; then
                 eventdate=${key}
+                nextdate=$(date -d "$eventdate 1 day" +%Y%m%d)
+                timeend="${nextdate}${endhour}"
                 nextday=true
+            elif [[ $key =~ ^[0-9]{12}$ ]]; then
+                eventdate=${key:0:8}
+                eventhour=${key:8:2}
+                if [[ $((10#$eventhour)) -lt 12 ]]; then
+                    eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
+                    nextday=true
+                fi
+                timeend="${key}"
             elif [[ -d $key ]]; then
                 run_dir="$key"
             else
@@ -99,8 +127,12 @@ if [[ -e ${conf_file} ]]; then
     eval "$(sed -n "/OBS_DIR=/p" ${conf_file})"
     destdir="${OBS_DIR}/CWP"
 else
-    echo "${RED}ERROR${NC}: ${CYAN}${conf_file}${NC} not exist."
-    exit 0
+    if [[ "$cmd" =~ "check" ]]; then
+        :
+    else
+        echo -e "${RED}ERROR${NC}: ${CYAN}${conf_file}${NC} not exist."
+        exit 0
+    fi
 fi
 
 nextdate=$(date -u -d "${eventdate} 1 day" +%Y%m%d)
@@ -121,26 +153,58 @@ echo "=== $(date +%Y%m%d_%H:%M:%S) - $0 ${saved_args} ==="
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 case $cmd in
-    ls )
-        echo "ls -l ${destdir}"
-        $show ls ${destdir}/obs_seq_cwp.G16_V04.${eventdate}*
-        if [[ $nextday == true ]]; then
-            $show ls ${destdir}/obs_seq_cwp.G16_V04.${nextdate}*
-        fi
+    ls | fix)
+        echo -e "\n${LIGHT_BLUE}${destdir}${NC}:"
+        beg_sec=$(date -d "${eventdate} ${starthour}"     +%s)
+        end_sec=$(date -d "${timeend:0:8} ${timeend:8:4}" +%s)
+        n=0
+        for ((i=beg_sec;i<=end_sec;i+=900)); do
+            datestr=$(date -d @$i +%Y%m%d%H%M)
+            filename="obs_seq_cwp.G16_V04.${datestr}"
+            if (( n%4 == 0)); then echo ""; fi
+            if [[ -e ${destdir}/$filename ]]; then
+                echo -ne "    ${GREEN}$filename${NC}"
+            else
+                if [[ "$cmd" == "fix" ]]; then
+                    touch "${destdir}/${filename}.missed"
+                fi
+                echo -ne "    ${PURPLE}$filename${NC}"
+            fi
+            ((n++))
+        done
+        echo ""
         ;;
 
     check )
-        if [[ -t 1 ]]; then
-            echo "ls -l ${srcdir}/${eventdate}/d1"
-            $show ls -l ${srcdir}/${eventdate}/d1/????-cwpobs.nc
-            if [[ $nextday == true ]]; then
-                $show ls -l ${srcdir}/${nextdate}/d1/????-cwpobs.nc
+        beg_sec=$(date -d "${eventdate} ${starthour}"     +%s)
+        end_sec=$(date -d "${timeend:0:8} ${timeend:8:4}" +%s)
+        cwpfiles=()
+        m=0
+        for ((i=beg_sec;i<=end_sec;i+=900)); do
+            datestr=$(date -d @$i +%H%M)
+            filename="${datestr}-cwpobs.nc"
+            if [[ -e ${srcdir}/${eventdate}/d1/$filename ]]; then
+                cwpfiles+=("${filename}")
+                ((m++))
+            else
+                cwpfiles+=("${datestr}-missing")
             fi
-        else
-            cwpfiles=()
-            for fn in "${srcdir}/${eventdate}"/d1/????-cwpobs.nc; do
-                cwpfiles+=("$(basename $fn)")
+        done
+        if [[ -t 1 ]]; then
+            echo -e "\n${LIGHT_BLUE}${srcdir}/${eventdate}/d1${NC}:"
+            n=0;
+            for filename in "${cwpfiles[@]}"; do
+                if (( n%4 == 0)); then echo ""; fi
+                if [[ -e ${srcdir}/${eventdate}/d1/$filename ]]; then
+                    echo -ne "    ${GREEN}$filename${NC}"
+                else
+                    echo -ne "    ${PURPLE}$filename${NC}  "
+                fi
+                ((n++))
             done
+            echo ""
+        else
+            echo "$m"
             echo "${cwpfiles[*]}"
         fi
         ;;

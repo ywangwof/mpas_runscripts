@@ -38,7 +38,7 @@ source ${rootdir}/scripts/Common_Utilfuncs.sh
 
 function usage {
     echo " "
-    echo "    USAGE: $0 [options] [DATETIME]"
+    echo "    USAGE: $0 [options] [DATETIME] [WORKDIR] [COMMAND]"
     echo " "
     echo "    PURPOSE: Preprocessing OK MESONET data in $MESO_DIR to $WORK_dir."
     echo " "
@@ -46,18 +46,21 @@ function usage {
     echo "               YYYYmmdd:       run this task for this event date."
     echo "               YYYYmmddHHMM:   run the task from event date $starthour Z up to YYYYmmddHHMM."
     echo " "
+    echo "    COMMAND  - one of [ls, check, fix]"
+    echo "               check    List the observations in the $MESO_DIR"
+    echo "               ls       List the observations in the $WORK_dir"
+    echo "               fix      Added '.missed' tag to missing file for the MPAS-WoFS workflow keeps going"
+    echo " "
     echo "    OPTIONS:"
     echo "              -h                  Display this message"
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
-    echo "              -check              List the observations in the $MESO_DIR"
-    echo "              -ls                 List the observations in the $WORK_dir"
     echo "              -s  start_time      Run task from start_time, default $starthour"
     echo " "
     echo " "
     echo "                                     -- By Y. Wang (2024.04.26)"
     echo " "
-    exit $1
+    exit "$1"
 }
 
 ########################################################################
@@ -98,12 +101,6 @@ while [[ $# -gt 0 ]]; do
         -v)
             verb=true
             ;;
-        -ls)
-            cmd="ls"
-            ;;
-        -check)
-            cmd="check"
-            ;;
         -s)
             if [[ $2 =~ ^[0-9]{4}$ ]]; then
                 start_time="$2"
@@ -117,6 +114,9 @@ while [[ $# -gt 0 ]]; do
         -*)
             echo "Unknown option: $key"
             usage 2
+            ;;
+        ls | check | fix )
+            cmd="${key}"
             ;;
         *)
             if [[ $key =~ ^[0-9]{8}$ ]]; then
@@ -149,8 +149,12 @@ if [[ -e ${conf_file} ]]; then
     eval "$(sed -n "/OBS_DIR=/p" ${conf_file})"
     WORK_dir=${OBS_DIR}/Mesonet
 else
-    echo "${RED}ERROR${NC}: ${CYAN}${conf_file}${NC} not exist."
-    exit 0
+    if [[ "$cmd" =~ "check" ]]; then
+        :
+    else
+        echo -e "${RED}ERROR${NC}: ${CYAN}${conf_file}${NC} not exist."
+        exit 0
+    fi
 fi
 
 if [[ $((10#$start_time)) -gt 1200 ]]; then
@@ -189,7 +193,7 @@ cp ${TEMPLATE_FILE} ./input.nml
 timebeg_s=$(date -d "${timebeg:0:8} ${timebeg:8:4}" +%s)
 timeend_s=$(date -d "${timeend:0:8} ${timeend:8:4}" +%s)
 
-mesofiles=()
+mesofiles=(); n=0
 for((i=timebeg_s;i<=timeend_s;i+=900)); do
 
     timestr=$(date -d @$i +%Y%m%d%H%M%S)
@@ -211,18 +215,27 @@ for((i=timebeg_s;i<=timeend_s;i+=900)); do
         evtd=$dd
     fi
 
-    if [[ "$cmd" == "ls" ]]; then
-        ls ${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min}
+    if [[ "$cmd" =~ ls|fix ]]; then
+        if [[ -e ${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min} ]]; then
+            echo -e "    ${GREEN}${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min}${NC}"
+        else
+            echo -e "    ${RED}${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min}${NC}"
+            if [[ "$cmd" == "fix" ]]; then
+                touch "${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min}.missed"
+            fi
+        fi
+        ((n++))
         continue
     fi
 
     mesonet_obs_file="${MESO_DIR}/${yyyy}/${mm}/${dd}/mesonet.realtime.${yyyy}${mm}${dd}${hh}${anl_min}.mdf"
 
     if [[ "$cmd" == "check" ]]; then
-        if [[ -t 1 ]]; then
-            ls -l ${mesonet_obs_file}
+        if [[ -e ${mesonet_obs_file} ]]; then
+            mesofiles+=("${mesonet_obs_file}")
+            ((n++))
         else
-            mesofiles+=("$(basename ${mesonet_obs_file})")
+            mesofiles+=("missing.realtime.${yyyy}${mm}${dd}${hh}${anl_min}.mdf")
         fi
         continue
     fi
@@ -288,8 +301,23 @@ for((i=timebeg_s;i<=timeend_s;i+=900)); do
     fi
 done
 
-if [[ "$cmd" == "check" && ! -t 1 ]]; then
-    echo "${mesofiles[*]}"
+if [[ "$cmd" == "check" ]]; then
+    if [[ -t 1 ]]; then
+        for obsfile in "${mesofiles[@]}"; do
+            if [[ -e ${obsfile} ]]; then
+                echo -e "    ${GREEN}${obsfile}${NC}"
+            else
+                echo -ne "    ${RED}${obsfile}${NC}"
+            fi
+        done
+    else
+        echo "$n"
+        return_str=""
+        for obsfile in "${mesofiles[@]}"; do
+            return_str="$return_str $(basename $obsfile)"
+        done
+        echo "${return_str}"
+    fi
 fi
 
 exit 0

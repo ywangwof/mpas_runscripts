@@ -1269,7 +1269,7 @@ function check_hrrr_subdir {
 
     mecho0 "Checking ${CYAN}${hrrrfile0}${NC} ... "
     if [[ -e ${hrrrfile0} ]]; then
-        mecho0 "Use hrrr_sub_ics='${hrrr_sub_ics}'"
+        mecho0 "Use hrrr_sub_ics='${YELLOW}${hrrr_sub_ics}${NC}'"
     else
         althrrrfile=${hrrrfile0/postprd_mem00/mem}
         #mecho0n "Checking ${CYAN}${althrrrfile}${NC} ... "
@@ -1377,14 +1377,18 @@ function check_obs_files {
     # Check the PrepBufr files availability
     #
     eval "$(sed -n "/BUFR_DIR=/p" ${rootdir}/observations/prepbufr_wofs.sh)"
-    mapfile -t my_array < <( ${rootdir}/observations/prepbufr_wofs.sh -check ${eventdate} )
-    #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/prepbufr_wofs.sh -check ${eventdate} && printf '\0')
+    mapfile -t my_array < <( ${rootdir}/observations/prepbufr_wofs.sh check ${eventdate} )
+    #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/prepbufr_wofs.sh check ${eventdate} && printf '\0')
     read -r -a obsfiles <<< "${my_array[-1]}"
-    echo -e "${DARK}observations/prepbufr_wofs.sh${NC}: Found ${GREEN}${#obsfiles[@]}${NC} PrepBufr files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${BUFR_DIR}${NC}."
+    echo -e "${DARK}observations/prepbufr_wofs.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} PrepBufr files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${BUFR_DIR}${NC}."
     n=0
     for fn in "${obsfiles[@]}"; do
         if (( n%4 == 0 )); then echo ""; fi
-        echo -n "    $fn"
+        if [[ "$fn" =~ "miss" ]]; then
+            echo -ne "    ${RED}$fn${NC}  "
+        else
+            echo -n "    $fn"
+        fi
         ((n++))
     done
     echo -e "\n"
@@ -1393,14 +1397,18 @@ function check_obs_files {
     # Check the Mesonet files availability
     #
     eval "$(sed -n "/MESO_DIR=/p" ${rootdir}/observations/okmeso_15min.sh)"
-    mapfile -t my_array < <( ${rootdir}/observations/okmeso_15min.sh -check ${eventdate} )
-    #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/prepbufr_wofs.sh -check ${eventdate} && printf '\0')
+    mapfile -t my_array < <( ${rootdir}/observations/okmeso_15min.sh check ${eventdate} )
+    #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/okmeso_15min.sh check ${eventdate} && printf '\0')
     read -r -a obsfiles <<< "${my_array[-1]}"
-    echo -e "${DARK}observations/okmeso_15min.sh${NC}: Found ${GREEN}${#obsfiles[@]}${NC} Mesonet files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${MESO_DIR}${NC}."
+    echo -e "${DARK}observations/okmeso_15min.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} Mesonet files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${MESO_DIR}${NC}."
     n=0
     for fn in "${obsfiles[@]}"; do
         if (( n%3 == 0 )); then echo ""; fi
-        echo -n "    $fn"
+        if [[ "$fn" =~ "miss" ]]; then
+            echo -ne "    ${RED}$fn${NC}  "
+        else
+            echo -n "    $fn"
+        fi
         ((n++))
     done
     echo -e "\n"
@@ -1409,14 +1417,18 @@ function check_obs_files {
     # Check the CWP files availability
     #
     eval "$(sed -n "/srcdir=/p" ${rootdir}/observations/run_cwpobs.sh)"
-    mapfile -t my_array < <( ${rootdir}/observations/run_cwpobs.sh -check ${eventdate} )
-    #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/prepbufr_wofs.sh -check ${eventdate} && printf '\0')
+    mapfile -t my_array < <( ${rootdir}/observations/run_cwpobs.sh check ${eventdate} )
+    #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/prepbufr_wofs.sh check ${eventdate} && printf '\0')
     read -r -a obsfiles <<< "${my_array[-1]}"
-    echo -e "${DARK}observations/run_cwpobs.sh${NC}: Found ${GREEN}${#obsfiles[@]}${NC} CWP files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${srcdir}${NC}."
+    echo -e "${DARK}observations/run_cwpobs.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} CWP files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${srcdir}${NC}."
     n=0
     for fn in "${obsfiles[@]}"; do
         if (( n%4 == 0 )); then echo ""; fi
-        echo -n "    $fn"
+        if [[ "$fn" =~ "-missing" ]]; then
+            echo -ne "    ${RED}$fn${NC}  "
+        else
+            echo -n "    $fn"
+        fi
         ((n++))
     done
     echo -e "\n"
@@ -1425,14 +1437,18 @@ function check_obs_files {
     # Check the GOES files availability
     #
     eval "$(sed -n "/srcdir=/p" ${rootdir}/observations/run_radiance.sh)"
-    mapfile -t my_array < <( ${rootdir}/observations/run_radiance.sh -check ${eventdate} )
-    #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/prepbufr_wofs.sh -check ${eventdate} && printf '\0')
+    mapfile -t my_array < <( ${rootdir}/observations/run_radiance.sh check ${eventdate} )
+    #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/run_radiance.sh check ${eventdate} && printf '\0')
     read -r -a obsfiles <<< "${my_array[-1]}"
-    echo -e "${DARK}observations/run_radiance.sh${NC}: Found ${GREEN}${#obsfiles[@]}${NC} Radiance files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${srcdir}${NC}."
+    echo -e "${DARK}observations/run_radiance.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} Radiance files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${srcdir}${NC}."
     n=0
     for fn in "${obsfiles[@]}"; do
         if (( n%4 == 0 )); then echo ""; fi
-        echo -n "    $fn"
+        if [[ "$fn" =~ "-missing" ]]; then
+            echo -ne "    ${RED}$fn${NC}"
+        else
+            echo -n "    $fn"
+        fi
         ((n++))
     done
     echo -e "\n"
@@ -1441,8 +1457,8 @@ function check_obs_files {
     # Check the radar files availability
     #
     eval "$(sed -n "/srcdir=/p" ${rootdir}/observations/link_radar.sh)"
-    mapfile -t my_array < <( ${rootdir}/observations/link_radar.sh -check ${eventdate} )
-    #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/prepbufr_wofs.sh -check ${eventdate} && printf '\0')
+    mapfile -t my_array < <( ${rootdir}/observations/link_radar.sh check ${eventdate} )
+    #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/link_radar.sh check ${eventdate} && printf '\0')
     read -r -a obsfiles <<< "${my_array[-3]}"
     echo -e "${DARK}observations/link_radar.sh${NC}: Found ${GREEN}${my_array[-4]}${NC} Reflectivity files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${srcdir}${NC}."
     n=0

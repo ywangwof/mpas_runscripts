@@ -68,7 +68,7 @@ source ${rootdir}/scripts/Common_Utilfuncs.sh
 
 function usage {
     echo " "
-    echo "    USAGE: $0 [options] [DATETIME]"
+    echo "    USAGE: $0 [options] [DATETIME] [WORKDIR] [COMMAND]"
     echo " "
     echo "    PURPOSE: Preprocessing PrepBufr data in $BUFR_DIR to $WORK_dir."
     echo " "
@@ -76,12 +76,15 @@ function usage {
     echo "               YYYYmmdd:       run this task for this event date."
     echo "               YYYYmmddHHMM:   run the task from event date $starthour Z up to YYYYmmddHHMM."
     echo " "
+    echo "    COMMAND  - one of [ls, check, fix]"
+    echo "               check    Check observation availability in $BUFR_DIR"
+    echo "               ls       List the processed observations in $WORK_dir"
+    echo "               fix      Added '.missed' tag to missing file for the MPAS-WoFS workflow keeps going"
+    echo " "
     echo "    OPTIONS:"
     echo "              -h                  Display this message"
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
-    echo "              -check              Check observation availability in $BUFR_DIR"
-    echo "              -ls                 List the processed observations in $WORK_dir"
     echo "              -s  start_time      Run task from start_time, default $starthour"
     echo " "
     echo " "
@@ -128,12 +131,6 @@ while [[ $# -gt 0 ]]; do
         -v)
             verb=true
             ;;
-        -ls)
-            cmd="ls"
-            ;;
-        -check)
-            cmd="check"
-            ;;
         -s)
             if [[ $2 =~ ^[0-9]{4}$ ]]; then
                 start_time="$2"
@@ -147,6 +144,9 @@ while [[ $# -gt 0 ]]; do
         -*)
             echo "Unknown option: $key"
             usage 2
+            ;;
+        ls | check | fix )
+            cmd="${key}"
             ;;
         *)
             if [[ $key =~ ^[0-9]{8}$ ]]; then
@@ -179,8 +179,12 @@ if [[ -e ${conf_file} ]]; then
     eval "$(sed -n "/OBS_DIR=/p" ${conf_file})"
     WORK_dir=${OBS_DIR}/Bufr
 else
-    echo "${RED}ERROR${NC}: ${CYAN}${conf_file}${NC} not exist."
-    exit 0
+    if [[ "$cmd" =~ "check" ]]; then
+        :
+    else
+        echo -e "${RED}ERROR${NC}: ${CYAN}${conf_file}${NC} not exist."
+        exit 0
+    fi
 fi
 
 if [[ $((10#$start_time)) -gt 1200 ]]; then
@@ -207,7 +211,7 @@ echo "=== $(date +%Y%m%d_%H:%M:%S) - $0 ${saved_args} ==="
 timebeg_s=$(date -d "${timebeg:0:8} ${timebeg:8:4}" +%s)
 timeend_s=$(date -d "${timeend:0:8} ${timeend:8:4}" +%s)
 
-bufr_files=()
+bufr_files=(); n=0
 for((i=timebeg_s;i<=timeend_s;i+=3600)); do
 
     timestr=$(date -d @$i +%Y%m%d%H)
@@ -228,17 +232,31 @@ for((i=timebeg_s;i<=timeend_s;i+=3600)); do
     # gzipped, you can leave it and this program will unzip it
     BUFR_in=${BUFR_dir}/rap.${inyear}${inmonth}${inday}${inhour}.prepbufr.tm00
 
-    if [[ "$cmd" == "check" ]]; then
-        if [[ -t 1 ]]; then
-            ls -l ${BUFR_in}
-        else
+    if [[ "$cmd" =~ "check" ]]; then
+        if [[ -e ${BUFR_in} ]]; then
             bufr_files+=("$(basename ${BUFR_in})")
+            (( n++ ))
+            if [[ -t 1 ]]; then
+                echo -e "    ${GREEN}${BUFR_in}${NC}"
+            fi
+        else
+            bufr_files+=("rap.${inyear}${inmonth}${inday}${inhour}.prepbufr.miss")
+            if [[ -t 1 ]]; then
+                echo -e "    ${RED}${BUFR_in}${NC}"
+            fi
         fi
         continue
     fi
 
-    if [[ "$cmd" == "ls" ]]; then
-        ls -l ${WORK_dir}/obs_seq_bufr.${inyear}${inmonth}${inday}${inhour}
+    if [[ "$cmd" =~ ls|fix ]]; then
+        if [[ -e ${WORK_dir}/obs_seq_bufr.${inyear}${inmonth}${inday}${inhour} ]]; then
+            echo -e "    ${GREEN}${WORK_dir}/obs_seq_bufr.${inyear}${inmonth}${inday}${inhour}${NC}"
+        else
+            echo -e "    ${PURPLE}${WORK_dir}/obs_seq_bufr.${inyear}${inmonth}${inday}${inhour}${NC}"
+            if [[ "$cmd" == "fix" ]]; then
+                touch "${WORK_dir}/obs_seq_bufr.${inyear}${inmonth}${inday}${inhour}.missed"
+            fi
+        fi
         continue
     fi
 
@@ -301,6 +319,7 @@ EOF
 done
 
 if [[ "$cmd" == "check" && ! -t 1 ]]; then
+    echo "$n"
     echo "${bufr_files[*]}"
 fi
 
