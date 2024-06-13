@@ -170,7 +170,7 @@ case $cmd in
 
     check | ls | fix )
 
-        reffiles=();n=0
+        reffiles=();n=0; missedfiles=()
         for((i=timebeg_s;i<=timeend_s;i+=900)); do
             timestr=$(date -d @$i +%Y%m%d%H%M)
             if [[ "$cmd" == "check" ]]; then
@@ -186,6 +186,7 @@ case $cmd in
                 reffiles+=("missing:...${timestr:0:8}_${timestr:8:4}.out")
                 if [[ "$cmd" == "fix" ]]; then
                     touch "${wrkdir}/${file_name}.missed"
+                    missedfiles+=("${wrkdir}/${file_name}.missed")
                 fi
             fi
         done
@@ -202,13 +203,19 @@ case $cmd in
                 ((n++))
             done
             echo ""
+            if [[ "$cmd" == "fix" ]]; then
+                echo -e "\nTouched missing files (${#missedfiles[@]}):\n"
+                for filename in "${missedfiles[@]}"; do
+                    echo -e "    ${RED}$filename${NC}"
+                done
+            fi
         else
             echo "$n"
             echo "${reffiles[*]}"
         fi
 
         declare -A velfiles=()
-        n=0
+        n=0; missedfiles=()
         for((i=timebeg_s;i<=timeend_s;i+=900)); do
             timestr=$(date -d @$i +%Y%m%d%H%M)
             if [[ "$cmd" == "check" ]]; then
@@ -230,6 +237,7 @@ case $cmd in
                 velfiles["${fkey}"]=""
                 if [[ "$cmd" == "fix" ]]; then
                     touch "${wrkdir}/${fkey}.missed"
+                    missedfiles+=("${wrkdir}/${fkey}.missed")
                 fi
             elif [[ ${#radnames[@]} -gt 0 ]]; then
                 velfiles["${fkey}"]=$(join_by _ "${radnames[@]}")
@@ -266,6 +274,14 @@ case $cmd in
                     echo -e "    $fn: ${radunique[*]} (${GREEN}${#radnames[@]}${NC})"
                 fi
             done | sort -n -k3
+
+            if [[ "$cmd" == "fix" ]]; then
+                echo -e "\nTouched missing files (${#missedfiles[@]}):\n"
+                for filename in "${missedfiles[@]}"; do
+                    echo -e "    ${RED}$filename${NC}"
+                done
+            fi
+
         else
             echo "$n"
             typeset -p velfiles

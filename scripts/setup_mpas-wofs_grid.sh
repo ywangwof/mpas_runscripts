@@ -1263,6 +1263,7 @@ EOF
 
 function check_hrrr_subdir {
 
+    rstatus=0
     #
     # Check the external grib2 files availability for providing the system ICS/LBCs
     #
@@ -1278,8 +1279,8 @@ function check_hrrr_subdir {
             hrrr_sub_ics="mem"
             hrrrfile0="${althrrrfile}"
         else
-            #echo -e "${RED}Missing${NC}"
-            :
+            mecho0 "Missing  ${RED}${hrrrfile0}${NC}"
+            (( rstatus++ ))
         fi
     fi
 
@@ -1291,19 +1292,24 @@ function check_hrrr_subdir {
     if [[ -d ${hrrr_dir}/${eventdate}/${hrrr_time_lbc} ]]; then
         #echo -e "${GREEN}Found${NC}"
         n=0
-        for mdir in "${hrrr_dir}/${eventdate}/${hrrr_time_lbc}/${hrrr_sub_lbc}"??; do
-            if [[ -d $mdir ]]; then
-                ((n++))
-            elif [[ -d ${mdir//postprd_mem00/mem} ]]; then
-                hrrr_sub_lbc="mem"
-                ((n++))
-            fi
-        done
+        pcount=$(find ${hrrr_dir}/${eventdate}/${hrrr_time_lbc}  -maxdepth 1 -name "postprd_mem00??" -type d | wc -l)
+        mcount=$(find ${hrrr_dir}/${eventdate}/${hrrr_time_lbc}  -maxdepth 1 -name "mem??" -type d | wc -l)
+
+        if [[ $pcount -eq 18 ]]; then
+            hrrr_sub_lbc="postprd_mem00"
+        elif [[ $mcount -eq 18 ]]; then
+            hrrr_sub_lbc="mem"
+        else
+            mecho0 "Missing  ${RED}${hrrr_dir}/${eventdate}/${hrrr_time_lbc}/${hrrr_sub_lbc}??${NC}"
+            (( rstatus++ ))
+        fi
         mecho0 "Use hrrr_sub_lbc='${YELLOW}${hrrr_sub_lbc}${NC}'"
     else
-        mecho0 "Missing ${RED}${hrrr_dir}/${eventdate}/${hrrr_time_lbc}${NC}'"
+        mecho0 "Missing  ${RED}${hrrr_dir}/${eventdate}/${hrrr_time_lbc}${NC}"
+        (( rstatus++ ))
     fi
     echo ""
+    return "${rstatus}"
 }
 
 ########################################################################
@@ -1385,7 +1391,7 @@ function check_obs_files {
     for fn in "${obsfiles[@]}"; do
         if (( n%4 == 0 )); then echo ""; fi
         if [[ "$fn" =~ "miss" ]]; then
-            echo -ne "    ${RED}$fn${NC}  "
+            echo -ne "    ${RED}$fn${NC}"
         else
             echo -n "    $fn"
         fi
@@ -1405,7 +1411,7 @@ function check_obs_files {
     for fn in "${obsfiles[@]}"; do
         if (( n%3 == 0 )); then echo ""; fi
         if [[ "$fn" =~ "miss" ]]; then
-            echo -ne "    ${RED}$fn${NC}  "
+            echo -ne "    ${RED}$fn${NC}"
         else
             echo -n "    $fn"
         fi
@@ -1848,7 +1854,9 @@ hrrr_sub_lbc="postprd_mem00"         # + 2-digit member string
 
 hrrrfile0="${hrrr_dir}/${eventdate}/${hrrr_time_ics}/${hrrr_sub_ics}01/wrfnat_hrrre_newse_mem0001_01.grib2"
 
-check_hrrr_subdir
+if ! check_hrrr_subdir; then
+    exit $?
+fi
 
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 

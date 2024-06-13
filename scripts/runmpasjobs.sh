@@ -228,7 +228,7 @@ if [[ -z $show ]]; then                 # Actually run the task
         script -aefq "${log_file}" -c "$0 noscript ${saved_args}"
         exit $?
     else                                        # interactive
-        echo -e "\nLogging to file: ${CYAN}${log_file}${NC} ....\n"
+        echo -e "\n${DARK}Logging to file: ${CYAN}${log_file}${NC} ....\n"
     fi
 fi
 
@@ -271,8 +271,8 @@ post )
             cmds+=("${affix}")
         fi
     else
-        echo -e "File ${CYAN}$donepost${NC} exist"
-        echo -e "Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} post${NC} before reprocessing."
+        echo -e "${DARK}File ${CYAN}$donepost${NC} exist"
+        echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} post${NC} before reprocessing."
         exit 1
     fi
     ;;
@@ -280,7 +280,7 @@ post )
 #4. plot
 plot )
     if [[ ! -e ${doneplot} ]]; then
-        echo -e "Waiting for ${CYAN}${donepost}${NC} ...."
+        echo -e "${DARK}Waiting for ${CYAN}${donepost}${NC} ...."
         while [[ ! -e "${donepost}" ]]; do
             sleep 10
         done
@@ -291,15 +291,15 @@ plot )
             cmds+=("${affix}")
         fi
     else
-        echo -e "File ${CYAN}$doneplot${NC} exist"
-        echo -e "Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} post${NC} before reprocessing."
+        echo -e "${DARK}File ${CYAN}$doneplot${NC} exist"
+        echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} post${NC} before reprocessing."
         exit 2
     fi
     ;;
 #5. verif
 verif )
     if [[ ! -e ${doneverif} ]]; then
-        echo "Waiting for ${donepost} ...."
+        echo "${DARK}Waiting for ${donepost} ...."
         while [[ ! -e "${donepost}" ]]; do
             sleep 10
         done
@@ -310,8 +310,8 @@ verif )
             cmds+=("${affix}")
         fi
     else
-        echo -e "File ${CYAN}$doneverif${NC} exist"
-        echo -e "Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} post${NC} before reprocessing."
+        echo -e "${DARK}File ${CYAN}$doneverif${NC} exist"
+        echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} post${NC} before reprocessing."
         exit 2
     fi
     ;;
@@ -329,9 +329,9 @@ diag )
 esac
 
 if [ -t 1 ]; then # "interactive"
-    echo -e "\nInteractivly running: ${BROWN}${task}${NC} ${LIGHT_BLUE}${runtime}${NC} from ${YELLOW}$(pwd)${NC}\n"
+    echo -e "\n${DARK}Interactivly running: ${BROWN}${task}${NC} ${LIGHT_BLUE}${runtime}${NC} from ${YELLOW}$(pwd)${NC}\n"
 else
-    echo -e "\nBackground   running: ${BROWN}${task}${NC} ${LIGHT_BLUE}${runtime}${NC} from ${BLYELLOWUE}$(pwd)${NC}\n"
+    echo -e "\n${DARK}Background   running: ${BROWN}${task}${NC} ${LIGHT_BLUE}${runtime}${NC} from ${BLYELLOWUE}$(pwd)${NC}\n"
 fi
 
 if [[ -z ${show} ]]; then echo -e "${GREEN}${cmds[*]}${NC}"; fi

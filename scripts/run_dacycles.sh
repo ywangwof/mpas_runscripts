@@ -375,12 +375,13 @@ function run_obsmerge {
             echo "    Waiting for Radiance/${rad_files} ...."
         fi
         while [[ $numrad -ne ${#channels[@]} ]]; do
-            sleep 10
-            numrad=$(find ${RAD_DIR}/ -name "${rad_files}" | wc -l)
-            if [[ -e "${RAD_DIR}/${rad_files}.missed" ]]; then
-                echo "    Not found. Skip Radiance/${rad_files} ...."
+            nummis=$(find ${RAD_DIR}/ -name "${rad_files}.missed" | wc -l)
+            if [[ $nummis -gt 0 ]]; then
+                echo "    Found ${nummis} missed files. Skip Radiance/${rad_files} ...."
                 break
             fi
+            sleep 10
+            numrad=$(find ${RAD_DIR}/ -name "${rad_files}" | wc -l)
         done
     fi
 
@@ -765,7 +766,7 @@ function run_filter {
     filename_mesh="${rundir}/init/${domname}_01.init.nc"
 
     #------------------------------------------------------
-    # 2. Adaptive inflation
+    # 2. Adaptive inflation & Sampling error correction
     #------------------------------------------------------
 
     inf_initial_restart=(".false." ".false.")
@@ -775,6 +776,7 @@ function run_filter {
             ln -sf ${parentdir}/${event_pre}/output_priorinf_sd.nc   input_priorinf_sd.nc
 
             inf_initial_restart=(".true." ".false.")
+            mecho0 "${WHITE}INFO${NC}: Use ${PURPLE}adaptive inflation${NC} for this cycle."
         else
             mecho0 "File ${CYAN}${parentdir}/${event_pre}/output_priorinf_mean.nc${NC} does not exist."
             mecho0 "${YELLOW}WARNING${NC}: Not using adaptive inflation for this cycle."
@@ -783,7 +785,7 @@ function run_filter {
     fi
 
     if [[ ${sampling_error_correction,,} == ".t." || ${sampling_error_correction,,} == ".true." ]]; then
-        mecho0 "${YELLOW}WARNING${NC}: Turning on ${PURPLE}sampling_error_correction${NC}."
+        mecho0 "${WHITE}INFO${NC}: Turning on ${PURPLE}sampling_error_correction${NC}."
         ln -sf ${FIXDIR}/sampling_error_correction_table.nc .
         sampling_error_correction=".true."
     else

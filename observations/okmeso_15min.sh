@@ -193,7 +193,7 @@ cp ${TEMPLATE_FILE} ./input.nml
 timebeg_s=$(date -d "${timebeg:0:8} ${timebeg:8:4}" +%s)
 timeend_s=$(date -d "${timeend:0:8} ${timeend:8:4}" +%s)
 
-mesofiles=(); n=0
+mesofiles=(); n=0; missedfiles=()
 for((i=timebeg_s;i<=timeend_s;i+=900)); do
 
     timestr=$(date -d @$i +%Y%m%d%H%M%S)
@@ -215,13 +215,15 @@ for((i=timebeg_s;i<=timeend_s;i+=900)); do
         evtd=$dd
     fi
 
+    seq_filename="obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min}"
     if [[ "$cmd" =~ ls|fix ]]; then
-        if [[ -e ${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min} ]]; then
-            echo -e "    ${GREEN}${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min}${NC}"
+        if [[ -e ${WORK_dir}/${seq_filename} ]]; then
+            echo -e "    ${GREEN}${WORK_dir}/${seq_filename}${NC}"
         else
-            echo -e "    ${RED}${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min}${NC}"
+            echo -e "    ${RED}${WORK_dir}/${seq_filename}${NC}"
             if [[ "$cmd" == "fix" ]]; then
-                touch "${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min}.missed"
+                touch "${WORK_dir}/${seq_filename}.missed"
+                missedfiles+=("${WORK_dir}/${seq_filename}.missed")
             fi
         fi
         ((n++))
@@ -245,7 +247,7 @@ for((i=timebeg_s;i<=timeend_s;i+=900)); do
         exit 1
     fi
 
-    if [[ ! -e ${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min} ]]; then
+    if [[ ! -e ${WORK_dir}/${seq_filename} ]]; then
 
         #MPAS_INITFILE=${MPASWoFS_DIR}/${evty}${evtm}${evtd}/dacycles/${phh}${pmin}/wofs_mpas_01.restart.${mpas_timestr}.nc
         MPAS_INITFILE=${run_dir}/${evty}${evtm}${evtd}/init/wofs_mpas.invariant.nc
@@ -286,8 +288,8 @@ for((i=timebeg_s;i<=timeend_s;i+=900)); do
         num_obs_kind=$(head -3 obs_seq.new | tail -1)
 
         if [[ ${num_obs_kind} -gt 0 ]]; then
-            echo "Saving ${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min}"
-            mv obs_seq.new ${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min}
+            echo "Saving ${WORK_dir}/${seq_filename}"
+            mv obs_seq.new ${WORK_dir}/${seq_filename}
         else
             echo "O observations in ${WORK_dir}"
             rm obs_seq.new
@@ -297,7 +299,7 @@ for((i=timebeg_s;i<=timeend_s;i+=900)); do
         rm obs_seq.old okmeso_mdf.in dart_log.out dart_log.nml
         echo ""
     else
-        echo "${WORK_dir}/obs_seq_okmeso.${yyyy}${mm}${dd}${hh}${anl_min} exists"
+        echo "${WORK_dir}/${seq_filename} exists"
     fi
 done
 
@@ -318,6 +320,11 @@ if [[ "$cmd" == "check" ]]; then
         done
         echo "${return_str}"
     fi
+elif [[ "$cmd" == "fix" ]]; then
+    echo -e "\nTouched missing files (${#missedfiles[@]}):\n"
+    for filename in "${missedfiles[@]}"; do
+        echo -e "    ${RED}$filename${NC}"
+    done
 fi
 
 exit 0

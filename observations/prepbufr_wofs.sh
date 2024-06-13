@@ -211,7 +211,7 @@ echo "=== $(date +%Y%m%d_%H:%M:%S) - $0 ${saved_args} ==="
 timebeg_s=$(date -d "${timebeg:0:8} ${timebeg:8:4}" +%s)
 timeend_s=$(date -d "${timeend:0:8} ${timeend:8:4}" +%s)
 
-bufr_files=(); n=0
+bufr_files=(); n=0; missedfiles=()
 for((i=timebeg_s;i<=timeend_s;i+=3600)); do
 
     timestr=$(date -d @$i +%Y%m%d%H)
@@ -230,11 +230,12 @@ for((i=timebeg_s;i<=timeend_s;i+=3600)); do
 
     # fix the BUFR_in line below to match what you have.  if the file is
     # gzipped, you can leave it and this program will unzip it
-    BUFR_in=${BUFR_dir}/rap.${inyear}${inmonth}${inday}${inhour}.prepbufr.tm00
+    BUFR_filename="rap.${inyear}${inmonth}${inday}${inhour}.prepbufr.tm00"
+    BUFR_in=${BUFR_dir}/${BUFR_filename}
 
     if [[ "$cmd" =~ "check" ]]; then
         if [[ -e ${BUFR_in} ]]; then
-            bufr_files+=("$(basename ${BUFR_in})")
+            bufr_files+=("${BUFR_filename}")
             (( n++ ))
             if [[ -t 1 ]]; then
                 echo -e "    ${GREEN}${BUFR_in}${NC}"
@@ -248,21 +249,23 @@ for((i=timebeg_s;i<=timeend_s;i+=3600)); do
         continue
     fi
 
+    seq_filename="obs_seq_bufr.${inyear}${inmonth}${inday}${inhour}"
     if [[ "$cmd" =~ ls|fix ]]; then
-        if [[ -e ${WORK_dir}/obs_seq_bufr.${inyear}${inmonth}${inday}${inhour} ]]; then
-            echo -e "    ${GREEN}${WORK_dir}/obs_seq_bufr.${inyear}${inmonth}${inday}${inhour}${NC}"
+        if [[ -e ${WORK_dir}/${seq_filename} ]]; then
+            echo -e "    ${GREEN}${WORK_dir}/${seq_filename}${NC}"
         else
-            echo -e "    ${PURPLE}${WORK_dir}/obs_seq_bufr.${inyear}${inmonth}${inday}${inhour}${NC}"
+            echo -e "    ${PURPLE}${WORK_dir}/${seq_filename}${NC}"
             if [[ "$cmd" == "fix" ]]; then
-                touch "${WORK_dir}/obs_seq_bufr.${inyear}${inmonth}${inday}${inhour}.missed"
+                touch "${WORK_dir}/${seq_filename}.missed"
+                missedfiles+=("${WORK_dir}/${seq_filename}.missed")
             fi
         fi
         continue
     fi
 
-    if [[ ! -e ${WORK_dir}/obs_seq_bufr.${inyear}${inmonth}${inday}${inhour} ]]; then
+    if [[ ! -e ${WORK_dir}/${seq_filename} ]]; then
 
-        cd ${WORK_dir}/work || exit 0
+        cd "${WORK_dir}/work" || exit 0
 
         # clear any old intermediate (text) files
         #rm -f temp_obs prepqm.in prepqm.out
@@ -270,8 +273,8 @@ for((i=timebeg_s;i<=timeend_s;i+=3600)); do
         rm -rf *
 
         ## MODIFY input.nml with correct date
-        sedfile=$(mktemp -t sbufr_${timestr}.sed_XXXX)
-        cat <<EOF > $sedfile
+        sedfile=$(mktemp -t "sbufr_${timestr}.sed_XXXX")
+        cat <<EOF > "$sedfile"
 s/ENDYR/${endyear}/g
 s/ENDMON/${endmonth}/g
 s/ENDDAY/${endday}/g
@@ -281,19 +284,19 @@ s/MON/${inmonth}/g
 s/DAY/${inday}/g
 s/HOUR/${inhour}/g
 EOF
-        sed -f $sedfile ${NML_TEMPLATE} > ./input.nml
-        rm -f $sedfile
+        sed -f "$sedfile" "${NML_TEMPLATE}" > ./input.nml
+        rm -f "$sedfile"
 
         if [[ -e ${BUFR_in} ]]; then
             wait_for_file_age "${BUFR_in}" 120
             echo "copying ${BUFR_in} into prepqm.in"
             rm -f prepqm.in
-            cp -f ${BUFR_in} prepqm.in
+            cp -f "${BUFR_in}" prepqm.in
         elif [[ -e ${BUFR_in}.gz ]]; then
             wait_for_file_age "${BUFR_in}.gz" 120
             echo "unzipping ${BUFR_in}.gz into prepqm.in"
             rm -f prepqm.in
-            gunzip -c -f ${BUFR_in}.gz >! prepqm.in
+            gunzip -c -f "${BUFR_in}.gz" >! prepqm.in
         else
             echo "INPUT FILE: ${BUFR_in} or ${BUFR_in}.gz not found"
             #echo "Script will abort now."
@@ -314,13 +317,18 @@ EOF
 
         #### NOW DO CONVERSION TO obs_seq file
         ${DART_exec_dir}/create_real_obs
-        mv obs_seq.bufr  ${WORK_dir}/obs_seq_bufr.${inyear}${inmonth}${inday}${inhour}
+        mv obs_seq.bufr  "${WORK_dir}/${seq_filename}"
     fi
 done
 
 if [[ "$cmd" == "check" && ! -t 1 ]]; then
     echo "$n"
     echo "${bufr_files[*]}"
+elif [[ "$cmd" == "fix" ]]; then
+    echo -e "\nTouched missing files (${#missedfiles[@]}):\n"
+    for filename in "${missedfiles[@]}"; do
+        echo -e "    ${RED}$filename${NC}"
+    done
 fi
 
 exit 0

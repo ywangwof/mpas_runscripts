@@ -1146,6 +1146,7 @@ function fcst_driver() {
 
         echo ""
         echo "- FCST Cycle at ${eventtime}"
+        time1=$(date +%s)
 
         if [[ " ${jobs[*]} " =~ " mpas " ]]; then
             #------------------------------------------------------
@@ -1208,6 +1209,15 @@ function fcst_driver() {
                     check_job_status "upp$minstr mem" $fcstwrkdir/upp $ENS_SIZE run_upp_$minstr.slurm  2
                 done
             fi
+        fi
+
+        #------------------------------------------------------
+        # This FCST cycle is done
+        #------------------------------------------------------
+        time2=$(date +%s)
+        if [[ $time2 -gt $time1 ]]; then
+            (( secoffset = time2-time1 )); (( minoffset = secoffset/60 )); (( secoffset = secoffset%60 ))
+            echo -e "= Cycle ${eventtime} took ${CYAN}${minoffset}:${secoffset}${NC} minutes:seconds."
         fi
 
     done

@@ -157,7 +157,7 @@ case $cmd in
         echo -e "\n${LIGHT_BLUE}${destdir}${NC}:"
         beg_sec=$(date -d "${eventdate} ${starthour}"     +%s)
         end_sec=$(date -d "${timeend:0:8} ${timeend:8:4}" +%s)
-        n=0
+        n=0; missedfiles=()
         for ((i=beg_sec;i<=end_sec;i+=900)); do
             datestr=$(date -d @$i +%Y%m%d%H%M)
             filename="obs_seq_cwp.G16_V04.${datestr}"
@@ -167,12 +167,20 @@ case $cmd in
             else
                 if [[ "$cmd" == "fix" ]]; then
                     touch "${destdir}/${filename}.missed"
+                    missedfiles+=("${destdir}/${filename}.missed")
+
                 fi
                 echo -ne "    ${PURPLE}$filename${NC}"
             fi
             ((n++))
         done
         echo ""
+        if [[ "$cmd" == "fix" ]]; then
+            echo -e "\nTouched missing files (${#missedfiles[@]}):\n"
+            for filename in "${missedfiles[@]}"; do
+                echo -e "    ${RED}$filename${NC}"
+            done
+        fi
         ;;
 
     check )
