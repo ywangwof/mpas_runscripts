@@ -1489,7 +1489,7 @@ def make_plot(wargs,obstype,wobj):
             alphaval = 0.2
 
         varname = plot_meta.varlabel
-        if 'REFLECTIVITY' in plot_meta.varlabel.upper():                # obstype == '120':
+        if 'RADAR_REFLECTIVITY' in plot_meta.type_label.upper():                # obstype == '120':
             varname = 'refl'
 
         color_map, normc = get_var_contours(varname,vardata,wargs.cntlevel)

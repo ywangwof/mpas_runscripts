@@ -192,8 +192,10 @@ function run_obsmerge {
     #=================================================
     #1. PrepBufr
 
+    if [[ "${anlys_time:2:2}" == "00" ]]; then
+
     bufr_file="${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}"
-    if [[ $rt_run == true && ${use_BUFR} == true && "${anlys_time:2:2}" == "00" ]]; then
+        if [[ $rt_run == true && ${use_BUFR} == true ]]; then
         if [[ ! -e ${bufr_file} ]]; then
             echo "    Waiting for ${bufr_file##"${OBS_DIR}"/} ...."
         fi
@@ -240,7 +242,6 @@ function run_obsmerge {
             mecho0 -e "${RED}ERROR${NC}: command ${BROWN}${obspreprocess}${NC} for PREPBUFR data"
         fi
     else
-        if [[ "${anlys_time:2:2}" == "00" ]]; then
             echo "    PrepBufr data not found: ${bufr_file##"${OBS_DIR}"/}"
         fi
     fi
@@ -362,7 +363,7 @@ function run_obsmerge {
     #=================================================
     #4. Radiance
 
-    channels=("8.4" "10.3")
+    channels=("6.2" "7.3")
 
     RAD_DIR=${OBS_DIR}/Radiance
 
@@ -1881,7 +1882,7 @@ function run_update_bc {
     #
     # Waiting for job conditions
     #
-    conditions=("${rundir}"/lbc/done.${domname})
+    conditions=("${rundir}/lbc/done.${domname}")
 
     if [[ $run_addnoise == true ]]; then
         conditions+=("${wrkdir}/done.add_noise")
@@ -2659,7 +2660,7 @@ function dacycle_driver() {
         cd $dawrkdir || return
 
         echo ""
-        echo "- Cycle $icyc at ${timestr_curr}"
+        echo -e "- Cycle $icyc at ${timestr_curr} - ${CYAN}$(date +'%Y-%m-%d %H:%M:%S')${NC}"
         time1=$(date +%s)
 
         no_observation=false

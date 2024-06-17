@@ -159,7 +159,7 @@ case $cmd in
         n=0; missedfiles=()
         for ((i=beg_sec;i<=end_sec;i+=900)); do
             datestr=$(date -d @$i +%Y%m%d%H%M)
-            for chan in "C8.4" "C10.3"; do
+            for chan in "C6.2" "C7.3"; do
                 filename="obs_seq_abi.G16_${chan}.${datestr}"
                 if (( n%4 == 0)); then echo ""; fi
                 if [[ -e ${destdir}/$filename ]]; then
@@ -234,16 +234,16 @@ case $cmd in
 
         cd ${scpdir} || exit 0
 
-        for channel in 5 7; do
+        for channel in 2 4; do
             #python abiobs2dart_tb.py -i /work/rt_obs/Satellite/RADIANCE/2022     \
             #            -o /scratch/ywang/MPAS/mpas_scripts/run_dirs/OBS_SEQ/Radiance \
             #            -c $channel                                                   \
             #            -d ${1-20220527}
             python abiobs2dart_tb.py -i "${srcdir}/${eventdate}/d1"       \
-                        -o ${destdir} -c $channel -d "${eventdate}"
+                        -o "${destdir}" -c $channel -d "${eventdate}"
             if [[ $nextday == true ]]; then
                 python abiobs2dart_tb.py -i "${srcdir}/${nextdate}/d1"   \
-                        -o ${destdir} -c $channel -d "${nextdate}"
+                        -o "${destdir}" -c $channel -d "${nextdate}"
             fi
         done
         ;;

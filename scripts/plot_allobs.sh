@@ -240,12 +240,19 @@ if [[ ! -e done.zigzag ]]; then
         mkdir -p ${image_destdir}
     fi
 
+    if [[ $verb -eq 1 ]]; then
+        echo "Convert to 1100x1100 and Trim for the web visualization."
+    fi
+
+    estatus=0
     for fn in rms_*.png ratio_*.png number_*.png; do
         destfn="${fn%_*}_f360.png"
         convert $fn -resize 1100x1100 -trim ${image_destdir}/${destfn}
+        (( estatus+=$? ))
     done
 
-    if [[ $? -eq 0 ]]; then
+    if [[ ${estatus} -eq 0 ]]; then
+        cp /scratch/ywang/MPAS/gnu/frdd-wofs-post/json/wofs_run_metadata_obsdiag.json ${image_destdir}/wofs_run_metadata.json
         ${show} touch "done.zigzag"
     fi
 fi

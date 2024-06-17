@@ -1145,7 +1145,7 @@ function fcst_driver() {
         fi
 
         echo ""
-        echo "- FCST Cycle at ${eventtime}"
+        echo -e "- FCST Cycle at ${eventtime} - ${CYAN}$(date +'%Y-%m-%d %H:%M:%S')${NC}"
         time1=$(date +%s)
 
         if [[ " ${jobs[*]} " =~ " mpas " ]]; then

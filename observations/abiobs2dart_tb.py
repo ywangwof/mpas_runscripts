@@ -3,10 +3,10 @@
 #    Version:	1.0
 #	 Inputs:	Directory where GSI format ABI Radiance Files  netcdf files are located
 #               Date to process (yyyymodd), channel num
-#               [1:3.9, 2:6.2, 3:6.9, 4:7.2, ect]
-# Output:	Directory where new DART obs_seq files will be located
+#		[1:3.9, 2:6.2, 3:6.9, 4:7.2, ect]
+#	 Output:	Directory where new DART obs_seq files will be located
 #
-# To Do:  Add night-time features to DART forward operator.
+#	 To Do:  Add night-time features to DART forward operator.
 ##############
 
 import sys, time
@@ -61,6 +61,7 @@ for f, file in enumerate(temp_files):
 
 infiles.sort()
 #print(infiles)
+#chans=[7,8,9,10,11,12,13,14,15,16]
 
 for ff, file in enumerate(infiles):
     abifile = os.path.join(abidir,file)
@@ -93,6 +94,7 @@ for ff, file in enumerate(infiles):
         #pressure = abiin.variables['pressure'][:]*100.0  #convert to PA
         value = abiin.variables['value'][:]
         #rad_value = abiin.variables['rad_value'][:]
+        cth = abiin.variables['cth'][:]
         cmask = abiin.variables['cloud_mask'][:]
         #abi_err = abiin.variables['cwp_err'][:]
 
@@ -109,20 +111,26 @@ for ff, file in enumerate(infiles):
         outch = str(channel[inchan-1])
         ccc = channel[inchan-1]
         print(f"sat={sat}, outch={outch}, inchan={inchan}")
-        abirad_err = 0.25
+        abitb_err = 1.0
+        pch = '00'
 
-        if outch[0] == '8':
-           pvert = 34000.0
+        print(f"outch={outch}")
+        #CLEAR SKY DEFAULT VALUES FOR WV CHANNELS
+        if outch == '6.2':
+           pvert_clear = 34000.0
            vert_coord  = 2
            abitb_err = 1.25
-        elif outch[0] == '9':
-           pvert = 45000.0
+           pch = '08'
+        elif outch == '6.9':
+           pvert_clear = 45000.0
            vert_coord  = 2
            abitb_err = 1.35
-        elif outch[0:2] == '10':
-           pvert = 60000.
+           pch = '09'
+        elif outch == '7.3':
+           pvert_clear = 60000.
            vert_coord  = 2
            abitb_err = 1.45
+           pch = '10'
         else:
            pvert = -1.0
            vert_coord  = -2
@@ -139,10 +147,10 @@ for ff, file in enumerate(infiles):
 
         if not os.path.lexists(dartfile):
 
-            Look_Up_Table={ "GOES_16_ABI_TB":  [98,   "GOES_16_ABI_TB"] ,
-                            "GOES_17_ABI_TB":  [99,   "GOES_17_ABI_TB"] ,
-                            "GOES_18_ABI_TB":  [100,   "GOES_18_ABI_TB"] ,
-                            "GOES_19_ABI_TB":  [101,   "GOES_19_ABI_TB"] }
+            Look_Up_Table={ "GOES_16_ABI_TB":                [98,   "GOES_16_ABI_TB"] ,
+                        "GOES_17_ABI_TB":                    [99,   "GOES_17_ABI_TB"] ,
+                        "GOES_18_ABI_TB":                    [100,   "GOES_18_ABI_TB"] ,
+                        "GOES_19_ABI_TB":                    [101,   "GOES_19_ABI_TB"] }
 
 
             kinds = ['GOES_16_ABI_TB','GOES_17_ABI_TB','GOES_18_ABI_TB','GOES_19_ABI_TB']
@@ -154,16 +162,16 @@ for ff, file in enumerate(infiles):
             specularity = missing
 
             if sat == 'G16':
-                nkind = 0
+              nkind = 0
             elif sat == 'G17':
-                nkind = 1
+              nkind = 1
             elif sat == 'G18':
-                nkind = 2
+              nkind = 2
             elif sat == 'G19':
-                nkind = 3
+              nkind = 3
 
 
-            #DEFINE TIME INFO (Constant for Sat data)
+    #DEFINE TIME INFO (Constant for Sat data)
             obs_time = datetime.datetime.strptime('2000-01-01 12:00:00', '%Y-%m-%d %H:%M:%S') + datetime.timedelta(seconds=t_time)
             dt_time  = obs_time - datetime.datetime(1601,1,1,0,0,0)
 
@@ -177,14 +185,10 @@ for ff, file in enumerate(infiles):
             nobs=1
             for i in range(1, numobs):
                 #print(i, nobs, numobs)
-                #if cmask[i] == cloud:
 
                 fi.write(" OBS            %d\n" % (nobs) )
 
-                if cmask[i] == cloud:
-                    fi.write("   %20.14f\n" % outrad[i]  )
-                else:
-                    fi.write("   %20.14f\n" % missing  )
+                fi.write("   %20.14f\n" % outrad[i]  )
                 fi.write("   %20.14f\n" % truth )
 
                 if nobs == 1:
@@ -205,8 +209,16 @@ for ff, file in enumerate(infiles):
                     tlon = tlon + 360.0
                 rlon = np.radians(tlon)
 
+                if (cmask[i] > 0 ):
+                    vert_coord = 3
+                    pvert = cth[i]*1000.0 #Cloud top height (m) to use as vertical coordinate for allsky
+                else:
+                    vert_coord = 2
+                    pvert = pvert_clear
+                    #print("SHOULD STILL BE CLEAR: ", pvert)
+
                 fi.write("    %20.14f          %20.14f          %20.14f     %d\n" %
-                            (rlon, rlat, pvert, vert_coord))
+                        (rlon, rlat, pvert, vert_coord))
 
                 fi.write("kind\n")
                 fi.write("     %d     \n" % kind_nums[nkind] )
@@ -224,7 +236,10 @@ for ff, file in enumerate(infiles):
                 fi.write("    %d          %d     \n" % (seconds, days) )
 
                 #OBS ERROR
-                fi.write("    %20.14f  \n" % abitb_err**2 )
+                if (cmask[i] > 0.0):
+                    fi.write("    %20.14f  \n" % (abitb_err*1.5)**2 )
+                else:
+                    fi.write("    %20.14f  \n" % abitb_err**2 )
 
                 if nobs % 1000 == 0: print(" write_DART_ABI:  Processed observation # %d" % nobs)
                 nobs=nobs+1

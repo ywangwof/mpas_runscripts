@@ -696,8 +696,8 @@ def plot_rms(cargs,wargs,wobj):
     ax.set_xticks(x[0::2])
     ax.set_xticklabels(wobj.times, rotation = 50)
     if len(wobj.times) > 40:
-        ax.xaxis.set_minor_locator(IndexLocator(1,0))
-        ax.xaxis.set_major_locator(IndexLocator(2,1))
+        ax.xaxis.set_minor_locator(IndexLocator(1,1))
+        ax.xaxis.set_major_locator(IndexLocator(4,0))
     ax.yaxis.set_minor_locator(MultipleLocator(1))
     ax.yaxis.set_major_locator(AutoLocator())
     ax.set_ylabel(wobj.unit_label)
@@ -774,8 +774,8 @@ def plot_qcnumbers(cargs,wargs,wobj):
     ax.set_xticks(wobj.times)
     ax.set_xticklabels(wobj.times, rotation = 50)
     if len(wobj.times) > 40:
-        ax.xaxis.set_minor_locator(IndexLocator(1,0))
-        ax.xaxis.set_major_locator(IndexLocator(2,1))
+        ax.xaxis.set_minor_locator(IndexLocator(1,1))
+        ax.xaxis.set_major_locator(IndexLocator(4,0))
     ax.set_ylabel("Number of Observations")
     ax.set_xlabel("Data Assimilation Cycles")
     ax.legend(loc="upper left")
@@ -828,8 +828,8 @@ def plot_ratio(cargs,wargs,wobj):
     ax.set_xticks(x)
     ax.set_xticklabels(wobj.times, rotation = 50)
     if len(wobj.times) > 40:
-        ax.xaxis.set_minor_locator(IndexLocator(1,0))
-        ax.xaxis.set_major_locator(IndexLocator(2,1))
+        ax.xaxis.set_minor_locator(IndexLocator(1,1))
+        ax.xaxis.set_major_locator(IndexLocator(4,0))
     ax.set_ylabel("Consistency Ratio")
     ax.set_xlabel("Data Assimilation Cycles")
     #ax.legend(loc="upper right")

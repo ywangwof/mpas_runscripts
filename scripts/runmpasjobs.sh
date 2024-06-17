@@ -324,7 +324,8 @@ diag )
     fi
     ;;
 * )
-    echo -e "${RED}ERROR${NC}: Unknown task: ${PURPLE}$task${NC}"
+    echo -e "${RED}ERROR${NC}: Unknown task - ${PURPLE}$task${NC}"
+    exit 3
     ;;
 esac
 
