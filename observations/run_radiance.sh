@@ -159,7 +159,7 @@ case $cmd in
         n=0; missedfiles=()
         for ((i=beg_sec;i<=end_sec;i+=900)); do
             datestr=$(date -d @$i +%Y%m%d%H%M)
-            for chan in "C6.2" "C7.3"; do
+            for chan in "C08" "C10"; do
                 filename="obs_seq_abi.G16_${chan}.${datestr}"
                 if (( n%4 == 0)); then echo ""; fi
                 if [[ -e ${destdir}/$filename ]]; then
@@ -189,22 +189,30 @@ case $cmd in
         goesfiles=()
         m=0
         for ((i=beg_sec;i<=end_sec;i+=900)); do
-            datestr=$(date -d @$i +%H%M)
-            filename="${datestr}-goes.nc"
-            if [[ -e ${srcdir}/${eventdate}/d1/$filename ]]; then
+            datestr=$(date -d @$i +%Y%m%d)
+            timestr=$(date -d @$i +%H%M)
+            filename="${timestr}-goes.nc"
+            if [[ -e ${srcdir}/${datestr}/d1/$filename ]]; then
                 goesfiles+=("${filename}")
                 ((m++))
             else
-                goesfiles+=("${datestr}-missing")
+                goesfiles+=("${timestr}-missing")
             fi
         done
 
         if [[ -t 1 ]]; then
             echo -e "\n${LIGHT_BLUE}${srcdir}/${eventdate}/d1${NC}:"
-            n=0
+            n=0; datadate=${eventdate}; next1=true
             for filename in "${goesfiles[@]}"; do
                 if (( n%4 == 0)); then echo ""; fi
-                if [[ -e ${srcdir}/${eventdate}/d1/$filename ]]; then
+                if [[ "${filename:0:4}" -lt 1200 && "$next1" == true ]]; then
+                    echo ""
+                    echo -e "\n${LIGHT_BLUE}${srcdir}/${nextdate}/d1${NC}:"
+                    echo ""
+                    datadate=${nextdate}
+                    next1=false
+                fi
+                if [[ -e ${srcdir}/${datadate}/d1/$filename ]]; then
                     echo -ne "    ${GREEN}$filename${NC}"
                 else
                     echo -ne "    ${PURPLE}$filename${NC}"

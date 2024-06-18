@@ -224,6 +224,10 @@ function run_mpas {
     # Preparation for each member
     # nenslbc/pbl_schemes/sfclayer_schemes are from the config file
     #
+    if [[ -z ${visc4_2dsmag} ]]; then
+        visc4_2dsmag=0.10
+    fi
+
     jobarrays=()
     for iens in $(seq 1 $ENS_SIZE); do
         memstr=$(printf "%02d" $iens)
@@ -338,7 +342,7 @@ function run_mpas {
     config_v_theta_eddy_visc2       = 0.0
     config_horiz_mixing             = '2d_smagorinsky'
     config_len_disp                 = 3000.0
-    config_visc4_2dsmag             = 0.10
+    config_visc4_2dsmag             = ${visc4_2dsmag}
     config_w_adv_order              = 3
     config_theta_adv_order          = 3
     config_scalar_adv_order         = 3

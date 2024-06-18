@@ -61,7 +61,7 @@ for f, file in enumerate(temp_files):
 
 infiles.sort()
 #print(infiles)
-#chans=[7,8,9,10,11,12,13,14,15,16]
+chans=[7,8,9,10,11,12,13,14,15,16]
 
 for ff, file in enumerate(infiles):
     abifile = os.path.join(abidir,file)
@@ -109,7 +109,7 @@ for ff, file in enumerate(infiles):
         outrad = value[inchan-1,:]
         print(f"channel = {channel}")
         outch = str(channel[inchan-1])
-        ccc = channel[inchan-1]
+        ccc = chans[inchan-1]
         print(f"sat={sat}, outch={outch}, inchan={inchan}")
         abitb_err = 1.0
         pch = '00'
@@ -143,14 +143,14 @@ for ff, file in enumerate(infiles):
 # Create local dictionary for observation kind definition - these can include user abbreviations
 #                      user's observation type            kind   DART official name
 
-        dartfile = os.path.join(outdir,'obs_seq_abi.'+sat+'_C'+outch+'.'+mdate)
+        dartfile = os.path.join(outdir,'obs_seq_abi.'+sat+'_C'+pch+'.'+mdate)
 
         if not os.path.lexists(dartfile):
 
-            Look_Up_Table={ "GOES_16_ABI_TB":                [98,   "GOES_16_ABI_TB"] ,
-                        "GOES_17_ABI_TB":                    [99,   "GOES_17_ABI_TB"] ,
-                        "GOES_18_ABI_TB":                    [100,   "GOES_18_ABI_TB"] ,
-                        "GOES_19_ABI_TB":                    [101,   "GOES_19_ABI_TB"] }
+            Look_Up_Table={ "GOES_16_ABI_TB":   [98,    "GOES_16_ABI_TB"],
+                            "GOES_17_ABI_TB":   [99,    "GOES_17_ABI_TB"],
+                            "GOES_18_ABI_TB":   [100,   "GOES_18_ABI_TB"],
+                            "GOES_19_ABI_TB":   [101,   "GOES_19_ABI_TB"] }
 
 
             kinds = ['GOES_16_ABI_TB','GOES_17_ABI_TB','GOES_18_ABI_TB','GOES_19_ABI_TB']

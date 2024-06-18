@@ -363,11 +363,11 @@ function run_obsmerge {
     #=================================================
     #4. Radiance
 
-    channels=("6.2" "7.3")
+    channels=("08" "10")
 
     RAD_DIR=${OBS_DIR}/Radiance
 
-    rad_files="obs_seq_abi.G16_C*.${anlys_date}${anlys_time}"
+    rad_files="obs_seq_abi.G16_C??.${anlys_date}${anlys_time}"
 
     if [[ $rt_run == true && ${use_RAD} == true ]]; then
 
@@ -387,7 +387,7 @@ function run_obsmerge {
     fi
 
     i=0
-    for abifile in "${RAD_DIR}"/obs_seq_abi.G16_C*."${anlys_date}${anlys_time}"; do
+    for abifile in "${RAD_DIR}"/obs_seq_abi.G16_C??."${anlys_date}${anlys_time}"; do
         if [[ -e ${abifile} ]]; then
             i=$((i+1))
 
@@ -2300,6 +2300,10 @@ function run_mpas {
     #
     # Preparation for each member
     #
+    if [[ -z ${visc4_2dsmag} ]]; then
+        visc4_2dsmag=0.10
+    fi
+
     jobarrays=()
     for iens in $(seq 1 $ENS_SIZE); do
         memstr=$(printf "%02d" $iens)
@@ -2394,7 +2398,7 @@ function run_mpas {
     config_v_theta_eddy_visc2       = 0.0
     config_horiz_mixing             = '2d_smagorinsky'
     config_len_disp                 = 3000.0
-    config_visc4_2dsmag             = 0.10
+    config_visc4_2dsmag             = ${visc4_2dsmag}
     config_w_adv_order              = 3
     config_theta_adv_order          = 3
     config_scalar_adv_order         = 3

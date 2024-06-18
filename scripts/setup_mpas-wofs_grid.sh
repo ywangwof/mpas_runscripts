@@ -1216,6 +1216,7 @@ function write_config {
     OUTIOTYPE="netcdf4"
     outwrf=false                        # Run MPASSIT after each data assimilation
     sampling_error_correction=".true."
+    visc4_2dsmag=0.10
 
     OBS_DIR="${OBS_DIR}"
 
@@ -1241,6 +1242,7 @@ function write_config {
     OUTIOTYPE="netcdf4"
 
     outpsfc=false                       # An extra streams for PSFC output"
+    visc4_2dsmag=0.10
 
     partition_fcst="${partition_fcst}"
     partition_post="${partition_post}"
@@ -1473,7 +1475,7 @@ function check_obs_files {
         if [[ "$fn" =~ "missing:" ]]; then
             echo -ne "    ${RED}$fn${NC}"
         else
-            echo -n "    $fn"
+            echo -n "    $(basename $fn)"
         fi
         ((n++))
     done

@@ -180,7 +180,7 @@ case $cmd in
             fi
             file_name="obs_seq_RF_${timestr:0:8}_${timestr:8:4}.out"
             if [[ -e ${wrkdir}/${file_name} ]]; then
-                reffiles+=("${file_name}")
+                reffiles+=("${wrkdir}/${file_name}")
                 ((n++))
             else
                 reffiles+=("missing:...${timestr:0:8}_${timestr:8:4}.out")
@@ -191,14 +191,20 @@ case $cmd in
             fi
         done
         if [[ -t 1 ]]; then
-            echo -e "\n${LIGHT_BLUE}${wrkdir}${NC}:"
-            n=0
+            #echo -e "\n${LIGHT_BLUE}${wrkdir}${NC}:"
+            n=0; prevwrkdir=""
             for filename in "${reffiles[@]}";do
                 if (( n%4 == 0)); then echo ""; fi
                 if [[ $filename =~ "missing:" ]]; then
                     echo -ne "    ${PURPLE}$filename${NC}"
                 else
-                    echo -ne "    ${GREEN}$filename${NC}"
+                    wrkdir=$(dirname "$filename")
+                    fn=$(basename "$filename")
+                    if [[ ! "$prevwrkdir" == "$wrkdir" ]]; then
+                        echo -e "\n${LIGHT_BLUE}${wrkdir}${NC}:\n"
+                        prevwrkdir="$wrkdir"
+                    fi
+                    echo -ne "    ${GREEN}$fn${NC}"
                 fi
                 ((n++))
             done
@@ -245,6 +251,11 @@ case $cmd in
             fi
         done
         if [[ -t 1 ]]; then
+            if [[ "$cmd" == "check" ]]; then
+                wrkdir="${srcdir}/{${eventdate},${nextdate}}/d1/DART"
+            else
+                wrkdir="${destdir}/VEL/${eventdate}"
+            fi
 
             echo -e "\n${LIGHT_BLUE}${wrkdir}${NC}:"
             echo ""

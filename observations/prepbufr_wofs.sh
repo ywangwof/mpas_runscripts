@@ -300,7 +300,8 @@ EOF
         else
             echo "INPUT FILE: ${BUFR_in} or ${BUFR_in}.gz not found"
             #echo "Script will abort now."
-            exit 1
+            #exit 1
+            continue
         fi
 
         # byte swapping
