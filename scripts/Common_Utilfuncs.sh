@@ -260,7 +260,7 @@ function check_job_status {
         numtries=1
         checkonly=true
     fi
-    # check each member's status
+    # check all member's status
     while IFS='' read -r line; do
         runjobs+=("$line");
     done < <(seq 1 $donenum)
@@ -268,9 +268,9 @@ function check_job_status {
     mecho1 "Waiting for ensemble jobs of ${WHITE}${jobname}${NC} in ${BROWN}${mywrkdir##"${WORKDIR}"/}${NC}"
     donefile="$mywrkdir/done.${jobname}"
     numtry=0
-    done=0; error=0; running=0; unknown=0
+    done=0; perror=0; running=0; unknown=0; serror=0
     while [[ $numtry -le $numtries ]]; do
-        jobarrays=()
+        jobarrays=(); failedarray=()
         for mem in "${runjobs[@]}"; do
             memstr=$(printf "%02d" $mem)
             memdir="$mywrkdir/${memname}$memstr"
@@ -279,11 +279,26 @@ function check_job_status {
 
             if [[ $verb -eq 1 ]]; then mecho1 "Checking $memdonefile"; fi
             while [[ ! -e $memdonefile && ! -e $donefile ]]; do
-                if [[ -e $memerrorfile ]]; then
-                    jobarrays+=("$mem")
-                    (( error+=1 ))
+                if [[ -e $memerrorfile ]]; then   # perror: program error, resubmission may not help
+                    failedarray+=("$mem")
+                    (( perror+=1 ))
                     break
-                elif $checkonly; then
+                elif compgen -G "$mywrkdir/${jobname}_${mem}_*.log" > /dev/null; then
+                    # Handle occasionally machine errors on Vecna
+                    lastestfile=$(ls -t $mywrkdir/${jobname}_${mem}_*.log | head -1)
+                    #lastline=$(tail -1 "${lastestfile}")
+                    #if [[ "${lastline}" =~ "srun: Job step aborted:" ]]; then
+                    if grep -q "srun: Job step aborted:" ${lastestfile}; then
+                        # serror: Slurm error, resubmission may help
+                        jobarrays+=("$mem")
+                        (( serror+=1 ))
+                        rm ${lastestfile}                        # to avoid it will be used for next try again
+                        #mv ${lastestfile} ${lastestfile}_bak    # to avoid it will be used for next try again
+                        break
+                    fi
+                fi
+
+                if $checkonly; then
                     if [[ -e $mywrkdir/queue.${jobname} || -e running.${jobname}_$memstr ]]; then
                         (( running+=1 ))
                     else
@@ -311,13 +326,13 @@ function check_job_status {
             break                                  # No further check needed
         elif $checkonly; then
             break                                  # Stop further try
-        elif [[ ${#jobarrays[@]} -gt 0 && $numtry -lt $numtries ]]; then    # failed jobs found
+        elif [[ ${#jobarrays[@]} -gt 0 && $numtry -le $numtries ]]; then    # failed jobs found
             if [[ $myjobscript == *.slurm ]]; then
                 runjobs=( "${jobarrays[@]}" )
                 mecho1 "${numtry}/${numtries} - Try these failed jobs again: ${PURPLE}${runjobs[*]}${NC}"
                 jobs_str=$(get_jobarray_str 'slurm' "${runjobs[@]}")
                 $runcmd ${jobs_str} $myjobscript
-                error=0                            # Perform another try
+                serror=0;perror=0                            # Perform another try
             else
                 jobgroupstr=$(group_numbers_by_steps "${runjobs[@]}")
                 IFS=";" read -r -a jobgroups <<< "${jobgroupstr}"; unset IFS  # convert string to array
@@ -327,8 +342,7 @@ function check_job_status {
                     jobgstr=$(get_jobarray_str 'pbs' "${jobgar[@]}")
                     $runcmd ${jobgstr} $myjobscript
                 done
-                error=0                             # Perform another try
-                #break                              # Stop further try for PBS jobs scheduler
+                serror=0; perror=0                            # Perform another try
             fi
 
             for mem in "${runjobs[@]}"; do
@@ -337,7 +351,6 @@ function check_job_status {
                 rm -rf "$memdir/error.${jobname}_$memstr"
             done
         fi
-
     done
 
     #
@@ -352,8 +365,12 @@ function check_job_status {
         outmessage="$outmessage; unknown: ${DARK}$unknown${NC}"
     fi
 
+    if [[ ${#failedarray[@]} -gt 0 ]]; then
+        outmessage="$outmessage; failed: ${#failedarray[@]} - [${LIGHT_RED}${failedarray[*]}${NC}]"
+    fi
+
     if [[ ${#jobarrays[@]} -gt 0 ]]; then
-        outmessage="$outmessage; failed: ${#jobarrays[@]} - [${LIGHT_RED}${jobarrays[*]}${NC}]"
+        outmessage="$outmessage; SLURM failed: ${#jobarrays[@]} - [${RED}${jobarrays[*]}${NC}]"
     fi
 
     mecho1 "$outmessage"

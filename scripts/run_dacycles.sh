@@ -1687,7 +1687,7 @@ EOF
     cat <<EOF > $sedfile
 s/PARTION/${partition_filter}/
 s/NOPART/$npefilter/
-s/JOBNAME/filter_${eventtime}/
+s/JOBNAME/filter-${eventdate:4:4}_${eventtime}/
 s/CPUSPEC/${claim_cpu_filter}/g
 s/MODULE/${modulename}/g
 s#ROOTDIR#$rootdir#g
@@ -2571,7 +2571,7 @@ EOF
 s/PARTION/${partition_fcst}/
 s/NOPART/$npefcst/
 s/NNODES/${nnodes_fcst}/
-s/JOBNAME/mpas_${eventtime}/
+s/JOBNAME/mpasfrd-${eventdate:4:4}_${eventtime}/
 s/CPUSPEC/${claim_cpu_fcst}/g
 s/CLAIMTIME/${claim_time_fcst}/
 s#MODULE#${modulename}#g

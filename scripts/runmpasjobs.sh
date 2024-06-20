@@ -78,6 +78,7 @@ function usage {
     echo    "    OPTIONS:"
     echo    "              -h                  Display this message"
     echo    "              -n                  Show command to be run, but not run it"
+    echo    "              -nn                 Show command to be run (one level deeper), but not run it"
     echo    "              -v                  Verbose mode"
     echo    "              -e                  Last time in HHMM format"
     echo    "              -x                  Directory affix"
@@ -101,6 +102,7 @@ verb=false
 eventdate=${eventdateDF:0:8}
 eventhour=${eventdateDF:8:2}
 task=""
+taskopt=""
 
 if ((10#$eventhour < 12)); then
     eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
@@ -131,6 +133,9 @@ while [[ $# -gt 0 ]]; do
             ;;
         -n)
             show="echo"
+            ;;
+        -nn)
+            taskopt="-n"
             ;;
         -v)
             verb=true
@@ -239,11 +244,13 @@ case $task in
 dacycles )
     cd "${script_dir}" || exit 1
     cmds=("${script_dir}/run_dacycles.sh" -f "config.${eventdate}${affix}" -e "${endtime}" "${runtime}" -r)
+    if [[ -n "${taskopt}" ]]; then cmds+=("${taskopt}"); fi
     ;;
 #2. fcst
 fcst )
     cd "${script_dir}" || exit 1
     cmds=("${script_dir}/run_fcst.sh" -f "config.${eventdate}${affix}" -e "${endtime}" "${runtime}" -r -w)
+    if [[ -n "${taskopt}" ]]; then cmds+=("${taskopt}"); fi
     ;;
 
 #3. post
@@ -318,10 +325,10 @@ verif )
 #6. diag
 diag )
     cd "${script_dir}" || exit 1
-    cmds=("${script_dir}/plot_allobs.sh" -e "${endtime}" "${eventdate}")
-    if [[ -n ${affix} ]]; then
-        cmds+=(-x "${affix}")
-    fi
+    cmds=("${script_dir}/plot_allobs.sh" "${taskopt}" -e "${endtime}" "${eventdate}")
+    if [[ -n ${affix} ]];     then cmds+=(-x "${affix}"); fi
+    if [[ -n "${taskopt}" ]]; then cmds+=("${taskopt}");  fi
+
     ;;
 * )
     echo -e "${RED}ERROR${NC}: Unknown task - ${PURPLE}$task${NC}"
