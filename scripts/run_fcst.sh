@@ -224,9 +224,8 @@ function run_mpas {
     # Preparation for each member
     # nenslbc/pbl_schemes/sfclayer_schemes are from the config file
     #
-    if [[ -z ${visc4_2dsmag} ]]; then
-        visc4_2dsmag=0.10
-    fi
+    if [[ -z ${visc4_2dsmag} ]];   then visc4_2dsmag=0.10;  fi
+    if [[ -z ${coef_3rd_order} ]]; then coef_3rd_order=1.0; fi
 
     jobarrays=()
     for iens in $(seq 1 $ENS_SIZE); do
@@ -353,7 +352,7 @@ function run_mpas {
     config_scalar_advection         = true
     config_positive_definite        = false
     config_monotonic                = true
-    config_coef_3rd_order           = 1.0
+    config_coef_3rd_order           = ${coef_3rd_order}
     config_epssm                    = 0.1
     config_smdiv                    = 0.1
 /
@@ -1669,7 +1668,7 @@ if [[ ! -r ${config_file} ]]; then
 else
     echo -e "Reading case (${GREEN}${eventdate}${NC}) configuration file: ${CYAN}${config_file}${NC} ...."
 fi
-readconf ${config_file} COMMON fcst || exit $?
+readconf ${config_file} COMMON MPAS_OPTIONS fcst || exit $?
 # get ENS_SIZE, time_step, EXTINVL, OUTINVL, OUTIOTYPE
 
 #

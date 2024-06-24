@@ -333,7 +333,7 @@ function check_job_status {
                 jobs_str=$(get_jobarray_str 'slurm' "${runjobs[@]}")
                 $runcmd ${jobs_str} $myjobscript
                 serror=0;perror=0                            # Perform another try
-            else
+            elif [[ $myjobscript == *.pbs ]]; then
                 jobgroupstr=$(group_numbers_by_steps "${runjobs[@]}")
                 IFS=";" read -r -a jobgroups <<< "${jobgroupstr}"; unset IFS  # convert string to array
                 #while IFS=';' read -r line; do jobgroups+=("$line"); done < <(group_numbers_by_steps "${runjobs[*]}")
@@ -575,11 +575,12 @@ function readconf {
     local debug=0
 
     if [[ ! -e $configfile ]]; then
-        echo -e "${RED}ERROR${NC}: Case configuration file: $configfile not exist. Have you run setup_mpas-wofs_grid.sh?"
+        echo -e "${RED}ERROR${NC}: Case configuration file: $configfile not exist. Have you run ${BROWN}setup_mpas-wofs_grid.sh${NC}?"
         exit 1
     fi
 
     local readmode line
+    declare -a read_sections=()
 
     readmode=false
     while read -r line; do
@@ -597,9 +598,12 @@ function readconf {
         # remove trailing whitespace from a string
         line=${line%%+([[:space:]])}
 
-        if [[ "$line" =~ \[$sections\] ]]; then
+        if [[ "$line" =~ ^\[$sections\]$ ]]; then
             if [[ $debug -eq 1 ]]; then echo "Found $sections"; fi
             readmode=true
+            sname="${line#[}"
+            sname="${sname%]}"
+            read_sections+=("${sname}")
             continue
         elif [[ "$line" == \[*\] ]]; then
             if [[ $debug -eq 1 ]]; then echo "Another Section"; fi
@@ -625,6 +629,8 @@ function readconf {
         fi
 
     done < $configfile
+
+    mecho0 "Reading in sections are: ${YELLOW}${read_sections[*]}${NC}"
 }
 
 ########################################################################

@@ -174,5 +174,7 @@ Notes:
     *1 All the workflow scripts have an option "-h" to show a brief usage of
        the command line options.
 
-    *2 The log files from Step 13 can be visulized using **less**/**cat** or
+    *2 All job scripts can be terminated using Ctrl+c. And resume from where stopped.
+
+    *3 The log files from Step 13 can be visulized using **less**/**cat** or
        **~yunheng.wang/bin/viewlog** commands.

@@ -232,7 +232,14 @@ function run_lbc {
     fi
 
     wrkdir=$rundir/lbc
-    if [[ -f $wrkdir/running.${domname} || -f $wrkdir/done.${domname} || -f $wrkdir/queue.${domname} ]]; then
+
+    if [[ -f $wrkdir/done.${domname} ]]; then
+        return 0
+    fi
+
+    if [[ -f $wrkdir/running.${domname} || -f $wrkdir/queue.${domname} ]]; then
+        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+        check_job_status "${domname}" "$wrkdir" "$nenslbc"
         return 0
     fi
 
@@ -396,7 +403,6 @@ EOF
     fi
 
     if [[ $dorun == true && $jobwait -eq 1 ]]; then
-
         #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
         check_job_status "${domname}" $wrkdir $nenslbc $jobscript 2
     fi

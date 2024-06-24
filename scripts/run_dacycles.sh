@@ -2300,9 +2300,8 @@ function run_mpas {
     #
     # Preparation for each member
     #
-    if [[ -z ${visc4_2dsmag} ]]; then
-        visc4_2dsmag=0.10
-    fi
+    if [[ -z ${visc4_2dsmag} ]];   then visc4_2dsmag=0.10;  fi
+    if [[ -z ${coef_3rd_order} ]]; then coef_3rd_order=1.0; fi
 
     jobarrays=()
     for iens in $(seq 1 $ENS_SIZE); do
@@ -2409,7 +2408,7 @@ function run_mpas {
     config_scalar_advection         = true
     config_positive_definite        = false
     config_monotonic                = true
-    config_coef_3rd_order           = 1.0
+    config_coef_3rd_order           = ${coef_3rd_order}
     config_epssm                    = 0.1
     config_smdiv                    = 0.1
 /
@@ -2571,7 +2570,7 @@ EOF
 s/PARTION/${partition_fcst}/
 s/NOPART/$npefcst/
 s/NNODES/${nnodes_fcst}/
-s/JOBNAME/mpasfrd-${eventdate:4:4}_${eventtime}/
+s/JOBNAME/mfrd-${eventdate:4:4}_${eventtime}/
 s/CPUSPEC/${claim_cpu_fcst}/g
 s/CLAIMTIME/${claim_time_fcst}/
 s#MODULE#${modulename}#g
@@ -3568,7 +3567,7 @@ else
     if [[ -e ${WORKDIR}/${config_file} ]]; then
         config_file="${WORKDIR}/${config_file}"
     else
-        echo -e "${RED}ERROR${NC}: file ${CYAN}${config_file}${NC} not exist."
+        echo -e "${RED}ERROR${NC}: file ${CYAN}${WORKDIR}/${config_file}${NC} not exist."
         usage 1
     fi
 fi
@@ -3580,7 +3579,7 @@ if [[ ! -r ${config_file} ]]; then
 else
     echo -e "Reading case (${GREEN}${eventdate}${NC}) configuration file: ${CYAN}${config_file}${NC} ...."
 fi
-readconf ${config_file} COMMON dacycles || exit $?
+readconf ${config_file} COMMON MPAS_OPTIONS dacycles || exit $?
 # get ENS_SIZE, time_step, EXTINVL, ADAPTIVE_INF, update_in_place
 
 #

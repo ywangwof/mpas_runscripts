@@ -398,7 +398,13 @@ function run_init {
     fi
 
     wrkdir=$rundir/init
-    if [[ -f $wrkdir/running.${domname} || -f $wrkdir/done.${domname} || -f $wrkdir/queue.${domname} ]]; then
+    if [[ -f $wrkdir/done.${domname} ]]; then
+        ln -sf ${domname}_01.init.nc ${domname}.invariant.nc
+        return 0
+    fi
+
+    if [[ -f $wrkdir/running.${domname} || -f $wrkdir/queue.${domname} ]]; then
+        check_job_status "${domname}" "$wrkdir" "$nensics"
         return 0
     fi
 
@@ -585,7 +591,7 @@ function run_clean {
         init )
             cd "$rundir/init"  || return
             #jobname=$1 mywrkdir=$2 nummem=$3
-            if [[ -e done.${domnane} ]]; then
+            if [[ -e done.${domname} ]]; then
                 clean_mem_runfiles "${domname}" "$rundir/init" "$nensics"
             fi
             ;;

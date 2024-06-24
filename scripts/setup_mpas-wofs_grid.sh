@@ -1163,6 +1163,14 @@ function write_config {
     job_runexe_str="${job_runexe_str}"
     runcmd_str="${runcmd_str}"
 
+#
+# MPAS_OPTIONS apply to both [dacycles] & [fcst]. For debugging the MPAS dynamic core
+# and should not be usually changed.
+#
+[MPAS_OPTIONS]
+    visc4_2dsmag=0.10
+    coef_3rd_order=1.0
+
 [init]
     ICSIOTYPE="pnetcdf,cdf5"
     EXTNFGL=51
@@ -1216,7 +1224,6 @@ function write_config {
     OUTIOTYPE="netcdf4"
     outwrf=false                        # Run MPASSIT after each data assimilation
     sampling_error_correction=".true."
-    visc4_2dsmag=0.10
 
     OBS_DIR="${OBS_DIR}"
 
@@ -1242,7 +1249,6 @@ function write_config {
     OUTIOTYPE="netcdf4"
 
     outpsfc=false                       # An extra streams for PSFC output"
-    visc4_2dsmag=0.10
 
     partition_fcst="${partition_fcst}"
     partition_post="${partition_post}"
