@@ -191,7 +191,7 @@ EOF
     fi
 
     if [[ $dorun == true && $jobwait -eq 1 ]]; then
-        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
         check_job_status "ungrib" $wrkdir $nenslbc $jobscript 2
     fi
 }
@@ -403,7 +403,7 @@ EOF
     fi
 
     if [[ $dorun == true && $jobwait -eq 1 ]]; then
-        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
         check_job_status "${domname}" $wrkdir $nenslbc $jobscript 2
     fi
 }

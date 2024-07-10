@@ -1142,9 +1142,9 @@ function fcst_driver() {
         cd $fcstwrkdir || return
 
         if [[ $dorun == true && $jobwait -eq 1 ]]; then
-            num_resubmit=2               # resubmit failed jobs
+            num_resubmit=2               # resubmit failed jobs one more times (give it a 2nd chance)
         else
-            num_resubmit=-1              # Just check job status
+            num_resubmit=0               # Just check job status
         fi
 
         echo ""
@@ -1192,12 +1192,12 @@ function fcst_driver() {
                     for ((i=diag_start;i<=fcst_seconds;i+=OUTINVL)); do
                         minstr=$(printf "%03d" $((i/60)))
                         if [[ ! -e $fcstwrkdir/mpassit/done.mpassit$minstr ]]; then
-                            #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                            check_job_status "mpassit$minstr mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit_$minstr.slurm 0
+                            #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
+                            check_job_status "mpassit$minstr mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit_$minstr.slurm
                         fi
                     done
                 else
-                    check_job_status "mpassit mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit.slurm 0
+                    check_job_status "mpassit mem" $fcstwrkdir/mpassit $ENS_SIZE run_mpassit.slurm
                 fi
             fi
 
@@ -1209,7 +1209,7 @@ function fcst_driver() {
                 for ((i=diag_start;i<=fcst_seconds;i+=OUTINVL)); do
                     minstr=$(printf "%03d" $((i/60)))
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                    check_job_status "upp$minstr mem" $fcstwrkdir/upp $ENS_SIZE run_upp_$minstr.slurm  2
+                    check_job_status "upp$minstr mem" $fcstwrkdir/upp $ENS_SIZE run_upp_$minstr.slurm ${num_resubmit}
                 done
             fi
         fi

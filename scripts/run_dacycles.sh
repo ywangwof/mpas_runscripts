@@ -2643,7 +2643,7 @@ function dacycle_driver() {
     if [[ $dorun == true ]]; then
         num_resubmit=2               # resubmit failed jobs
     else
-        num_resubmit=-1              # Just check job status
+        num_resubmit=0               # Just check job status
     fi
 
     local icyc=$(( (start_sec-init_sec)/intvl_sec ))
@@ -2674,16 +2674,16 @@ function dacycle_driver() {
         if [[ $dorun == true ]]; then
             if [[ $icyc -eq 0 ]]; then
                 if [[ ! -e $rundir/lbc/done.lbc ]]; then
-                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                    check_job_status "${domname}" $rundir/lbc $nenslbc run_lbc.${mach} 0
+                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
+                    check_job_status "${domname}" $rundir/lbc $nenslbc run_lbc.${mach}
                 fi
             else   #if [[ $icyc -gt 0 ]]; then
                 timesec_pre=$((isec-intvl_sec))
                 event_pre=$(date -u -d @$timesec_pre  +%H%M)
                 wrkdir_pre=${wrkdir}/${event_pre}
                 if [[ ! -e ${wrkdir_pre}/done.fcst ]]; then
-                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                    check_job_status "fcst" $wrkdir_pre $ENS_SIZE run_mpas.${mach} 0
+                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
+                    check_job_status "fcst" $wrkdir_pre $ENS_SIZE run_mpas.${mach}
                 fi
             fi
         fi
@@ -2710,11 +2710,9 @@ function dacycle_driver() {
 
         if [[ $run_addnoise == true ]]; then
             # check and set update_states status
-            if [[ $dorun == true ]]; then
-                if [[ ! -e done.update_states ]]; then
-                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                    check_job_status "update_states fcst_" $dawrkdir $ENS_SIZE run_update_states.${mach} 1
-                fi
+            if [[ ! -e done.update_states ]]; then
+                #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
+                check_job_status "update_states fcst_" $dawrkdir $ENS_SIZE run_update_states.${mach} ${num_resubmit}
             fi
 
             if [[ $verb -eq 1 ]]; then echo "  Run add_noise at $eventtime"; fi
@@ -2725,17 +2723,15 @@ function dacycle_driver() {
         # 4. Run update_bc for all ensemble members
         #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " update_bc " ]]; then
-            if [[ $dorun == true ]]; then
-                if [[ ${run_addnoise} == true ]]; then   # check and set add_noise status
-                    if [[ ! -e done.add_noise ]]; then
-                        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                        check_job_status "add_noise fcst_" $dawrkdir $ENS_SIZE run_noise_pert.${mach} 0
-                    fi
-                else                                     # check and set update_states status
-                    if [[ ! -e done.update_states ]]; then
-                        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                        check_job_status "update_states fcst_" $dawrkdir $ENS_SIZE run_update_states.${mach} 0
-                    fi
+            if [[ ${run_addnoise} == true ]]; then   # check and set add_noise status
+                if [[ ! -e done.add_noise ]]; then
+                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
+                    check_job_status "add_noise fcst_" $dawrkdir $ENS_SIZE run_noise_pert.${mach} ${num_resubmit}
+                fi
+            else                                     # check and set update_states status
+                if [[ ! -e done.update_states ]]; then
+                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
+                    check_job_status "update_states fcst_" $dawrkdir $ENS_SIZE run_update_states.${mach} ${num_resubmit}
                 fi
             fi
 
@@ -2749,11 +2745,9 @@ function dacycle_driver() {
         # Run forecast for ensemble members until the next analysis time
         if [[ " ${jobs[*]} " =~ " mpas " ]]; then
             # check and set update_bc status
-            if [[ $dorun == true ]]; then
-                if [[ ! -e done.update_bc ]]; then
-                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                    check_job_status "update_bc fcst_" $dawrkdir $ENS_SIZE run_update_bc.${mach} 0
-                fi
+            if [[ ! -e done.update_bc ]]; then
+                #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
+                check_job_status "update_bc fcst_" $dawrkdir $ENS_SIZE run_update_bc.${mach} ${num_resubmit}
             fi
 
             if [[ "${eventtime}" != "0300" ]]; then
@@ -2762,11 +2756,9 @@ function dacycle_driver() {
                 mpas_jobscript="run_mpas.${mach}"
                 run_mpas $dawrkdir $icyc $isec
 
-                if [[ $dorun == true ]]; then
-                    if [[ ! -e done.fcst ]]; then
-                        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                        check_job_status "fcst" $dawrkdir $ENS_SIZE $mpas_jobscript 2
-                    fi
+                if [[ ! -e done.fcst ]]; then
+                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
+                    check_job_status "fcst" $dawrkdir $ENS_SIZE $mpas_jobscript ${num_resubmit}
                 fi
             fi
         fi
@@ -2780,9 +2772,7 @@ function dacycle_driver() {
 
             run_mpassit $dawrkdir ${isec}
 
-            if [[ $dorun == true ]]; then
-                check_job_status "mpassit mem" $dawrkdir/mpassit $ENS_SIZE run_mpassit.${mach} ${num_resubmit}
-            fi
+            check_job_status "mpassit mem" $dawrkdir/mpassit $ENS_SIZE run_mpassit.${mach} ${num_resubmit}
         else
             # Clean not needed files in each member's forecast directory after
             # the MPAS forward forecast

@@ -1167,8 +1167,11 @@ function write_config {
 # MPAS_OPTIONS apply to both [dacycles] & [fcst]. For debugging the MPAS dynamic core
 # and should not be usually changed.
 #
+#    coef_3rd_order=1.0     # 3rd order advection
+#    coef_3rd_order=0.25    # nearly 4th order advection
+#
 [MPAS_OPTIONS]
-    visc4_2dsmag=0.10
+    visc4_2dsmag=0.20
     coef_3rd_order=1.0
 
 [init]
@@ -1561,7 +1564,7 @@ else
 fi
 
 fixed_level="${FIXDIR}/L60.txt"
-damode="restart"
+damode="init"
 
 source "${scpdir}/Common_Utilfuncs.sh" || exit $?
 
