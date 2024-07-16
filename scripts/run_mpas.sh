@@ -532,6 +532,16 @@ function run_ungrib_hrrr {
     if [[ -f running.ungrib || -f done.ungrib || -f queue.ungrib ]]; then
         :                   # skip
     else
+
+        ##https://noaa-hrrr-bdp-pds.s3.amazonaws.com/index.html
+        #if [[ "$hrrr_grib_dir" == "https://noaa-hrrr-bdp-pds.s3.amazonaws.com"* ]]; then
+        #    hrrr_url="$hrrr_grib_dir/rrfs_a/rrfs_a.${currdate}/${currtime}/control"
+        #    download_aws=1
+        #else
+        #    rrfs_grib_dir="$rrfs_grib_dir/${currdate}${currtime}"
+        #    download_aws=0
+        #fi
+
         myhrrrfiles=(); jobarrays=()
         for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
             hstr=$(printf "%02d" $h)
@@ -1751,7 +1761,8 @@ function run_mpas {
 
         if [[ "${mpscheme}" == "Thompson" ]]; then
             thompson_tables=( MP_THOMPSON_QRacrQG_DATA.DBL   MP_THOMPSON_QRacrQS_DATA.DBL   \
-                              MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL )
+                              MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL   \
+                              CCN_ACTIVATE.BIN )
 
             for fn in "${thompson_tables[@]}"; do
                 ln -sf ${FIXDIR}/$fn .
@@ -2584,7 +2595,8 @@ if [[ $machine == "Jet" ]]; then
     module purge
     module use ${rootdir}/modules
     module load $modulename
-    module load wgrib2/2.0.8
+    module load netcdf/4.7.0
+    module load wgrib2/3.1.2_ncep
     wgrib2path="/apps/wgrib2/2.0.8/intel/18.0.5.274/bin/wgrib2"
     gpmetis="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/bin/gpmetis"
 
@@ -2712,7 +2724,7 @@ exedir="$rootdir/exec"
 
 declare -A jobargs=([static]=$WORKDIR/$domname                                 \
                     [geogrid]=$WORKDIR/${domname/*_/geo_}                      \
-                    [ungrib_hrrr]="/public/data/grids/hrrr/conus/wrfnat/grib2" \
+                    [ungrib_hrrr]="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/run_dirs/20240508_hrrr" \
                     [ungrib_rrfs]="https://noaa-rrfs-pds.s3.amazonaws.com"     \
                     [ungrib_rrfsna]="/lfs4/NAGAPE/wof/grib_files/RRFS-A"       \
                     [ungrib_rrfsp]="https://noaa-rrfs-pds.s3.amazonaws.com"    \

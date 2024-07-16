@@ -296,6 +296,8 @@ for pkg in "${packages[@]}"; do
 
         run_cmd "${runcmd}" "${srcmodel}/src/core_atmosphere/physics/physics_wrf/files" "${staticfiles[*]}"
 
+        run_cmd "${runcmd}" "${srcmodel}/src/core_atmosphere/physics/TEMPO/tables" "CCN_ACTIVATE.BIN"
+
         if [[ ${realrun} == true ]]; then
             thompsonfiles=(MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL \
                            MP_THOMPSON_QRacrQG_DATA.DBL MP_THOMPSON_QRacrQS_DATA.DBL)

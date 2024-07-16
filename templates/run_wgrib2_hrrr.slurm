@@ -19,7 +19,8 @@ if [[ "MACHINE" == "Jet" ]]; then
     module purge
     module use ROOTDIR/modules
     module load MODULE
-    module load wgrib2/2.0.8
+    module load netcdf/4.7.0
+    module load wgrib2/3.1.2_ncep
 else
     # shellcheck source=/dev/null # to ignore source path error
     source /scratch/ywang/MPAS/MODULE

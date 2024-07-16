@@ -1,5 +1,13 @@
   Version History
 
+07/12/2024 Version 3.8
+   Updated wgrid module on Jet.
+   Upgraded to the merged GSL MPAS package.
+
+07/01/2024
+   Changed in magnitude of smoothing for MPAS UH from uh_smooth = 0.25 to uh_smooth = 0.1
+   to reduce the amount of smoothing for somewhat higher UH magnitude.
+   
 03/21/2024 Version 3.7
     1. Upgraded to Rocky linux OS on Jet
     2. Note that "atmosphere_model.single" is renamed as "atmosphere_model"

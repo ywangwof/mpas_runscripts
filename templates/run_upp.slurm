@@ -23,7 +23,9 @@ if [[ "MACHINE" == "Jet" ]]; then
     module purge
     module use ROOTDIR/modules
     module load MODULE
-    module load wgrib2/2.0.8
+    #module load netcdf/4.7.0
+    #module load wgrib2/3.1.2_ncep
+    wgrib2path="/apps/wgrib2/2.0.8/intel/18.0.5.274/bin/wgrib2"
 else
     # shellcheck source=/dev/null # to ignore source path error
     source /scratch/ywang/MPAS/mpas_runscripts/MODULE
@@ -52,13 +54,13 @@ if [[ $? -eq 0 ]]; then
     tmpfile=tmpGrbFHHHSTR.grib2
     outfile=../MPAS-A_${dtstr[-3]}fHHHSTR.grib2
 
-    wgrib2 ${infile} -set_bitmap 1 -set_grib_type c3 -new_grid_winds grid \
+    ${wgrib2path} ${infile} -set_bitmap 1 -set_grib_type c3 -new_grid_winds grid \
            -new_grid_vectors "UGRD:VGRD:USTM:VSTM:VUCSH:VVCSH" \
            -new_grid_interpolation neighbor \
            -new_grid ${grid_specs_hrrr} ${tmpfile}
 
     # Merge vector field records
-    wgrib2 ${tmpfile} -new_grid_vectors "UGRD:VGRD:USTM:VSTM:VUCSH:VVCSH" -submsg_uv ${outfile}
+    ${wgrib2path} ${tmpfile} -new_grid_vectors "UGRD:VGRD:USTM:VSTM:VUCSH:VVCSH" -submsg_uv ${outfile}
 
     # Remove temporary file
     rm ${tmpfile} ${infile}
