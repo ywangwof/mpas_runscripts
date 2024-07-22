@@ -398,59 +398,59 @@ function run_static {
 
     cat <<EOF > namelist.init_atmosphere
 &nhyd_model
-    config_init_case = 7
-    config_start_time = '${starttime_str}'
-    config_stop_time = '${starttime_str}'
+    config_init_case       = 7
+    config_start_time      = '${starttime_str}'
+    config_stop_time       = '${starttime_str}'
     config_theta_adv_order = 3
-    config_coef_3rd_order = 0.25
+    config_coef_3rd_order  = 0.25
 /
 &dimensions
-    config_nvertlevels   = 1
-    config_nsoillevels   = 1
-    config_nfglevels     = 1
-    config_nfgsoillevels = 1
-    config_nsoilcat      = 16
+    config_nvertlevels     = 1
+    config_nsoillevels     = 1
+    config_nfglevels       = 1
+    config_nfgsoillevels   = 1
+    config_nsoilcat        = 16
 
 /
 &data_sources
-    config_geog_data_path = '${WPSGEOG_PATH}'
-    config_met_prefix = '${EXTHEAD}'
-    config_sfc_prefix = 'SST'
-    config_fg_interval = $((EXTINVL*3600))
-    config_landuse_data = 'MODIFIED_IGBP_MODIS_NOAH_15s'
-    config_soilcat_data = 'BNU'
-    config_topo_data    = 'GMTED2010'
-    config_vegfrac_data = 'MODIS'
-    config_albedo_data  = 'MODIS'
+    config_geog_data_path     = '${WPSGEOG_PATH}'
+    config_met_prefix         = '${EXTHEAD}'
+    config_sfc_prefix         = 'SST'
+    config_fg_interval        = $((EXTINVL*3600))
+    config_landuse_data       = 'MODIFIED_IGBP_MODIS_NOAH_15s'
+    config_soilcat_data       = 'BNU'
+    config_topo_data          = 'GMTED2010'
+    config_vegfrac_data       = 'MODIS'
+    config_albedo_data        = 'MODIS'
     config_maxsnowalbedo_data = 'MODIS'
     config_lai_data           = 'MODIS'
     config_supersample_factor = 1
-    config_use_spechumd = false
+    config_use_spechumd       = false
 /
 &vertical_grid
-    config_ztop = 25878.712
-    config_nsmterrain = 1
-    config_smooth_surfaces = true
-    config_dzmin = 0.3
-    config_nsm = 30
-    config_tc_vertical_grid = false
-    config_blend_bdy_terrain = false
+    config_ztop                  = 25878.712
+    config_nsmterrain            = 1
+    config_smooth_surfaces       = true
+    config_dzmin                 = 0.3
+    config_nsm                   = 30
+    config_tc_vertical_grid      = false
+    config_blend_bdy_terrain     = false
     config_specified_zeta_levels = '${FIXDIR}/L60.txt'
 /
 &interpolation_control
-    config_extrap_airtemp = 'linear'
+    config_extrap_airtemp        = 'linear'
 /
 &preproc_stages
-    config_static_interp = true
-    config_native_gwd_static = true
-    config_vertical_grid = false
-    config_met_interp = false
-    config_input_sst = false
-    config_frac_seaice = false
+    config_static_interp        = true
+    config_native_gwd_static    = true
+    config_vertical_grid        = false
+    config_met_interp           = false
+    config_input_sst            = false
+    config_frac_seaice          = false
 /
 &io
-    config_pio_num_iotasks = 0
-    config_pio_stride = 1
+    config_pio_num_iotasks      = 0
+    config_pio_stride           = 1
 /
 &decomposition
     config_block_decomp_file_prefix = '${domname}.graph.info.part.'
@@ -1405,56 +1405,57 @@ function run_init {
 
         cat << EOF > namelist.init_atmosphere
 &nhyd_model
-    config_init_case = 7
-    config_start_time = '${starttime_str}'
-    config_stop_time = '${stoptime_str}'
-    config_theta_adv_order = 3
-    config_coef_3rd_order = 0.25
+    config_init_case              = 7
+    config_start_time             = '${starttime_str}'
+    config_stop_time              = '${stoptime_str}'
+    config_theta_adv_order        = 3
+    config_coef_3rd_order         = 0.25
 /
 &dimensions
-    config_nvertlevels   = 59
-    config_nsoillevels   = ${MPASNFLS}
-    config_nfglevels     = ${EXTNFGL}
-    config_nfgsoillevels = ${EXTNFLS}
-    config_nsoilcat      = 16
+    config_nvertlevels            = 59
+    config_nsoillevels            = ${MPASNFLS}
+    config_nfglevels              = ${EXTNFGL}
+    config_nfgsoillevels          = ${EXTNFLS}
+    config_nsoilcat               = 16
 /
 &data_sources
-    config_geog_data_path = '/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/'
-    config_met_prefix = '${EXTHEAD}'
-    config_sfc_prefix = 'SST'
-    config_fg_interval = $((EXTINVL*3600))
-    config_landuse_data = 'MODIFIED_IGBP_MODIS_NOAH_15s'
-    config_topo_data = 'GMTED2010'
-    config_vegfrac_data = 'MODIS'
-    config_albedo_data = 'MODIS'
-    config_maxsnowalbedo_data = 'MODIS'
-    config_supersample_factor = 1
-    config_use_spechumd = false
+    config_geog_data_path         = '/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/'
+    config_met_prefix             = '${EXTHEAD}'
+    config_sfc_prefix             = 'SST'
+    config_fg_interval            = $((EXTINVL*3600))
+    config_landuse_data           = 'MODIFIED_IGBP_MODIS_NOAH_15s'
+    config_topo_data              = 'GMTED2010'
+    config_vegfrac_data           = 'MODIS'
+    config_albedo_data            = 'MODIS'
+    config_maxsnowalbedo_data     = 'MODIS'
+    config_supersample_factor     = 3
+    config_30s_supersample_factor = 1
+    config_use_spechumd           = true
 /
 &vertical_grid
-    config_ztop = 25878.712
-    config_nsmterrain = 1
-    config_smooth_surfaces = true
-    config_dzmin = 0.3
-    config_nsm = 30
-    config_tc_vertical_grid = true
-    config_blend_bdy_terrain = true
-    config_specified_zeta_levels = '${FIXDIR}/L60.txt'
+    config_ztop                   = 25878.712
+    config_nsmterrain             = 1
+    config_smooth_surfaces        = true
+    config_dzmin                  = 0.3
+    config_nsm                    = 30
+    config_tc_vertical_grid       = true
+    config_blend_bdy_terrain      = true
+    config_specified_zeta_levels  = '${FIXDIR}/L60.txt'
 /
 &interpolation_control
-    config_extrap_airtemp = 'lapse-rate'
+    config_extrap_airtemp         = 'lapse-rate'
 /
 &preproc_stages
-    config_static_interp = false
-    config_native_gwd_static = false
-    config_vertical_grid = true
-    config_met_interp = true
-    config_input_sst = false
-    config_frac_seaice = true
+    config_static_interp          = false
+    config_native_gwd_static      = false
+    config_vertical_grid          = true
+    config_met_interp             = true
+    config_input_sst              = false
+    config_frac_seaice            = true
 /
 &io
-    config_pio_num_iotasks = 0
-    config_pio_stride = 1
+    config_pio_num_iotasks        = 0
+    config_pio_stride             = 1
 /
 &decomposition
     config_block_decomp_file_prefix = '$domname.graph.info.part.'
@@ -1583,56 +1584,57 @@ function run_lbc {
 
         cat << EOF > namelist.init_atmosphere
 &nhyd_model
-    config_init_case = 9
-    config_start_time = '${starttime_str}'
-    config_stop_time = '${stoptime_str}'
-    config_theta_adv_order = 3
-    config_coef_3rd_order = 0.25
+    config_init_case              = 9
+    config_start_time             = '${starttime_str}'
+    config_stop_time              = '${stoptime_str}'
+    config_theta_adv_order        = 3
+    config_coef_3rd_order         = 0.25
 /
 &dimensions
-    config_nvertlevels   = 59
-    config_nsoillevels   = ${MPASNFLS}
-    config_nfglevels     = ${EXTNFGL}
-    config_nfgsoillevels = ${EXTNFLS}
-    config_nsoilcat      = 16
+    config_nvertlevels            = 59
+    config_nsoillevels            = ${MPASNFLS}
+    config_nfglevels              = ${EXTNFGL}
+    config_nfgsoillevels          = ${EXTNFLS}
+    config_nsoilcat               = 16
 /
 &data_sources
-    config_geog_data_path = '/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/'
-    config_met_prefix = '${EXTHEAD}'
-    config_sfc_prefix = 'SST'
-    config_fg_interval = $((EXTINVL*3600))
-    config_landuse_data = 'MODIFIED_IGBP_MODIS_NOAH_15s'
-    config_topo_data = 'GMTED2010'
-    config_vegfrac_data = 'MODIS'
-    config_albedo_data = 'MODIS'
-    config_maxsnowalbedo_data = 'MODIS'
-    config_supersample_factor = 1
-    config_use_spechumd = false
+    config_geog_data_path         = '/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/'
+    config_met_prefix             = '${EXTHEAD}'
+    config_sfc_prefix             = 'SST'
+    config_fg_interval            = $((EXTINVL*3600))
+    config_landuse_data           = 'MODIFIED_IGBP_MODIS_NOAH_15s'
+    config_topo_data              = 'GMTED2010'
+    config_vegfrac_data           = 'MODIS'
+    config_albedo_data            = 'MODIS'
+    config_maxsnowalbedo_data     = 'MODIS'
+    config_supersample_factor     = 3
+    config_30s_supersample_factor = 1
+    config_use_spechumd           = true
 /
 &vertical_grid
-    config_ztop = 25878.712
-    config_nsmterrain = 1
-    config_smooth_surfaces = true
-    config_dzmin = 0.3
-    config_nsm = 30
-    config_tc_vertical_grid = true
-    config_blend_bdy_terrain = true
-    config_specified_zeta_levels = '${FIXDIR}/L60.txt'
+    config_ztop                   = 25878.712
+    config_nsmterrain             = 1
+    config_smooth_surfaces        = true
+    config_dzmin                  = 0.3
+    config_nsm                    = 30
+    config_tc_vertical_grid       = true
+    config_blend_bdy_terrain      = true
+    config_specified_zeta_levels  = '${FIXDIR}/L60.txt'
 /
 &interpolation_control
-    config_extrap_airtemp = 'lapse-rate'
+    config_extrap_airtemp           = 'lapse-rate'
 /
 &preproc_stages
-    config_static_interp = false
-    config_native_gwd_static = false
-    config_vertical_grid = true
-    config_met_interp = true
-    config_input_sst = false
-    config_frac_seaice = true
+    config_static_interp            = false
+    config_native_gwd_static        = false
+    config_vertical_grid            = true
+    config_met_interp               = true
+    config_input_sst                = false
+    config_frac_seaice              = true
 /
 &io
-    config_pio_num_iotasks = 0
-    config_pio_stride = 1
+    config_pio_num_iotasks          = 0
+    config_pio_stride               = 1
 /
 &decomposition
     config_block_decomp_file_prefix = '$domname.graph.info.part.'
@@ -1765,7 +1767,7 @@ function run_mpas {
                               CCN_ACTIVATE.BIN )
 
             for fn in "${thompson_tables[@]}"; do
-                ln -sf ${FIXDIR}/$fn .
+                ln -sf ${FIXDIR}/hail-aware/$fn .
             done
         fi
 
@@ -1774,30 +1776,16 @@ function run_mpas {
         cat << EOF > namelist.atmosphere
 &nhyd_model
     config_time_integration_order   = 2
-    config_dt                       = 25
+    config_dt                       = 20
     config_start_time               = '${starttime_str}'
     config_run_duration             = '${fcsthour_str}:00:00'
     config_split_dynamics_transport = true
     config_number_of_sub_steps      = 4
     config_dynamics_split_steps     = 3
-    config_h_mom_eddy_visc2         = 0.0
-    config_h_mom_eddy_visc4         = 0.0
-    config_v_mom_eddy_visc2         = 0.0
-    config_h_theta_eddy_visc2       = 0.0
-    config_h_theta_eddy_visc4       = 0.0
-    config_v_theta_eddy_visc2       = 0.0
     config_horiz_mixing             = '2d_smagorinsky'
     config_len_disp                 = 3000.0
     config_visc4_2dsmag             = 0.05
-    config_w_adv_order              = 3
-    config_theta_adv_order          = 3
-    config_scalar_adv_order         = 3
-    config_u_vadv_order             = 3
-    config_w_vadv_order             = 3
-    config_theta_vadv_order         = 3
-    config_scalar_vadv_order        = 3
     config_scalar_advection         = true
-    config_positive_definite        = false
     config_monotonic                = true
     config_coef_3rd_order           = 0.25
     config_epssm                    = 0.1
@@ -1836,19 +1824,35 @@ function run_mpas {
     config_sst_update                = false
     config_sstdiurn_update           = false
     config_deepsoiltemp_update       = false
-    config_radtlw_interval           = '00:30:00'
-    config_radtsw_interval           = '00:30:00'
+    config_radtlw_interval           = '00:15:00'
+    config_radtsw_interval           = '00:15:00'
     config_bucket_update             = 'none'
     config_lsm_scheme                = '${MPASLSM}'
     num_soil_layers                  = ${MPASNFLS}
     config_physics_suite             = 'convection_permitting'
     config_convection_scheme         = 'off'
-    config_microp_re                 = true
+
+    config_gwdo_scheme         = 'off'
+    config_frac_seaice         = true
+    config_radt_cld_scheme     = 'cld_fraction_mynn'
+    config_mynn_edmf_tke       = 0
+    config_mynn_edmf           = 1
+    config_mynn_mixqt          = 0
+    config_mynn_tkeadvect      = .false.
+    config_mynn_cloudpdf       = 2
+    config_mynn_closure        = 2.6
+    config_mynn_mixscalars     = 1
+    config_mynn_edmf_output    = 0
+    config_mynn_mixlength      = 1
+    config_mynn_mixclouds      = 1
+    config_mynn_tkebudget      = 0
+    config_mynn_edmf_mom       = 1
 EOF
 
         if [[ ${mpscheme} == "mp_nssl2m" ]]; then
 
             cat << EOF >> namelist.atmosphere
+    config_microp_re                 = true
     config_microp_scheme             = '${mpscheme}'
 /
 &nssl_mp_params
@@ -1858,7 +1862,11 @@ EOF
     snowfallfac                      = 1.25
     iusewetsnow                      = 0
 EOF
-
+        else
+            cat << EOF >> namelist.atmosphere
+    config_microp_scheme             = 'mp_thompson'
+    config_thompson_hail_aware       = true
+EOF
         fi
 
         cat << EOF >> namelist.atmosphere
