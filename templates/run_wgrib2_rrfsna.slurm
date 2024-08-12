@@ -19,7 +19,8 @@ if [[ "MACHINE" == "Jet" ]]; then
     module purge
     module use ROOTDIR/modules
     module load MODULE
-    module load wgrib2/2.0.8
+    module load gnu/13.2.0 wgrib2/3.1.1_wmo
+    wgrib2path="/apps/wgrib2/3.1.1/gnu_13.2.0/wmo/bin/wgrib2"
 else
     # shellcheck source=/dev/null # to ignore source path error
     source /scratch/ywang/MPAS/MODULE

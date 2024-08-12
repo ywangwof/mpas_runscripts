@@ -532,16 +532,6 @@ function run_ungrib_hrrr {
     if [[ -f running.ungrib || -f done.ungrib || -f queue.ungrib ]]; then
         :                   # skip
     else
-
-        ##https://noaa-hrrr-bdp-pds.s3.amazonaws.com/index.html
-        #if [[ "$hrrr_grib_dir" == "https://noaa-hrrr-bdp-pds.s3.amazonaws.com"* ]]; then
-        #    hrrr_url="$hrrr_grib_dir/rrfs_a/rrfs_a.${currdate}/${currtime}/control"
-        #    download_aws=1
-        #else
-        #    rrfs_grib_dir="$rrfs_grib_dir/${currdate}${currtime}"
-        #    download_aws=0
-        #fi
-
         myhrrrfiles=(); jobarrays=()
         for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
             hstr=$(printf "%02d" $h)
@@ -811,7 +801,7 @@ function run_ungrib_rrfsna {
                 basefn=$(basename $rrfsfile)
                 basefn="HRRR_$basefn"
 
-                if [[ ! -f $rrfsfile && ! -f $basefn ]]; then
+                if [[ ! -f $rrfsfile && ! -f $basefn && $dorun == true ]]; then
                     if [[ $verb -eq 1 ]]; then echo "Downloading $rrfsfile ..."; fi
                     rrfsfidx="${rrfsfile}.idx"
                     wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfidx
@@ -835,7 +825,7 @@ function run_ungrib_rrfsna {
                 rrfsfile=$rrfs_grib_dir/rrfs.t${currtime}z.natlev.f${hstr}.grib2
                 basefn=$(basename $rrfsfile)
                 basefn="HRRR_$basefn"
-                while [[ ! -f $rrfsfile && ! -f $basefn ]]; do
+                while [[ ! -f $rrfsfile && ! -f $basefn && $dorun == true ]]; do
                     if [[ $verb -eq 1 ]]; then
                         echo "Waiting for $rrfsfile ..."
                     fi
@@ -844,7 +834,7 @@ function run_ungrib_rrfsna {
 
                 # Wait for done file to ensure all files are downloaded
                 donefile="$rrfs_grib_dir/done.rrfs.${currdate}${currtime}"
-                while [[ ! -f $donefile ]]; do
+                while [[ ! -f $donefile && $dorun == true ]]; do
                     if [[ $verb -eq 1 ]]; then
                         echo "Waiting for $rrfsfile ..."
                     fi
@@ -1017,7 +1007,7 @@ function run_ungrib_rrfs {
                 basefn=$(basename $rrfsfile)
                 basefn="NSSL_$basefn"
 
-                if [[ ! -f $rrfsfile && ! -f $basefn ]]; then
+                if [[ ! -f $rrfsfile && ! -f $basefn && $dorun == true ]]; then
                     if [[ $verb -eq 1 ]]; then echo "Downloading $rrfsfile ..."; fi
                     rrfsfidx="${rrfsfile}.idx"
                     wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfidx
@@ -1041,7 +1031,7 @@ function run_ungrib_rrfs {
                 rrfsfile=$rrfs_grib_dir/RRFS_CONUS.t${currtime}z.bgrd3df${hstr}.tm00.grib2
                 basefn=$(basename $rrfsfile)
                 basefn="NSSL_$basefn"
-                while [[ ! -f $rrfsfile && ! -f $basefn ]]; do
+                while [[ ! -f $rrfsfile && ! -f $basefn && $dorun == true ]]; do
                     if [[ $verb -eq 1 ]]; then
                         echo "Waiting for $rrfsfile ..."
                     fi
@@ -2595,9 +2585,8 @@ if [[ $machine == "Jet" ]]; then
     module purge
     module use ${rootdir}/modules
     module load $modulename
-    module load netcdf/4.7.0
-    module load wgrib2/3.1.2_ncep
-    wgrib2path="/apps/wgrib2/2.0.8/intel/18.0.5.274/bin/wgrib2"
+    module load gnu/13.2.0 wgrib2/3.1.1_wmo
+    wgrib2path="/apps/wgrib2/3.1.1/gnu_13.2.0/wmo/bin/wgrib2"
     gpmetis="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/bin/gpmetis"
 
 elif [[ $machine == "Cheyenne" ]]; then
@@ -2724,7 +2713,7 @@ exedir="$rootdir/exec"
 
 declare -A jobargs=([static]=$WORKDIR/$domname                                 \
                     [geogrid]=$WORKDIR/${domname/*_/geo_}                      \
-                    [ungrib_hrrr]="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/run_dirs/20240508_hrrr" \
+                    [ungrib_hrrr]="/public/data/grids/hrrr/conus/wrfnat/grib2" \
                     [ungrib_rrfs]="https://noaa-rrfs-pds.s3.amazonaws.com"     \
                     [ungrib_rrfsna]="/lfs4/NAGAPE/wof/grib_files/RRFS-A"       \
                     [ungrib_rrfsp]="https://noaa-rrfs-pds.s3.amazonaws.com"    \
