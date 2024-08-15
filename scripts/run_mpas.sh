@@ -2730,6 +2730,8 @@ declare -A jobargs=([static]=$WORKDIR/$domname                                 \
 #[ungrib_rrfs]="/mnt/lfs4/BMC/nrtrr/NCO_dirs/ptmp/com/RRFS_CONUS/para /public/data/grids/gfs/0p25deg/grib2 RRFS_conus_3km"  \
 
 for job in "${jobs[@]}"; do
+    if [[ -z $job ]]; then continue; fi
+
     if [[ $verb -eq 1 ]]; then
         echo " "
         echo "run_$job ${jobargs[$job]}"
