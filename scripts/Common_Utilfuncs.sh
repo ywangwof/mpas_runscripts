@@ -230,13 +230,13 @@ function resubmit_a_jobscript {
     local myjobscript=$1
     local jobarray_str=$2
 
-    read -r -a runjobs <<< "$2"
+    read -r -a myjobs <<< "$2"
 
     if [[ $myjobscript == *.slurm ]]; then
-        jobs_str=$(get_jobarray_str 'slurm' "${runjobs[@]}")
+        jobs_str=$(get_jobarray_str 'slurm' "${myjobs[@]}")
         $runcmd ${jobs_str} $myjobscript
     elif [[ $myjobscript == *.pbs ]]; then
-        jobgroupstr=$(group_numbers_by_steps "${runjobs[@]}")
+        jobgroupstr=$(group_numbers_by_steps "${myjobs[@]}")
         IFS=";" read -r -a jobgroups <<< "${jobgroupstr}"; unset IFS  # convert string to array
         #while IFS=';' read -r line; do jobgroups+=("$line"); done < <(group_numbers_by_steps "${abortjobarray[*]}")
         for jobg in "${jobgroups[@]}"; do
@@ -325,9 +325,8 @@ function check_job_status {
                 if compgen -G "$mywrkdir/${jobname}_${mem}_*.log" > /dev/null; then
                     # Handle occasionally machine errors on Vecna
                     lastestfile=$(ls -t $mywrkdir/${jobname}_${mem}_*.log | head -1)
-                    #lastline=$(tail -1 "${lastestfile}")
-                    #if [[ "${lastline}" =~ "srun: Job step aborted:" ]]; then
-                    if grep -q "srun: Job step aborted:" ${lastestfile}; then
+                    #if grep -q "srun: Job step aborted:" ${lastestfile}; then
+                    if grep -q "slurmstepd: error:" ${lastestfile}; then
                         # abort: Slurm error, resubmission may help
                         abortjobarray+=("$mem")
                         (( abort+=1 ))
@@ -348,10 +347,10 @@ function check_job_status {
                         (( unknown+=1 ))
                     fi
                     break
+                else                           # job pending or running
+                    #if [[ $verb -eq 1 ]]; then echo "Waiting for $donefile"; fi
+                    sleep 10
                 fi
-
-                #if [[ $verb -eq 1 ]]; then echo "Waiting for $donefile"; fi
-                sleep 10
             done
             if [[ -e $donefile ]]; then
                 done=$donenum

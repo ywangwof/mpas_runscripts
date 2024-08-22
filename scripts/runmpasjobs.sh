@@ -337,9 +337,9 @@ diag )
 esac
 
 if [ -t 1 ]; then # "interactive"
-    echo -e "\n${DARK}Interactivly running: ${BROWN}${task}${NC} ${LIGHT_BLUE}${runtime}${NC} from ${YELLOW}$(pwd)${NC}\n"
+    echo -e "\n${DARK}Interactivly running: ${BROWN}${task}${NC} ${LIGHT_BLUE}${runtime}${NC} from ${YELLOW}$(pwd)${NC} at ${PURPLE}$(date '+%Y%m%d_%H:%M:%S(%Z)')${NC}\n"
 else
-    echo -e "\n${DARK}Background   running: ${BROWN}${task}${NC} ${LIGHT_BLUE}${runtime}${NC} from ${BLYELLOWUE}$(pwd)${NC}\n"
+    echo -e "\n${DARK}Background   running: ${BROWN}${task}${NC} ${LIGHT_BLUE}${runtime}${NC} from ${BLYELLOWUE}$(pwd)${NC} at ${PURPLE}$(date '+%Y%m%d_%H:%M:%S(%Z)')${NC}\n"
 fi
 
 if [[ -z ${show} ]]; then echo -e "${GREEN}${cmds[*]}${NC}"; fi

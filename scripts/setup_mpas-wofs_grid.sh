@@ -1171,8 +1171,10 @@ function write_config {
 #    coef_3rd_order=0.25    # nearly 4th order advection
 #
 [MPAS_OPTIONS]
-    visc4_2dsmag=0.20
-    coef_3rd_order=1.0
+    visc4_2dsmag=0.05
+    h_mom_eddy_visc4=0.0
+    h_theta_eddy_visc4=0.0
+    coef_3rd_order=0.25
 
 [init]
     ICSIOTYPE="pnetcdf,cdf5"

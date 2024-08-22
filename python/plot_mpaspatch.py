@@ -210,7 +210,8 @@ def load_mpas_patches(pickle_fname):
     if(os.path.isfile(pickle_fname)):
         pickled_patches = open(pickle_fname,'rb')
         try:
-            patch_collection = pkle.load(pickled_patches)
+            in_pkle = pkle.load(pickled_patches)
+            #patch_collection = pkle.load(pickled_patches)
             pickled_patches.close()
             print("Pickle file (", pickle_fname, ") loaded succsfully")
 
@@ -226,7 +227,8 @@ def load_mpas_patches(pickle_fname):
             print("ERROR: succesfully!")
             sys.exit(-1)
 
-        return patch_collection
+        #return patch_collection
+        return in_pkle["patches"],in_pkle["range"]
     else:
         print("A valid pickle file for MPAS patches is required.")
         sys.exit(-1)
@@ -396,9 +398,9 @@ def parse_args():
     parser.add_argument('varname', help='Name of variable to be plotted',type=str, default=None)
 
     parser.add_argument('-v','--verbose',   help='Verbose output',                             action="store_true", default=False)
-    #parser.add_argument('-g','--gridfile',  help='Name of the MPAS file that contains cell grid',         type=str, default=None)
+    parser.add_argument('-g','--gridfile',  help='Name of the MPAS file that contains cell grid',         type=str, default=None)
     parser.add_argument('-p','--patchfile', help='Name of the MPAS patch file that contains cell patches',type=str, default=None)
-    parser.add_argument('-l','--vertLevels',help='Vertical levels to be plotted [l1,l2,l3,...]',  type=str, default=None)
+    parser.add_argument('-k','--vertLevels',help='Vertical levels to be plotted [l1,l2,l3,...]',  type=str, default=None)
     parser.add_argument('-c','--cntLevels', help='Contour levels [cmin,cmax,cinc]',               type=str, default=None)
     parser.add_argument('-o','--outfile',   help='Name of output image or output directory',              type=str, default=None)
     parser.add_argument('-range'         ,  help='Map range in degrees [lat1,lat2,lon1,lon2]',type=str, default=None)
@@ -428,7 +430,6 @@ def parse_args():
         sys.exit(0)
 
     varname = varnames[0]
-    varname = varnames[0]
     operator= None
     opmatch = re.match(r'([\w_]+)([+\-\*\/])([\w_]+)',varname)
     if opmatch:
@@ -456,7 +457,7 @@ def parse_args():
     out_args['caldiff'] = caldiff
     out_args['diffstr'] = diffstr
 
-    ranges = [-135.0,-60.0,20.0,55.0]
+    ranges = None # [-135.0,-60.0,20.0,55.0]
     if args.range == 'hrrr':
         if args.latlon:
             ranges = [-135.0,-60.0,20.0,55.0]
@@ -482,6 +483,7 @@ def parse_args():
     out_args['ranges']     = ranges
     out_args['vertLevels'] = args.vertLevels
     out_args['patchfile']  = args.patchfile
+    out_args['gridfile']   = args.gridfile
 
     #
     # Output file dir / file name
@@ -509,7 +511,7 @@ def parse_args():
     if args.cntLevels is None:
         cntlevel = None
     else:
-        cntlevel = [float(item) for item in args.cntLevels.split(',')]
+        cntlevel = [float(item.replace('"','')) for item in args.cntLevels.split(',')]
         if len(cntlevel) != 3:
             print(f"Option -c must be [cmin,cmax,cinc]. Got \"{cntlevel}\"")
             sys.exit(0)
@@ -517,6 +519,59 @@ def parse_args():
     out_args['cntlevel']         = cntlevel
 
     return make_namespace(out_args)
+
+########################################################################
+
+def retreive_variable_data(args,ndim, ncells, varobj):
+    if varobj.dimensions[1]=="nEdges":
+        if args.gridfile is not None:
+            with Dataset(args.gridfile, 'r') as grid:
+                cellsOnEdges = grid.variables['cellsOnEdge'][:]
+        else:
+            print("ERROR: gridfile is required because the varialbe is defined on nEdges.")
+            sys.exit(1)
+
+        origdata= varobj[:]
+        varshape = list(varobj.shape)
+        nedges = varshape[1]
+        varshape[1] = ncells
+
+        vardata = np.zeros(varshape)
+        edgecounts= np.zeros((ncells))
+
+        for n in range(0,nedges):
+            i = cellsOnEdges[n,0]-1
+            j = cellsOnEdges[n,1]-1
+            edgecounts[i] += 1
+            edgecounts[j] += 1
+
+        edgecounts = 1.0/edgecounts
+
+        for n in range(0,nedges):
+            i = cellsOnEdges[n,0]-1
+            j = cellsOnEdges[n,1]-1
+            vardata[:,i,:] += origdata[:,n,:]*edgecounts[i]
+            vardata[:,j,:] += origdata[:,n,:]*edgecounts[j]
+
+        ncfile = Dataset('Edge_interp.nc',mode='w',format='NETCDF4_CLASSIC')
+        edge_dim = ncfile.createDimension('nEdges', nedges)
+        cell_dim = ncfile.createDimension('nCells', ncells)
+        vert_dim = ncfile.createDimension('nVerts', varshape[2])
+        time_dim = ncfile.createDimension('time', None) # unlimited axis (can be appended to).
+        var_edgecounts = ncfile.createVariable('edgesCounts',np.float64,('nCells')) # note: unlimited dimension is leftmost
+        var_origdata = ncfile.createVariable('orig_data',np.float64,('time', 'nEdges','nVerts')) # note: unlimited dimension is leftmost
+        var_newdata = ncfile.createVariable('new_data',np.float64,('time', 'nCells','nVerts')) # note: unlimited dimension is leftmost
+        ncfile.title='Interpolate variable on Edges to Cells'
+
+        var_edgecounts[:] = edgecounts
+        var_origdata[:]   = origdata
+        var_newdata[:]    = vardata
+
+        ncfile.close()
+    else:
+        vardata   = varobj[:]
+
+    return vardata
 
 ########################################################################
 
@@ -552,7 +607,7 @@ def load_variables(cargs):
                     varstr = f"{var.name:24s}: {vndim}D {var.long_name} ({var.units})"
                     if vndim == 2 and vshapes[0] == 1 and vshapes[1] == nCells:
                         var2dlist.append(varstr)
-                    elif vndim == 3 and vshapes[0] == 1 and vshapes[1] == nCells and (vshapes[2] == nlevels or vshapes[2] == nlevels):
+                    elif vndim == 3 and vshapes[0] == 1 and vshapes[1] == nCells and (vshapes[2] == nlevels or vshapes[2] == nslevels):
                         var3dlist.append(varstr)
                     elif vndim == 0:
                         varstr = f"{var.name:20s}: (={var.getValue()}) {var.long_name} ({var.units})"
@@ -587,11 +642,12 @@ def load_variables(cargs):
             variable = mesh.variables[cargs.varnames[0]]
             varunits = variable.getncattr('units')
             varndim  = variable.ndim
-            varshapes = variable.shape
-            vardata   = variable[:]
+            vardata = retreive_variable_data(cargs,varndim,nCells,variable)
+            varshapes = vardata.shape
             validtimestring = mesh.variables['xtime'][0].tobytes().decode('utf-8')
+
             if cargs.operator is not None:
-                vardata1 = mesh.variables[cargs.varnames[1]][:]
+                vardata1 = retreive_variable_data(cargs,varndim, nCells, mesh.variables[cargs.varnames[1]])
                 vardata = eval(f"x {cargs.operator} y",{"x":vardata,"y":vardata1})
                 varname = f"{cargs.varnames[0]}{cargs.operator}{cargs.varnames[1]}"
             else:
@@ -599,7 +655,8 @@ def load_variables(cargs):
 
         if cargs.caldiff:
             with Dataset(cargs.fcstfiles[1], 'r') as mesh:
-                vardata = vardata - mesh.variables[varname][:]
+                vardata1 = retreive_variable_data(cargs,varndim, nCells, mesh.variables[varname])
+                vardata = vardata - vardata1
     else:
         print("ERROR: need a MPAS history/diag file.")
         sys.exit(0)
@@ -735,11 +792,11 @@ def make_plot(cargs,varobj,attrobj,var2d,pcollection,oattribs):
     #ax.add_feature(cfeature.LAKES, edgecolor='black',facecolor='white')
     #ax.add_feature(cfeature.RIVERS)
     ax.add_feature(cfeature.BORDERS)
-    ax.add_feature(cfeature.STATES,linewidth=0.1)
+    ax.add_feature(cfeature.STATES,linewidth=0.4)
     if cargs.basmap == "latlon":
-        gl = ax.gridlines(draw_labels=True,linewidth=0.2, color='gray', alpha=0.7, linestyle='--')
-        gl.xlocator = mticker.FixedLocator([-140,-120, -100, -80, -60])
-        gl.ylocator = mticker.FixedLocator([10,20,30,40,50,60])
+        gl = ax.gridlines(draw_labels=True,linewidth=0.5, color='gray', alpha=0.7, linestyle='--')
+        gl.xlocator = mticker.FixedLocator([-140,-135, -130,-125, -120, -115, -110,-105,-100, -95, -90,-85, -80,-75,-70, -60])
+        gl.ylocator = mticker.FixedLocator([10,15,20,25,30,35,40,45,50,55,60])
         gl.top_labels = False
         gl.left_labels = True  #default already
         gl.right_labels = False
@@ -787,8 +844,8 @@ if __name__ == "__main__":
     # Get patch file name
     #
     gridfile = args.fcstfiles[0]
-    #if args.gridfile is not None:
-    #    gridfile = args.gridfile
+    if args.gridfile is not None:
+        gridfile = args.gridfile
 
     if args.patchfile is not None:
         picklefile = args.patchfile
@@ -837,19 +894,19 @@ if __name__ == "__main__":
             if l == "max":
                 varplt = np.max(variable.vardata,axis=2)[t,:]
                 outlvl = f"_{l}"
-                outtlt = f"colum maximum {variable.varname}{args.diffstr} ({variable.varunits}) valid at {attributes.fcsttime}"
+                outtlt = f"colum maximum {variable.varname}{args.diffstr} valid at {attributes.fcsttime}"
             else:
                 varplt = variable.vardata[t,:,l]
                 outlvl = f"_K{l:02d}"
-                outtlt = f"{variable.varname}{args.diffstr} ({variable.varunits}) valid at {attributes.fcsttime} on level {l:02d}"
+                outtlt = f"{variable.varname}{args.diffstr} valid at {attributes.fcsttime} on level {l:02d}"
         elif variable.varndim == 230:
             varplt = variable.vardata[:,l]
             outlvl = f"_K{l:02d}"
-            outtlt = f"{variable.varname}{args.diffstr} ({variable.varunits}) on level {l:02d}"
+            outtlt = f"{variable.varname}{args.diffstr} on level {l:02d}"
         elif variable.varndim == 2:
             varplt = variable.vardata[t,:]
             outlvl = ""
-            outtlt = f"{variable.varname}{args.diffstr} ({variable.varunits}) valid at {attributes.fcsttime}"
+            outtlt = f"{variable.varname}{args.diffstr} valid at {attributes.fcsttime}"
         elif variable.varndim == 1:
             varplt = variable.vardata[:]
             outlvl = ""
@@ -857,6 +914,8 @@ if __name__ == "__main__":
         else:
             print(f"Variable {variable.varname} is in wrong shape: {variable.varshapes}.")
             sys.exit(0)
+
+        outtlt+=f" MIN: {varplt.min():#.4g} MAX: {varplt.max():#.4g}"
 
         color_map, normc,cmin, cmax, ticks_list = get_var_contours(variable.varname,varplt,args)
 
@@ -869,6 +928,9 @@ if __name__ == "__main__":
                         'ticks_list': ticks_list
                       }
 
-        patch_collection = load_mpas_patches(picklefile)
+        patch_collection,range_pkle = load_mpas_patches(picklefile)
+        if args.ranges is None:
+            args.ranges = range_pkle
+
         make_plot(args,variable,attributes,varplt,patch_collection,plt_attribs)
         patch_collection.remove()

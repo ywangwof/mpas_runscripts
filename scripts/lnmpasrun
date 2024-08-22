@@ -46,12 +46,20 @@ else
 fi
 
 cpfiles=(namelist.atmosphere streams.atmosphere          \
-         stream_list.atmosphere.diagnostics stream_list.atmosphere.output stream_list.atmosphere.surface)
+         stream_list.atmosphere.output stream_list.atmosphere.surface)
 
 
 for fn in "${cpfiles[@]}"; do
     echo "Copying $fn ..."
     cp $srcabsdir/$fn .
+done
+
+cpanyone=(stream_list.atmosphere.diagnostics stream_list.atmosphere.diagnostics_fcst stream_list.atmosphere.diagnostics_da )
+for fn in "${cpanyone[@]}"; do
+   if [[ -e $fn ]]; then
+       echo "Copying $fn ..."
+       cp $srcabsdir/$fn .
+   fi
 done
 
 #

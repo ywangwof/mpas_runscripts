@@ -228,9 +228,10 @@ if __name__ == "__main__":
         #
         print(f"Writting to pickle file ({pickle_fname}) .... ")
 
+        out_pkle = { "patches": patch_collection, "range": [lon_min-0.2,lon_max+0.2,lat_min-0.2,lat_max+0.2] }
         # Pickle the patch collection
         pickle_file = open(pickle_fname, 'wb')
-        pkle.dump(patch_collection, pickle_file)
+        pkle.dump(out_pkle, pickle_file)
         pickle_file.close()
 
         time2 = time.time()

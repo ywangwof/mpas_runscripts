@@ -39,3 +39,7 @@ wind_speed_10m_max
 wind_speed_10m_mean
 u10m_mean
 v10m_mean
+divergence
+pressure_p
+tend_sfc_pressure
+h_divergence
