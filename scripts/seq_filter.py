@@ -208,9 +208,11 @@ def decode_one_obs(fhandle,iobs,ncopy,nqc,cloud_types,verbose):
         elif i == itype:              # get kind
             #print(i,itype,sline)
             otype = int(sline)
+            #print(f"otype={otype}")
             if otype in cloud_types:     # or (otype >= 80 and otype <= 87):
                 line = fhandle.readline()
                 sline = line.strip()
+                #print(f"sline={sline}")
                 cloud_base,cloud_top = [decimal.Decimal(x) for x in sline.split()]
 
                 line = fhandle.readline()
@@ -253,9 +255,9 @@ def decode_one_obs(fhandle,iobs,ncopy,nqc,cloud_types,verbose):
                         }
             i += j
         elif sline == "visir":
-            itime = itype + 7        # skip 6 more lines
+            itime = itype + 6        # skip 6 more lines
             ivar  = itime + 1
-            nobslines += 6
+            nobslines += 5
 
 # visir
 #    17.08586741569378         40.85687083986613        -888888.0000000000
@@ -265,13 +267,13 @@ def decode_one_obs(fhandle,iobs,ncopy,nqc,cloud_types,verbose):
 #          132
 
             j = 0
-            while j < 5:
+            while j < 4:
                 line = fhandle.readline()
                 sline = line.strip()
                 #print(i,j,sline)
-                if j in (0,1,3):
+                if j in (0,2):
                     visir_values.extend([decimal.Decimal(x) for x in sline.split()])
-                elif j in (2,4):
+                elif j in (1,3):
                     visir_values.extend([int(x) for x in sline.split()])
                 j += 1
             i += j
@@ -633,7 +635,7 @@ def parse_args():
     parser.add_argument('-o','--outdir' , help='Name of the output file or an output directory',    default='./',        type=str)
     parser.add_argument('-x','--xtypes' , help='Type Numbers of observation to be removed',         default=None,        type=str)
     parser.add_argument('-c','--ctypes' , help='Type Numbers of observation that contains cloud lines',
-                                                                                                    default="124,125,126", type=str)
+                                                                                                    default="124,125,126,229", type=str)
     parser.add_argument('-t','--type'   , help='''Type Numbers of observation to be kept, for examples, 44 or 44,42''',
                                                                                                     default=None,        type=str)
     parser.add_argument('-r','--range' ,  help='Filter records by location range, [lat1-lat2,lon1-lon2]', default=None, type=str)

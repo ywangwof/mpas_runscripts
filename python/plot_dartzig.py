@@ -182,6 +182,38 @@ def daterange(start_date, end_date, minutes=15):
 
 ########################################################################
 
+def obsObj_init(numfile,timelist):
+
+    var_objtmp = { 'times':    [],
+                'rms_prior':   [],
+                'rms_post':    [],
+                'sprd_prior':  [],
+                'sprd_post':   [],
+                'bias_prior':  [],
+                'bias_post':   [],
+                'ratio':       [],
+                'obs_std':     [],
+                'qc_numbers':  {},
+                'type_label':  None,
+                'unit_label':  None,
+                'numfile':     0
+    }
+
+    for i in range(numfile):
+        var_objtmp['times'].append(timelist[i])
+        var_objtmp['rms_prior'].append(0)
+        var_objtmp['rms_post'].append(0)
+        var_objtmp['sprd_prior'].append(0)
+        var_objtmp['sprd_post'].append(0)
+        var_objtmp['bias_prior'].append(0)
+        var_objtmp['bias_post'].append(0)
+        var_objtmp['ratio'].append(0)
+        var_objtmp['obs_std'].append(0)
+
+    return var_objtmp
+
+########################################################################
+
 def load_variables(cargs,wargs, filelist):
     """ Load obs_seq.final sequence files """
 
@@ -213,27 +245,36 @@ def load_variables(cargs,wargs, filelist):
                   #'GOES_CWP_ZERO'              :
                   }
 
+    types15mins = { 119: 'DOPPLER_RADIAL_VELOCITY',
+                    120: 'RADAR_REFLECTIVITY',
+                    121: 'RADAR_CLEARAIR_REFLECTIVITY',
+                    124: 'GOES_LWP_PATH',
+                    125: 'GOES_IWP_PATH',
+                    126: 'GOES_CWP_ZERO',
+                    127: 'GOES_LWP_NIGHT',
+                    128: 'GOES_IWP_NIGHT',
+                    130: 'GOES_CWP_ZERO_NIGHT',
+                     25: 'LAND_SFC_U_WIND_COMPONENT',
+                     26: 'LAND_SFC_V_WIND_COMPONENT',
+                     27: 'LAND_SFC_TEMPERATURE',
+                     28: 'LAND_SFC_SPECIFIC_HUMIDITY',
+                     43: 'LAND_SFC_ALTIMETER',
+                     98: 'LAND_SFC_RELATIVE_HUMIDITY',
+                    118: 'LAND_SFC_DEWPOINT',
+                    229: 'GOES_16_ABI_TB'    }
+
     #beg_dt = datetime.strptime(f"{wargs.eventdate} {begtime}",'%Y%m%d %H%M')
     #end_dt = datetime.strptime(f"{wargs.eventdate} {endtime}",'%Y%m%d %H%M')
     #if int(endtime) < 1200:
     #    end_dt = end_dt + timedelta(days=1)
 
-    var_objtmp = { 'times':    [],
-                'rms_prior':   [],
-                'rms_post':    [],
-                'sprd_prior':  [],
-                'sprd_post':   [],
-                'bias_prior':  [],
-                'bias_post':   [],
-                'ratio':       [],
-                'obs_std':     [],
-                'qc_numbers':  {},
-                'type_label':  None,
-                'unit_label':  None,
-                'numfile':     0
-    }
+    if wargs.obstype is not None:
+        obstypes = [int(t) for t in wargs.obstype]
+    else:
+        obstypes = []
 
-    var_objs = {}
+    var_objs = {}; num15min = 0; num1hr = 0
+    times_15min = []; times_1hour = []; type_Labels = {}; unit_Labels = {}
     for obsfile in filelist:
 
         #timestr   = run_dt.strftime("%H%M")
@@ -266,37 +307,70 @@ def load_variables(cargs,wargs, filelist):
                 copyMetaData = fh.variables['CopyMetaData'][:,:]
                 ncopy        = fh.dimensions['copy'].size
 
-            #nobs      = varobs.shape[0]
-
-            #
-            # find the variance index from CopyMetaData
-            #
-            variance_str = "observation error variance"
-            #copystrs     = []
-            ivariance    = None
-            for k in range(ncopy):
-                copy_str = copyMetaData[k,:].tobytes().decode('utf-8')
-                #copystrs.append(copy_str)
-                if  copy_str.strip() == variance_str:
-                    ivariance = k
-                    break
-
-            if ivariance is None:
-                print(f"ERROR: Cannot find copy for variance.")
-                sys.exit(1)
-
-            if cargs.verbose: print(f"              observation error variance is the {ivariance}th copy")
-
         else:
             print(f"ERROR: file {obsfile} not found")
             sys.exit(1)
 
+        #nobs      = varobs.shape[0]
+
+        #
+        # find the variance index from CopyMetaData
+        #
+        variance_str = "observation error variance"
+        #copystrs     = []
+        ivariance    = None
+        for k in range(ncopy):
+            copy_str = copyMetaData[k,:].tobytes().decode('utf-8')
+            #copystrs.append(copy_str)
+            if  copy_str.strip() == variance_str:
+                ivariance = k
+                break
+
+        if ivariance is None:
+            print(f"ERROR: Cannot find copy for variance.")
+            sys.exit(1)
+
+        if cargs.verbose: print(f"              observation error variance is the {ivariance}th copy")
+
+        #
+        # remember newly appear observation type for its label & unit
+        #
+        for otype in np.unique(varobstypes).astype(int):
+            if otype not in type_Labels.keys():
+                t_label = vartypesMeta[otype-1,:].tobytes().decode('utf-8').strip()
+                type_Labels[otype] = t_label
+                unit_Labels[otype] = unitLabels.get(t_label,'Undefined')
+
+        #
+        # Remember the file number for 150-min interval and 1 hour interval individually
+        #
+        num15min += 1
+        times_15min.append(timestr)
+        if int(timestr[3:5]) == 0 :
+            num1hr += 1
+            times_1hour.append(timestr)
+
+        #
+        # Set go through observation types in the file if it is not set from the command line
+        #
         if wargs.obstype is None:
-            obstypes = np.unique(varobstypes)
-        else:
-            obstypes = [int(t) for t in wargs.obstype]
+            obstypes = np.append(obstypes,varobstypes)
+            obstypes = np.unique(obstypes).astype(int)
+            #print(f"obstypes={obstypes}")
 
         for otype in obstypes:
+
+            if otype not in np.unique(varobstypes):    # This obs type not in this file
+                if int(timestr[3:5]) > 0:              # not at exact hour
+                    if otype not in types15mins.keys():
+                        continue
+
+            if otype in types15mins:
+                numfile = num15min-1
+                time_Labels = times_15min
+            else:
+                numfile = num1hr-1
+                time_Labels = times_1hour
 
             #
             # Select by observation type and skip unused observation types
@@ -309,23 +383,18 @@ def load_variables(cargs,wargs, filelist):
             for ind in obs_index:
                 if varqc[ind,1] == 0:  i+=1        # This observation is used
 
-            #print(f"{otype}, {i}")
-            if i == 0: continue
-
             #
             # Initialize return object for this type of osbervation
             #
             if str(otype) in var_objs.keys():
-                #print(f"reading {obsfile}, {otype} {var_objs.keys()} retrieve old obj")
                 var_obj = var_objs[str(otype)]
             else:
-                #print(f"reading {obsfile}, {otype} {var_objs.keys()} initialize obj")
-                var_objs[str(otype)] = copy.deepcopy(var_objtmp)
-                var_obj = var_objs[str(otype)]
+                var_obj = obsObj_init(numfile,time_Labels)
+                var_objs[str(otype)] = var_obj
 
-            var_obj['type_label'] = vartypesMeta[otype-1,:].tobytes().decode('utf-8').strip()
-            var_obj['unit_label'] = unitLabels.get(var_obj['type_label'],'Undefined')
-
+            var_obj['type_label'] = type_Labels[otype]
+            var_obj['unit_label'] = unit_Labels[otype]
+            var_obj['numfile']    = numfile + 1
 
             #
             # Select by threshold for reflectivity only
@@ -343,6 +412,7 @@ def load_variables(cargs,wargs, filelist):
             # Check observation numbers based on qc flags, which should be done before the dataqc & dartqc narrowers
             #
             nobs_type = len(obs_index)
+
             if nobs_type > 0:
                 typeqcs = np.unique(varqc[obs_index,1])
                 uniqqcs = []
@@ -350,18 +420,18 @@ def load_variables(cargs,wargs, filelist):
                     obs_index1 = np.where(varqc[obs_index,1] == qval)[0]
                     qckey = str(qval)
                     if qckey in var_obj["qc_numbers"].keys():
-                        #print(f"Added {qckey} number {len(obs_index1)} numf = {var_obj['numfile']} to type {otype}")
                         var_obj["qc_numbers"][qckey].append(len(obs_index1))
                     else:
-                        #print(f"initialize qc = {qckey} number {len(obs_index1)} numf = {var_obj['numfile']} to type {otype}")
-                        var_obj["qc_numbers"][qckey] = [0]*var_obj['numfile']+[len(obs_index1)]
+                        var_obj["qc_numbers"][qckey] = [0]*numfile+[len(obs_index1)]
                     uniqqcs.append(qckey)
 
                 # if some qc value not appear in this cycle
                 for qckey in var_obj["qc_numbers"].keys()-uniqqcs:
                    var_obj["qc_numbers"][qckey].append(0)
 
-                var_obj['numfile'] = var_obj['numfile']+1
+            else:
+                for qckey in var_obj["qc_numbers"].keys():
+                    var_obj["qc_numbers"][qckey].append(0)
 
             #
             # Select by dataqc & dartqc
@@ -389,14 +459,13 @@ def load_variables(cargs,wargs, filelist):
             #
             nobs_type = len(obs_index)
             if nobs_type > 0:
-                obs  = varobs[obs_index,0]
-                prio = varobs[obs_index,1]
-                post = varobs[obs_index,2]
+                obs      = varobs[obs_index,0]
+                prio     = varobs[obs_index,1]
+                post     = varobs[obs_index,2]
                 sprd_pri = varobs[obs_index,3]
                 sprd_pst = varobs[obs_index,4]
                 variance = varobs[obs_index,ivariance]
 
-                print(f"time = {timestr}, number of obs = {nobs_type} for {var_obj['type_label']}")
                 if cargs.verbose: print(f"              index variance: {ivariance}, value: {variance[0:3]}")
 
                 variance = np.min(variance)   # use minimum to exclude the boundary effects
@@ -445,7 +514,18 @@ def load_variables(cargs,wargs, filelist):
                 #    #Output mean value
                 #    var_obj['obs_std'].append( np.sqrt(np.mean(variance)) )
 
-                var_obj['times'].append( timestr )
+            else:
+                var_obj['rms_prior'].append( 0 )
+                var_obj['rms_post'].append( 0 )
+                var_obj['sprd_prior'].append( 0 )
+                var_obj['sprd_post'].append(  0 )
+                var_obj['bias_prior'].append( 0 )
+                var_obj['bias_post'].append(  0 )
+                var_obj['ratio'].append( 0 )
+                var_obj['obs_std'].append( 0 )
+
+            print(f"time = {timestr}, number of obs = {nobs_type} for {var_obj['type_label']}")
+            var_obj['times'].append( timestr )
 
     # finally, make the return objects a set of namespaces
     for otype in var_objs.keys():
@@ -473,8 +553,8 @@ QCValMeta = { '0' : 'assimilated successfully',
               '6' : 'incoming qc value was larger than threshold',
               '7' : 'Outlier threshold test failed',
               '8' : 'vertical location conversion failed',
-              '10' : 'Inlier threshold test failed',
-              '14' : 'Unknown'
+              '10': 'Inlier threshold test failed',
+              '14': 'Unknown'
             }
 
 def print_meta(wargs,obsfile):
@@ -757,7 +837,7 @@ def plot_qcnumbers(cargs,wargs,wobj):
 
     figure = plt.figure(figsize = (12,12) )
 
-    ax = figure.add_axes([0.1, 0.2, 0.8, 0.6]) # main axes
+    ax = figure.add_axes([0.1, 0.2, 0.8, 0.6])       # main axes
 
     mks = ['o', 'D', '+', '*', 's', 'x', '^', '1']
     cls = ['r', 'g', 'b', 'c', 'k', 'y', 'm', 'k']

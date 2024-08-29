@@ -56,7 +56,7 @@ done
 
 cpanyone=(stream_list.atmosphere.diagnostics stream_list.atmosphere.diagnostics_fcst stream_list.atmosphere.diagnostics_da )
 for fn in "${cpanyone[@]}"; do
-   if [[ -e $fn ]]; then
+   if [[ -e $srcabsdir/$fn ]]; then
        echo "Copying $fn ..."
        cp $srcabsdir/$fn .
    fi

@@ -384,6 +384,8 @@ def parse_args():
     parser.add_argument('-g','--gridfile',  help='Model file that provide grids',                                  type=str,   default=None)
     parser.add_argument('-o','--outfile' ,  help='Name of the output image file or an output directory',           type=str,   default=None)
     parser.add_argument('-r','--resolution',help='Resolution of the output image',                                 type=int,   default=100)
+    parser.add_argument('-t','--ctypes' ,   help='Type Numbers of observation that contains cloud lines for decoding ASCII sequence files',
+                                                                                                    default="124,125,126,229", type=str)
 
     args = parser.parse_args()
 
@@ -447,6 +449,22 @@ def parse_args():
         sys.exit(0)
 
     parsed_args['type']  = type
+
+    #
+    # Types with cloud bottone/top records
+    #
+    typerange = re.compile("(\d+)-(\d+)")
+    ctypes=[]
+    if args.ctypes is not None:
+        parsed_args['ctypes'] = []
+        ctypes = [x for x in args.ctypes.split(',')]
+        for typestr in ctypes:
+            typematch = typerange.match(typestr)
+            if typematch:
+                for t in range(int(typematch[1]),int(typematch[2])+1):
+                    parsed_args['ctypes'].append(t)
+            else:
+                parsed_args['ctypes'].append(int(typestr))
 
     #-------------------------------------------------------------------
     # Map releated parameters
@@ -683,7 +701,7 @@ def load_variables(args):
 
 ########################################################################
 
-def load_obs_seq(varargs):
+def load_obs_seq(filename,cloud_types,verbose):
 
     var_obj = {}
 
@@ -706,16 +724,16 @@ def load_obs_seq(varargs):
     #expt2 = expect_time + 300
 
     nobs = 0
-    if os.path.lexists(varargs.obsfile):
+    if os.path.lexists(filename):
 
-        with open(args.obsfile,'r') as fh:
+        with open(filename,'r') as fh:
             while True:
                 line = fh.readline().strip()
                 if not line: break
                 #print(line)
                 if type_re.match(line):
                     type,label = line.split()
-                    type_labels[type] = label
+                    type_labels[type] = f"{label:32s}"
                     if type not in validtypevals:
                         validtypevals.append(type)
 
@@ -736,7 +754,8 @@ def load_obs_seq(varargs):
 
                 elif line.startswith("OBS"):
                     #obs_gen = islice(fh, nobslines)
-                    obs = decode_obs_seq_OBS(fh,ncopy,nqc)
+                    iobs = int(line.split()[1])      # number of this obs
+                    obs = decode_obs_seq_OBS(fh,iobs,ncopy,nqc,cloud_types,verbose)
                     vardat.append(obs.value)
                     varloc.append((obs.lon,obs.lat,obs.level))
                     vartim.append(obs.time)
@@ -818,7 +837,7 @@ def load_obs_seq(varargs):
 
 ########################################################################
 
-def decode_obs_seq_OBS(fhandle,ncopy,nqc):
+def decode_obs_seq_OBS(fhandle,iobs,ncopy,nqc,cloud_types,verbose):
 
     nobslines = 8+ncopy+nqc
 
@@ -842,9 +861,9 @@ def decode_obs_seq_OBS(fhandle,ncopy,nqc):
             nobslines += 7
             #print(i,nobslines,itime,sline)
         elif sline == "visir":
-            itime = itype + 7
+            itime = itype + 6
             ivar  = itime + 1
-            nobslines += 6
+            nobslines += 5
 
         if i < ncopy:
             values.append(float(sline))
@@ -857,13 +876,13 @@ def decode_obs_seq_OBS(fhandle,ncopy,nqc):
 
         elif i == itype:
             otype = int(sline)
-            if otype >= 124 and otype <= 130:  # GOES observation contains an extra line for cloud base and cloud top heights
+            if otype in cloud_types:     # or (otype >= 80 and otype <= 87):  # GOES observation contains an extra line for cloud base and cloud top heights
               itime = itype + 3                # and an integer line (?)
               ivar  = itime + 1
               nobslines = 10+ncopy+nqc
 
         elif i == itime:
-            #print(sline)
+            #print(f"time: {i}/{nobslines},{itime} - {sline}")
             secs,days = sline.split()
         elif i == ivar:
             var=float(line)
@@ -874,7 +893,8 @@ def decode_obs_seq_OBS(fhandle,ncopy,nqc):
     # 1970 01 01 00:00:00 is 134774 days 00 seconds
     # one day is 86400 seconds
 
-    obsobj = {'value': values,
+    obsobj = {'iobs' : iobs,
+              'value': values,
               'qc':    qcs,
               'lon':   math.degrees(float(lon)),
               'lat':   math.degrees(float(lat)),
@@ -908,7 +928,8 @@ QCValMeta = { '0' : 'assimilated successfully',
               '5' : 'not used because not selected in namelist',
               '6' : 'incoming qc value was larger than threshold',
               '7' : 'Outlier threshold test failed',
-              '8' : 'vertical location conversion failed'
+              '8' : 'vertical location conversion failed',
+              '10': 'Inlier test failed'
             }
 
 ########################################################################
@@ -1644,7 +1665,8 @@ if __name__ == "__main__":
     if args.ncfmt:
         obs_obj = load_variables(args)
     else:
-        obs_obj = load_obs_seq(args)
+        if cmd_args.verbose: print(f" load_obs_seq: Reading {args.obsfile}\n")
+        obs_obj = load_obs_seq(args.obsfile,args.ctypes,cmd_args.verbose)
 
     if args.type is None:
         args.type = [str(t) for t in obs_obj.distypes]

@@ -306,7 +306,7 @@ plot )
 #5. verif
 verif )
     if [[ ! -e ${doneverif} ]]; then
-        echo "${DARK}Waiting for ${donepost} ...."
+        echo -e "${DARK}Waiting for ${donepost} ...."
         while [[ ! -e "${donepost}" ]]; do
             sleep 10
         done

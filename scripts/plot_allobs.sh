@@ -233,28 +233,32 @@ done
 if [[ ! -e done.zigzag ]]; then
     ${show} ${rootdir}/python/plot_dartzig.py ${eventdate} -d ${rundir}/${eventdate}/${dadir} -r 300 2>/dev/null
 
-    cd ${rundir}/${eventdate}/${dadir}/obs_diag || exit 1
+    if [[ -z ${show} ]]; then
+        cd ${rundir}/${eventdate}/${dadir}/obs_diag || exit 1
 
-    image_destdir="${imagedir}/${eventdate}${affix}/1500"
-    if [[ ! -d ${image_destdir} ]]; then
-        mkdir -p ${image_destdir}
+        image_destdir="${imagedir}/${eventdate}${affix}/1500"
+        if [[ ! -d ${image_destdir} ]]; then
+            mkdir -p ${image_destdir}
+        fi
+
+        if [[ $verb -eq 1 ]]; then
+            echo "Convert to 1100x1100 and Trim for the web visualization."
+        fi
+
+        estatus=0
+        for fn in rms_*.png ratio_*.png number_*.png; do
+            destfn="${fn%_*}_f360.png"
+            convert $fn -resize 1100x1100 -trim ${image_destdir}/${destfn}
+            (( estatus+=$? ))
+        done
+
+        if [[ ${estatus} -eq 0 ]]; then
+            cp /scratch/ywang/MPAS/gnu/frdd-wofs-post/json/wofs_run_metadata_obsdiag.json ${image_destdir}/wofs_run_metadata.json
+            ${show} touch "done.zigzag"
+        fi
     fi
-
-    if [[ $verb -eq 1 ]]; then
-        echo "Convert to 1100x1100 and Trim for the web visualization."
-    fi
-
-    estatus=0
-    for fn in rms_*.png ratio_*.png number_*.png; do
-        destfn="${fn%_*}_f360.png"
-        convert $fn -resize 1100x1100 -trim ${image_destdir}/${destfn}
-        (( estatus+=$? ))
-    done
-
-    if [[ ${estatus} -eq 0 ]]; then
-        cp /scratch/ywang/MPAS/gnu/frdd-wofs-post/json/wofs_run_metadata_obsdiag.json ${image_destdir}/wofs_run_metadata.json
-        ${show} touch "done.zigzag"
-    fi
+else
+    echo "Found $(pwd)/done.zigzag. Skipping ...."
 fi
 
 exit 0

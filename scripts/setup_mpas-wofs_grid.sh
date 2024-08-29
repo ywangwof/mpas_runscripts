@@ -1109,6 +1109,7 @@ function write_config {
 
     cat <<EOF > $configname
 #!/bin/bash
+# shellcheck disable=SC1035,SC1020,SC1073,SC1072
 #
 # This file contains settings specifically for case $eventdate
 # It does NOT contain anything that is configurable from the command line
@@ -1259,8 +1260,8 @@ function write_config {
     partition_post="${partition_post}"
     claim_cpu_fcst="${claim_cpu_fcst}"
     claim_cpu_post="${claim_cpu_post}"
-    npefcst="${npefcst}";          ncores_fcst="${ncores_fcst}";  nnodes_fcst="${nnodes_fcst}"
-    ncores_post="${ncores_post}";  npepost="${npepost}";          nnodes_post="${nnodes_post}"
+    npefcst="${npefcst}";    ncores_fcst="${ncores_fcst}";  nnodes_fcst="${nnodes_fcst}"
+    npepost="${npepost}";    ncores_post="${ncores_post}";  nnodes_post="${nnodes_post}"
 
     claim_time_fcst="01:20:00"
     claim_time_mpassit_alltimes="03:30:00"

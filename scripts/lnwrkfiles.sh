@@ -97,11 +97,26 @@ function run_cmd {
         fi
         $dorun "${cmds[@]}" "${cmdfns[@]}"
     else
+
         for arg in "${cmdfns[@]}"; do
-            if [[ $verb -eq 1 ]]; then
-                echo "${cmds[@]}" "${src_dir}/$arg" "${target}"
+            subdir=$(dirname "$arg")
+            fn=$(basename "$arg")
+            if [[ ! "$subdir" == "." ]]; then
+                srcfn="$src_dir/$subdir/$fn"
+                desdir="$target/$subdir"
+                if [[ ! -e $subdir ]]; then mkdir -p "$subdir"; fi
+                #cd "$subdir" || exit 1
+            else
+                srcfn="$src_dir/$arg"
+                desdir="$target"
             fi
-            $dorun "${cmds[@]}" "${src_dir}/$arg" "${target}"
+
+            if [[ $verb -eq 1 ]]; then echo "${cmds[@]}" "${srcfn}" "${desdir}"; fi
+            $dorun "${cmds[@]}" "${srcfn}" "${desdir}"
+
+            #if [[ -n $subdir ]]; then
+            #    cd ${target} || exit 1
+            #fi
         done
     fi
 }
@@ -283,6 +298,30 @@ for pkg in "${packages[@]}"; do
             cd "${desdir}" || exit 1
             echo "  -- ${cmdnote} DART static to $(pwd) ...."
             run_cmd "${runcmd}" "$srcdart/assimilation_code/programs/gen_sampling_err_table/work" "sampling_error_correction_table.nc"
+
+            coef_rootdir="/scratch/tajones/software/nvidia/rttov13/rtcoef_rttov13"
+
+            coef_files=(    rttov9pred54L/rtcoef_goes_16_abi.dat                          \
+                            rttov13pred54L/rtcoef_goes_16_abi_7gas.dat                    \
+                            rttov13pred54L/rtcoef_goes_16_abi_7gas_ironly.dat             \
+                            rttov13pred54L/rtcoef_goes_16_abi_o3.dat                      \
+                            rttov13pred54L/rtcoef_goes_16_abi_o3co2.dat                   \
+                            rttov13pred54L/rtcoef_goes_16_abi_o3co2_ironly.dat            \
+                            rttov13pred54L/rtcoef_goes_16_abi_o3_ironly.dat               \
+                            mfasis_lut/rttov_mfasis_cld_goes_16_abi_deff.H5               \
+                            mfasis_lut/rttov_mfasis_cld_goes_16_abi_deff_sub1micron.H5    \
+                            mfasis_lut/rttov_mfasis_cld_goes_16_abi_opac.H5               \
+                            mfasis_lut/rttov_mfasis_cld_goes_16_abi_opac_sub1micron.H5    \
+                            cldaer_visir/scaercoef_goes_16_abi_cams.dat                   \
+                            cldaer_ir/scaercoef_goes_16_abi_cams_ironly.dat               \
+                            cldaer_visir/scaercoef_goes_16_abi_opac.dat                   \
+                            cldaer_ir/scaercoef_goes_16_abi_opac_ironly.dat               \
+                            cldaer_visir/sccldcoef_goes_16_abi.dat                        \
+                            cldaer_ir/sccldcoef_goes_16_abi_ironly.dat                    )
+
+            cd "${desdir}/rtcoef_rttov13" || exit 1
+            echo "  -- ${cmdnote} DART RTTOV13 coef files to $(pwd) ...."
+            run_cmd "${runcmd}" "${coef_rootdir}" "${coef_files[@]}"
         fi
         ;;
     #5. MPASREGION
