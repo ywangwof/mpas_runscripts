@@ -228,7 +228,7 @@ function run_mpas {
     if [[ -z ${visc4_2dsmag} ]];       then visc4_2dsmag=0.05;      fi
     if [[ -z ${coef_3rd_order} ]];     then coef_3rd_order=0.25;    fi
     if [[ -z ${h_mom_eddy_visc4} ]];   then h_mom_eddy_visc4=0.0;   fi
-    if [[ -z ${h_theta_eddy_visc4} ]]; then h_theta_eddy_visc4=0.0; fi
+    if [[ -z ${h_theta_eddy_visc4} ]]; then h_theta_eddy_visc4=0.25; fi
 
     jobarrays=()
     for iens in $(seq 1 $ENS_SIZE); do
@@ -342,7 +342,7 @@ function run_mpas {
     config_h_theta_eddy_visc2       = 0.0
     config_h_theta_eddy_visc4       = ${h_theta_eddy_visc4}
     config_v_theta_eddy_visc2       = 0.0
-    config_h_scalar_eddy_visc4      = 0.0
+    config_h_scalar_eddy_visc4      = 0.25
     config_horiz_mixing             = '2d_smagorinsky'
     config_len_disp                 = 3000.0
     config_visc4_2dsmag             = ${visc4_2dsmag}
