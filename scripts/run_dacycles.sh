@@ -2490,29 +2490,10 @@ function run_mpas {
     config_microp_re                 = true
     config_physics_suite             = 'convection_permitting'
     config_convection_scheme         = 'off'
+    config_frac_seaice               = false
     config_pbl_scheme                = '${pblscheme}'
     config_sfclayer_scheme           = '${sfcscheme}'
-
-    config_frac_seaice         = true
-    config_gwdo_scheme         = 'off'
 EOF
-        if [[ ${sfcscheme} == "sf_mynn" ]]; then
-            cat << EOF >> namelist.atmosphere
-    config_radt_cld_scheme     = 'cld_fraction_mynn'
-    config_mynn_edmf_tke       = 0
-    config_mynn_edmf           = 1
-    config_mynn_mixqt          = 0
-    config_mynn_tkeadvect      = .false.
-    config_mynn_cloudpdf       = 2
-    config_mynn_closure        = 2.6
-    config_mynn_mixscalars     = 1
-    config_mynn_edmf_output    = 0
-    config_mynn_mixlength      = 1
-    config_mynn_mixclouds      = 1
-    config_mynn_tkebudget      = 0
-    config_mynn_edmf_mom       = 1
-EOF
-        fi
 
         if [[ ${mpscheme} == "mp_nssl2m" ]]; then
             cat << EOF >> namelist.atmosphere
