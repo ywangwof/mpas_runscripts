@@ -295,7 +295,7 @@ for pkg in "${packages[@]}"; do
             echo "  -- ${cmdnote} DART programs to $(pwd) ...."
             run_cmd "${runcmd}" "$srcdart/models/mpas_atm/work" "${dartprograms[*]}"
 
-            cd "${desdir}" || exit 1
+            cd "${rootdir}/fix_files" || exit 1
             echo "  -- ${cmdnote} DART static to $(pwd) ...."
             run_cmd "${runcmd}" "$srcdart/assimilation_code/programs/gen_sampling_err_table/work" "sampling_error_correction_table.nc"
 
@@ -319,9 +319,9 @@ for pkg in "${packages[@]}"; do
                             cldaer_visir/sccldcoef_goes_16_abi.dat                        \
                             cldaer_ir/sccldcoef_goes_16_abi_ironly.dat                    )
 
-            cd "${desdir}/rtcoef_rttov13" || exit 1
+            cd "${rootdir}/fix_files/rtcoef_rttov13" || exit 1
             echo "  -- ${cmdnote} DART RTTOV13 coef files to $(pwd) ...."
-            run_cmd "${runcmd}" "${coef_rootdir}" "${coef_files[@]}"
+            run_cmd "${runcmd}" "${coef_rootdir}" "${coef_files[*]}"
         fi
         ;;
     #5. MPASREGION

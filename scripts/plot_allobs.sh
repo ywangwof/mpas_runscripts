@@ -2,8 +2,9 @@
 script_dir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${script_dir}")")
 #rootdir="/scratch/ywang/MPAS/gnu/mpas_scripts"
+mpasdir=$(dirname "$rootdir")
 
-rundir="${rootdir}/run_dirs"
+rundir="${mpasdir}/run_dirs"
 imagedir="${rundir}/image_files"
 
 eventdateDF=$(date -u +%Y%m%d)
