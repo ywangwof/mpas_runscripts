@@ -226,10 +226,11 @@ function run_mpas {
     # Preparation for each member
     # nenslbc/pbl_schemes/sfclayer_schemes are from the config file
     #
-    if [[ -z ${visc4_2dsmag} ]];       then visc4_2dsmag=0.05;      fi
-    if [[ -z ${coef_3rd_order} ]];     then coef_3rd_order=0.25;    fi
-    if [[ -z ${h_mom_eddy_visc4} ]];   then h_mom_eddy_visc4=0.0;   fi
-    if [[ -z ${h_theta_eddy_visc4} ]]; then h_theta_eddy_visc4=0.25; fi
+    if [[ -z ${coef_3rd_order} ]];      then coef_3rd_order=0.25;      fi
+    if [[ -z ${visc4_2dsmag} ]];        then visc4_2dsmag=0.05;        fi
+    if [[ -z ${h_mom_eddy_visc4} ]];    then h_mom_eddy_visc4=0.0;     fi
+    if [[ -z ${h_theta_eddy_visc4} ]];  then h_theta_eddy_visc4=0.25;  fi
+    if [[ -z ${h_scalar_eddy_visc4} ]]; then h_scalar_eddy_visc4=0.25; fi
 
     jobarrays=()
     for iens in $(seq 1 $ENS_SIZE); do
@@ -343,7 +344,7 @@ function run_mpas {
     config_h_theta_eddy_visc2       = 0.0
     config_h_theta_eddy_visc4       = ${h_theta_eddy_visc4}
     config_v_theta_eddy_visc2       = 0.0
-    config_h_scalar_eddy_visc4      = 0.25
+    config_h_scalar_eddy_visc4      = ${h_scalar_eddy_visc4}
     config_horiz_mixing             = '2d_smagorinsky'
     config_len_disp                 = 3000.0
     config_visc4_2dsmag             = ${visc4_2dsmag}
@@ -359,6 +360,7 @@ function run_mpas {
     config_coef_3rd_order           = ${coef_3rd_order}
     config_epssm                    = 0.1
     config_smdiv                    = 0.1
+    config_smagorinsky_coef         = 0.25
 /
 &damping
     config_mpas_cam_coef             = 2.0
@@ -1620,7 +1622,7 @@ elif [[ $machine == "Cheyenne" ]]; then
     modulename="defaults"
 else    # Vecna at NSSL
     modulename="env.mpas_smiol"
-    source ${rootdir}/modules/${modulename}
+    source ${rootdir}/modules/${modulename} || exit $?
 fi
 
 if [[ $dorun == false ]]; then
