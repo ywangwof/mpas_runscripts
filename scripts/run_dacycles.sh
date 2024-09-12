@@ -4,6 +4,7 @@
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
+mpasdir=$(dirname "${rootdir}")
 
 eventdateDF=$(date -u +%Y%m%d)
 
@@ -133,7 +134,7 @@ function usage {
     echo "   DEFAULTS:"
     echo "              eventdt = $eventdateDF"
     echo "              rootdir = $rootdir"
-    echo "              WORKDIR = $rootdir/run_dirs"
+    echo "              WORKDIR = $mpasdir/run_dirs"
     echo "              TEMPDIR = $rootdir/templates"
     echo "              FIXDIR  = $rootdir/fix_files"
     echo " "
@@ -240,7 +241,7 @@ function run_obsmerge {
 
             obsflists+=(obsflist.bufr)
         else
-            mecho0 -e "${RED}ERROR${NC}: command ${BROWN}${obspreprocess}${NC} for PREPBUFR data"
+            mecho0 "${RED}ERROR${NC}: command ${BROWN}${obspreprocess}${NC} for PREPBUFR data"
         fi
     else
             echo "    PrepBufr data not found: ${bufr_file##"${OBS_DIR}"/}"
@@ -2493,6 +2494,7 @@ function run_mpas {
     config_frac_seaice               = false
     config_pbl_scheme                = '${pblscheme}'
     config_sfclayer_scheme           = '${sfcscheme}'
+    config_mynn_cloudpdf             = 0
 EOF
 
         if [[ ${mpscheme} == "mp_nssl2m" ]]; then
@@ -3374,7 +3376,7 @@ function run_clean {
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #@ MAIN
 
-WORKDIR="${rootdir}/run_dirs"
+WORKDIR="${mpasdir}/run_dirs"
 TEMPDIR="${rootdir}/templates"
 FIXDIR="${rootdir}/fix_files"
 

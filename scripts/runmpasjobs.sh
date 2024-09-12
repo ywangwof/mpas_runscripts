@@ -3,6 +3,7 @@
 script_dir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 top_dir=$(realpath "$(dirname "${script_dir}")")
 #top_dir="/scratch/ywang/MPAS/gnu/mpas_scripts"
+mpas_dir=$(dirname "$top_dir")
 
 eventdateDF=$(date -u +%Y%m%d%H%M)
 
@@ -10,10 +11,9 @@ eventdateDF=$(date -u +%Y%m%d%H%M)
 # To run MPAS-WoFS tasks interactively or using at/cron at background
 #
 
-run_dir=${top_dir}/run_dirs
+run_dir=${mpas_dir}/run_dirs
+post_dir=${mpas_dir}/frdd-wofs-post/wofs/scripts
 script_dir=${top_dir}/scripts
-post_dir=${top_dir}/wofs_post/wofs/scripts
-#post_dir="/scratch/ywang/MPAS/gnu/frdd-wofs-post/wofs/scripts"
 
 host="$(hostname)"
 
@@ -264,7 +264,7 @@ post )
         fi
         if [[ ! -e ${run_dir}/FCST/${eventdate}${affix}/fcst_${enddate}${endtime}_start ]]; then
             # To make sure the correct FCST files are used, "-c"
-            cmds=("${script_dir}/lnmpasfcst.sh" -c -e "${endtime}")
+            cmds=("${script_dir}/lnmpasfcst.sh" -c -e "${endtime}" -src "${run_dir}")
             if [[ -n ${affix} ]]; then
                 cmds+=(-x "${affix}")
             fi
@@ -273,7 +273,7 @@ post )
         fi
 
         cd "${post_dir}" || exit 1
-        cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${eventdate}")
+        cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${eventdate}" "${endtime}")
         if [[ -n ${affix} ]]; then
             cmds+=("${affix}")
         fi
@@ -293,7 +293,7 @@ plot )
         done
 
         cd "${post_dir}" || exit 1
-        cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${eventdate}")
+        cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${eventdate}" "${endtime}")
         if [[ -n ${affix} ]]; then
             cmds+=("${affix}")
         fi
@@ -312,7 +312,7 @@ verif )
         done
 
         cd "${post_dir}" || exit 1
-        cmds=(time "./wofs_plot_verification_MPAS.py" "${eventdate}")
+        cmds=(time "./wofs_plot_verification_MPAS.py" "${eventdate}" "${endtime}")
         if [[ -n ${affix} ]]; then
             cmds+=("${affix}")
         fi

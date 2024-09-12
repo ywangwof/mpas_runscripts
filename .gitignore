@@ -20,4 +20,12 @@ fix_files/RRTMG_SW_DATA
 fix_files/RRTMG_SW_DATA.DBL
 fix_files/VEGPARM.TBL
 fix_files/UPP/crtm2_fix
+fix_files/CCN_ACTIVATE.BIN
+fix_files/rtcoef_rttov13/cldaer_ir/
+fix_files/rtcoef_rttov13/cldaer_visir/
+fix_files/rtcoef_rttov13/mfasis_lut/
+fix_files/rtcoef_rttov13/rttov13pred54L/
+fix_files/rtcoef_rttov13/rttov9pred54L/
+fix_files/sampling_error_correction_table.nc
+modules/env.mpas_smiol
 run_dirs
