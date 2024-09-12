@@ -264,7 +264,7 @@ post )
         fi
         if [[ ! -e ${run_dir}/FCST/${eventdate}${affix}/fcst_${enddate}${endtime}_start ]]; then
             # To make sure the correct FCST files are used, "-c"
-            cmds=("${script_dir}/lnmpasfcst.sh" -c -e "${endtime}")
+            cmds=("${script_dir}/lnmpasfcst.sh" -c -e "${endtime}" -src "${run_dir}")
             if [[ -n ${affix} ]]; then
                 cmds+=(-x "${affix}")
             fi
@@ -273,7 +273,7 @@ post )
         fi
 
         cd "${post_dir}" || exit 1
-        cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${eventdate}")
+        cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${eventdate}" "${endtime}")
         if [[ -n ${affix} ]]; then
             cmds+=("${affix}")
         fi
@@ -293,7 +293,7 @@ plot )
         done
 
         cd "${post_dir}" || exit 1
-        cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${eventdate}")
+        cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${eventdate}" "${endtime}")
         if [[ -n ${affix} ]]; then
             cmds+=("${affix}")
         fi
@@ -312,7 +312,7 @@ verif )
         done
 
         cd "${post_dir}" || exit 1
-        cmds=(time "./wofs_plot_verification_MPAS.py" "${eventdate}")
+        cmds=(time "./wofs_plot_verification_MPAS.py" "${eventdate}" "${endtime}")
         if [[ -n ${affix} ]]; then
             cmds+=("${affix}")
         fi
