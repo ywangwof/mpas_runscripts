@@ -407,7 +407,6 @@ function run_mpas {
     config_frac_seaice               = false
     config_pbl_scheme                = '${pblscheme}'
     config_sfclayer_scheme           = '${sfcscheme}'
-    config_mynn_cloudpdf             = 0
 EOF
 
         if [[ ${mpscheme} == "mp_nssl2m" ]]; then

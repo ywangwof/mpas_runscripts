@@ -1,6 +1,6 @@
 #!/bin/bash
 
-fcst_root="/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs"
+fcst_root="/scratch/ywang/MPAS/intel/run_dirs"
 
 eventdateDF=$(date -u +%Y%m%d)
 
