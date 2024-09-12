@@ -2504,7 +2504,7 @@ EOF
     config_mynn_edmf           = 1
     config_mynn_mixqt          = 0
     config_mynn_tkeadvect      = .false.
-    config_mynn_cloudpdf       = 2
+    config_mynn_cloudpdf       = 0
     config_mynn_closure        = 2.6
     config_mynn_mixscalars     = 1
     config_mynn_edmf_output    = 0
