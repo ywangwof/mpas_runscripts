@@ -78,6 +78,7 @@ affix=""
 
 saved_args=()          # Pass after confirmation for deleting
 pass_args=()           # Pass to each member for \"mpasm\"
+doclean_args=()
 
 while [[ $# -gt 0 ]]; do
     key="$1"
@@ -89,6 +90,7 @@ while [[ $# -gt 0 ]]; do
         -c)
             show=""
             pass_args+=("$key")
+            doclean_args+=("$key")
             ;;
         -v)
             verb=true
@@ -199,11 +201,11 @@ for taskname in "${tasknames[@]}"; do
             echo "Remove MPAS restart files in ${run_dir}/${eventdate}/dacycles${affix}/${wrksubdir} ${jobsubstr} ..."
         fi
 
-        show="echo"
+        #show="echo"
         askconfirm=false
-        echo -e "${LIGHT_RED}INFO${NC}: ${BROWN}${script_dir}/run_dacycles.sh${NC} ${LIGHT_BLUE}${eventdate}${runtime}${NC} ${run_dir} ${GREEN}clean${NC} -c "
+        echo -e "${LIGHT_RED}INFO${NC}: ${BROWN}${script_dir}/run_dacycles.sh${NC} ${LIGHT_BLUE}${eventdate}${runtime}${NC} ${run_dir} ${GREEN}clean${NC}" "${doclean_args[@]}"
 
-        ${script_dir}/run_dacycles.sh -f config.${eventdate}${affix} ${eventdate} ${run_dir} clean -c
+        ${script_dir}/run_dacycles.sh -f config.${eventdate}${affix} ${eventdate} ${run_dir} clean "${doclean_args[@]}"
 
         #cd "${run_dir}/${eventdate}/dacycles${affix}/${wrksubdir}" || exit 1
         #if [[ -z ${runtime} ]]; then             # All time cycles
@@ -223,11 +225,11 @@ for taskname in "${tasknames[@]}"; do
         if [[ $verb == true ]]; then
             echo "Remove MPAS history/diag files in ${run_dir}/${eventdate}/fcst${affix}/${wrksubdir} ${jobsubstr} ..."
         fi
-        show="echo"
+        #show="echo"
         askconfirm=false
-        echo -e "${LIGHT_RED}INFO${NC}: ${BROWN}${script_dir}/run_fcst.sh${NC} ${LIGHT_BLUE}${eventdate}${runtime}${NC} ${run_dir} ${GREEN}clean${NC} -c"
+        echo -e "${LIGHT_RED}INFO${NC}: ${BROWN}${script_dir}/run_fcst.sh${NC} ${LIGHT_BLUE}${eventdate}${runtime}${NC} ${run_dir} ${GREEN}clean${NC}" "${doclean_args[@]}"
 
-        ${script_dir}/run_fcst.sh -f config.${eventdate}${affix} ${eventdate} ${run_dir} clean -c
+        ${script_dir}/run_fcst.sh -f config.${eventdate}${affix} ${eventdate} ${run_dir} clean "${doclean_args[@]}"
 
         #cd "${run_dir}/${eventdate}/fcst${affix}/${wrksubdir}" || exit 1
         #$show find . -name "wofs_mpas_??.{history,diag}.*" -exec rm {} \;
@@ -289,7 +291,7 @@ for taskname in "${tasknames[@]}"; do
         if [[ ${doit^^} == "YES" ]]; then
             echo -e "${BROWN}WARNING${NC}: Cleaning in process ...\n"
             saved_args+=("-c" "-noask")
-            $0 "${saved_args[@]}" taskname
+            $0 "${saved_args[@]}" ${taskname}
         else
             echo -e "Get ${PURPLE}${doit^^}${NC}, do nothing."
         fi
