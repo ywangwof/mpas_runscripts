@@ -2,10 +2,11 @@
 
 script_dir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 top_dir=$(realpath "$(dirname "${script_dir}")")
+mpas_dir=$(dirname ${top_dir})
 
 eventdateDF=$(date -u +%Y%m%d%H%M)
 
-run_dir=${top_dir}/run_dirs
+run_dir=${mpas_dir}/run_dirs
 script_dir=${top_dir}/scripts
 post_dir=${run_dir}/summary_files
 image_dir=${run_dir}/image_files

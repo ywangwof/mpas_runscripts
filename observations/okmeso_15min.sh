@@ -15,9 +15,10 @@
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
+mpasdir=$(dirname "${rootdir}")
 
 MESO_DIR=/work/rt_obs/Mesonet
-DART_DIR=/scratch/ywang/MPAS/gnu/frdd-DART
+DART_DIR=/scratch/ywang/MPAS/intel/frdd-DART
 
 TEMPLATE_FILE=${scpdir}/input.nml.mesonet
 MESOINFO_FILE=${scpdir}/geoinfo.csv
@@ -25,7 +26,7 @@ convert_okmeso=${DART_DIR}/observations/obs_converters/ok_mesonet/work/convert_o
 obs_preprocess=${DART_DIR}/models/mpas_atm/work/mpas_dart_obs_preprocess
 #convert_date=/scratch/ywang/MPAS/gnu/frdd-DART/models/wrf/work/convertdate
 
-run_dir="/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs"
+run_dir="${mpasdir}/run_dirs"
 WORK_dir=${run_dir}/OBS_SEQ/Mesonet
 
 eventdateDF=$(date -u +%Y%m%d%H%M)

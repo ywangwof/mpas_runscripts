@@ -4,6 +4,7 @@
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
+mpasdir=$(dirname "${rootdir}")
 
 eventdateDF=$(date -u +%Y%m%d)
 
@@ -300,7 +301,7 @@ function run_lbc {
     config_albedo_data = 'MODIS'
     config_maxsnowalbedo_data = 'MODIS'
     config_supersample_factor = 1
-    config_use_spechumd = false
+    config_use_spechumd = true
 /
 &vertical_grid
     config_ztop = 25878.712
@@ -446,7 +447,7 @@ function run_clean {
 
 jobs=(ungrib lbc clean)
 
-WORKDIR="${rootdir}/run_dirs"
+WORKDIR="${mpasdir}/run_dirs"
 TEMPDIR="${rootdir}/templates"
 FIXDIR="${rootdir}/fix_files"
 eventdate="$eventdateDF"

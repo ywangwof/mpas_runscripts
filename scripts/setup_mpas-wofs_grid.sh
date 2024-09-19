@@ -4,6 +4,7 @@
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "$scpdir")")
+mpasdir=$(dirname "${rootdir}")
 
 eventdateDF=$(date -u +%Y%m%d)
 
@@ -467,7 +468,7 @@ function run_static {
     config_maxsnowalbedo_data = 'MODIS'
     config_lai_data = 'MODIS'
     config_supersample_factor = 1
-    config_use_spechumd = false
+    config_use_spechumd = true
 /
 &vertical_grid
     config_ztop = 25878.712
@@ -1542,7 +1543,7 @@ function check_obs_files {
 #jobs=(geogrid ungrib_hrrr createWOFS static)
 jobs=(geogrid ungrib_hrrr rotate meshplot_py static)
 
-WORKDIR="${rootdir}/run_dirs"
+WORKDIR="${mpasdir}/run_dirs"
 TEMPDIR="${rootdir}/templates"
 FIXDIR="${rootdir}/fix_files"
 
@@ -1821,7 +1822,7 @@ else    # Vecna at NSSL
     export LD_LIBRARY_PATH=/scratch/ywang/MPAS/tools/lib
     nclpath="/scratch/software/miniconda3/bin/ncl"
 
-    OBS_DIR="/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs/OBS_SEQ"
+    OBS_DIR="/scratch/ywang/MPAS/intel/run_dirs/OBS_SEQ"
 
     hrrr_dir="/scratch/wofuser/MODEL_DATA/HRRRE"
 
