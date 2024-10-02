@@ -615,19 +615,20 @@ function readconf {
         # remove trailing whitespace from a string
         line=${line%%+([[:space:]])}
 
-        if [[ "$line" =~ ^\[$sections\]$ ]]; then
+        if [[ "$line" =~ ^#.* ]]; then
+            if [[ $debug -eq 1 ]]; then echo "Comment"; fi
+            continue
+        elif [[ "$line" =~ ^\[$sections\]$ ]]; then
             if [[ $debug -eq 1 ]]; then echo "Found $sections"; fi
             readmode=true
             sname="${line#[}"
             sname="${sname%]}"
             read_sections+=("${sname}")
+            echo "read_sections = ${read_sections[*]}"
             continue
         elif [[ "$line" == \[*\] ]]; then
             if [[ $debug -eq 1 ]]; then echo "Another Section"; fi
             readmode=false
-            continue
-        elif [[ "$line" =~ ^#.* ]]; then
-            if [[ $debug -eq 1 ]]; then echo "Comment"; fi
             continue
         fi
 

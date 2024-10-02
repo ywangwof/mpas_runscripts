@@ -598,7 +598,9 @@ def process_obs(obs_in, obs_out, cargs,rargs):
             it.links[1] = -1
 
     #
-    # 6. From Craig on Jan 19, 2024
+    # 6. Set observation value
+    #
+    # From Craig on Jan 19, 2024
     #
     # I'm a bit more concerned about your surface observation types having a
     # "which_vert" of -1 (obs_seq.bufr), which is VERTISSURFACE.  When computing
@@ -614,6 +616,16 @@ def process_obs(obs_in, obs_out, cargs,rargs):
     #    if it.kind == 29 and it.location.level_type == -1:
     #        it.location.level_type = 3
     #        print(f"iobs = {it.iobs}: which_vert changed from -1 to 3")
+
+    if hasattr(rargs, "s_type"):
+        for it in obs_records:
+            if it.kind == rargs.s_type:
+                if len(it.values) > 1:
+                    print(f"ERROR: expect one values for record {it.iobs}, but found {len(it.values)}.")
+                    sys.exit(1)
+                orgvalue = it.values[0]
+                it.values[0] = rargs.s_value
+                print(f"iobs = {it.iobs}: value changed from {orgvalue} to {rargs.s_value}")
 
     return obs_records
 
@@ -637,6 +649,8 @@ def parse_args():
     parser.add_argument('-c','--ctypes' , help='Type Numbers of observation that contains cloud lines',
                                                                                                     default="124,125,126,229", type=str)
     parser.add_argument('-t','--type'   , help='''Type Numbers of observation to be kept, for examples, 44 or 44,42''',
+                                                                                                    default=None,        type=str)
+    parser.add_argument('-s','--set'   , help='''Set values of observation type, for example, clear air reflectivity, 13,-15.0''',
                                                                                                     default=None,        type=str)
     parser.add_argument('-r','--range' ,  help='Filter records by location range, [lat1-lat2,lon1-lon2]', default=None, type=str)
     parser.add_argument('-k','--keep' ,   help='After drop observations, keep it links as possible',   action="store_true", default=False)
@@ -692,6 +706,13 @@ def parse_args():
         rlist = [int(item) for item in args.type.split(',')]
         rargs['t_types'] = rlist
 
+    #
+    # Set type value
+    #
+    if args.set is not None:
+        type_value_arr = [x for x in args.set.split(',')]
+        rargs['s_type']  = int(type_value_arr[0])
+        rargs['s_value'] = decimal.Decimal(type_value_arr[1])
     #
     # Range filter
     #
