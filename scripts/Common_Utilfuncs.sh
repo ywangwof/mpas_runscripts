@@ -23,6 +23,7 @@
 # o wait_for_file_age        # Hold the task until the file age is older than the give number of seconds
 # o num_pending_jobs_greater_than       # Check number of jobs in the queue before submit a new job to avoid job flooding
 # o mecho/mecho0/mecho1/mecho2    # Print text with function name prefix
+# o split_graph              # Split graph.info file for the corresponding MPI processes
 
 ########################################################################
 
@@ -893,4 +894,39 @@ function clean_mem_runfiles {
         rm -f queue.$jobname
         touch done.$jobname
     fi
+}
+
+########################################################################
+
+function split_graph {
+
+    local gpmetis=$1
+    local graph_file=$2
+    local numprocs=$3
+    local rundir=$4
+    local dorun=$5
+    local verb=$6
+
+    wrkdir=$(pwd)
+    IFS=$'/' read -r -a outdirs <<< "$rundir"; unset IFS
+    shortdir="${outdirs[-2]}/${outdirs[-1]}"
+
+    cd "${rundir}" || exit $?
+
+    if [[ $verb -eq 1 ]]; then
+        mecho0 "Generating ${CYAN}${graph_file}.part.${numprocs}${NC} in ${BLUE}${shortdir}${NC} using ${GREEN}${gpmetis}${NC}"
+    fi
+    if which ${gpmetis} >/dev/null 2>&1; then
+        ${gpmetis} -minconn -contig -niter=200 ${graph_file} ${numprocs} > gpmetis.out${numprocs}
+        estatus=$?
+        if [[ ${estatus} -ne 0 ]]; then
+            mecho0 "${estatus}: ${gpmetis} -minconn -contig -niter=200 ${graph_file} ${numprocs}"
+            exit ${estatus}
+        fi
+    else
+        mecho0 "${RED}ERROR${NC}: Command gpmetis=${BLUE}${gpmetis}${NC} not found."
+        if [[ $dorun == true ]]; then exit 1; fi
+    fi
+
+    cd "${wrkdir}" || exit $?
 }

@@ -85,7 +85,8 @@ function usage {
     echo " "
     echo "    DATETIME - Case date and time in YYYYmmddHHMM, Default for today"
     echo "    WORKDIR  - Run Directory"
-    echo "    JOBS     - One or more jobs from [geogrid,ungrib_hrrr,rotate,meshplot_py,static,createWOFS,projectHexes,meshplot_ncl,clean] or [check,checkbg,checkobs,setup]."
+    echo "    JOBS     - One or more jobs from [geogrid,ungrib_hrrr,rotate,meshplot_py,static,createWOFS,projectHexes,meshplot_ncl,clean]"
+    echo "               or [check,checkbg,checkobs,setup]."
     echo "               setup    - just write set up configuration file"
     echo "               checkbg  - Check the availability of the HRRRE datasets"
     echo "               checkobs - Check the availability of observations"
@@ -125,7 +126,12 @@ function usage {
 # Extract WRF domain attributes
 #
 function ncattget {
-  ${nckspath} -x -M "$1" | grep -E "(corner_lats|corner_lons|CEN_LAT|CEN_LON|TRUELAT1|TRUELAT2)"
+    if which ${nckspath} 2> /dev/null ; then
+        ${nckspath} -x -M "$1" | grep -E "(corner_lats|corner_lons|CEN_LAT|CEN_LON|TRUELAT1|TRUELAT2)"
+    else
+        mecho0 "${RED}ERROR${NC}: Program ${BLUE}${nckspath}${NC} not found."
+        exit $?
+    fi
 }
 
 ########################################################################
@@ -558,15 +564,7 @@ function run_static {
     fi
 
     if [[ ! -f $domname.graph.info.part.${npestatic} ]]; then
-        if [[ $verb -eq 1 ]]; then
-            mecho0 "Generating ${CYAN}${domname}.graph.info.part.${npestatic}${NC} in ${BROWN}${wrkdir##"$WORKDIR"/}${NC} using ${GREEN}${gpmetis}${NC}."
-        fi
-        ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npestatic} > gpmetis.out$npestatic
-        estatus=$?
-        if [[ ${estatus} -ne 0 ]]; then
-            mecho0 "${estatus}: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npestatic}"
-            exit ${estatus}
-        fi
+        split_graph "${gpmetis}" "${domname}.graph.info" "${npestatic}" "$wrkdir" "$dorun" "$verb"
     fi
 
     # The program needs a time string in file $domname.grid.nc
@@ -1935,11 +1933,16 @@ elif [[ $machine == "Cheyenne" ]]; then
     job_runexe_str="mpiexec"
     runcmd_str=""
 
+    wgrib2path="/glade/u/apps/derecho/23.09/spack/opt/spack/wgrib2/3.1.1/gcc/7.5.0/i5h5/bin/wgrib2"
+    nckspath="/glade/u/apps/derecho/23.09/spack/opt/spack/nco/5.2.4/gcc/12.2.0/c2uf/bin/ncks"
+    gpmetis="/glade/work/ywang/tools/bin/gpmetis"
+
     OBS_DIR="/glade/work/ywang/observations"
+
+    hrrr_dir="/glade/derecho/scratch/ywang/tmp"
 
     modulename="defaults"
     WPSGEOG_PATH="/glade/work/ywang/WPS_GEOG/"
-    wgrib2path="wgrib2_not_found"
 else    # Vecna at NSSL
     ncores_static=96
     partition_wps="batch"
@@ -2014,7 +2017,7 @@ hrrr_sub_lbc="postprd_mem00"         # + 2-digit member string
 
 hrrrfile0="${hrrr_dir}/${eventdate}/${hrrr_time_ics}/${hrrr_sub_ics}01/wrfnat_hrrre_newse_mem0001_01.grib2"
 
-if ! check_hrrr_subdir; then
+if $dorun && ! check_hrrr_subdir; then
     exit $?
 fi
 

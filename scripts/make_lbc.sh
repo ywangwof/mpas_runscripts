@@ -168,7 +168,7 @@ EOF
     cd $wrkdir || return
 
     if [[ ${#jobarrays[@]} -gt 0 ]]; then
-        jobscript="run_ungrib.slurm"
+        jobscript="run_ungrib.pbs"
         # shellcheck disable=SC2154
         jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
@@ -188,7 +188,7 @@ s/EXCLSTR/${job_exclusive_str}/
 s/RUNCMD/${job_runexe_str}/
 EOF
         # shellcheck disable=SC2154
-        submit_a_jobscript $wrkdir "ungrib" $sedfile $TEMPDIR/run_ungrib_array.${mach} $jobscript ${jobarraystr}
+        submit_a_jobscript "$wrkdir" "ungrib" "$sedfile" "$TEMPDIR/run_ungrib_array.${mach}" "$jobscript" "${jobarraystr}"
     fi
 
     if [[ $dorun == true && $jobwait -eq 1 ]]; then
@@ -260,18 +260,7 @@ function run_lbc {
         #ln -sf $rundir/init/${domname}.invariant.nc .
 
         if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npelbc} ]]; then
-            cd $rundir/$domname || return
-            # shellcheck disable=SC2154
-            if [[ $verb -eq 1 ]]; then
-                mecho0 "Generating ${CYAN}${domname}.graph.info.part.${npelbc}${NC} in ${BLUE}${rundir##"${WORKDIR}"/}/$domname${NC} using ${GREEN}${gpmetis}${NC}"
-            fi
-            ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npelbc} > gpmetis.out$npelbc
-            estatus=$?
-            if [[ ${estatus} -ne 0 ]]; then
-                mecho0 "${estatus}: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npelbc}"
-                exit ${estatus}
-            fi
-            cd $mywrkdir || return
+            split_graph "${gpmetis}" "${domname}.graph.info" "${npelbc}" "$rundir/$domname" "$dorun" "$verb"
         fi
         ln -sf $rundir/$domname/$domname.graph.info.part.${npelbc} .
 
@@ -400,7 +389,7 @@ EOF
         fi
 
         # shellcheck disable=SC2154
-        submit_a_jobscript $wrkdir "${domname}" $sedfile $TEMPDIR/run_lbc_array.${mach} $jobscript ${jobarraystr}
+        submit_a_jobscript "$wrkdir" "${domname}" "$sedfile" "$TEMPDIR/run_lbc_array.${mach}" "$jobscript" "${jobarraystr}"
     fi
 
     if [[ $dorun == true && $jobwait -eq 1 ]]; then

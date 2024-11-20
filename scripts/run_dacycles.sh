@@ -2312,17 +2312,7 @@ function run_mpas {
     # Preparation for all members
     #
     if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npefcst} ]]; then
-        cd "${rundir}/${domname}" || exit $?
-        if [[ $verb -eq 1 ]]; then
-            mecho0 "Generating ${CYAN}${domname}.graph.info.part.${npefcst}${NC} in ${BLUE}${rundir##"${WORKDIR}"/}/$domname${NC} using ${GREEN}${gpmetis}${NC}"
-        fi
-        ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npefcst} > $rundir/$domname/gpmetis.out$npefcst
-        estatus=$?
-        if [[ ${estatus} -ne 0 ]]; then
-            mecho0 "${estatus}: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npefcst}"
-            exit ${estatus}
-        fi
-        cd "${wrkdir}" || exit $?
+        split_graph "${gpmetis}" "${domname}.graph.info" "${npefcst}" "$rundir/$domname" "$dorun" "$verb"
     fi
 
     intvl_min=$((intvl_sec/60))

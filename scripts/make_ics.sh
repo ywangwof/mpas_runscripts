@@ -153,7 +153,7 @@ EOF
 
         # shellcheck disable=SC2154
         if [[ ${#jobarrays[@]} -gt 0 ]]; then
-            jobscript="run_ungrib.slurm"
+            jobscript="run_ungrib.${mach}"
             jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
             sedfile=$(mktemp -t "ungrib_${jobname}.sed_XXXX")
@@ -231,18 +231,7 @@ function run_init4invariant {
     ln -sf "$rundir/$domname/$domname.static.nc" .
 
     if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npeics} ]]; then
-        cd "$rundir/$domname" || return
-        # shellcheck disable=SC2154
-        if [[ $verb -eq 1 ]]; then
-            mecho0 "Generating ${CYAN}${domname}.graph.info.part.${npeics}${NC} in ${BLUE}${rundir##"${WORKDIR}"/}/$domname${NC} using ${GREEN}${gpmetis}${NC}"
-        fi
-        ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npeics} > gpmetis.out$npeics
-        estatus=$?
-        if [[ ${estatus} -ne 0 ]]; then
-            mecho0 "${estatus}: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npeics}"
-            exit ${estatus}
-        fi
-        cd $mywrkdir || return
+        split_graph "${gpmetis}" "${domname}.graph.info" "${npeics}" "$rundir/$domname" "$dorun" "$verb"
     fi
     ln -sf $rundir/$domname/$domname.graph.info.part.${npeics} .
 
@@ -425,18 +414,7 @@ function run_init {
         #ln -sf ../${domname}.invariant.nc .
 
         if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npeics} ]]; then
-            cd "$rundir/$domname" || return
-            # shellcheck disable=SC2154
-            if [[ $verb -eq 1 ]]; then
-                mecho0 "Generating ${CYAN}${domname}.graph.info.part.${npeics}${NC} in ${BLUE}${rundir##"${WORKDIR}"/}/$domname${NC} using ${GREEN}${gpmetis}${NC}"
-            fi
-            ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npeics} > gpmetis.out$npeics
-            estatus=$?
-            if [[ ${estatus} -ne 0 ]]; then
-                mecho0 "${estatus}: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npeics}"
-                exit ${estatus}
-            fi
-            cd $mywrkdir || return
+            split_graph "${gpmetis}" "${domname}.graph.info" "${npeics}" "$rundir/$domname" "$dorun" "$verb"
         fi
         ln -sf $rundir/$domname/$domname.graph.info.part.${npeics} .
 
@@ -562,7 +540,7 @@ EOF
             echo "s/NNODES/${nnodes_ics}/;s/NCORES/${ncores_ics}/" >> $sedfile
         fi
 
-        submit_a_jobscript $wrkdir "${domname}" $sedfile $TEMPDIR/run_init_array.${mach} $jobscript ${jobarraystr}
+        submit_a_jobscript "$wrkdir" "${domname}" "$sedfile" "$TEMPDIR/run_init_array.${mach}" "$jobscript" "${jobarraystr}"
     fi
 
     if [[ $dorun == true && $jobwait -eq 1 ]]; then

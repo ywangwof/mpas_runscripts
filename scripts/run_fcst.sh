@@ -206,17 +206,7 @@ function run_mpas {
     # Preparation for all members
     #
     if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npefcst} ]]; then
-        cd $rundir/$domname || return
-        if [[ $verb -eq 1 ]]; then
-            mecho0 "Generating ${domname}.graph.info.part.${npefcst} in $rundir/$domname using $exedir/gpmetis"
-        fi
-        $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst} > gpmetis.out$npefcst
-        estatus=$?
-        if [[ ${estatus} -ne 0 ]]; then
-            mecho0 "${estatus}: $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst}"
-            exit ${estatus}
-        fi
-        cd $wrkdir || return
+        split_graph "${gpmetis}" "${domname}.graph.info" "${npefcst}" "$rundir/$domname" "$dorun" "$verb"
     fi
 
     currtime_str=$(date -u -d @$iseconds +%Y-%m-%d_%H:%M:%S)
