@@ -624,7 +624,7 @@ function readconf {
             sname="${line#[}"
             sname="${sname%]}"
             read_sections+=("${sname}")
-            echo "read_sections = ${read_sections[*]}"
+            #echo "read_sections = ${read_sections[*]}"
             continue
         elif [[ "$line" == \[*\] ]]; then
             if [[ $debug -eq 1 ]]; then echo "Another Section"; fi

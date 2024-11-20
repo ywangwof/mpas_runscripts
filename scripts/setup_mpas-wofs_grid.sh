@@ -37,6 +37,7 @@ eventdateDF=$(date -u +%Y%m%d)
 #        run_static.slurm
 #        run_geogrid.slurm
 #        run_createWOFS.slurm
+#        run_projectHexes.slurm
 #        run_ungrib.slurm
 #
 # 3. fix_files                              # static files
@@ -84,7 +85,7 @@ function usage {
     echo " "
     echo "    DATETIME - Case date and time in YYYYmmddHHMM, Default for today"
     echo "    WORKDIR  - Run Directory"
-    echo "    JOBS     - One or more jobs from [geogrid,ungrib_hrrr,rotate,meshplot_py,static,createWOFS,meshplot_ncl,clean] or [check,checkbg,checkobs,setup]."
+    echo "    JOBS     - One or more jobs from [geogrid,ungrib_hrrr,rotate,meshplot_py,static,createWOFS,projectHexes,meshplot_ncl,clean] or [check,checkbg,checkobs,setup]."
     echo "               setup    - just write set up configuration file"
     echo "               checkbg  - Check the availability of the HRRRE datasets"
     echo "               checkobs - Check the availability of observations"
@@ -124,7 +125,7 @@ function usage {
 # Extract WRF domain attributes
 #
 function ncattget {
-  ${nckspath} -x -M "$1" | grep -E "(corner_lats|corner_lons|CEN_LAT|CEN_LON)"
+  ${nckspath} -x -M "$1" | grep -E "(corner_lats|corner_lons|CEN_LAT|CEN_LON|TRUELAT1|TRUELAT2)"
 }
 
 ########################################################################
@@ -373,6 +374,147 @@ s#EXEDIR#${exedir}#
 s/RUNMPCMD/${job_runmpexe_str}/
 EOF
     submit_a_jobscript $wrkdir "create" $sedfile $TEMPDIR/$jobscript $jobscript ""
+}
+
+########################################################################
+
+function run_projectHexes {
+
+    conditions=()
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+        /*)
+            conditions+=("$1")
+            ;;
+        *)
+            conditions+=("$rundir/$1")
+            ;;
+        esac
+        shift
+    done
+
+    if [[ $dorun == true ]]; then
+        for cond in "${conditions[@]}"; do
+            mecho0 "Checking: ${CYAN}$cond"${NC}
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    mecho0 "Waiting for file: ${CYAN}$cond"${NC}
+                fi
+                sleep 10
+            done
+        done
+    fi
+
+    wrkdir="$rundir/$domname"
+    mkwrkdir $wrkdir $overwrite
+    cd $wrkdir || return
+
+    if [[ -f done.project ]]; then
+        mecho0 "Found file ${CYAN}done.project${NC}, skipping ${WHITE}run_projectHexes${NC} ...."
+        return
+    elif [[ -f running.project || -f queue.project ]]; then
+        return                   # skip
+    fi
+
+    local geofile wrfdomain wrfkey vals val keyval domelements
+    # Get lat/lon ranges
+    geofile=$(dirname ${conditions[0]})/geo_em.d01.nc
+    wrfdomain=$(ncattget $geofile)
+
+    # shellcheck disable=SC2206
+    IFS=$'\n' domelements=($wrfdomain)
+    # shellcheck disable=SC2206
+    for var in "${domelements[@]}"; do
+        IFS='= ' keyval=(${var%%;})
+        wrfkey=${keyval[0]:1}
+        vals=(${keyval[@]:1})
+
+        #echo "${wrfkey} -> ${vals[@]}"
+
+        case $wrfkey in
+        CEN_LAT | CEN_LON | TRUELAT? | STAND_LON)
+            newval=${vals[0]%%f}
+            declare "$wrfkey=$newval"
+            ;;
+        corner_lats | corner_lons)
+            minval=360.0
+            maxval=-360.0
+            for val in "${vals[@]}"; do
+                newval=${val%%f*}
+                if (( $(echo "$newval > $maxval" | bc -l) )); then
+                    maxval=$newval
+                fi
+
+                if (( $(echo "$newval < $minval" | bc -l) )); then
+                    minval=$newval
+                fi
+            done
+            declare "${wrfkey}_min=$minval"
+            declare "${wrfkey}_max=$maxval"
+            ;;
+        *)
+            continue
+            ;;
+      esac
+    done
+    #echo $CEN_LAT
+    #echo $CEN_LON
+    #echo $TRUELAT1, $TRUELAT2
+    #echo $corner_lats_min, $corner_lats_max
+    #echo $corner_lons_min, $corner_lons_max
+    #exit 0
+
+    ## shellcheck disable=SC2154
+    #lat_s=$(echo "$corner_lats_min-0.2" | bc -l)
+    ## shellcheck disable=SC2154
+    #lat_n=$(echo "$corner_lats_max+0.2" | bc -l)
+    ## shellcheck disable=SC2154
+    #lon_sw=$(echo "$corner_lons_min+0.5" | bc -l)
+    #lon_nw=$(echo "$corner_lons_min-0.2" | bc -l)
+    ## shellcheck disable=SC2154
+    #lon_ne=$(echo "$corner_lons_max+0.2" | bc -l)
+    #lon_se=$(echo "$corner_lons_max-0.5" | bc -l)
+
+    # shellcheck disable=SC2153
+    cat <<EOF > namelist.projections
+&mesh
+  cell_spacing_km  =      3.,
+  mesh_length_x_km =   1000.,
+  mesh_length_y_km =   1000.,
+  earth_radius_km  = 6378.14,
+/
+&projection
+  projection_type = "lambert_conformal",
+/
+&lambert_conformal
+  reference_longitude_degrees = ${CEN_LON},
+  reference_latitude_degrees  = ${CEN_LAT},
+  standard_parallel_1_degrees = ${TRUELAT1},
+  standard_parallel_2_degrees = ${TRUELAT2},
+/
+EOF
+
+    #
+    # Create job script and submit it
+    #
+    jobscript="run_projectHexes.slurm"
+
+    sedfile=$(mktemp -t projectHexes.sed_XXXX)
+    cat <<EOF > $sedfile
+s/PARTION/${partition_static}/
+s/CPUSPEC/${claim_cpu_static}/
+s/ACCTSTR/${job_account_str}/
+s/EXCLSTR/${job_exclusive_str}/
+s/JOBNAME/project_${domname}/
+s/DOMNAME/${domname}/g
+s/MODULE/${modulename}/
+s/MACHINE/${machine}/g
+s#ROOTDIR#$rootdir#g
+s#WRKDIR#$wrkdir#g
+s#EXEDIR#${exedir}#
+s/RUNMPCMD/${job_runmpexe_str}/
+EOF
+    submit_a_jobscript $wrkdir "projectHexes" $sedfile $TEMPDIR/$jobscript $jobscript ""
 }
 
 ########################################################################
@@ -854,10 +996,10 @@ function run_meshplot_py {
     fi
 
     wrkdir="$rundir/$domname"
-    if [[ ! -f $wrkdir/$domname.grid.nc ]]; then
-        mecho0 "Working file: $wrkdir/$domname.grid.nc not exist."
-        return
-    fi
+    #if [[ ! -f $wrkdir/$domname.grid.nc ]]; then
+    #    mecho0 "Working file: $wrkdir/$domname.grid.nc not exist."
+    #    return
+    #fi
     cd $wrkdir  || return
 
     if [[ -f "${domname}.radars.${eventdate}.sh" ]]; then
@@ -884,7 +1026,7 @@ function run_meshplot_py {
     #  -outgrid OUTGRID      Plot an output grid, "True", "False" or a filename.
     #                        When "True", retrieve grid from command line.
     #
-    jobcmdstr="$jobscript -o $wrkdir -e ${eventdate} -name ${domname} -outgrid ${output_grid} -g ${FIXDIR}/nexrad_stations.txt ${domname}.grid.nc"
+    jobcmdstr="$jobscript -o $wrkdir -e ${eventdate} -name ${domname} -outgrid ${output_grid} -g ${FIXDIR}/nexrad_stations.txt -m stereo ${conditions[1]}"
     mecho0 "Running ${BROWN}$jobcmdstr${NC}"
     python $jobcmdstr
 
@@ -956,8 +1098,8 @@ function write_config {
         elif [[ ${doit^^} == "BAK" ]]; then
             datestr=$(date +%Y%m%d_%H%M%S)
             mecho0 "${BROWN}WARNING${NC}: Orignal ${CYAN}$configname${NC} is backuped as"
-            mecho0 "         ${PURPLE}${configname}.bak${datestr}${NC}"
-            mv ${configname} ${configname}.bak${datestr}
+            mecho0 "         ${PURPLE}${configname}.bak_${datestr}${NC}"
+            mv ${configname} ${configname}.bak_${datestr}
         else
             mecho0 "Got ${PURPLE}${doit^^}${NC}, exit the program."
             exit 1
@@ -1541,7 +1683,8 @@ function check_obs_files {
 #@ MAIN
 
 #jobs=(geogrid ungrib_hrrr createWOFS static)
-jobs=(geogrid ungrib_hrrr rotate meshplot_py static)
+#jobs=(geogrid ungrib_hrrr rotate meshplot_py static)
+jobs=(geogrid ungrib_hrrr projectHexes meshplot_py static)
 
 WORKDIR="${mpasdir}/run_dirs"
 TEMPDIR="${rootdir}/templates"
@@ -1679,7 +1822,7 @@ while [[ $# -gt 0 ]]
             echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
             usage 2
             ;;
-        static* | geogrid* | createWOFS | meshplot* | clean* | setup | check*)
+        static* | geogrid* | createWOFS | projectHexes | meshplot* | ungrib* | rotate* | clean* | setup | check*)
             #jobs=(${key//,/ })
             IFS="," read -r -a jobs <<< "$key"
             ;;
@@ -1915,15 +2058,21 @@ if [[ " ${jobs[*]} " == " setup " ]]; then exit 0; fi
 #
 # Start the forecast driver
 #
+if [[ " ${jobs[*]} " == " projectHexes " ]]; then
+    mesh="project"       # mesh generation method, project or rotate
+else
+    mesh="rotate"        # mesh generation method, project or rotate
+fi
+
 declare -A jobargs=([geogrid]="${rundir}/geo_${domname##*_}"            \
                     [createWOFS]="geo_${domname##*_}/done.geogrid"      \
-                    #[static]="$domname/done.create ungrib/done.ungrib"
+                    [projectHexes]="geo_${domname##*_}/done.geogrid"      \
                     [rotate]="geo_${domname##*_}/done.geogrid"          \
                     [meshplot_ncl]="$domname/done.rotate"                         \
-                    [meshplot_py]="$domname/done.rotate $domname/$domname.grid.nc" \
-                    [static]="$domname/done.rotate ungrib/done.ungrib"  \
-                    [ungrib_hrrr]="${hrrrfile0}"                         \
-                    [clean]="geogrid static createWOFS"                 \
+                    [meshplot_py]="$domname/done.${mesh} $domname/$domname.grid.nc" \
+                    [static]="$domname/done.${mesh} ungrib/done.ungrib" \
+                    [ungrib_hrrr]="${hrrrfile0}"                        \
+                    [clean]="geogrid static createWOFS projectHexes"    \
                    )
 
 for job in "${jobs[@]}"; do
