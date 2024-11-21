@@ -612,7 +612,7 @@ fi
 
 if [[ ! -r ${config_file} ]]; then
     echo -e "${RED}ERROR${NC}: Configuration file ${CYAN}${config_file}${NC} is not found."
-    echo -e "       Please run ${GREEN}setup_mpas-wofs_grid.sh${NC} first."
+    echo -e "       Please run ${GREEN}setup_mpas-wofs.sh${NC} first."
     exit 2
 fi
 readconf ${config_file} COMMON lbc || exit $?

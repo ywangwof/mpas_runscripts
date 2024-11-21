@@ -43,7 +43,7 @@ eventdateDF=$(date -u +%Y%m%d)
 #
 #  Use an existing domain (wofs_mpas)
 #
-#     0. It should be run after "setup_mpas-wofs_grid.sh"
+#     0. It should be run after "setup_mpas-wofs.sh"
 #     1. make_ics.sh [YYYYmmddHH] [run_dirs] [jobnames]
 #
 #-----------------------------------------------------------------------
@@ -722,7 +722,7 @@ fi
 
 if [[ ! -r ${config_file} ]]; then
     echo -e "${RED}ERROR${NC}: Configuration file ${CYAN}${config_file}${NC} is not found."
-    echo -e "       Please run ${GREEN}setup_mpas-wofs_grid.sh${NC} first."
+    echo -e "       Please run ${GREEN}setup_mpas-wofs.sh${NC} first."
     exit 2
 fi
 readconf ${config_file} COMMON init || exit $?

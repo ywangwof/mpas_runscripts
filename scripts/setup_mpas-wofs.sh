@@ -52,7 +52,7 @@ eventdateDF=$(date -u +%Y%m%d)
 #        *WOFSdomain.grid.nc
 #
 # 4. scripts                                # this scripts
-#    4.1 setup_mpas-wofs_grid.sh
+#    4.1 setup_mpas-wofs.sh
 #
 # 5. /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG*
 #
@@ -73,7 +73,7 @@ eventdateDF=$(date -u +%Y%m%d)
 #     2. make a run directory under rootdir
 #        run_dirs
 #
-#     3. setup_mpas-wofs_grid.sh [YYYYmmddHHMM] [run_dirs] [jobnames]
+#     3. setup_mpas-wofs.sh [YYYYmmddHHMM] [run_dirs] [jobnames]
 #
 #-----------------------------------------------------------------------
 
@@ -85,12 +85,12 @@ function usage {
     echo " "
     echo "    DATETIME - Case date and time in YYYYmmddHHMM, Default for today"
     echo "    WORKDIR  - Run Directory"
-    echo "    JOBS     - One or more jobs from [geogrid,ungrib_hrrr,rotate,meshplot_py,static,createWOFS,projectHexes,meshplot_ncl,clean]"
-    echo "               or [check,checkbg,checkobs,setup]."
+    echo "    JOBS     - One or more jobs from [geogrid,ungrib_hrrr,rotate,meshplot_{py,ncl},static,createWOFS,projectHexes,clean]"
+    echo "               or any one from [check,checkbg,checkobs,setup]."
     echo "               setup    - just write set up configuration file"
     echo "               checkbg  - Check the availability of the HRRRE datasets"
     echo "               checkobs - Check the availability of observations"
-    echo "               Default all jobs in the proper order."
+    echo "               Default  - All jobs in order from [geogrid,ungrib_hrrr,projectHexes,meshplot_py,static]."
     echo " "
     echo "    OPTIONS:"
     echo "              -h              Display this message"
@@ -99,10 +99,10 @@ function usage {
     echo "              -k  [0,1,2]     Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
     echo "                              Default is 0 for ungrib, mpassit, upp and 1 for others"
     echo "              -t  DIR         Template directory for runtime files"
-    echo "              -m  Machine     Machine name to run on, [Jet, Cheyenne, Vecna]."
+    echo "              -m  Machine     Machine name to run on, [Jet, Derecho, Vecna]."
     echo "              -a  wof         Account name for job submission."
-    echo "              -M  restart     DA cycles mode, either init or restart. default: restart"
-    echo "              -c  lat,lon     Domain central lat/lon, for example, 43.33296,-84.24593"
+    echo "              -M  init        DA cycles mode, either init or restart. default: init"
+    echo "              -c  lat,lon     Domain central lat/lon, for example, 43.33296,-84.24593. Program \"geogrid\" requires them."
     echo "              -d  domname     Domain name, default: wofs_mpas"
     echo "              -x  affix       Affix attached to the run directory \"dacycles\" or \"fcst\". Default: Null"
     echo "              -l  L60.txt     Vertical level file"
@@ -897,7 +897,7 @@ EOF
         [EXCLSTR]="${job_exclusive_str}"
         [RUNCMD]="${job_runexe_str}"
     )
-    submit_a_job $wrkdir "ungrib" jobParms $TEMPDIR/$jobscript $jobscript ""
+    submit_a_job $wrkdir "ungrib" "jobParms" $TEMPDIR/$jobscript $jobscript ""
 }
 
 ########################################################################
@@ -1052,6 +1052,16 @@ function run_clean {
                 donecreate="$rundir/$domname/done.create"
                 if [[ -e $donecreate ]]; then
                     rm -rf create_region limited_area create_*.log x1.65536002.grid.nc
+                fi
+            fi
+            ;;
+        projectHexes )
+            if [[ -d $rundir/$domname ]]; then
+                cd "$rundir/$domname" || return
+
+                doneproject="$rundir/$domname/done.project"
+                if [[ -e $doneproject ]]; then
+                    rm -rf queue.projectHexes projectHexes_*.log
                 fi
             fi
             ;;
@@ -2012,7 +2022,7 @@ hrrr_sub_lbc="postprd_mem00"         # + 2-digit member string
 
 hrrrfile0="${hrrr_dir}/${eventdate}/${hrrr_time_ics}/${hrrr_sub_ics}01/wrfnat_hrrre_newse_mem0001_01.grib2"
 
-if $dorun && ! check_hrrr_subdir; then
+if $dorun && [ " ${jobs[*]} " != " clean " ] && ! check_hrrr_subdir; then
     exit $?
 fi
 
@@ -2048,18 +2058,20 @@ exedir="$rootdir/exec"
 #
 # write runtime configuration file
 #
-caseconfig="${WORKDIR}/${caseconfig-config.${eventdate}${affix}}"
-write_config "$caseconfig"
+if [[ " ${jobs[*]} " != " clean " ]]; then
+    caseconfig="${WORKDIR}/${caseconfig-config.${eventdate}${affix}}"
+    write_config "$caseconfig"
+fi
 
 if [[ " ${jobs[*]} " == " setup " ]]; then exit 0; fi
 
 #
 # Start the forecast driver
 #
-if [[ " ${jobs[*]} " =~ " projectHexes " ]]; then
-    mesh="project"       # mesh generation method, project
-else
+if [[ " ${jobs[*]} " =~ " rotate " ]]; then
     mesh="rotate"        # mesh generation method, rotate
+else
+    mesh="project"       # mesh generation method, project, DEFAULT
 fi
 
 declare -A jobargs=([geogrid]="${rundir}/geo_${domname##*_}"            \

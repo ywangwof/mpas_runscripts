@@ -73,7 +73,7 @@ eventdateDF=$(date -u +%Y%m%d)
 #
 #  Use an existing domain (wofs_mpas)
 #
-#     0. It should be run after "setup_mpas-wofs_grid.sh", "make_ics.sh" & "make_lbc.sh"
+#     0. It should be run after "setup_mpas-wofs.sh", "make_ics.sh" & "make_lbc.sh"
 #
 #     1. Copy these directories to rootdir (or clone using git)
 #        modules
@@ -3584,7 +3584,7 @@ fi
 
 if [[ ! -r ${config_file} ]]; then
     echo -e "${RED}ERROR${NC}: Configuration file ${CYAN}${config_file}${NC} is not found."
-    echo -e "       Please run ${GREEN}setup_mpas-wofs_grid.sh${NC} first."
+    echo -e "       Please run ${GREEN}setup_mpas-wofs.sh${NC} first."
     exit 2
 else
     echo -e "Reading case (${GREEN}${eventdate}${NC}) configuration file: ${CYAN}${config_file}${NC} ...."

@@ -11,7 +11,7 @@ README.md
 2. MPAS-base WoFS workflow
 
             Common_Utilfuncs.sh
-    Step 1: setup_mpas-wofs_grid.sh
+    Step 1: setup_mpas-wofs.sh
             edit file `$WORKDIR/config.${eventdate}` for runtime configurations as needed
     Step 2: make_ics.sh
     Step 3: make_lbc.sh

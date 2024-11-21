@@ -12,7 +12,7 @@
 # o intersection             # Intersection of two arrays, pass in as two strings and pass out as one intersected string
 # o typeset2array            # Typeset output to an associative array
 # o string2array             # '_' separated string to an array
-# o readconf                 # Read config file, written from "setup_mpas-wofs_grid.sh"
+# o readconf                 # Read config file, written from "setup_mpas-wofs.sh"
 # o convert2days             # Convert date/time strings to days/seconds since 1601-01-01
 # o convertS2days            # Convert epoch seconds to days/seconds since 1601-01-01
 # o convert2date             # Convert days/seconds since 1601-01-01 to date/time strings
@@ -599,7 +599,7 @@ function readconf {
     local debug=0
 
     if [[ ! -e $configfile ]]; then
-        echo -e "${RED}ERROR${NC}: Case configuration file: $configfile not exist. Have you run ${BROWN}setup_mpas-wofs_grid.sh${NC}?"
+        echo -e "${RED}ERROR${NC}: Case configuration file: $configfile not exist. Have you run ${BROWN}setup_mpas-wofs.sh${NC}?"
         exit 1
     fi
 
