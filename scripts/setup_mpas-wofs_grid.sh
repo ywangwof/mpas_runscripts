@@ -219,20 +219,20 @@ EOF
     geoname="geogrid_${jobname}"
     jobscript="run_geogrid.slurm"
 
-    sedfile=$(mktemp -t ${geoname}.sed_XXXX)
-    cat <<EOF > $sedfile
-s/PARTION/${partition_wps}/
-s/NOPART/$npestatic/
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/JOBNAME/${geoname}/
-s/MODULE/${modulename}/
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}#
-s/RUNMPCMD/${job_runmpexe_str}/
-EOF
-    submit_a_jobscript $wrkdir "geogrid" $sedfile $TEMPDIR/$jobscript $jobscript ""
+    # Associative arrays are local by default
+    declare -A jobParms=(
+        [PARTION]="${partition_wps}"
+        [NOPART]="$npestatic"
+        [ACCTSTR]="${job_account_str}"
+        [EXCLSTR]="${job_exclusive_str}"
+        [JOBNAME]="${geoname}"
+        [MODULE]="${modulename}"
+        [ROOTDIR]="$rootdir"
+        [WRKDIR]="$wrkdir"
+        [EXEDIR]="${exedir}"
+        [RUNMPCMD]="${job_runmpexe_str}"
+    )
+    submit_a_job "$wrkdir" "geogrid" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
 }
 
 ########################################################################
@@ -368,18 +368,17 @@ EOF
     #
     jobscript="run_createWOFS.slurm"
 
-    sedfile=$(mktemp -t createWOFS.sed_XXXX)
-    cat <<EOF > $sedfile
-s/PARTION/${partition_create}/
-s/CPUSPEC/${claim_cpu_create}/
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/JOBNAME/createWOFS/
-s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}#
-s/RUNMPCMD/${job_runmpexe_str}/
-EOF
-    submit_a_jobscript $wrkdir "create" $sedfile $TEMPDIR/$jobscript $jobscript ""
+    declare -A jobParms=(
+        [PARTION]="${partition_create}"
+        [CPUSPEC]="${claim_cpu_create}"
+        [ACCTSTR]="${job_account_str}"
+        [EXCLSTR]="${job_exclusive_str}"
+        [JOBNAME]="createWOFS"
+        [WRKDIR]="$wrkdir"
+        [EXEDIR]="${exedir}"
+        [RUNMPCMD]="${job_runmpexe_str}"
+    )
+    submit_a_job $wrkdir "create" jobParms $TEMPDIR/$jobscript $jobscript ""
 }
 
 ########################################################################
@@ -505,22 +504,21 @@ EOF
     #
     jobscript="run_projectHexes.slurm"
 
-    sedfile=$(mktemp -t projectHexes.sed_XXXX)
-    cat <<EOF > $sedfile
-s/PARTION/${partition_static}/
-s/CPUSPEC/${claim_cpu_static}/
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/JOBNAME/project_${domname}/
-s/DOMNAME/${domname}/g
-s/MODULE/${modulename}/
-s/MACHINE/${machine}/g
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}#
-s/RUNMPCMD/${job_runmpexe_str}/
-EOF
-    submit_a_jobscript $wrkdir "projectHexes" $sedfile $TEMPDIR/$jobscript $jobscript ""
+    declare -A jobParms=(
+        [PARTION]="${partition_static}"
+        [CPUSPEC]="${claim_cpu_static}"
+        [ACCTSTR]="${job_account_str}"
+        [EXCLSTR]="${job_exclusive_str}"
+        [JOBNAME]="project_${domname}"
+        [DOMNAME]="${domname}"
+        [MODULE]="${modulename}"
+        [MACHINE]="${machine}"
+        [ROOTDIR]="$rootdir"
+        [WRKDIR]="$wrkdir"
+        [EXEDIR]="${exedir}"
+        [RUNMPCMD]="${job_runmpexe_str}"
+    )
+    submit_a_job $wrkdir "projectHexes" jobParms $TEMPDIR/$jobscript $jobscript ""
 }
 
 ########################################################################
@@ -678,22 +676,21 @@ EOF
     #
     jobscript="run_static.${mach}"
 
-    sedfile=$(mktemp -t static_${jobname}.sed_XXXX)
-    cat <<EOF > $sedfile
-s/PARTION/${partition_static}/
-s/NOPART/$npestatic/
-s/JOBNAME/static_${jobname}/
-s/CPUSPEC/${claim_cpu_static}/
-s/MODULE/${modulename}/
-s/MACHINE/${machine}/g
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}#
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/RUNMPCMD/${job_runmpexe_str}/
-EOF
-    submit_a_jobscript $wrkdir "static" $sedfile $TEMPDIR/$jobscript $jobscript ""
+    declare -A jobParms=(
+        [PARTION]="${partition_static}"
+        [NOPART]="$npestatic"
+        [JOBNAME]="static_${jobname}"
+        [CPUSPEC]="${claim_cpu_static}"
+        [MODULE]="${modulename}"
+        [MACHINE]="${machine}"
+        [ROOTDIR]="$rootdir"
+        [WRKDIR]="$wrkdir"
+        [EXEDIR]="${exedir}"
+        [ACCTSTR]="${job_account_str}"
+        [EXCLSTR]="${job_exclusive_str}"
+        [RUNMPCMD]="${job_runmpexe_str}"
+    )
+    submit_a_job $wrkdir "static" jobParms $TEMPDIR/$jobscript $jobscript ""
 }
 
 ########################################################################
@@ -804,21 +801,20 @@ EOF
     #
     jobscript="run_rotate.slurm"
 
-    sedfile=$(mktemp -t grid_rotate.sed_XXXX)
-    cat <<EOF > $sedfile
-s/PARTION/${partition_static}/
-s/CPUSPEC/${claim_cpu_static}/
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/JOBNAME/grid_rotate/
-s/DOMNAME/${domname}/
-s/MODULE/${modulename}/g
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}#
-s/RUNCMD/${job_runexe_str}/
-EOF
-    submit_a_jobscript $wrkdir "rotate" $sedfile $TEMPDIR/$jobscript $jobscript ""
+    declare -A jobParms=(
+        [PARTION]="${partition_static}"
+        [CPUSPEC]="${claim_cpu_static}"
+        [ACCTSTR]="${job_account_str}"
+        [EXCLSTR]="${job_exclusive_str}"
+        [JOBNAME]="grid_rotate"
+        [DOMNAME]="${domname}"
+        [MODULE]="${modulename}"
+        [ROOTDIR]="$rootdir"
+        [WRKDIR]="$wrkdir"
+        [EXEDIR]="${exedir}"
+        [RUNCMD]="${job_runexe_str}"
+    )
+    submit_a_job $wrkdir "rotate" jobParms $TEMPDIR/$jobscript $jobscript ""
 }
 
 ########################################################################
@@ -890,19 +886,18 @@ EOF
     #
     jobscript="run_ungrib.${mach}"
 
-    sedfile=$(mktemp -t ungrib_hrrr_${jobname}.sed_XXXX)
-    cat <<EOF > $sedfile
-s/PARTION/${partition_wps}/
-s/JOBNAME/ungrb_hrrr_${jobname}/
-s/MODULE/${modulename}/g
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}#
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/RUNCMD/${job_runexe_str}/
-EOF
-    submit_a_jobscript $wrkdir "ungrib" $sedfile $TEMPDIR/$jobscript $jobscript ""
+    declare -A jobParms=(
+        [PARTION]="${partition_wps}"
+        [JOBNAME]="ungrb_hrrr_${jobname}"
+        [MODULE]="${modulename}"
+        [ROOTDIR]="$rootdir"
+        [WRKDIR]="$wrkdir"
+        [EXEDIR]="${exedir}"
+        [ACCTSTR]="${job_account_str}"
+        [EXCLSTR]="${job_exclusive_str}"
+        [RUNCMD]="${job_runexe_str}"
+    )
+    submit_a_job $wrkdir "ungrib" jobParms $TEMPDIR/$jobscript $jobscript ""
 }
 
 ########################################################################
@@ -2061,10 +2056,10 @@ if [[ " ${jobs[*]} " == " setup " ]]; then exit 0; fi
 #
 # Start the forecast driver
 #
-if [[ " ${jobs[*]} " == " projectHexes " ]]; then
-    mesh="project"       # mesh generation method, project or rotate
+if [[ " ${jobs[*]} " =~ " projectHexes " ]]; then
+    mesh="project"       # mesh generation method, project
 else
-    mesh="rotate"        # mesh generation method, project or rotate
+    mesh="rotate"        # mesh generation method, rotate
 fi
 
 declare -A jobargs=([geogrid]="${rundir}/geo_${domname##*_}"            \

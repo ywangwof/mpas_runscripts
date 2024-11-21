@@ -4,7 +4,7 @@
 # Export Functions:
 #
 # o mkwrkdir
-# o submit_a_jobscript
+# o submit_a_job             # Create a job script base on the template and submit the job script
 # o check_job_status
 # o get_jobarray_str         # Retrieve job array option string based on job scheduler
 # o group_numbers_by_steps   # Group job numbers for PBS job array option "-J X-Y[:Z]%num"
@@ -179,10 +179,10 @@ function mkwrkdir {
 
 ########################################################################
 
-function submit_a_jobscript {
+function submit_a_job {
     # Arguments
     #   1      2       3       4       5        6
-    # wrkdir jobname sedfile jobtemp jobscript joboption
+    # wrkdir jobname jobparms jobtemp jobscript joboption
     #
     # Use global variables: $verb, $dorun, $runcmd
     #
@@ -194,27 +194,33 @@ function submit_a_jobscript {
     #    if the job script is submitted correctly
     #
     if [[ $# -ne 6 ]]; then
-        echo "No enough argument in \"submit_a_jobscript\", get: $*"
+        echo "No enough argument in \"submit_a_job\", get: $*"
         exit 0
     fi
 
     local mywrkdir=$1
     local myjobname=$2
-    local sedscript=$3
+    local -n jparms_ref=$3     # Bash 4.3 or newer
     local myjobtemp=$4
     local myjobscript=$5
     local myjoboption=$6
 
     cd $mywrkdir  || return
 
-    sed -f $sedscript $myjobtemp > $myjobscript
+    local sedfile
+    sedfile=$(mktemp -t ${myjobname}.sed_XXXX)
+    for parm in "${!jparms_ref[@]}"; do
+        echo "s^${parm}^${jparms_ref[$parm]}^g" >> $sedfile
+    done
+
+    sed -f $sedfile $myjobtemp > $myjobscript
     # shellcheck disable=SC2154
     if [[ ${verb} -eq 1 ]]; then
         mecho1 "Generated job script: ${WHITE}$myjobscript${NC}"
-        mecho1 "from template:  ${BLUE}$myjobtemp${NC} "
-        mecho1 "using sed file: ${DARK}$sedscript${NC}  "
+        mecho1 "from template       : ${BLUE}$myjobtemp${NC} "
+        mecho1 "using sed file      : ${DARK}$sedfile${NC}  "
     else
-        rm -f $sedscript
+        rm -f $sedfile
     fi
 
     # shellcheck disable=SC2154

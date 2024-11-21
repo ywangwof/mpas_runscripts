@@ -172,23 +172,21 @@ EOF
         # shellcheck disable=SC2154
         jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
-        sedfile=$(mktemp -t ungrib_${jobname}.sed_XXXX)
+        declare -A jobParms=(
+            [PARTION]="${partition_lbc}"
+            [JOBNAME]="ungrb_${jobname}"
+            [CPUSPEC]="${claim_cpu_ungrib}"
+            [MODULE]="${modulename}"
+            [ROOTDIR]="$rootdir"
+            [WRKDIR]="$wrkdir"
+            [EXEDIR]="${exedir}"
+            [PREFIX]="${EXTHEAD}"
+            [ACCTSTR]="${job_account_str}"
+            [EXCLSTR]="${job_exclusive_str}"
+            [RUNCMD]="${job_runexe_str}"
+        )
         # shellcheck disable=SC2154
-        cat <<EOF > $sedfile
-s/PARTION/${partition_lbc}/
-s/JOBNAME/ungrb_${jobname}/
-s/CPUSPEC/${claim_cpu_ungrib}/
-s/MODULE/${modulename}/g
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}#
-s#PREFIX#${EXTHEAD}#g
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/RUNCMD/${job_runexe_str}/
-EOF
-        # shellcheck disable=SC2154
-        submit_a_jobscript "$wrkdir" "ungrib" "$sedfile" "$TEMPDIR/run_ungrib_array.${mach}" "$jobscript" "${jobarraystr}"
+        submit_a_job "$wrkdir" "ungrib" "jobParms" "$TEMPDIR/run_ungrib_array.${mach}" "$jobscript" "${jobarraystr}"
     fi
 
     if [[ $dorun == true && $jobwait -eq 1 ]]; then
@@ -364,32 +362,29 @@ EOF
         jobscript="run_lbc_${domname}.${mach}"
         jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
-        sedfile=$(mktemp -t lbc_${jobname}.sed_XXXX)
-
-        # shellcheck disable=SC2154
-        cat <<EOF > $sedfile
-s/PARTION/${partition_lbc}/
-s/MACHINE/${machine}/g
-s/NOPART/$npelbc/
-s/CPUSPEC/${claim_cpu_lbc}/
-s/JOBNAME/lbc_${jobname}/
-s/MODULE/${modulename}/g
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}#
-s#PREFIX#${domname}#g
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/RUNMPCMD/${job_runmpexe_str}/
-EOF
-
+        declare -A jobParms=(
+            [PARTION]="${partition_lbc}"
+            [MACHINE]="${machine}"
+            [NOPART]="$npelbc"
+            [CPUSPEC]="${claim_cpu_lbc}"
+            [JOBNAME]="lbc_${jobname}"
+            [MODULE]="${modulename}"
+            [ROOTDIR]="$rootdir"
+            [WRKDIR]="$wrkdir"
+            [EXEDIR]="${exedir}"
+            [PREFIX]="${domname}"
+            [ACCTSTR]="${job_account_str}"
+            [EXCLSTR]="${job_exclusive_str}"
+            [RUNMPCMD]="${job_runmpexe_str}"
+        )
         # shellcheck disable=SC2154
         if [[ "${mach}" == "pbs" ]]; then
-            echo "s/NNODES/${nnodes_ics}/;s/NCORES/${ncores_lbc}/" >> $sedfile
+            jobParms[NNODES]="${nnodes_ics}"
+            jobParms[NCORES]="${ncores_lbc}"
         fi
 
         # shellcheck disable=SC2154
-        submit_a_jobscript "$wrkdir" "${domname}" "$sedfile" "$TEMPDIR/run_lbc_array.${mach}" "$jobscript" "${jobarraystr}"
+        submit_a_job "$wrkdir" "${domname}" "jobParms" "$TEMPDIR/run_lbc_array.${mach}" "$jobscript" "${jobarraystr}"
     fi
 
     if [[ $dorun == true && $jobwait -eq 1 ]]; then
