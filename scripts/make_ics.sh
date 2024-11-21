@@ -4,6 +4,7 @@
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
+mpasdir=$(dirname "${rootdir}")
 
 eventdateDF=$(date -u +%Y%m%d)
 
@@ -152,25 +153,23 @@ EOF
 
         # shellcheck disable=SC2154
         if [[ ${#jobarrays[@]} -gt 0 ]]; then
-            jobscript="run_ungrib.slurm"
+            jobscript="run_ungrib.${mach}"
             jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
-            sedfile=$(mktemp -t "ungrib_${jobname}.sed_XXXX")
-            # shellcheck disable=SC2154
-            cat <<EOF > "$sedfile"
-s/PARTION/${partition_ics}/
-s/JOBNAME/ungrb_${jobname}/
-s/CPUSPEC/${claim_cpu_ungrib}/
-s/MODULE/${modulename}/g
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}#
-s#PREFIX#${EXTHEAD}#g
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/RUNCMD/${job_runexe_str}/
-EOF
-            submit_a_jobscript "$wrkdir" "ungrib" "$sedfile" "$TEMPDIR/run_ungrib_array.${mach}" "$jobscript" "${jobarraystr}"
+            declare -A jobParms=(
+                [PARTION]="${partition_ics}"
+                [JOBNAME]="ungrb_${jobname}"
+                [CPUSPEC]="${claim_cpu_ungrib}"
+                [MODULE]="${modulename}"
+                [ROOTDIR]="$rootdir"
+                [WRKDIR]="$wrkdir"
+                [EXEDIR]="${exedir}"
+                [PREFIX]="${EXTHEAD}"
+                [ACCTSTR]="${job_account_str}"
+                [EXCLSTR]="${job_exclusive_str}"
+                [RUNCMD]="${job_runexe_str}"
+            )
+            submit_a_job "$wrkdir" "ungrib" "jobParms" "$TEMPDIR/run_ungrib_array.${mach}" "$jobscript" "${jobarraystr}"
         fi
     fi
 
@@ -230,18 +229,7 @@ function run_init4invariant {
     ln -sf "$rundir/$domname/$domname.static.nc" .
 
     if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npeics} ]]; then
-        cd "$rundir/$domname" || return
-        # shellcheck disable=SC2154
-        if [[ $verb -eq 1 ]]; then
-            mecho0 "Generating ${CYAN}${domname}.graph.info.part.${npeics}${NC} in ${BLUE}${rundir##"${WORKDIR}"/}/$domname${NC} using ${GREEN}${gpmetis}${NC}"
-        fi
-        ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npeics} > gpmetis.out$npeics
-        estatus=$?
-        if [[ ${estatus} -ne 0 ]]; then
-            mecho0 "${estatus}: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npeics}"
-            exit ${estatus}
-        fi
-        cd $mywrkdir || return
+        split_graph "${gpmetis}" "${domname}.graph.info" "${npeics}" "$rundir/$domname" "$dorun" "$verb"
     fi
     ln -sf $rundir/$domname/$domname.graph.info.part.${npeics} .
 
@@ -271,7 +259,7 @@ function run_init4invariant {
     config_albedo_data = 'MODIS'
     config_maxsnowalbedo_data = 'MODIS'
     config_supersample_factor = 1
-    config_use_spechumd = false
+    config_use_spechumd = true
 /
 &vertical_grid
     config_ztop = 25878.712
@@ -340,30 +328,28 @@ EOF
     #
     jobscript="run_invariant.${mach}"
 
-    sedfile=$(mktemp -t init_${jobname}.sed_XXXX)
-
-    # shellcheck disable=SC2154
-    cat <<EOF > $sedfile
-s/PARTION/${partition_ics}/
-s/MACHINE/${machine}/g
-s/NOPART/$npeics/
-s/CPUSPEC/${claim_cpu_ics}/
-s/JOBNAME/invariant_${jobname}/
-s/MODULE/${modulename}/g
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$mywrkdir#g
-s#EXEDIR#${exedir}#
-s#PREFIX#${domname}#g
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/RUNMPCMD/${job_runmpexe_str}/
-EOF
+    declare -A jobParms=(
+        [PARTION]="${partition_ics}"
+        [MACHINE]="${machine}"
+        [NOPART]="$npeics"
+        [CPUSPEC]="${claim_cpu_ics}"
+        [JOBNAME]="invariant_${jobname}"
+        [MODULE]="${modulename}"
+        [ROOTDIR]="$rootdir"
+        [WRKDIR]="$mywrkdir"
+        [EXEDIR]="${exedir}"
+        [PREFIX]="${domname}"
+        [ACCTSTR]="${job_account_str}"
+        [EXCLSTR]="${job_exclusive_str}"
+        [RUNMPCMD]="${job_runmpexe_str}"
+    )
     # shellcheck disable=SC2154
     if [[ "${mach}" == "pbs" ]]; then
-        echo "s/NNODES/${nnodes_ics}/;s/NCORES/${ncores_ics}/" >> $sedfile
+        jobParms[NNODES]="${nnodes_ics}"
+        jobParms[NCORES]="${ncores_ics}"
     fi
 
-    submit_a_jobscript $mywrkdir "invariant" $sedfile $TEMPDIR/run_init.${mach} $jobscript ""
+    submit_a_job $mywrkdir "invariant" "jobParms" $TEMPDIR/run_init.${mach} $jobscript ""
 }
 
 ########################################################################
@@ -424,18 +410,7 @@ function run_init {
         #ln -sf ../${domname}.invariant.nc .
 
         if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npeics} ]]; then
-            cd "$rundir/$domname" || return
-            # shellcheck disable=SC2154
-            if [[ $verb -eq 1 ]]; then
-                mecho0 "Generating ${CYAN}${domname}.graph.info.part.${npeics}${NC} in ${BLUE}${rundir##"${WORKDIR}"/}/$domname${NC} using ${GREEN}${gpmetis}${NC}"
-            fi
-            ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npeics} > gpmetis.out$npeics
-            estatus=$?
-            if [[ ${estatus} -ne 0 ]]; then
-                mecho0 "${estatus}: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npeics}"
-                exit ${estatus}
-            fi
-            cd $mywrkdir || return
+            split_graph "${gpmetis}" "${domname}.graph.info" "${npeics}" "$rundir/$domname" "$dorun" "$verb"
         fi
         ln -sf $rundir/$domname/$domname.graph.info.part.${npeics} .
 
@@ -465,7 +440,7 @@ function run_init {
     config_albedo_data = 'MODIS'
     config_maxsnowalbedo_data = 'MODIS'
     config_supersample_factor = 1
-    config_use_spechumd = false
+    config_use_spechumd = true
 /
 &vertical_grid
     config_ztop = 25878.712
@@ -538,30 +513,28 @@ EOF
         jobscript="run_init_${domname}.${mach}"
         jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
-        sedfile=$(mktemp -t init_${jobname}.sed_XXXX)
-
-        # shellcheck disable=SC2154
-        cat <<EOF > $sedfile
-s/PARTION/${partition_ics}/
-s/MACHINE/${machine}/g
-s/NOPART/$npeics/
-s/CPUSPEC/${claim_cpu_ics}/
-s/JOBNAME/init_${jobname}/
-s/MODULE/${modulename}/g
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}#
-s#PREFIX#${domname}#g
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/RUNMPCMD/${job_runmpexe_str}/
-EOF
+        declare -A jobParms=(
+            [PARTION]="${partition_ics}"
+            [MACHINE]="${machine}"
+            [NOPART]="$npeics"
+            [CPUSPEC]="${claim_cpu_ics}"
+            [JOBNAME]="init_${jobname}"
+            [MODULE]="${modulename}"
+            [ROOTDIR]="$rootdir"
+            [WRKDIR]="$wrkdir"
+            [EXEDIR]="${exedir}"
+            [PREFIX]="${domname}"
+            [ACCTSTR]="${job_account_str}"
+            [EXCLSTR]="${job_exclusive_str}"
+            [RUNMPCMD]="${job_runmpexe_str}"
+        )
         # shellcheck disable=SC2154
         if [[ "${mach}" == "pbs" ]]; then
-            echo "s/NNODES/${nnodes_ics}/;s/NCORES/${ncores_ics}/" >> $sedfile
+            jobParms[NNODES]="${nnodes_ics}"
+            jobParms[NCORES]="${ncores_ics}"
         fi
 
-        submit_a_jobscript $wrkdir "${domname}" $sedfile $TEMPDIR/run_init_array.${mach} $jobscript ${jobarraystr}
+        submit_a_job "$wrkdir" "${domname}" "jobParms" "$TEMPDIR/run_init_array.${mach}" "$jobscript" "${jobarraystr}"
     fi
 
     if [[ $dorun == true && $jobwait -eq 1 ]]; then
@@ -608,7 +581,7 @@ function run_clean {
 
 jobs=(ungrib init clean)
 
-WORKDIR="${rootdir}/run_dirs"
+WORKDIR="${mpasdir}/run_dirs"
 TEMPDIR="${rootdir}/templates"
 FIXDIR="${rootdir}/fix_files"
 eventdate="$eventdateDF"

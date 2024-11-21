@@ -1714,35 +1714,33 @@ EOF
     # 5. Run filter
     #------------------------------------------------------
 
-    #
-    # Create job script and submit it
-    #
     jobscript="run_filter.${mach}"
-    sedfile=$(mktemp -t filter_${eventtime}.sed_XXXX)
-    cat <<EOF > $sedfile
-s/PARTION/${partition_filter}/
-s/NOPART/$npefilter/
-s/JOBNAME/filter-${eventdate:4:4}_${eventtime}/
-s/CPUSPEC/${claim_cpu_filter}/g
-s/MODULE/${modulename}/g
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}/dart#
-s/MACHINE/${machine}/g
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/RUNMPCMD/${job_runmpexe_str}/
-s/ISECONDS/${iseconds}/
-s/RUNOBS2NC/${run_obs2nc}/
-s/RUNOBSDIAG/${run_obsdiag}/
-s/RUNADDNOISE/${run_addnoise}/
-s/RUNCMD/${job_runexe_str}/
-EOF
+
+    declare -A jobParms=(
+        [PARTION]="${partition_filter}"
+        [NOPART]="$npefilter"
+        [JOBNAME]="filter-${eventdate:4:4}_${eventtime}"
+        [CPUSPEC]="${claim_cpu_filter}"
+        [MODULE]="${modulename}"
+        [ROOTDIR]="$rootdir"
+        [WRKDIR]="$wrkdir"
+        [EXEDIR]="${exedir}/dart"
+        [MACHINE]="${machine}"
+        [ACCTSTR]="${job_account_str}"
+        [EXCLSTR]="${job_exclusive_str}"
+        [RUNMPCMD]="${job_runmpexe_str}"
+        [ISECONDS]="${iseconds}"
+        [RUNOBS2NC]="${run_obs2nc}"
+        [RUNOBSDIAG]="${run_obsdiag}"
+        [RUNADDNOISE]="${run_addnoise}"
+        [RUNCMD]="${job_runexe_str}"
+    )
     if [[ "${mach}" == "pbs" ]]; then
-        echo "s/NNODES/${nnodes_filter}/;s/NCORES/${ncores_filter}/" >> $sedfile
+        jobParms[NNODES]="${nnodes_filter}"
+        jobParms[NCORES]="${ncores_filter}"
     fi
 
-    submit_a_jobscript $wrkdir "filter" $sedfile $TEMPDIR/$jobscript $jobscript ""
+    submit_a_job $wrkdir "filter" jobParms $TEMPDIR/$jobscript $jobscript ""
 }
 
 ########################################################################
@@ -1865,35 +1863,33 @@ function run_update_states {
     # Run update_mpas_states for all ensemble members
     #------------------------------------------------------
 
-    #
-    # Create job script and submit it
-    #
     jobscript="run_update_states.${mach}"
-    sedfile=$(mktemp -t update_${eventtime}.sed_XXXX)
-    cat <<EOF > $sedfile
-s/PARTION/${partition_filter}/
-s/NOPART/1/
-s/JOBNAME/updatestates_${eventtime}/
-s/CPUSPEC/${claim_cpu_update}/g
-s/MODULE/${modulename}/g
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}/dart#
-s/MACHINE/${machine}/g
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/RUNMPCMD/${job_runexe_str}/
-s#CPCMD#${cpcmd}#g
-s#STATEINFILESSTR#${stateinfiles[*]}#
-s#STATEOUTFILESSTR#${stateoutfiles[*]}#
-EOF
+
+    declare -a jobParms=(
+        [PARTION]="${partition_filter}"
+        [NOPART]="1"
+        [JOBNAME]="updatestates_${eventtime}"
+        [CPUSPEC]="${claim_cpu_update}"
+        [MODULE]="${modulename}"
+        [ROOTDIR]="$rootdir"
+        [WRKDIR]="$wrkdir"
+        [EXEDIR]="${exedir}/dart"
+        [MACHINE]="${machine}"
+        [ACCTSTR]="${job_account_str}"
+        [EXCLSTR]="${job_exclusive_str}"
+        [RUNMPCMD]="${job_runexe_str}"
+        [CPCMD]="${cpcmd}"
+        [STATEINFILESSTR]="${stateinfiles[*]}"
+        [STATEOUTFILESSTR]="${stateoutfiles[*]}"
+    )
     if [[ "${mach}" == "pbs" ]]; then
-        echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
+        jobParms[NNODES]="1"
+        jobParms[NCORES]="1"
     fi
 
     jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
 
-    submit_a_jobscript "$wrkdir" "update_states" "$sedfile" "$TEMPDIR/$jobscript" "$jobscript" "${jobarraystr}"
+    submit_a_job "$wrkdir" "update_states" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" "${jobarraystr}"
 }
 
 ########################################################################
@@ -2029,36 +2025,34 @@ function run_update_bc {
     #------------------------------------------------------
 
     if [[ ${run_updatebc} == true ]]; then
-        #
-        # Create job script and submit it
-        #
         jobscript="run_update_bc.${mach}"
-        sedfile=$(mktemp -t update_${eventtime}.sed_XXXX)
-        cat <<EOF > $sedfile
-s/PARTION/${partition_filter}/
-s/NOPART/1/
-s/JOBNAME/updatebc_${eventtime}/
-s/CPUSPEC/${claim_cpu_update}/g
-s/MODULE/${modulename}/g
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}/dart#
-s/MACHINE/${machine}/g
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/RUNMPCMD/${job_runexe_str}/
-s#CPCMD#${cpcmd}#g
-s/MPSCHEME/${mpscheme}/g
-s#LBCFILEORGSTR#${lbcfiles_org[*]}#
-s#LBCFILEMEMSTR#${lbcfiles_mem[*]}#
-EOF
+
+        declare -A jobParms=(
+            [PARTION]="${partition_filter}"
+            [NOPART]="1"
+            [JOBNAME]="updatebc_${eventtime}"
+            [CPUSPEC]="${claim_cpu_update}"
+            [MODULE]="${modulename}"
+            [ROOTDIR]="$rootdir"
+            [WRKDIR]="$wrkdir"
+            [EXEDIR]="${exedir}/dart"
+            [MACHINE]="${machine}"
+            [ACCTSTR]="${job_account_str}"
+            [EXCLSTR]="${job_exclusive_str}"
+            [RUNMPCMD]="${job_runexe_str}"
+            [CPCMD]="${cpcmd}"
+            [MPSCHEME]="${mpscheme}"
+            [LBCFILEORGSTR]="${lbcfiles_org[*]}"
+            [LBCFILEMEMSTR]="${lbcfiles_mem[*]}"
+        )
         if [[ "${mach}" == "pbs" ]]; then
-            echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
+            jobParms[NNODES]="1"
+            jobParms[NCORES]="1"
         fi
 
         jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
 
-        submit_a_jobscript $wrkdir "update_bc" $sedfile $TEMPDIR/$jobscript $jobscript "${jobarraystr}"
+        submit_a_job $wrkdir "update_bc" jobParms $TEMPDIR/$jobscript $jobscript "${jobarraystr}"
     fi
 }
 
@@ -2140,25 +2134,26 @@ function run_add_noise {
         fi
 
         jobscript="run_noise_mask.${mach}"
-        sedfile=$(mktemp -t mask_${eventtime}.sed_XXXX)
-        cat <<EOF > $sedfile
-s/PARTION/${partition_filter}/
-s/NOPART/1/
-s/JOBNAME/noise_mask_${eventtime}/
-s/CPUSPEC/${claim_cpu_update}/g
-s#WRKDIR#$wrkdir#g
-s/MACHINE/${mymachine}/g
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/SEQFILE/${seqfile}/g
-s#INVFILE#${invfile}#g
-s#WAN_PATH#${WOFSAN_PATH}#g
-s/EVENTDAYS/${days_secs[0]}/g
-s/EVENTSECS/${days_secs[1]}/g
-s/RUNCMD/${runexe_str}/
-EOF
+
+        declare -A jobParms=(
+            [PARTION]="${partition_filter}"
+            [NOPART]="1"
+            [JOBNAME]="noise_mask_${eventtime}"
+            [CPUSPEC]="${claim_cpu_update}"
+            [WRKDIR]="$wrkdir"
+            [MACHINE]="${mymachine}"
+            [ACCTSTR]="${job_account_str}"
+            [EXCLSTR]="${job_exclusive_str}"
+            [SEQFILE]="${seqfile}"
+            [INVFILE]="${invfile}"
+            [WAN_PATH]="${WOFSAN_PATH}"
+            [EVENTDAYS]="${days_secs[0]}"
+            [EVENTSECS]="${days_secs[1]}"
+            [RUNCMD]="${runexe_str}"
+        )
         if [[ "${mach}" == "pbs" ]]; then
-            echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
+            jobParms[NNODES]="1"
+            jobParms[NCORES]="1"
         fi
 
         if [[ -n "${python_machine}" ]]; then    # run the job on the submitted machine
@@ -2167,7 +2162,7 @@ EOF
             # shellcheck disable=SC2029
             ssh ${python_machine} "cd ${wrkdir};bash ${jobscript} &> noise_mask.log" &>/dev/null
         else
-            submit_a_jobscript $wrkdir "noise_mask" "$sedfile" "$TEMPDIR/$jobscript" "$jobscript" ""
+            submit_a_job $wrkdir "noise_mask" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
         fi
     fi
 
@@ -2232,24 +2227,25 @@ EOF
             runexe_str=""
         fi
 
-        cat <<EOF > $sedfile
-s/PARTION/${partition_filter}/
-s/NOPART/1/
-s/JOBNAME/noist_pert_${eventtime}/
-s/CPUSPEC/${claim_cpu_update}/g
-s#WRKDIR#$wrkdir#g
-s#INVFILE#${invfile}#g
-s/MACHINE/${mymachine}/g
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/SEQFILE/${seqfile}/g
-s#WAN_PATH#${WOFSAN_PATH}#g
-s/EVENTDAYS/${days_secs[0]}/g
-s/EVENTSECS/${days_secs[1]}/g
-s/RUNCMD/${runexe_str}/
-EOF
+        declare -A jobParms=(
+            [PARTION]="${partition_filter}"
+            [NOPART]="1"
+            [JOBNAME]="noist_pert_${eventtime}"
+            [CPUSPEC]="${claim_cpu_update}"
+            [WRKDIR]="$wrkdir"
+            [INVFILE]="${invfile}"
+            [MACHINE]="${mymachine}"
+            [ACCTSTR]="${job_account_str}"
+            [EXCLSTR]="${job_exclusive_str}"
+            [SEQFILE]="${seqfile}"
+            [WAN_PATH]="${WOFSAN_PATH}"
+            [EVENTDAYS]="${days_secs[0]}"
+            [EVENTSECS]="${days_secs[1]}"
+            [RUNCMD]="${runexe_str}"
+        )
         if [[ "${mach}" == "pbs" ]]; then
-            echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
+            jobParms[NNODES]="1"
+            jobParms[NCORES]="1"
         fi
 
         if [[ -n "${python_machine}" ]]; then
@@ -2260,7 +2256,7 @@ EOF
             ssh ${python_machine} "cd ${wrkdir};bash ${jobscript} &> noise_pert.log" &>/dev/null
         else
             jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
-            submit_a_jobscript $wrkdir "add_noise" "$sedfile" "$TEMPDIR/$jobscript" "$jobscript" "${jobarraystr}"
+            submit_a_job $wrkdir "add_noise" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" "${jobarraystr}"
         fi
     fi
 }
@@ -2312,17 +2308,7 @@ function run_mpas {
     # Preparation for all members
     #
     if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npefcst} ]]; then
-        cd "${rundir}/${domname}" || exit $?
-        if [[ $verb -eq 1 ]]; then
-            mecho0 "Generating ${CYAN}${domname}.graph.info.part.${npefcst}${NC} in ${BLUE}${rundir##"${WORKDIR}"/}/$domname${NC} using ${GREEN}${gpmetis}${NC}"
-        fi
-        ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npefcst} > $rundir/$domname/gpmetis.out$npefcst
-        estatus=$?
-        if [[ ${estatus} -ne 0 ]]; then
-            mecho0 "${estatus}: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npefcst}"
-            exit ${estatus}
-        fi
-        cd "${wrkdir}" || exit $?
+        split_graph "${gpmetis}" "${domname}.graph.info" "${npefcst}" "$rundir/$domname" "$dorun" "$verb"
     fi
 
     intvl_min=$((intvl_sec/60))
@@ -2623,31 +2609,31 @@ EOF
     #
     # Create job script for MPAS forecast and submit it
     #
-    sedfile=$(mktemp -t mpas_${eventtime}.sed_XXXX)
-    cat <<EOF > $sedfile
-s/PARTION/${partition_fcst}/
-s/NOPART/$npefcst/
-s/NNODES/${nnodes_fcst}/
-s/JOBNAME/mfrd-${eventdate:4:4}_${eventtime}/
-s/CPUSPEC/${claim_cpu_fcst}/g
-s/CLAIMTIME/${claim_time_fcst}/
-s#MODULE#${modulename}#g
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}#
-s/MACHINE/${machine}/g
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/RUNMPCMD/${job_runmpexe_str}/
-EOF
+    declare -A jobParms=(
+        [PARTION]="${partition_fcst}"
+        [NOPART]="$npefcst"
+        [NNODES]="${nnodes_fcst}"
+        [JOBNAME]="mfrd-${eventdate:4:4}_${eventtime}"
+        [CPUSPEC]="${claim_cpu_fcst}"
+        [CLAIMTIME]="${claim_time_fcst}"
+        [MODULE]="${modulename}"
+        [ROOTDIR]="$rootdir"
+        [WRKDIR]="$wrkdir"
+        [EXEDIR]="${exedir}"
+        [MACHINE]="${machine}"
+        [ACCTSTR]="${job_account_str}"
+        [EXCLSTR]="${job_exclusive_str}"
+        [RUNMPCMD]="${job_runmpexe_str}"
+    )
     #mpas_jobscript="run_mpas.${mach}"
     jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
 
     if [[ "${mach}" == "pbs" ]]; then
-        echo "s/NNODES/${nnodes_fcst}/;s/NCORES/${ncores_fcst}/" >> $sedfile
+        jobParms[NNODES]="${nnodes_fcst}"
+        jobParms[NCORES]="${ncores_fcst}"
     fi
 
-    submit_a_jobscript "$wrkdir" "fcst" "$sedfile" "$TEMPDIR/run_mpas_array.${mach}" "$mpas_jobscript" "${jobarraystr}"
+    submit_a_job "$wrkdir" "fcst" "jobParms" "$TEMPDIR/run_mpas_array.${mach}" "$mpas_jobscript" "${jobarraystr}"
 }
 
 ########################################################################
@@ -2933,33 +2919,30 @@ EOF
     # Run obs_diag for all analysis
     #------------------------------------------------------
 
-    #
-    # Create job script and submit it
-    #
     jobscript="run_obs_diag.${mach}"
-    sedfile=$(mktemp -t obsdiag_${timestr_end}.sed_XXXX)
-    cat <<EOF > $sedfile
-s/PARTION/${partition_filter}/
-s/NOPART/1/
-s/JOBNAME/obsdiag_${eventdate:4:4}/
-s/CPUSPEC/${claim_cpu_update}/g
-s/MODULE/${modulename}/g
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}/dart#
-s/MACHINE/${machine}/g
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/RUNCMD/${job_runexe_str}/
-s/EXENAME/obs_diag/
-s/PRONAME/obs_diag/g
 
-EOF
+    declare -A jobParms=(
+        [PARTION]="${partition_filter}"
+        [NOPART]="1"
+        [JOBNAME]="obsdiag_${eventdate:4:4}"
+        [CPUSPEC]="${claim_cpu_update}"
+        [MODULE]="${modulename}"
+        [ROOTDIR]="$rootdir"
+        [WRKDIR]="$wrkdir"
+        [EXEDIR]="${exedir}/dart"
+        [MACHINE]="${machine}"
+        [ACCTSTR]="${job_account_str}"
+        [EXCLSTR]="${job_exclusive_str}"
+        [RUNCMD]="${job_runexe_str}"
+        [EXENAME]="obs_diag"
+        [PRONAME]="obs_diag"
+    )
     if [[ "${mach}" == "pbs" ]]; then
-        echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
+        jobParms[NNODES]="1"
+        jobParms[NCORES]="1"
     fi
 
-    submit_a_jobscript "$wrkdir" "obs_diag" "$sedfile" "$TEMPDIR/$jobscript" "$jobscript" ""
+    submit_a_job "$wrkdir" "obs_diag" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
 }
 
 ########################################################################
@@ -3027,34 +3010,32 @@ function run_obs_final2nc {
     #    echo "    Running ${exedir}/dart/obs_seq_to_netcdf"
     #    ${runcmd_str} ${exedir}/dart/obs_seq_to_netcdf >& $srunout
     #    mv obs_epoch_001.nc obs_seq.final.${timestr_cur}.nc
-    #
-    # Create job script and submit it
-    #
     jobscript="run_obs_final2nc.${mach}"
-    sedfile=$(mktemp -t obs_final2nc.sed_XXXX)
-    cat <<EOF > $sedfile
-s/PARTION/${partition_filter}/
-s/NOPART/1/
-s/JOBNAME/obsdiag_${eventdate:4:4}/
-s/CPUSPEC/${claim_cpu_update}/g
-s/MODULE/${modulename}/g
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}/dart#
-s/MACHINE/${machine}/g
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/RUNCMD/${job_runexe_str}/
-s/START_S/${start_sec}/g
-s/END_S/${end_sec}/g
-s/INTVL_S/${intvl_sec}/g
-s#DACYCLEDIR#${dawrkdir}#
-EOF
+
+    declare -A jobParms=(
+        [PARTION]="${partition_filter}"
+        [NOPART]="1"
+        [JOBNAME]="obsdiag_${eventdate:4:4}"
+        [CPUSPEC]="${claim_cpu_update}"
+        [MODULE]="${modulename}"
+        [ROOTDIR]="$rootdir"
+        [WRKDIR]="$wrkdir"
+        [EXEDIR]="${exedir}/dart"
+        [MACHINE]="${machine}"
+        [ACCTSTR]="${job_account_str}"
+        [EXCLSTR]="${job_exclusive_str}"
+        [RUNCMD]="${job_runexe_str}"
+        [START_S]="${start_sec}"
+        [END_S]="${end_sec}"
+        [INTVL_S]="${intvl_sec}"
+        [DACYCLEDIR]="${dawrkdir}"
+    )
     if [[ "${mach}" == "pbs" ]]; then
-        echo "s/NNODES/1/;s/NCORES/1/" >> $sedfile
+        jobParms[NNODES]="1"
+        jobParms[NCORES]="1"
     fi
 
-    submit_a_jobscript $wrkdir "obs_final2nc" $sedfile $TEMPDIR/$jobscript $jobscript ""
+    submit_a_job $wrkdir "obs_final2nc" jobParms $TEMPDIR/$jobscript $jobscript ""
 }
 
 ########################################################################
@@ -3180,32 +3161,31 @@ function run_mpassit_alltimes {
     cd $wrkdir || return
     jobscript="run_mpassit.${mach}"
 
-    sedfile=$(mktemp -t mpassit_${eventtime}.sed_XXXX)
-    cat <<EOF > $sedfile
-s/PARTION/${partition_filter}/
-s/NOPART/$npepost/
-s/MODULE/${modulename}/g
-s/JOBNAME/mpassit_${eventtime}/
-s/CPUSPEC/${claim_cpu_post}/
-s/CLAIMTIME/${claim_time_mpassit_alltimes}/
-s/HHMINSTR//g
-s/FCST_START/${minsec}/
-s/FCST_END/${maxsec}/
-s/FCST_INTVL/${intvl_sec}/
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}#
-s/MACHINE/${machine}/g
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/RUNMPCMD/${job_runmpexe_str}/
-EOF
-
+    declare -A jobParms=(
+        [PARTION]="${partition_filter}"
+        [NOPART]="$npepost"
+        [MODULE]="${modulename}"
+        [JOBNAME]="mpassit_${eventtime}"
+        [CPUSPEC]="${claim_cpu_post}"
+        [CLAIMTIME]="${claim_time_mpassit_alltimes}"
+        [HHMINSTR]=""
+        [FCST_START]="${minsec}"
+        [FCST_END]="${maxsec}"
+        [FCST_INTVL]="${intvl_sec}"
+        [ROOTDIR]="$rootdir"
+        [WRKDIR]="$wrkdir"
+        [EXEDIR]="${exedir}"
+        [MACHINE]="${machine}"
+        [ACCTSTR]="${job_account_str}"
+        [EXCLSTR]="${job_exclusive_str}"
+        [RUNMPCMD]="${job_runmpexe_str}"
+    )
     if [[ "${mach}" == "pbs" ]]; then
-        echo "s/NNODES/${nnodes_post}/;s/NCORES/${ncores_post}/" >> $sedfile
+        jobParms[NNODES]="${nnodes_post}"
+        jobParms[NCORES]="${ncores_post}"
     fi
 
-    submit_a_jobscript "$wrkdir" "mpassit" "$sedfile" "$TEMPDIR/run_mpassit_array.${mach}" "$jobscript" "$jobarraystr"
+    submit_a_job "$wrkdir" "mpassit" "jobParms" "$TEMPDIR/run_mpassit_array.${mach}" "$jobscript" "$jobarraystr"
 }
 
 ########################################################################

@@ -46,14 +46,15 @@
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
+mpasdir=$(dirname "${rootdir}")
 
 BUFR_DIR=/work/rt_obs/SBUFR
-DART_DIR=/scratch/ywang/MPAS/gnu/frdd-DART
+DART_DIR=/scratch/ywang/MPAS/intel/frdd-DART
 
 DART_exec_dir=${DART_DIR}/observations/obs_converters/NCEP/prep_bufr/exe
 NML_TEMPLATE=${scpdir}/input.nml.bufrobs.template
 
-run_dir="/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs"
+run_dir="${mpasdir}/run_dirs"
 WORK_dir=${run_dir}/OBS_SEQ/Bufr
 
 convert=yes

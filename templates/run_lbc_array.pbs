@@ -1,0 +1,48 @@
+#!/bin/bash
+ACCTSTR
+#PBS -q PARTION
+#PBS -l job_priority=economy
+#PBS -N JOBNAME
+#PBS -l select=NNODES:CPUSPEC:mpiprocs=NCORES:ompthreads=1
+#PBS -l walltime=00:30:00
+#PBS -j oe
+#PBS -o WRKDIR/PREFIX.log
+
+#set -eux
+
+time1=$(date '+%s')
+echo "Job Started: $(date). Job Id:  $PBS_JOBID"
+echo " "
+
+ulimit -s unlimited
+
+mem=${PBS_ARRAY_INDEX}
+memstr=$(printf "%02d" $mem)
+
+cd WRKDIR/PREFIX_$memstr || exit 0
+
+touch running.PREFIX_$memstr
+rm -rf error.PREFIX_$memstr queue.PREFIX_$memstr
+
+RUNMPCMD -n NOPART EXEDIR/init_atmosphere_model
+
+if [[ $? -eq 0 ]]; then
+    mv PREFIX_${memstr}.lbc.* ..
+    touch done.PREFIX_$memstr
+else
+    touch error.PREFIX_$memstr
+fi
+
+rm -rf running.PREFIX_$memstr
+
+time2=$(date '+%s')
+
+let diff=time2-time1
+let hour=diff/3600
+let diff=diff%3600
+let min=diff/60
+let sec=diff%60
+
+echo -n "Job   Ended: $(date). "
+printf 'Job run time:  %02d:%02d:%02d' $hour $min $sec
+echo " "

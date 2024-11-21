@@ -3,10 +3,11 @@
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
+mpasdir=$(dirname "${rootdir}")
 
 srcdir="/work2/wof/realtime/OBSGEN/CLOUD_OBS"
 
-run_dir="/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs"
+run_dir="${mpasdir}/run_dirs"
 destdir="${run_dir}/OBS_SEQ"
 
 eventdateDF=$(date -u +%Y%m%d%H%M)

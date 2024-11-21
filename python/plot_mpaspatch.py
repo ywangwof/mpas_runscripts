@@ -403,13 +403,14 @@ def parse_args():
     parser.add_argument('-k','--vertLevels',help='Vertical levels to be plotted [l1,l2,l3,...]',  type=str, default=None)
     parser.add_argument('-c','--cntLevels', help='Contour levels [cmin,cmax,cinc]',               type=str, default=None)
     parser.add_argument('-o','--outfile',   help='Name of output image or output directory',              type=str, default=None)
-    parser.add_argument('-range'         ,  help='Map range in degrees [lat1,lat2,lon1,lon2]',type=str, default=None)
+    parser.add_argument('-range',           help='Map range in degrees [lat1,lat2,lon1,lon2]',type=str, default=None)
+    parser.add_argument('-m','--map',       help='Base map projection, latlon, stereo or lambert',type=str,default='latlon')
 
     args = parser.parse_args()
 
     out_args = {}
 
-    basmap = "latlon"
+    basmap = args.map
     out_args['basmap'] = basmap
 
     fcstfiles = []
@@ -480,6 +481,7 @@ def parse_args():
         #for lon,lat in ranges:
         #    print(f"{lat}, {lon}")
         #print(" ")
+
     out_args['ranges']     = ranges
     out_args['vertLevels'] = args.vertLevels
     out_args['patchfile']  = args.patchfile
@@ -760,9 +762,21 @@ def make_plot(cargs,varobj,attrobj,var2d,pcollection,oattribs):
         #carr._threshold = carr._threshold/10.
         ax = plt.axes(projection=carr)
         ax.set_extent(cargs.ranges,crs=carr)
+    elif cargs.basmap == "stereo":
+        earthRadius = 6371229.0
+        cenLat = (cargs.ranges[3] + cargs.ranges[2])/2.0
+        cenLon = (cargs.ranges[1] + cargs.ranges[0])/2.0
+        extentY = math.radians(cargs.ranges[3] - cargs.ranges[2]) * earthRadius
+        extentX = math.radians(cargs.ranges[1] - cargs.ranges[0]) * math.cos(math.radians(cenLat)) * earthRadius
+        print(f"    extent = {extentX/1000.:8.2f} km X {extentY/1000.:8.2f} km")
+
+        scaling = 0.5
+        proj = ccrs.Stereographic(cenLat, cenLon)
+        ax = plt.axes(projection=proj)
+        ax.set_extent([-scaling * extentX, scaling * extentX, -scaling * extentY, scaling * extentY], crs=proj)
     else:
         ax = plt.axes(projection=proj_hrrr)
-        ax.set_extent([-125.0,-70.0,22.0,52.0],crs=carr)
+        ax.set_extent(cargs.ranges,crs=carr)
 
     pcollection.set_array(var2d)
     #patch_collection.set_edgecolors('w')       # No Edge Colors
@@ -793,13 +807,13 @@ def make_plot(cargs,varobj,attrobj,var2d,pcollection,oattribs):
     #ax.add_feature(cfeature.RIVERS)
     ax.add_feature(cfeature.BORDERS)
     ax.add_feature(cfeature.STATES,linewidth=0.4)
-    if cargs.basmap == "latlon":
+    if cargs.basmap == "latlon" or cargs.basmap == "stereo":
         gl = ax.gridlines(draw_labels=True,linewidth=0.5, color='gray', alpha=0.7, linestyle='--')
-        gl.xlocator = mticker.FixedLocator([-140,-135, -130,-125, -120, -115, -110,-105,-100, -95, -90,-85, -80,-75,-70, -60])
-        gl.ylocator = mticker.FixedLocator([10,15,20,25,30,35,40,45,50,55,60])
-        gl.top_labels = False
-        gl.left_labels = True  #default already
-        gl.right_labels = False
+        gl.xlocator      = mticker.FixedLocator([-140,-135, -130,-125, -120, -115, -110,-105,-100, -95, -90,-85, -80,-75,-70, -60])
+        gl.ylocator      = mticker.FixedLocator([10,15,20,25,30,35,40,45,50,55,60])
+        gl.top_labels    = False
+        gl.left_labels   = True  #default already
+        gl.right_labels  = False
         gl.bottom_labels = True
         #gl.ylabel_style = {'rotation': 45}
 

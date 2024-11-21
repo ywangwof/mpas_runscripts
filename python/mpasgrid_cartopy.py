@@ -117,6 +117,50 @@ def read_sfc_station_file(station_file):
 
 ########################################################################
 
+def boundary_vertices(lonVertex, latVertex, bdyMaskVertex, edgesOnVertex, verticesOnEdge, bdyMask):
+    bdyLats = []
+    bdyLons = []
+
+    for startVertex in range(bdyMaskVertex.size):
+        if bdyMaskVertex[startVertex] == bdyMask:
+            break
+
+    for edge in edgesOnVertex[startVertex][:]:
+        if edge == -1:
+            continue
+
+        if verticesOnEdge[edge][0] != startVertex:
+            neighbor = verticesOnEdge[edge][0]
+        else:
+            neighbor = verticesOnEdge[edge][1]
+
+        if bdyMaskVertex[neighbor] == bdyMask:
+            nextVertex = neighbor
+            bdyLons.append(lonVertex[nextVertex])
+            bdyLats.append(latVertex[nextVertex])
+            break
+
+    prevVertex = startVertex
+
+    while nextVertex != startVertex:
+        for edge in edgesOnVertex[nextVertex][:]:
+            if edge == -1:
+                continue
+
+            if verticesOnEdge[edge][0] != nextVertex:
+                neighbor = verticesOnEdge[edge][0]
+            else:
+                neighbor = verticesOnEdge[edge][1]
+
+            if bdyMaskVertex[neighbor] == bdyMask and neighbor != prevVertex:
+                prevVertex = nextVertex
+                nextVertex = neighbor
+                bdyLons.append(lonVertex[nextVertex])
+                bdyLats.append(latVertex[nextVertex])
+                break
+
+    return np.asarray(bdyLons), np.asarray(bdyLats)
+
 def load_wofs_grid(filename):
 
     fileroot,filext = os.path.splitext(filename)
@@ -139,6 +183,7 @@ def load_wofs_grid(filename):
         mpas_grid = {}
 
         wofs_gridtype = "pts"
+
     elif filext == ".nc":                       # netcdf grid file
 
         r2d = 57.2957795             # radians to degrees
@@ -150,7 +195,7 @@ def load_wofs_grid(filename):
 
             #verticesOnCell = mesh.variables['verticesOnCell'][:,:]
             #nEdgesOnCell   = mesh.variables['nEdgesOnCell'][:]
-            verticesOnEdge = mesh.variables['verticesOnEdge'][:,:]
+            verticesOnEdge = mesh.variables['verticesOnEdge'][:,:]-1
             #lonCell = mesh.variables['lonCell'][:] * r2d
             #latCell = mesh.variables['latCell'][:] * r2d
             lonVertex = mesh.variables['lonVertex'][:] * r2d
@@ -158,17 +203,36 @@ def load_wofs_grid(filename):
             #lonEdge = mesh.variables['lonEdge'][:] * r2d
             #latEdge = mesh.variables['latEdge'][:] * r2d
             #hvar     = mesh.variables['areaCell'][:]
+            bdyMaskVertex = np.ma.getdata(mesh.variables['bdyMaskVertex'][:])
+            edgesOnVertex = np.ma.getdata(mesh.variables['edgesOnVertex'][:]) - 1
+
             nedges    = mesh.dimensions['nEdges'].size
 
         lonlats = [ (lon,lat) for lon,lat in zip(lonVertex,latVertex)]
+
+        earthRadius = 6371229.0
+        cenLat = np.sum(latVertex) / latVertex.size
+        cenLon = np.sum(lonVertex) / lonVertex.size
+        extentY = math.radians(max(latVertex) - min(latVertex)) * earthRadius
+        extentX = math.radians(max(lonVertex) - min(lonVertex)) * math.cos(math.radians(cenLat)) * earthRadius
+        print(f"    Domain Center = {cenLat:8.2f},{cenLon:8.2f}")
+        print(f"    Domain Extent = {extentX/1000.:8.2f} km X {extentY/1000.:8.2f} km")
+
+        bdyLons, bdyLats = boundary_vertices(lonVertex, latVertex, bdyMaskVertex, edgesOnVertex, verticesOnEdge, 1)
+        bdyLonsSpec, bdyLatsSpec = boundary_vertices(lonVertex, latVertex, bdyMaskVertex, edgesOnVertex, verticesOnEdge, 7)
 
         mpas_grid = {"nedges"         : nedges,
                      "verticesOnEdge" : verticesOnEdge,
                      "lonVertex"      : lonVertex,
                      "latVertex"      : latVertex,
+                     "bdyLons"        : bdyLons,
+                     "bdyLats"        : bdyLats,
+                     "bdyLonsSpec"    : bdyLonsSpec,
+                     "bdyLatsSpec"    : bdyLatsSpec,
                     }
 
-        wofs_gridtype = "grid"
+        #wofs_gridtype = "grid"
+        wofs_gridtype = "hex"
     else:
         print("ERROR: need a MPAS grid file or custom pts file.")
         sys.exit(0)
@@ -338,7 +402,7 @@ def attach_hrrr_grid(grid, axo):
 
 ########################################################################
 
-def attach_wofs_grid(wofsgridtype,axo, lonlats,skipedges,mpas_grid):
+def attach_wofs_grid(wofsgridtype, axo, lonlats,skipedges,mpas_grid):
     ''' Plot the WoFS domain
     skipedges:  We do not want to plot all points of MPAS domain for time saving purpose
     '''
@@ -359,10 +423,10 @@ def attach_wofs_grid(wofsgridtype,axo, lonlats,skipedges,mpas_grid):
 
         looprange=list(range(0,nedges,skipedges))
 
-        ecy[:,0] = mpas_grid.latVertex[mpas_grid.verticesOnEdge[:,0]-1]
-        ecx[:,0] = mpas_grid.lonVertex[mpas_grid.verticesOnEdge[:,0]-1]
-        ecy[:,1] = mpas_grid.latVertex[mpas_grid.verticesOnEdge[:,1]-1]
-        ecx[:,1] = mpas_grid.lonVertex[mpas_grid.verticesOnEdge[:,1]-1]
+        ecy[:,0] = mpas_grid.latVertex[mpas_grid.verticesOnEdge[:,0]]
+        ecx[:,0] = mpas_grid.lonVertex[mpas_grid.verticesOnEdge[:,0]]
+        ecy[:,1] = mpas_grid.latVertex[mpas_grid.verticesOnEdge[:,1]]
+        ecx[:,1] = mpas_grid.lonVertex[mpas_grid.verticesOnEdge[:,1]]
 
         for j in looprange:
             if abs(ecx[j,0] - ecx[j,1]) > 180.0:
@@ -372,8 +436,25 @@ def attach_wofs_grid(wofsgridtype,axo, lonlats,skipedges,mpas_grid):
                  ecx[j,1] = ecx[j,1] - 360.0
 
             plt.plot(ecx[j,:], ecy[j,:],
-                    color='blue', linewidth=0.1, marker='o', markersize=0.2,alpha=.2,
+                    color='blue', linewidth=0.1, marker='o', markersize=0.2,alpha=0.4,
                     transform=carr) # Be explicit about which transform you want
+
+    elif wofsgridtype == "hex":
+
+        poly_corners = np.zeros((len(mpas_grid.bdyLons), 2), np.float64)
+        poly_corners[:,0] = np.asarray(mpas_grid.bdyLons)
+        poly_corners[:,1] = np.asarray(mpas_grid.bdyLats)
+
+        poly = mpatches.Polygon(poly_corners, closed=True, ec='black', fill=True, lw=0.1, fc='black', alpha=0.3, transform=ccrs.Geodetic())
+        ax.add_patch(poly)
+
+        poly_corners = np.zeros((len(mpas_grid.bdyLonsSpec), 2), np.float64)
+        poly_corners[:,0] = np.asarray(mpas_grid.bdyLonsSpec)
+        poly_corners[:,1] = np.asarray(mpas_grid.bdyLatsSpec)
+
+        poly = mpatches.Polygon(poly_corners, closed=True, ec='black', fill=True, lw=0.1, fc='black', alpha=0.3, transform=ccrs.Geodetic())
+        axo.add_patch(poly)
+
     else:
         print(f"ERROR: unsupported wofs_gridtype = {wofsgridtype}")
         return
@@ -523,10 +604,10 @@ if __name__ == "__main__":
     parser.add_argument('-name',           help='Name of the WoF grid', type=str, default="WoFS_mpas"                                )
     parser.add_argument('-o','--outfile',  help='Name of output image or output directory',           type=str, default=None)
 
-    parser.add_argument('-p','--plot',    help="Boolean flag to interactively plot domain",                    default=False, action="store_true")
-    parser.add_argument('-latlon'        ,help='Base map latlon or lambert',action='store_true',               default=False)
-    parser.add_argument('-range'         ,help='Map range in degrees [lat1,lat2,lon1,lon2]',         type=str, default=None)
-    parser.add_argument('-outgrid'       ,help='Plot an output grid, "True", "False" or a filename. When "True", retrieve grid from command line.',type=str, default="True")
+    parser.add_argument('-p','--plot',    help="Boolean flag to interactively plot domain",                     default=False, action="store_true")
+    parser.add_argument('-m','--map' ,    help='Base map projection, latlon, stereo or lambert',type=str,default='lambert')
+    parser.add_argument('-range'         ,help='Map range in degrees [lat1,lat2,lon1,lon2] or hrrr',   type=str,default=None)
+    parser.add_argument('-outgrid'       ,help='Plot an output grid, "True", "False" or a filename. When "True", retrieve grid from command line.',type=str, default="False")
 
     args = parser.parse_args()
 
@@ -536,20 +617,17 @@ if __name__ == "__main__":
     #
     #-----------------------------------------------------------------------
 
-    basmap = "lambert"
-    if args.latlon:
-        basmap = "latlon"
+    basmap = args.map
 
     #
     # Get MPAS grid
     #
     lats = None; lons = None; fileroot = None
     if os.path.lexists(args.pts_file):
-
         wofs_gridtype,lonlats,mpas_edges = load_wofs_grid(args.pts_file)
 
-        lats = [ l[1] for l in lonlats]
-        lons = [ l[0] for l in lonlats]
+        lats = [ l[1] for l in lonlats]; cenLat = sum(lats) / len(lats)
+        lons = [ l[0] for l in lonlats]; cenLon = sum(lons) / len(lons)
         plt_wofs = True
     else:
         plt_wofs = False
@@ -561,12 +639,13 @@ if __name__ == "__main__":
     skipedges = 4
     if args.range == 'hrrr':
         plt_hrrr = True
-        if args.latlon:
-            ranges = [-135.0,-60.0,20.0,55.0]
-        else:
+        if basmap == "lambert":
             ranges = [-125.0,-70.0,22.0,52.0]
+        else:
+            ranges = [-135.0,-60.0,20.0,55.0]
 
-        skipedges = 10
+        skipedges = 5
+
     elif args.range is not None:
         rlist = [float(item) for item in args.range.split(',')]
         if len(rlist) < 4:
@@ -588,6 +667,11 @@ if __name__ == "__main__":
             ranges = [ min(lons)-2.0, max(lons)+2.0, min(lats)-2.0, max(lats)+2.0]
 
     print(f"    ranges = {color_text(ranges,'cyan')}")
+
+    earthRadius = 6371229.0
+    extentY = math.radians(ranges[3] - ranges[2]) * earthRadius
+    extentX = math.radians(ranges[1] - ranges[0]) * math.cos(math.radians(cenLat)) * earthRadius
+    print(f"    extent = {extentX/1000.:8.2f} km X {extentY/1000.:8.2f} km")
 
     #
     # Decode output grid parameters
@@ -628,68 +712,69 @@ if __name__ == "__main__":
         print("ERROR: need an output grid file or command line arguments.")
         sys.exit(0)
 
-    #
-    # Decode radar station file
-    #
-    plt_radar = False
-    if args.radar_file is not None:
-        if not os.path.lexists(args.radar_file):
-            print(f"ERROR:Radar station file {args.radar_file} not exist.")
-            #parser.print_help()
-            #sys.exit(1)
-        else:
-            radar_locations = read_radar_location(args.radar_file)
-            print(f"    Read in radar file {color_text(args.radar_file,'blue')} successfully\n")
-
-            if len(radar_locations) > 0:
-                plt_radar = True
-
-    #
-    # Decode surface station file
-    #
-    if lat_c is None or lon_c is None:
-        if args.center is not None:
-            print(f"WOFS grid center location supplied, using central lat/lon: {args.center}.")
-            lat_c,lon_c = args.center
-        elif args.station is not None:
-            station_c = None
-            print(f"WOFS grid center location supplied, using station: {args.station}.")
-            station_c = args.station
-
-            if os.path.lexists(args.station_file):
-                stations = read_sfc_station_file(args.station_file)
-                print(f"  Read in sfc station file {args.station_file} successfully")
+    if plt_outgrid:
+        #
+        # Decode radar station file
+        #
+        plt_radar = False
+        if args.radar_file is not None:
+            if not os.path.lexists(args.radar_file):
+                print(f"INFO: Radar station file {args.radar_file} not exist.")
+                #parser.print_help()
+                #sys.exit(1)
             else:
-                print(f"\nERROR: surface station file: {args.station_file} not exist.\n")
+                radar_locations = read_radar_location(args.radar_file)
+                print(f"    Read in radar file {color_text(args.radar_file,'blue')} successfully\n")
+
+                if len(radar_locations) > 0:
+                    plt_radar = True
+
+        #
+        # Decode surface station file
+        #
+        if lat_c is None or lon_c is None:
+            if args.center is not None:
+                print(f"WOFS grid center location supplied, using central lat/lon: {args.center}.")
+                lat_c,lon_c = args.center
+            elif args.station is not None:
+                station_c = None
+                print(f"WOFS grid center location supplied, using station: {args.station}.")
+                station_c = args.station
+
+                if os.path.lexists(args.station_file):
+                    stations = read_sfc_station_file(args.station_file)
+                    print(f"  Read in sfc station file {args.station_file} successfully")
+                else:
+                    print(f"\nERROR: surface station file: {args.station_file} not exist.\n")
+                    parser.print_help()
+                    sys.exit(1)
+
+                print(f"  Input station: {args.station} is located at {stations[station_c][0]},  {stations[station_c][1]}\n")
+                lat_c, lon_c = stations[station_c]
+            else:
+                print("ERROR:  Need either the 3-letter identifier for the WOFS grid center location or the central lat/lon on command line \n")
                 parser.print_help()
                 sys.exit(1)
 
-            print(f"  Input station: {args.station} is located at {stations[station_c][0]},  {stations[station_c][1]}\n")
-            lat_c, lon_c = stations[station_c]
-        else:
-            print("ERROR:  Need either the 3-letter identifier for the WOFS grid center location or the central lat/lon on command line \n")
-            parser.print_help()
-            sys.exit(1)
+            ogrid['ctrlat']  = lat_c
+            ogrid['ctrlon']  = lon_c
 
-        ogrid['ctrlat']  = lat_c
-        ogrid['ctrlon']  = lon_c
+        #
+        # Decode nudging option
+        #
+        x_nudge   = 0.0
+        y_nudge   = 0.0
+        if args.nudge[0] != 0 or args.nudge[1] != 0:
+            x_nudge = 1000.*float(args.nudge[0])
+            y_nudge = 1000.*float(args.nudge[1])
+            print(f"Set WOFS grid nudge from original center {lon_c,lat_c}, moving the grid DX = {x_nudge} meters,  DY = {y_nudge} meters")
 
-    #
-    # Decode nudging option
-    #
-    x_nudge   = 0.0
-    y_nudge   = 0.0
-    if args.nudge[0] != 0 or args.nudge[1] != 0:
-        x_nudge = 1000.*float(args.nudge[0])
-        y_nudge = 1000.*float(args.nudge[1])
-        print(f"Set WOFS grid nudge from original center {lon_c,lat_c}, moving the grid DX = {x_nudge} meters,  DY = {y_nudge} meters")
-
-    #
-    # WoFS domain size
-    #
-    print(f"    Set WOFS grid width {color_text(args.width,'cyan')} km.")
-    WOFS_size = 1000. * args.width
-    ogrid['sizeinm'] = WOFS_size
+        #
+        # WoFS domain size
+        #
+        print(f"    Set WOFS grid width {color_text(args.width,'cyan')} km.")
+        WOFS_size = 1000. * args.width
+        ogrid['sizeinm'] = WOFS_size
 
     #
     # Output file dir / file name
@@ -752,10 +837,15 @@ if __name__ == "__main__":
 
     figure = plt.figure(figsize = (12,12) )
 
-    if args.latlon:
+    if basmap == "latlon":
         carr._threshold = carr._threshold/10.
         ax = plt.axes(projection=carr)
         ax.set_extent(ranges,crs=carr)
+    elif basmap == "stereo":
+        scaling = 0.5
+        proj = ccrs.Stereographic(cenLat, cenLon)
+        ax = plt.axes(projection=proj)
+        ax.set_extent([-scaling * extentX, scaling * extentX, -scaling * extentY, scaling * extentY], crs=proj)
     else:
         if plt_outgrid and args.range != 'hrrr':
             ax = plt.axes(projection=grid_out.proj)
@@ -764,23 +854,31 @@ if __name__ == "__main__":
 
         ax.set_extent(ranges,crs=carr)
 
-    if plt_hrrr:
-        lonsticks = [-140,-120, -100, -80, -60]
-        latsticks = [10,20,30,40,50,60]
-    else:
-        lonsticks = np.arange(math.floor(ranges[0]),math.ceil(ranges[1]), 2)
-        latsticks = np.arange(math.floor(ranges[2]),math.ceil(ranges[3]), 4)
+    #ax.coastlines(resolution='50m')
 
-    ax.coastlines(resolution='50m')
     #ax.stock_img()
-    ax.add_feature(cfeature.OCEAN,facecolor='skyblue')
-    ax.add_feature(cfeature.LAND, facecolor='#666666')
-    ax.add_feature(cfeature.LAKES, facecolor='skyblue')
+    #ax.add_feature(cfeature.OCEAN,facecolor='skyblue')
+    #ax.add_feature(cfeature.LAND, facecolor='#666666')
+    #ax.add_feature(cfeature.LAKES, facecolor='skyblue')
     #ax.add_feature(cfeature.RIVERS,facecolor='skyblue')
-    ax.add_feature(cfeature.BORDERS,linewidth=0.1)
-    ax.add_feature(cfeature.STATES,linewidth=0.2)
-    if args.latlon:
-        gl = ax.gridlines(draw_labels=True,linewidth=0.2, color='brown', alpha=1.0, linestyle='--')
+    #ax.add_feature(cfeature.BORDERS,linewidth=0.1)
+    #ax.add_feature(cfeature.STATES,linewidth=0.2)
+    ax.add_feature(cfeature.LAND)
+    ax.add_feature(cfeature.OCEAN)
+    ax.add_feature(cfeature.COASTLINE, linewidth=0.1)
+    ax.add_feature(cfeature.BORDERS,   linewidth=0.1)
+    ax.add_feature(cfeature.LAKES,     linewidth=0.1)
+    ax.add_feature(cfeature.RIVERS,    linewidth=0.1)
+    ax.add_feature(cfeature.STATES,    linewidth=0.1)
+
+    if basmap == "latlon" or basmap == "stereo":
+        if plt_hrrr:
+            lonsticks = [-140, -120, -100, -80, -60]
+            latsticks = [10,20,30,40,50,60]
+        else:
+            lonsticks = np.arange(math.floor(ranges[0]),math.ceil(ranges[1]), 2)
+            latsticks = np.arange(math.floor(ranges[2]),math.ceil(ranges[3]), 4)
+        gl = ax.gridlines(draw_labels=True,linewidth=0.1, color='brown', alpha=1.0, linestyle='--')
         gl.xlocator      = mticker.FixedLocator(lonsticks)
         gl.ylocator      = mticker.FixedLocator(latsticks)
         gl.top_labels    = False

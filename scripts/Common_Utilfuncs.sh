@@ -4,7 +4,7 @@
 # Export Functions:
 #
 # o mkwrkdir
-# o submit_a_jobscript
+# o submit_a_job             # Create a job script base on the template and submit the job script
 # o check_job_status
 # o get_jobarray_str         # Retrieve job array option string based on job scheduler
 # o group_numbers_by_steps   # Group job numbers for PBS job array option "-J X-Y[:Z]%num"
@@ -23,6 +23,7 @@
 # o wait_for_file_age        # Hold the task until the file age is older than the give number of seconds
 # o num_pending_jobs_greater_than       # Check number of jobs in the queue before submit a new job to avoid job flooding
 # o mecho/mecho0/mecho1/mecho2    # Print text with function name prefix
+# o split_graph              # Split graph.info file for the corresponding MPI processes
 
 ########################################################################
 
@@ -178,10 +179,10 @@ function mkwrkdir {
 
 ########################################################################
 
-function submit_a_jobscript {
+function submit_a_job {
     # Arguments
     #   1      2       3       4       5        6
-    # wrkdir jobname sedfile jobtemp jobscript joboption
+    # wrkdir jobname jobparms jobtemp jobscript joboption
     #
     # Use global variables: $verb, $dorun, $runcmd
     #
@@ -193,27 +194,33 @@ function submit_a_jobscript {
     #    if the job script is submitted correctly
     #
     if [[ $# -ne 6 ]]; then
-        echo "No enough argument in \"submit_a_jobscript\", get: $*"
+        echo "No enough argument in \"submit_a_job\", get: $*"
         exit 0
     fi
 
     local mywrkdir=$1
     local myjobname=$2
-    local sedscript=$3
+    local -n jparms_ref=$3     # Bash 4.3 or newer
     local myjobtemp=$4
     local myjobscript=$5
     local myjoboption=$6
 
     cd $mywrkdir  || return
 
-    sed -f $sedscript $myjobtemp > $myjobscript
+    local sedfile
+    sedfile=$(mktemp -t ${myjobname}.sed_XXXX)
+    for parm in "${!jparms_ref[@]}"; do
+        echo "s^${parm}^${jparms_ref[$parm]}^g" >> $sedfile
+    done
+
+    sed -f $sedfile $myjobtemp > $myjobscript
     # shellcheck disable=SC2154
     if [[ ${verb} -eq 1 ]]; then
         mecho1 "Generated job script: ${WHITE}$myjobscript${NC}"
-        mecho1 "from template:  ${BLUE}$myjobtemp${NC} "
-        mecho1 "using sed file: ${DARK}$sedscript${NC}  "
+        mecho1 "from template       : ${BLUE}$myjobtemp${NC} "
+        mecho1 "using sed file      : ${DARK}$sedfile${NC}  "
     else
-        rm -f $sedscript
+        rm -f $sedfile
     fi
 
     # shellcheck disable=SC2154
@@ -615,19 +622,20 @@ function readconf {
         # remove trailing whitespace from a string
         line=${line%%+([[:space:]])}
 
-        if [[ "$line" =~ ^\[$sections\]$ ]]; then
+        if [[ "$line" =~ ^#.* ]]; then
+            if [[ $debug -eq 1 ]]; then echo "Comment"; fi
+            continue
+        elif [[ "$line" =~ ^\[$sections\]$ ]]; then
             if [[ $debug -eq 1 ]]; then echo "Found $sections"; fi
             readmode=true
             sname="${line#[}"
             sname="${sname%]}"
             read_sections+=("${sname}")
+            #echo "read_sections = ${read_sections[*]}"
             continue
         elif [[ "$line" == \[*\] ]]; then
             if [[ $debug -eq 1 ]]; then echo "Another Section"; fi
             readmode=false
-            continue
-        elif [[ "$line" =~ ^#.* ]]; then
-            if [[ $debug -eq 1 ]]; then echo "Comment"; fi
             continue
         fi
 
@@ -892,4 +900,39 @@ function clean_mem_runfiles {
         rm -f queue.$jobname
         touch done.$jobname
     fi
+}
+
+########################################################################
+
+function split_graph {
+
+    local gpmetis=$1
+    local graph_file=$2
+    local numprocs=$3
+    local rundir=$4
+    local dorun=$5
+    local verb=$6
+
+    wrkdir=$(pwd)
+    IFS=$'/' read -r -a outdirs <<< "$rundir"; unset IFS
+    shortdir="${outdirs[-2]}/${outdirs[-1]}"
+
+    cd "${rundir}" || exit $?
+
+    if [[ $verb -eq 1 ]]; then
+        mecho0 "Generating ${CYAN}${graph_file}.part.${numprocs}${NC} in ${BLUE}${shortdir}${NC} using ${GREEN}${gpmetis}${NC}"
+    fi
+    if which ${gpmetis} >/dev/null 2>&1; then
+        ${gpmetis} -minconn -contig -niter=200 ${graph_file} ${numprocs} > gpmetis.out${numprocs}
+        estatus=$?
+        if [[ ${estatus} -ne 0 ]]; then
+            mecho0 "${estatus}: ${gpmetis} -minconn -contig -niter=200 ${graph_file} ${numprocs}"
+            exit ${estatus}
+        fi
+    else
+        mecho0 "${RED}ERROR${NC}: Command gpmetis=${BLUE}${gpmetis}${NC} not found."
+        if [[ $dorun == true ]]; then exit 1; fi
+    fi
+
+    cd "${wrkdir}" || exit $?
 }

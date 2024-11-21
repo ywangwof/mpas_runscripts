@@ -376,6 +376,7 @@ for pkg in "${packages[@]}"; do
 
             src_dir=$(dirname "$srcmodel")
             run_cmd "${runcmd}" "$src_dir/MPAS-Tools/mesh_tools/grid_rotate" grid_rotate
+            run_cmd "${runcmd}" "$src_dir/project_hexes/project_hexes"       project_hexes
 
         fi
 

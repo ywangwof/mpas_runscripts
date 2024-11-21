@@ -206,17 +206,7 @@ function run_mpas {
     # Preparation for all members
     #
     if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npefcst} ]]; then
-        cd $rundir/$domname || return
-        if [[ $verb -eq 1 ]]; then
-            mecho0 "Generating ${domname}.graph.info.part.${npefcst} in $rundir/$domname using $exedir/gpmetis"
-        fi
-        $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst} > gpmetis.out$npefcst
-        estatus=$?
-        if [[ ${estatus} -ne 0 ]]; then
-            mecho0 "${estatus}: $exedir/gpmetis -minconn -contig -niter=200 ${domname}.graph.info ${npefcst}"
-            exit ${estatus}
-        fi
-        cd $wrkdir || return
+        split_graph "${gpmetis}" "${domname}.graph.info" "${npefcst}" "$rundir/$domname" "$dorun" "$verb"
     fi
 
     currtime_str=$(date -u -d @$iseconds +%Y-%m-%d_%H:%M:%S)
@@ -553,28 +543,28 @@ EOF
     jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
 
     # undefined variables are from the config file
-    sedfile=$(mktemp -t mpas_${eventtime}.sed_XXXX)
-    cat <<EOF > $sedfile
-s/PARTION/${partition_fcst}/
-s/NOPART/$npefcst/
-s/NNODES/${nnodes_fcst}/
-s/JOBNAME/mpas-${eventdate:4:4}_${eventtime}/
-s/CPUSPEC/${claim_cpu_fcst}/g
-s/CLAIMTIME/${claim_time_fcst}/
-s/MODULE/${modulename}/g
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}#
-s/MACHINE/${machine}/g
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/RUNMPCMD/${job_runmpexe_str}/
-EOF
+    declare -A jobParms=(
+        [PARTION]="${partition_fcst}"
+        [NOPART]="$npefcst"
+        [NNODES]="${nnodes_fcst}"
+        [JOBNAME]="mpas-${eventdate:4:4}_${eventtime}"
+        [CPUSPEC]="${claim_cpu_fcst}"
+        [CLAIMTIME]="${claim_time_fcst}"
+        [MODULE]="${modulename}"
+        [ROOTDIR]="$rootdir"
+        [WRKDIR]="$wrkdir"
+        [EXEDIR]="${exedir}"
+        [MACHINE]="${machine}"
+        [ACCTSTR]="${job_account_str}"
+        [EXCLSTR]="${job_exclusive_str}"
+        [RUNMPCMD]="${job_runmpexe_str}"
+    )
     if [[ "${mach}" == "pbs" ]]; then
-        echo "s/NNODES/${nnodes_fcst}/;s/NCORES/${ncores_fcst}/" >> $sedfile
+        jobParms[NNODES]="${nnodes_fcst}"
+        jobParms[NCORES]="${ncores_fcst}"
     fi
 
-    submit_a_jobscript "${wrkdir}" "fcst" "${sedfile}" "${TEMPDIR}/run_mpas_array.${mach}" "${mpas_jobscript}" "${jobarraystr}"
+    submit_a_job "${wrkdir}" "fcst" "jobParms" "${TEMPDIR}/run_mpas_array.${mach}" "${mpas_jobscript}" "${jobarraystr}"
 }
 
 ########################################################################
@@ -736,32 +726,31 @@ function run_mpassit_onetime {
         #
         jobscript="run_mpassit_$minstr.${mach}"
 
-        sedfile=$(mktemp -t mpassit_${eventtime}_$minstr.sed_XXXX)
-        cat <<EOF > $sedfile
-s/PARTION/${partition_post}/
-s/NOPART/$npepost/
-s/MODULE/${modulename}/g
-s/JOBNAME/mpassit${minstr}_${eventtime}/
-s/CPUSPEC/${claim_cpu_post}/
-s/CLAIMTIME/${claim_time_mpassit_onetime}/
-s/HHMINSTR/$minstr/g
-s/FCST_START/${i}/
-s/FCST_END/${i}/
-s/FCST_INTVL/${OUTINVL}/
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}#
-s/MACHINE/${machine}/g
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/RUNMPCMD/${job_runmpexe_str}/
-EOF
-
+        declare -A jobParms=(
+            [PARTION]="${partition_post}"
+            [NOPART]="$npepost"
+            [MODULE]="${modulename}"
+            [JOBNAME]="mpassit${minstr}_${eventtime}"
+            [CPUSPEC]="${claim_cpu_post}"
+            [CLAIMTIME]="${claim_time_mpassit_onetime}"
+            [HHMINSTR]="$minstr"
+            [FCST_START]="${i}"
+            [FCST_END]="${i}"
+            [FCST_INTVL]="${OUTINVL}"
+            [ROOTDIR]="$rootdir"
+            [WRKDIR]="$wrkdir"
+            [EXEDIR]="${exedir}"
+            [MACHINE]="${machine}"
+            [ACCTSTR]="${job_account_str}"
+            [EXCLSTR]="${job_exclusive_str}"
+            [RUNMPCMD]="${job_runmpexe_str}"
+        )
         if [[ "${mach}" == "pbs" ]]; then
-            echo "s/NNODES/${nnodes_post}/;s/NCORES/${ncores_post}/" >> $sedfile
+            jobParms[NNODES]="${nnodes_post}"
+            jobParms[NCORES]="${ncores_post}"
         fi
 
-        submit_a_jobscript "${wrkdir}" "mpassit$minstr" "${sedfile}" "${TEMPDIR}/run_mpassit_array.${mach}" "${jobscript}" "${jobarraystr}"
+        submit_a_job "${wrkdir}" "mpassit$minstr" "jobParms" "${TEMPDIR}/run_mpassit_array.${mach}" "${jobscript}" "${jobarraystr}"
     done
 }
 
@@ -807,32 +796,31 @@ function run_mpassit_alltimes {
         cd $wrkdir || return
         jobscript="run_mpassit.${mach}"
 
-        sedfile=$(mktemp -t mpassit_${eventtime}.sed_XXXX)
-        cat <<EOF > $sedfile
-s/PARTION/${partition_post}/
-s/NOPART/$npepost/
-s/MODULE/${modulename}/g
-s/JOBNAME/mpassit_${eventtime}/
-s/CPUSPEC/${claim_cpu_post}/
-s/CLAIMTIME/${claim_time_mpassit_alltimes}/
-s/HHMINSTR//g
-s/FCST_START/${minsec}/
-s/FCST_END/${maxsec}/
-s/FCST_INTVL/${OUTINVL}/
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}#
-s/MACHINE/${machine}/g
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/RUNMPCMD/${job_runmpexe_str}/
-EOF
-
+        declare -A jobParms=(
+            [PARTION]="${partition_post}"
+            [NOPART]="$npepost"
+            [MODULE]="${modulename}"
+            [JOBNAME]="mpassit_${eventtime}"
+            [CPUSPEC]="${claim_cpu_post}"
+            [CLAIMTIME]="${claim_time_mpassit_alltimes}"
+            [HHMINSTR]=""
+            [FCST_START]="${minsec}"
+            [FCST_END]="${maxsec}"
+            [FCST_INTVL]="${OUTINVL}"
+            [ROOTDIR]="$rootdir"
+            [WRKDIR]="$wrkdir"
+            [EXEDIR]="${exedir}"
+            [MACHINE]="${machine}"
+            [ACCTSTR]="${job_account_str}"
+            [EXCLSTR]="${job_exclusive_str}"
+            [RUNMPCMD]="${job_runmpexe_str}"
+        )
         if [[ "${mach}" == "pbs" ]]; then
-            echo "s/NNODES/${nnodes_post}/;s/NCORES/${ncores_post}/" >> $sedfile
+            jobParms[NNODES]="${nnodes_post}"
+            jobParms[NCORES]="${ncores_post}"
         fi
 
-        submit_a_jobscript "$wrkdir" "mpassit" "$sedfile" "$TEMPDIR/run_mpassit_array.${mach}" "$jobscript" "$jobarraystr"
+        submit_a_job "$wrkdir" "mpassit" "jobParms" "$TEMPDIR/run_mpassit_array.${mach}" "$jobscript" "$jobarraystr"
     fi
 }
 
@@ -1101,25 +1089,24 @@ EOF
             jobscript="run_upp$minstr.slurm"
             jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
 
-            sedfile=$(mktemp -t upp_${eventtime}_$minstr.sed_XXXX)
-            cat <<EOF > $sedfile
-s/PARTION/${partition_post}/
-s/NOPART/$npepost/
-s/CPUSPEC/${claim_cpu_post}/
-s/JOBNAME/upp${minstr}_${eventtime}/
-s/HHMINSTR/$minstr/g
-s/UPPDATE/$upptimestr/g
-s/EVENTDATE/$eventtimestr/g
-s/MODULE/${modulename}/g
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$wrkdir#g
-s#EXEDIR#${exedir}#
-s/MACHINE/${machine}/g
-s/ACCTSTR/${job_account_str}/
-s/EXCLSTR/${job_exclusive_str}/
-s/RUNMPCMD/${job_runmpexe_str}/
-EOF
-            submit_a_jobscript $wrkdir "upp$minstr" $sedfile $TEMPDIR/run_upp_array.slurm $jobscript $jobarraystr
+            declare -A jobParms=(
+                [PARTION]="${partition_post}"
+                [NOPART]="$npepost"
+                [CPUSPEC]="${claim_cpu_post}"
+                [JOBNAME]="upp${minstr}_${eventtime}"
+                [HHMINSTR]="$minstr"
+                [UPPDATE]="$upptimestr"
+                [EVENTDATE]="$eventtimestr"
+                [MODULE]="${modulename}"
+                [ROOTDIR]="$rootdir"
+                [WRKDIR]="$wrkdir"
+                [EXEDIR]="${exedir}"
+                [MACHINE]="${machine}"
+                [ACCTSTR]="${job_account_str}"
+                [EXCLSTR]="${job_exclusive_str}"
+                [RUNMPCMD]="${job_runmpexe_str}"
+            )
+            submit_a_job $wrkdir "upp$minstr" "jobParms" $TEMPDIR/run_upp_array.slurm $jobscript $jobarraystr
         fi
     done
 }
