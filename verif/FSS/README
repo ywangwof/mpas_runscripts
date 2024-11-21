@@ -1,0 +1,14 @@
+09/30/2024 from Derek Stratman
+
+    Here are the list of scripts for computing and plotting eFSS/FSS...
+
+    eFSS run script:                       /home/derek.stratman/wofs_verif/run_compute_efss_wofs_mpas.csh
+    eFSS wrapper script for cb-WoFS:       /home/derek.stratman/wofs_verif/wrapper_compute_efss_wofs_2024.py
+    eFSS wrapper script for WoFS-MPAS:     /home/derek.stratman/wofs_verif/wrapper_compute_efss_wofs_mpas_2024.py
+    eFSS computation script for cb-WoFS:   /home/derek.stratman/wofs_verif/compute_efss_wofs_2024.py
+    eFSS computation script for WoFS-MPAS: /home/derek.stratman/wofs_verif/compute_efss_wofs_mpas_2024.py
+
+    Plotting run script:                   /home/derek.stratman/wofs_verif/run_plot_efss_wofs_mpas.csh
+    Python plotting script:                /home/derek.stratman/wofs_verif/plot_efss_wofs_mpas.py
+    Plot functions script:                 /home/derek.stratman/wofs_verif/efss_plot_functions_wofs_mpas.py
+    Color tables:                          /home/derek.stratman/wofs_verif/wofs_colortables.py
