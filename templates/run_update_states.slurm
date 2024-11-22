@@ -35,6 +35,7 @@ rm -rf error.update_states_$memstr queue.update_states_$memstr
 
 #-----------------------------------------------------------------------
 # Copy working file
+# Do copy here instead of the driver script for parallelism
 #-----------------------------------------------------------------------
 
 ((iensidx = mem-1))

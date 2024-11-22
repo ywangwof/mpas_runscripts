@@ -1310,6 +1310,7 @@ function write_config {
     job_runexe_str="${job_runexe_str}"
     runcmd_str="${runcmd_str}"
 
+    relative_path=true
 #
 # MPAS_OPTIONS apply to both [dacycles] & [fcst]. For debugging the MPAS dynamic core
 # and should not be usually changed.
@@ -1860,7 +1861,8 @@ done
 #-----------------------------------------------------------------------
 #% PLATFORM
 
-if [[ $machine == "Jet" ]]; then
+case ${machine} in
+Jet )
     partition_wps="ujet,tjet,xjet,vjet,kjet"
     partition_static="ujet,tjet,xjet,vjet,kjet"  ; claim_cpu_static="--cpus-per-task=12"
     partition_create="bigmem"                    ; claim_cpu_create="--mem-per-cpu=128G"
@@ -1890,8 +1892,8 @@ if [[ $machine == "Jet" ]]; then
     OBS_DIR="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/OBSGEN"
 
     hrrr_dir="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MODEL_DATA/HRRRE"
-
-elif [[ $machine == "Hercules" ]]; then
+    ;;
+Hercules )
     partition_wps="batch"
     partition_static="batch"  ; claim_cpu_static="--cpus-per-task=12"
     partition_create="batch"  ; claim_cpu_create="--mem-per-cpu=128G"
@@ -1918,9 +1920,8 @@ elif [[ $machine == "Hercules" ]]; then
     OBS_DIR="/work2/noaa/wof/ywang/MPAS/OBSGEN"
 
     hrrr_dir="/work2/noaa/wof/ywang/MPAS/MODEL_DATA/HRRRE"
-
-elif [[ $machine == "Cheyenne" ]]; then
-
+    ;;
+Cheyenne )
     if [[ $dorun == true ]]; then
         runcmd="qsub"
     fi
@@ -1948,7 +1949,8 @@ elif [[ $machine == "Cheyenne" ]]; then
 
     modulename="defaults"
     WPSGEOG_PATH="/glade/work/ywang/WPS_GEOG/"
-else    # Vecna at NSSL
+    ;;
+* )    # Vecna at NSSL
     ncores_static=96
     partition_wps="batch"
     partition_static="batch"    ; claim_cpu_static=""
@@ -1984,7 +1986,8 @@ else    # Vecna at NSSL
         echo    ""
         source /home/yunheng.wang/.pythonrc  || exit $?
     fi
-fi
+    ;;
+esac
 
 #
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@

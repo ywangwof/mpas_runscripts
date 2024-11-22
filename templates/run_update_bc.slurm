@@ -43,7 +43,8 @@ lbcfile_orgs=(LBCFILEORGSTR)
 lbcfile_mems=(LBCFILEMEMSTR)
 
 #
-# lbc files
+# Copy the lbc file for this member
+# Doing copy here because it will take too much time if it is done in the driver script.
 #
 lbc_file0="${lbcfile_orgs[$iensidx]}"
 lbc_filem="${lbcfile_mems[$iensidx]}"
@@ -67,11 +68,7 @@ done
 # Run the job itself
 #-----------------------------------------------------------------------
 
-if [[ "MPSCHEME" == "Thompson" ]]; then
-    RUNMPCMD -n NOPART EXEDIR/update_bc.Thompson
-else
-    RUNMPCMD -n NOPART EXEDIR/update_bc
-fi
+RUNMPCMD -n NOPART EXEDIR/update_bc
 
 if [[ $? -eq 0 ]]; then
     touch done.update_bc_${memstr}

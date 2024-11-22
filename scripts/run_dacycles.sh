@@ -714,7 +714,13 @@ function run_filter {
     read -r -a gobef_dates < <(convertS2days "${gobef_secs}")
     read -r -a goaft_dates < <(convertS2days "${goaft_secs}")
 
-    parentdir=$(dirname ${wrkdir})
+    if $relative_path; then
+        parentdir='..'  #$(realpath -m --relative-to=${wrkdir} ${parentdir_a})
+        casedir="${rundir}"
+    else
+        parentdir=$(dirname ${wrkdir})
+        casedir=$(realpath -m --relative-to=${wrkdir} ${rundir})
+    fi
 
     #------------------------------------------------------
     # Waiting for job conditions before submit the job
@@ -750,7 +756,7 @@ function run_filter {
     for iens in $(seq 1 $ENS_SIZE); do
         memstr=$(printf "%02d" $iens)
         if [[ $icycle -eq 0 ]]; then
-            input_file="$rundir/init/${domname}_${memstr}.init.nc"
+            input_file="${casedir}/init/${domname}_${memstr}.init.nc"
         else
             input_file="$parentdir/${event_pre}/fcst_${memstr}/${domname}_${memstr}.restart.$currtime_str.nc"
         fi
@@ -1810,7 +1816,11 @@ function run_update_states {
         update_output_file_list='update_states_out.txt'
         rm -rf ${update_output_file_list}
 
-        fn="${input_file_array[$jindex]}"
+        if ${relative_path}; then
+            fn="../${input_file_array[$jindex]}"        # Use relative path
+        else
+            fn="${input_file_array[$jindex]}"           # Use absolute path
+        fi
         fnbase=$(basename $fn)
         srcfn=${fnbase/.restart./.${damode}.}
         if [[ "$srcfn" =~ ^${domname}_[0-9]{2}.init.nc$ ]]; then     # insert time to init.nc
@@ -1996,11 +2006,20 @@ function run_update_bc {
             mecho0 "Member: $iens use lbc files from $rundir/lbc:"
             mecho0 "        ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc  ${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc";
         fi
+
+        case ${relative_path} in
+        true  ) lbcdir=$(realpath -m --relative-to=${wrkdir} ${rundir}/lbc);;
+        false ) lbcdir="${rundir}/lbc";;
+        *     ) mecho0 "${RED}ERROR${NC}: Hi, what is this <${relative_path}>?"; exit 1;;
+        esac
+
         #ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc ${domname}_${memstr}.lbc.${mpastime_str1}.nc
-        lbc_file0="$rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc"
-        lbc_filem="${domname}_${memstr}.lbc.${mpastime_str1}.nc"
+        lbc_file0="${lbcdir}/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc"
+        lbc_filem="./${domname}_${memstr}.lbc.${mpastime_str1}.nc"
 
         if [[ ${run_updatebc} == true ]]; then
+            # Should copy the initial boundary file as a starting point.
+            # it is moved to the job script for parallelization to save time.
             echo "$lbc_filem" >> ${update_output_file_list}
             sed -i "/update_boundary_file_list/s/=.*/= '${update_output_file_list}'/" input.nml
             echo "${input_file_array[0]}" >> ${update_input_file_list}
@@ -2013,7 +2032,7 @@ function run_update_bc {
             touch "$memwrkdir/done.update_bc_${memstr}"
         fi
 
-        ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc ${domname}_${memstr}.lbc.${mpastime_str2}.nc
+        ln -sf ${lbcdir}/${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc ${domname}_${memstr}.lbc.${mpastime_str2}.nc
 
         jobarrays+=("$iens")
     done
@@ -2362,8 +2381,8 @@ function run_mpas {
         fi
 
         if [[ $verb -eq 1 ]]; then
-            realinit=$(realpath ${initfile})
-            mecho0 "Member: $iens init file: ${realinit##"${WORKDIR}"/}";
+            realinit=$(realpath -m --relative-to=. ${initfile})
+            mecho0 "Member $iens init file: ${realinit}";
         fi
 
         if [[ ! -e ${initfile} && ${dorun} == true ]]; then
@@ -2371,8 +2390,14 @@ function run_mpas {
             exit 1              # something wrong should never happen
         fi
 
-        ln -sf $rundir/$domname/$domname.graph.info.part.${npefcst} .
-        ln -sf $rundir/init/${domname}.invariant.nc .
+        if $relative_path; then
+            casedir=$(realpath -m --relative-to=. ${rundir})
+        else
+            casedir="${rundir}"
+        fi
+
+        ln -sf ${casedir}/$domname/$domname.graph.info.part.${npefcst} .
+        ln -sf ${casedir}/init/${domname}.invariant.nc .
 
         diag_stream="stream_list.atmosphere.diagnostics_da"
         if [[ ${outwrf} == true ]]; then
@@ -3620,24 +3645,28 @@ fi
 #-----------------------------------------------------------------------
 #% PLATFORM
 
-if [[ $machine == "Jet" ]]; then
+case $machine in
+Jet )
     modulename="build_jet_Rocky8_intel_smiol"
 
     source /etc/profile.d/modules.sh
     module purge
     module use ${rootdir}/modules
     module load ${modulename}
-elif [[ $machine == "Hercules" ]]; then
+    ;;
+Hercules )
     modulename="build_hercules_intel"
 
     module purge
     module use ${rootdir}/modules
     module load ${modulename}
-elif [[ $machine == "Cheyenne" ]]; then
+    ;;
+Cheyenne )
     runcmd="qsub"
 
     modulename="defaults"
-else    # Vecna at NSSL
+    ;;
+* )    # Vecna at NSSL
     modulename="env.mpas_smiol"
     source /usr/share/Modules/init/bash
     source ${rootdir}/modules/${modulename} || exit $?
@@ -3647,7 +3676,8 @@ else    # Vecna at NSSL
         echo -e "Enabling Python micromamba environment - ${YELLOW}wofs_an${NC} ...."
         source /home/yunheng.wang/.pythonrc  || exit $?
     fi
-fi
+    ;;
+esac
 
 if [[ $dorun == false ]]; then
     runcmd="echo $runcmd"
