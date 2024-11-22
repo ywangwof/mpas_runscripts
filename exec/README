@@ -4,7 +4,6 @@ This directory contains executables for this workflow.
 You can copy/link them using scripts/lnwrkfiles.sh
 
 .
-├── atmosphere_model.single -> /scratch/ywang/MPAS/frdd-MPAS-Model/atmosphere_model
 ├── dart
 │   ├── advance_time -> /scratch/ywang/MPAS/DART/models/mpas_atm/work/advance_time
 │   ├── convertdate -> /scratch/ywang/MPAS/DART/models/wrf/work/convertdate
@@ -15,12 +14,14 @@ You can copy/link them using scripts/lnwrkfiles.sh
 │   ├── obs_sequence_tool -> /scratch/ywang/MPAS/frdd-DART/models/mpas_atm/work/obs_sequence_tool
 │   ├── update_bc -> /scratch/ywang/MPAS/frdd-DART/models/mpas_atm/work/update_bc
 │   └── update_mpas_states -> /scratch/ywang/MPAS/frdd-DART/models/mpas_atm/work/update_mpas_states
+│
+├── atmosphere_model.single -> /scratch/ywang/MPAS/frdd-MPAS-Model/atmosphere_model
 ├── geogrid.exe -> /scratch/ywang/MPAS/WPS_SRC/geogrid/src/geogrid.exe
-├── gpmetis -> /scratch/ywang/tools/bin/gpmetis
 ├── grid_rotate -> /scratch/ywang/MPAS/MPAS-Tools/mesh_tools/grid_rotate/grid_rotate
 ├── init_atmosphere_model -> /scratch/ywang/MPAS/frdd-MPAS-Model/init_atmosphere_model
 ├── init_atmosphere_model.static -> /scratch/ywang/MPAS/MPAS-Model.static/init_atmosphere_model.dbl
 ├── mpassit -> /scratch/ywang/MPAS/MPASSIT/bin/mpassit
+├── project_hexes -> /scratch/ywang/MPAS/intel/project_hexes
 ├── ungrib.exe -> /scratch/ywang/MPAS/WPS_SRC/ungrib/src/ungrib.exe
 └── unipost.exe -> /scratch/ywang/MPAS/UPP_KATE_kjet/bin/unipost.exe
 

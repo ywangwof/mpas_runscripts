@@ -4,7 +4,7 @@ exec/init_atmosphere_model
 exec/mpassit
 exec/ungrib.exe
 exec/unipost.exe
-exec/gpmetis
+exec/project_hexes
 exec/grid_rotate
 exec/dart/
 fix_files/CAM_ABS_DATA.DBL
@@ -18,7 +18,6 @@ fix_files/RRTMG_LW_DATA
 fix_files/RRTMG_LW_DATA.DBL
 fix_files/RRTMG_SW_DATA
 fix_files/RRTMG_SW_DATA.DBL
-fix_files/VEGPARM.TBL
 fix_files/UPP/crtm2_fix
 fix_files/CCN_ACTIVATE.BIN
 fix_files/rtcoef_rttov13/cldaer_ir/
