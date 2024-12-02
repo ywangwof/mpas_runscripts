@@ -160,14 +160,7 @@ EOF
                 [PARTION]="${partition_ics}"
                 [JOBNAME]="ungrb_${jobname}"
                 [CPUSPEC]="${claim_cpu_ungrib}"
-                [MODULE]="${modulename}"
-                [ROOTDIR]="$rootdir"
-                [WRKDIR]="$wrkdir"
-                [EXEDIR]="${exedir}"
                 [PREFIX]="${EXTHEAD}"
-                [ACCTSTR]="${job_account_str}"
-                [EXCLSTR]="${job_exclusive_str}"
-                [RUNCMD]="${job_runexe_str}"
             )
             submit_a_job "$wrkdir" "ungrib" "jobParms" "$TEMPDIR/run_ungrib_array.${mach}" "$jobscript" "${jobarraystr}"
         fi
@@ -330,18 +323,10 @@ EOF
 
     declare -A jobParms=(
         [PARTION]="${partition_ics}"
-        [MACHINE]="${machine}"
         [NOPART]="$npeics"
         [CPUSPEC]="${claim_cpu_ics}"
         [JOBNAME]="invariant_${jobname}"
-        [MODULE]="${modulename}"
-        [ROOTDIR]="$rootdir"
-        [WRKDIR]="$mywrkdir"
-        [EXEDIR]="${exedir}"
         [PREFIX]="${domname}"
-        [ACCTSTR]="${job_account_str}"
-        [EXCLSTR]="${job_exclusive_str}"
-        [RUNMPCMD]="${job_runmpexe_str}"
     )
     # shellcheck disable=SC2154
     if [[ "${mach}" == "pbs" ]]; then
@@ -349,7 +334,7 @@ EOF
         jobParms[NCORES]="${ncores_ics}"
     fi
 
-    submit_a_job $mywrkdir "invariant" "jobParms" $TEMPDIR/run_init.${mach} $jobscript ""
+    submit_a_job "$mywrkdir" "invariant" "jobParms" "$TEMPDIR/run_init.${mach}" "$jobscript" ""
 }
 
 ########################################################################
@@ -515,18 +500,10 @@ EOF
 
         declare -A jobParms=(
             [PARTION]="${partition_ics}"
-            [MACHINE]="${machine}"
-            [NOPART]="$npeics"
+            [NOPART]="${npeics}"
             [CPUSPEC]="${claim_cpu_ics}"
             [JOBNAME]="init_${jobname}"
-            [MODULE]="${modulename}"
-            [ROOTDIR]="$rootdir"
-            [WRKDIR]="$wrkdir"
-            [EXEDIR]="${exedir}"
             [PREFIX]="${domname}"
-            [ACCTSTR]="${job_account_str}"
-            [EXCLSTR]="${job_exclusive_str}"
-            [RUNMPCMD]="${job_runmpexe_str}"
         )
         # shellcheck disable=SC2154
         if [[ "${mach}" == "pbs" ]]; then

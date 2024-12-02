@@ -77,6 +77,8 @@ for mem in "${mem_arr[@]}"; do
     #fi
     #
     #rm -rf running.add_noise_${memstr}
+
+    cd ..
 done
 
 wait

@@ -184,7 +184,9 @@ function submit_a_job {
     #   1      2       3       4       5        6
     # wrkdir jobname jobparms jobtemp jobscript joboption
     #
-    # Use global variables: $verb, $dorun, $runcmd
+    # Use global variables: $verb, $dorun, $runcmd, $exedir
+    #          $relative_path, $rootdir, $modulename, $machine
+    #          $job_account_str, $job_exclusive_str, $job_runexe_str, $job_runmpexe_str
     #
     # Purpose:
     #
@@ -205,29 +207,56 @@ function submit_a_job {
     local myjobscript=$5
     local myjoboption=$6
 
-    cd $mywrkdir  || return
+    cd ${mywrkdir}  || return
 
     local sedfile
     sedfile=$(mktemp -t ${myjobname}.sed_XXXX)
+
+    # shellcheck disable=SC2154
+    case ${relative_path} in
+    true  ) jobdir="."         ;;
+    false ) jobdir="${wrkdir}" ;;
+    *     ) mecho0 "${RED}ERROR${NC}: Hi, what is this <${relative_path}>?"; exit 1;;
+    esac
+    #
+    # Common parameters for all jobs
+    #
+    declare -A commparms=(
+        [WRKDIR]="${jobdir}"
+        [ROOTDIR]="${rootdir}"
+        [MODULE]="${modulename}"
+        [ACCTSTR]="${job_account_str}"
+        [EXCLSTR]="${job_exclusive_str}"
+        [MACHINE]="${machine}"
+        [RUNCMD]="${job_runexe_str}"
+        [RUNMPCMD]="${job_runmpexe_str}"
+        [EXEDIR]="${exedir}"
+    )
+    # If the job passes in a specific value for any of the common parameters
+    # it will be taken. Merge the two arrays
     for parm in "${!jparms_ref[@]}"; do
-        echo "s^${parm}^${jparms_ref[$parm]}^g" >> $sedfile
+        commparms[$parm]="${jparms_ref[$parm]}"
     done
 
-    sed -f $sedfile $myjobtemp > $myjobscript
+    for parm in "${!commparms[@]}"; do
+        echo "s^${parm}^${commparms[$parm]}^g" >> ${sedfile}
+    done
+
+    sed -f ${sedfile} ${myjobtemp} > ${myjobscript}
     # shellcheck disable=SC2154
     if [[ ${verb} -eq 1 ]]; then
-        mecho1 "Generated job script: ${WHITE}$myjobscript${NC}"
-        mecho1 "from template       : ${BLUE}$myjobtemp${NC} "
-        mecho1 "using sed file      : ${DARK}$sedfile${NC}  "
+        mecho1 "Generated job script: ${WHITE}${myjobscript}${NC}"
+        mecho1 "from template       : ${BLUE}${myjobtemp}${NC} "
+        mecho1 "using sed file      : ${DARK}${sedfile}${NC}  "
     else
-        rm -f $sedfile
+        rm -f ${sedfile}
     fi
 
     # shellcheck disable=SC2154
-    if [[ $dorun == true ]]; then mecho1n "Submitting $myjobscript .... "; fi
+    if [[ $dorun == true ]]; then mecho1n "Submitting ${myjobscript} .... "; fi
     # shellcheck disable=SC2154
     $runcmd ${myjoboption} "$myjobscript"
-    if [[ $dorun == true && $? -eq 0 ]]; then touch $mywrkdir/queue.$myjobname; fi
+    if [[ $dorun == true && $? -eq 0 ]]; then touch ${mywrkdir}/queue.${myjobname}; fi
     echo " "
 }
 
@@ -913,7 +942,9 @@ function split_graph {
     local dorun=$5
     local verb=$6
 
+    local wrkdir
     wrkdir=$(pwd)
+
     IFS=$'/' read -r -a outdirs <<< "$rundir"; unset IFS
     shortdir="${outdirs[-2]}/${outdirs[-1]}"
 

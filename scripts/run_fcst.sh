@@ -537,14 +537,6 @@ EOF
         [JOBNAME]="mpas-${eventdate:4:4}_${eventtime}"
         [CPUSPEC]="${claim_cpu_fcst}"
         [CLAIMTIME]="${claim_time_fcst}"
-        [MODULE]="${modulename}"
-        [ROOTDIR]="$rootdir"
-        [WRKDIR]="$wrkdir"
-        [EXEDIR]="${exedir}"
-        [MACHINE]="${machine}"
-        [ACCTSTR]="${job_account_str}"
-        [EXCLSTR]="${job_exclusive_str}"
-        [RUNMPCMD]="${job_runmpexe_str}"
     )
     if [[ "${mach}" == "pbs" ]]; then
         jobParms[NNODES]="${nnodes_fcst}"
@@ -715,8 +707,7 @@ function run_mpassit_onetime {
 
         declare -A jobParms=(
             [PARTION]="${partition_post}"
-            [NOPART]="$npepost"
-            [MODULE]="${modulename}"
+            [NOPART]="${npepost}"
             [JOBNAME]="mpassit${minstr}_${eventtime}"
             [CPUSPEC]="${claim_cpu_post}"
             [CLAIMTIME]="${claim_time_mpassit_onetime}"
@@ -724,13 +715,6 @@ function run_mpassit_onetime {
             [FCST_START]="${i}"
             [FCST_END]="${i}"
             [FCST_INTVL]="${OUTINVL}"
-            [ROOTDIR]="$rootdir"
-            [WRKDIR]="$wrkdir"
-            [EXEDIR]="${exedir}"
-            [MACHINE]="${machine}"
-            [ACCTSTR]="${job_account_str}"
-            [EXCLSTR]="${job_exclusive_str}"
-            [RUNMPCMD]="${job_runmpexe_str}"
         )
         if [[ "${mach}" == "pbs" ]]; then
             jobParms[NNODES]="${nnodes_post}"
@@ -781,12 +765,12 @@ function run_mpassit_alltimes {
         # Create job script and submit it
         #
         cd $wrkdir || return
+
         jobscript="run_mpassit.${mach}"
 
         declare -A jobParms=(
             [PARTION]="${partition_post}"
             [NOPART]="$npepost"
-            [MODULE]="${modulename}"
             [JOBNAME]="mpassit_${eventtime}"
             [CPUSPEC]="${claim_cpu_post}"
             [CLAIMTIME]="${claim_time_mpassit_alltimes}"
@@ -794,13 +778,6 @@ function run_mpassit_alltimes {
             [FCST_START]="${minsec}"
             [FCST_END]="${maxsec}"
             [FCST_INTVL]="${OUTINVL}"
-            [ROOTDIR]="$rootdir"
-            [WRKDIR]="$wrkdir"
-            [EXEDIR]="${exedir}"
-            [MACHINE]="${machine}"
-            [ACCTSTR]="${job_account_str}"
-            [EXCLSTR]="${job_exclusive_str}"
-            [RUNMPCMD]="${job_runmpexe_str}"
         )
         if [[ "${mach}" == "pbs" ]]; then
             jobParms[NNODES]="${nnodes_post}"
@@ -1079,7 +1056,6 @@ EOF
         #
         cd $wrkdir || return
         if [[ ${#jobarrays} -gt 0 ]]; then
-
             jobscript="run_upp$minstr.slurm"
             jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
 
@@ -1091,16 +1067,8 @@ EOF
                 [HHMINSTR]="$minstr"
                 [UPPDATE]="$upptimestr"
                 [EVENTDATE]="$eventtimestr"
-                [MODULE]="${modulename}"
-                [ROOTDIR]="$rootdir"
-                [WRKDIR]="$wrkdir"
-                [EXEDIR]="${exedir}"
-                [MACHINE]="${machine}"
-                [ACCTSTR]="${job_account_str}"
-                [EXCLSTR]="${job_exclusive_str}"
-                [RUNMPCMD]="${job_runmpexe_str}"
             )
-            submit_a_job $wrkdir "upp$minstr" "jobParms" $TEMPDIR/run_upp_array.slurm $jobscript $jobarraystr
+            submit_a_job "$wrkdir" "upp$minstr" "jobParms" "$TEMPDIR/run_upp_array.slurm" "$jobscript" "$jobarraystr"
         fi
     done
 }
@@ -1715,7 +1683,8 @@ if [[ ! -d $rundir ]]; then
     mkdir -p $rundir
 fi
 
-exedir="$rootdir/exec"
+# shellcheck disable=SC2034
+exedir="$rootdir/exec"        # will be used in submit_a_job
 
 echo    "---- Jobs ($$) started $(date '+%m-%d_%H:%M:%S (%Z)') on host $(hostname) ----"
 echo -e "  Event date : ${GREEN}$eventdate${NC} ${YELLOW}${eventtime}${NC} --> ${LIGHT_BLUE}${enddatetime:0:8}${NC} ${YELLOW}${enddatetime:8:4}${NC}"

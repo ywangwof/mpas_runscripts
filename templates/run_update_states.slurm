@@ -64,7 +64,7 @@ fi
 # Run the job itself
 #-----------------------------------------------------------------------
 
-RUNMPCMD -n NOPART EXEDIR/update_mpas_states
+RUNCMD -n NOPART EXEDIR/update_mpas_states
 
 if [[ $? -eq 0 ]]; then
     touch done.update_states_${memstr}

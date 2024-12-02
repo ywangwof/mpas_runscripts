@@ -716,10 +716,10 @@ function run_filter {
 
     if $relative_path; then
         parentdir='..'  #$(realpath -m --relative-to=${wrkdir} ${parentdir_a})
-        casedir="${rundir}"
+        casedir=$(realpath -m --relative-to=${wrkdir} ${rundir})
     else
         parentdir=$(dirname ${wrkdir})
-        casedir=$(realpath -m --relative-to=${wrkdir} ${rundir})
+        casedir="${rundir}"
     fi
 
     #------------------------------------------------------
@@ -1727,26 +1727,18 @@ EOF
         [NOPART]="$npefilter"
         [JOBNAME]="filter-${eventdate:4:4}_${eventtime}"
         [CPUSPEC]="${claim_cpu_filter}"
-        [MODULE]="${modulename}"
-        [ROOTDIR]="$rootdir"
-        [WRKDIR]="$wrkdir"
         [EXEDIR]="${exedir}/dart"
-        [MACHINE]="${machine}"
-        [ACCTSTR]="${job_account_str}"
-        [EXCLSTR]="${job_exclusive_str}"
-        [RUNMPCMD]="${job_runmpexe_str}"
         [ISECONDS]="${iseconds}"
         [RUNOBS2NC]="${run_obs2nc}"
         [RUNOBSDIAG]="${run_obsdiag}"
         [RUNADDNOISE]="${run_addnoise}"
-        [RUNCMD]="${job_runexe_str}"
     )
     if [[ "${mach}" == "pbs" ]]; then
         jobParms[NNODES]="${nnodes_filter}"
         jobParms[NCORES]="${ncores_filter}"
     fi
 
-    submit_a_job $wrkdir "filter" jobParms $TEMPDIR/$jobscript $jobscript ""
+    submit_a_job "${wrkdir}" "filter" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
 }
 
 ########################################################################
@@ -1875,19 +1867,14 @@ function run_update_states {
 
     jobscript="run_update_states.${mach}"
 
-    declare -a jobParms=(
+    echo "${jobParms[@]}"
+
+    declare -A jobParms=(
         [PARTION]="${partition_filter}"
         [NOPART]="1"
         [JOBNAME]="updatestates_${eventtime}"
         [CPUSPEC]="${claim_cpu_update}"
-        [MODULE]="${modulename}"
-        [ROOTDIR]="$rootdir"
-        [WRKDIR]="$wrkdir"
         [EXEDIR]="${exedir}/dart"
-        [MACHINE]="${machine}"
-        [ACCTSTR]="${job_account_str}"
-        [EXCLSTR]="${job_exclusive_str}"
-        [RUNMPCMD]="${job_runexe_str}"
         [CPCMD]="${cpcmd}"
         [STATEINFILESSTR]="${stateinfiles[*]}"
         [STATEOUTFILESSTR]="${stateoutfiles[*]}"
@@ -2008,7 +1995,7 @@ function run_update_bc {
         fi
 
         case ${relative_path} in
-        true  ) lbcdir=$(realpath -m --relative-to=${wrkdir} ${rundir}/lbc);;
+        true  ) lbcdir=$(realpath -m --relative-to=${memwrkdir} ${rundir}/lbc);;
         false ) lbcdir="${rundir}/lbc";;
         *     ) mecho0 "${RED}ERROR${NC}: Hi, what is this <${relative_path}>?"; exit 1;;
         esac
@@ -2044,6 +2031,7 @@ function run_update_bc {
     #------------------------------------------------------
 
     if [[ ${run_updatebc} == true ]]; then
+
         jobscript="run_update_bc.${mach}"
 
         declare -A jobParms=(
@@ -2051,14 +2039,7 @@ function run_update_bc {
             [NOPART]="1"
             [JOBNAME]="updatebc_${eventtime}"
             [CPUSPEC]="${claim_cpu_update}"
-            [MODULE]="${modulename}"
-            [ROOTDIR]="$rootdir"
-            [WRKDIR]="$wrkdir"
             [EXEDIR]="${exedir}/dart"
-            [MACHINE]="${machine}"
-            [ACCTSTR]="${job_account_str}"
-            [EXCLSTR]="${job_exclusive_str}"
-            [RUNMPCMD]="${job_runexe_str}"
             [CPCMD]="${cpcmd}"
             [MPSCHEME]="${mpscheme}"
             [LBCFILEORGSTR]="${lbcfiles_org[*]}"
@@ -2159,10 +2140,7 @@ function run_add_noise {
             [NOPART]="1"
             [JOBNAME]="noise_mask_${eventtime}"
             [CPUSPEC]="${claim_cpu_update}"
-            [WRKDIR]="$wrkdir"
             [MACHINE]="${mymachine}"
-            [ACCTSTR]="${job_account_str}"
-            [EXCLSTR]="${job_exclusive_str}"
             [SEQFILE]="${seqfile}"
             [INVFILE]="${invfile}"
             [WAN_PATH]="${WOFSAN_PATH}"
@@ -2251,11 +2229,8 @@ function run_add_noise {
             [NOPART]="1"
             [JOBNAME]="noist_pert_${eventtime}"
             [CPUSPEC]="${claim_cpu_update}"
-            [WRKDIR]="$wrkdir"
             [INVFILE]="${invfile}"
             [MACHINE]="${mymachine}"
-            [ACCTSTR]="${job_account_str}"
-            [EXCLSTR]="${job_exclusive_str}"
             [SEQFILE]="${seqfile}"
             [WAN_PATH]="${WOFSAN_PATH}"
             [EVENTDAYS]="${days_secs[0]}"
@@ -2623,14 +2598,6 @@ EOF
         [JOBNAME]="mfrd-${eventdate:4:4}_${eventtime}"
         [CPUSPEC]="${claim_cpu_fcst}"
         [CLAIMTIME]="${claim_time_fcst}"
-        [MODULE]="${modulename}"
-        [ROOTDIR]="$rootdir"
-        [WRKDIR]="$wrkdir"
-        [EXEDIR]="${exedir}"
-        [MACHINE]="${machine}"
-        [ACCTSTR]="${job_account_str}"
-        [EXCLSTR]="${job_exclusive_str}"
-        [RUNMPCMD]="${job_runmpexe_str}"
     )
     #mpas_jobscript="run_mpas.${mach}"
     jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
@@ -2933,14 +2900,7 @@ EOF
         [NOPART]="1"
         [JOBNAME]="obsdiag_${eventdate:4:4}"
         [CPUSPEC]="${claim_cpu_update}"
-        [MODULE]="${modulename}"
-        [ROOTDIR]="$rootdir"
-        [WRKDIR]="$wrkdir"
         [EXEDIR]="${exedir}/dart"
-        [MACHINE]="${machine}"
-        [ACCTSTR]="${job_account_str}"
-        [EXCLSTR]="${job_exclusive_str}"
-        [RUNCMD]="${job_runexe_str}"
         [EXENAME]="obs_diag"
         [PRONAME]="obs_diag"
     )
@@ -3017,6 +2977,7 @@ function run_obs_final2nc {
     #    echo "    Running ${exedir}/dart/obs_seq_to_netcdf"
     #    ${runcmd_str} ${exedir}/dart/obs_seq_to_netcdf >& $srunout
     #    mv obs_epoch_001.nc obs_seq.final.${timestr_cur}.nc
+
     jobscript="run_obs_final2nc.${mach}"
 
     declare -A jobParms=(
@@ -3024,14 +2985,7 @@ function run_obs_final2nc {
         [NOPART]="1"
         [JOBNAME]="obsdiag_${eventdate:4:4}"
         [CPUSPEC]="${claim_cpu_update}"
-        [MODULE]="${modulename}"
-        [ROOTDIR]="$rootdir"
-        [WRKDIR]="$wrkdir"
         [EXEDIR]="${exedir}/dart"
-        [MACHINE]="${machine}"
-        [ACCTSTR]="${job_account_str}"
-        [EXCLSTR]="${job_exclusive_str}"
-        [RUNCMD]="${job_runexe_str}"
         [START_S]="${start_sec}"
         [END_S]="${end_sec}"
         [INTVL_S]="${intvl_sec}"
@@ -3166,12 +3120,12 @@ function run_mpassit_alltimes {
     # Create job script and submit it
     #
     cd $wrkdir || return
+
     jobscript="run_mpassit.${mach}"
 
     declare -A jobParms=(
         [PARTION]="${partition_filter}"
         [NOPART]="$npepost"
-        [MODULE]="${modulename}"
         [JOBNAME]="mpassit_${eventtime}"
         [CPUSPEC]="${claim_cpu_post}"
         [CLAIMTIME]="${claim_time_mpassit_alltimes}"
@@ -3179,13 +3133,6 @@ function run_mpassit_alltimes {
         [FCST_START]="${minsec}"
         [FCST_END]="${maxsec}"
         [FCST_INTVL]="${intvl_sec}"
-        [ROOTDIR]="$rootdir"
-        [WRKDIR]="$wrkdir"
-        [EXEDIR]="${exedir}"
-        [MACHINE]="${machine}"
-        [ACCTSTR]="${job_account_str}"
-        [EXCLSTR]="${job_exclusive_str}"
-        [RUNMPCMD]="${job_runmpexe_str}"
     )
     if [[ "${mach}" == "pbs" ]]; then
         jobParms[NNODES]="${nnodes_post}"

@@ -161,6 +161,8 @@ def boundary_vertices(lonVertex, latVertex, bdyMaskVertex, edgesOnVertex, vertic
 
     return np.asarray(bdyLons), np.asarray(bdyLats)
 
+########################################################################
+
 def load_wofs_grid(filename):
 
     fileroot,filext = os.path.splitext(filename)
@@ -207,6 +209,8 @@ def load_wofs_grid(filename):
             edgesOnVertex = np.ma.getdata(mesh.variables['edgesOnVertex'][:]) - 1
 
             nedges    = mesh.dimensions['nEdges'].size
+
+            lonVertex = np.where(lonVertex > 180., lonVertex-360., lonVertex)
 
         lonlats = [ (lon,lat) for lon,lat in zip(lonVertex,latVertex)]
 

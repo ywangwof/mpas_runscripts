@@ -222,15 +222,8 @@ EOF
     # Associative arrays are local by default
     declare -A jobParms=(
         [PARTION]="${partition_wps}"
-        [NOPART]="$npestatic"
-        [ACCTSTR]="${job_account_str}"
-        [EXCLSTR]="${job_exclusive_str}"
+        [NOPART]="${npestatic}"
         [JOBNAME]="${geoname}"
-        [MODULE]="${modulename}"
-        [ROOTDIR]="$rootdir"
-        [WRKDIR]="$wrkdir"
-        [EXEDIR]="${exedir}"
-        [RUNMPCMD]="${job_runmpexe_str}"
     )
     submit_a_job "$wrkdir" "geogrid" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
 }
@@ -371,12 +364,7 @@ EOF
     declare -A jobParms=(
         [PARTION]="${partition_create}"
         [CPUSPEC]="${claim_cpu_create}"
-        [ACCTSTR]="${job_account_str}"
-        [EXCLSTR]="${job_exclusive_str}"
         [JOBNAME]="createWOFS"
-        [WRKDIR]="$wrkdir"
-        [EXEDIR]="${exedir}"
-        [RUNMPCMD]="${job_runmpexe_str}"
     )
     submit_a_job $wrkdir "create" jobParms $TEMPDIR/$jobscript $jobscript ""
 }
@@ -507,18 +495,10 @@ EOF
     declare -A jobParms=(
         [PARTION]="${partition_static}"
         [CPUSPEC]="${claim_cpu_static}"
-        [ACCTSTR]="${job_account_str}"
-        [EXCLSTR]="${job_exclusive_str}"
         [JOBNAME]="project_${domname}"
         [DOMNAME]="${domname}"
-        [MODULE]="${modulename}"
-        [MACHINE]="${machine}"
-        [ROOTDIR]="$rootdir"
-        [WRKDIR]="$wrkdir"
-        [EXEDIR]="${exedir}"
-        [RUNMPCMD]="${job_runmpexe_str}"
     )
-    submit_a_job $wrkdir "projectHexes" jobParms $TEMPDIR/$jobscript $jobscript ""
+    submit_a_job "$wrkdir" "projectHexes" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
 }
 
 ########################################################################
@@ -678,19 +658,11 @@ EOF
 
     declare -A jobParms=(
         [PARTION]="${partition_static}"
-        [NOPART]="$npestatic"
+        [NOPART]="${npestatic}"
         [JOBNAME]="static_${jobname}"
         [CPUSPEC]="${claim_cpu_static}"
-        [MODULE]="${modulename}"
-        [MACHINE]="${machine}"
-        [ROOTDIR]="$rootdir"
-        [WRKDIR]="$wrkdir"
-        [EXEDIR]="${exedir}"
-        [ACCTSTR]="${job_account_str}"
-        [EXCLSTR]="${job_exclusive_str}"
-        [RUNMPCMD]="${job_runmpexe_str}"
     )
-    submit_a_job $wrkdir "static" jobParms $TEMPDIR/$jobscript $jobscript ""
+    submit_a_job "$wrkdir" "static" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
 }
 
 ########################################################################
@@ -804,17 +776,10 @@ EOF
     declare -A jobParms=(
         [PARTION]="${partition_static}"
         [CPUSPEC]="${claim_cpu_static}"
-        [ACCTSTR]="${job_account_str}"
-        [EXCLSTR]="${job_exclusive_str}"
         [JOBNAME]="grid_rotate"
         [DOMNAME]="${domname}"
-        [MODULE]="${modulename}"
-        [ROOTDIR]="$rootdir"
-        [WRKDIR]="$wrkdir"
-        [EXEDIR]="${exedir}"
-        [RUNCMD]="${job_runexe_str}"
     )
-    submit_a_job $wrkdir "rotate" jobParms $TEMPDIR/$jobscript $jobscript ""
+    submit_a_job "$wrkdir" "rotate" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
 }
 
 ########################################################################
@@ -889,15 +854,8 @@ EOF
     declare -A jobParms=(
         [PARTION]="${partition_wps}"
         [JOBNAME]="ungrb_hrrr_${jobname}"
-        [MODULE]="${modulename}"
-        [ROOTDIR]="$rootdir"
-        [WRKDIR]="$wrkdir"
-        [EXEDIR]="${exedir}"
-        [ACCTSTR]="${job_account_str}"
-        [EXCLSTR]="${job_exclusive_str}"
-        [RUNCMD]="${job_runexe_str}"
     )
-    submit_a_job $wrkdir "ungrib" "jobParms" $TEMPDIR/$jobscript $jobscript ""
+    submit_a_job "$wrkdir" "ungrib" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
 }
 
 ########################################################################
@@ -1310,7 +1268,7 @@ function write_config {
     job_runexe_str="${job_runexe_str}"
     runcmd_str="${runcmd_str}"
 
-    relative_path=true
+    relative_path=${relative_path}
 #
 # MPAS_OPTIONS apply to both [dacycles] & [fcst]. For debugging the MPAS dynamic core
 # and should not be usually changed.
@@ -1720,6 +1678,8 @@ fixed_level="${FIXDIR}/L60.txt"
 damode="init"
 
 source "${scpdir}/Common_Utilfuncs.sh" || exit $?
+
+relative_path=true
 
 #-----------------------------------------------------------------------
 #
