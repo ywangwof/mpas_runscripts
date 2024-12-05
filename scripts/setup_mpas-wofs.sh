@@ -206,6 +206,7 @@ EOF
     'ctrlon'  : ${cen_lon},
     'stdlat1' : ${trulats[0]},
     'stdlat2' : ${trulats[1]},
+    'stdlon'  : ${cen_lon},
     'nx'      : $nx,
     'ny'      : $ny,
     'dx'      : $dx,
@@ -388,10 +389,10 @@ function run_projectHexes {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking: ${CYAN}$cond"${NC}
+            mecho0 "Checking: ${CYAN}$cond${NC}"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: ${CYAN}$cond"${NC}
+                    mecho0 "Waiting for file: ${CYAN}$cond${NC}"
                 fi
                 sleep 10
             done
@@ -953,8 +954,8 @@ function run_meshplot_py {
     #fi
     cd $wrkdir  || return
 
-    if [[ -f "${domname}.radars.${eventdate}.sh" ]]; then
-        mecho0 "Found file ${CYAN}${domname}.radars.${eventdate}.sh${NC}, skipping ${WHITE}run_run_meshplot_py${NC} ...."
+    if [[ -f "${domname}.${eventdate}.radars.sh" ]]; then
+        mecho0 "Found file ${CYAN}${domname}.${eventdate}.radars.sh${NC}, skipping ${WHITE}run_run_meshplot_py${NC} ...."
         return
     fi
 
@@ -977,13 +978,13 @@ function run_meshplot_py {
     #  -outgrid OUTGRID      Plot an output grid, "True", "False" or a filename.
     #                        When "True", retrieve grid from command line.
     #
-    jobcmdstr="$jobscript -o $wrkdir -e ${eventdate} -name ${domname} -outgrid ${output_grid} -g ${FIXDIR}/nexrad_stations.txt -m stereo ${conditions[1]}"
+    jobcmdstr="$jobscript -o $wrkdir --title ${domname}.${eventdate} -outgrid ${output_grid} -g ${FIXDIR}/nexrad_stations.txt -m stereo ${conditions[1]}"
     mecho0 "Running ${BROWN}$jobcmdstr${NC}"
     python $jobcmdstr
 
-    #ls -l ${domname}.radars.${eventdate}.sh
-    #echo "Waiting for ${domname}.radars.${eventdate}.sh ...."
-    #while [[ ! -e ${domname}.radars.${eventdate}.sh  ]]; do
+    #ls -l ${domname}.${eventdate}.radars.sh
+    #echo "Waiting for ${domname}.${eventdate}.radars.sh ...."
+    #while [[ ! -e ${domname}.${eventdate}.radars.sh  ]]; do
     #    sleep 10
     #done
 }
@@ -1283,6 +1284,7 @@ function write_config {
     h_mom_eddy_visc4=0.0
     h_theta_eddy_visc4=0.25
     h_scalar_eddy_visc4=0.25
+    smdiv=0.1
 
 [init]
     ICSIOTYPE="pnetcdf,cdf5"

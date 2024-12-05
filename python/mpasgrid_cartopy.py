@@ -163,12 +163,9 @@ def boundary_vertices(lonVertex, latVertex, bdyMaskVertex, edgesOnVertex, vertic
 
 ########################################################################
 
-def load_wofs_grid(filename):
+def load_wofs_grid(filename,format):
 
-    fileroot,filext = os.path.splitext(filename)
-    #print(fileroot, filext)
-
-    if filext == ".pts":                       # custom.pts file
+    if format == ".pts":                       # custom.pts file
         with open(filename, 'r') as csvfile:
             reader = csv.reader(csvfile)
             next(reader);next(reader);next(reader);
@@ -186,11 +183,11 @@ def load_wofs_grid(filename):
 
         wofs_gridtype = "pts"
 
-    elif filext == ".nc":                       # netcdf grid file
+    elif format == ".nc":                       # netcdf grid file
 
         r2d = 57.2957795             # radians to degrees
 
-        with Dataset(args.pts_file,'r') as mesh:
+        with Dataset(filename,'r') as mesh:
             #xVertex = mesh.variables['xVertex'][:]
             #yVertex = mesh.variables['yVertex'][:]
             #zVertex = mesh.variables['zVertex'][:]
@@ -214,7 +211,7 @@ def load_wofs_grid(filename):
 
         lonlats = [ (lon,lat) for lon,lat in zip(lonVertex,latVertex)]
 
-        earthRadius = 6371229.0
+        earthRadius = __r_earth  # 6371229.0
         cenLat = np.sum(latVertex) / latVertex.size
         cenLon = np.sum(lonVertex) / lonVertex.size
         extentY = math.radians(max(latVertex) - min(latVertex)) * earthRadius
@@ -296,19 +293,32 @@ def setup_out_projection(gridparms):
     xsize=(gridparms.nx-1)*gridparms.dx
     ysize=(gridparms.ny-1)*gridparms.dy
 
-    x1d = np.linspace(0.0,xsize,num=gridparms.nx)
-    y1d = np.linspace(0.0,ysize,num=gridparms.ny)
+    proj=ccrs.LambertConformal(central_longitude=gridparms.stdlon, central_latitude=gridparms.ctrlat,
+                #false_easting=xctr, false_northing=yctr,
+                standard_parallels=gridparms.stdlats, globe=None)
 
-    #x2d1, y2d1 = np.meshgrid(x1d,y1d)
+    #lonlat_sw = carr.transform_point(0.0,0.0,proj)
 
-    xctr = (gridparms.nx-1)/2*gridparms.dx
-    yctr = (gridparms.ny-1)/2*gridparms.dy
+    xygs = proj.transform_points(carr,np.array([gridparms.ctrlon]),np.array([gridparms.ctrlat]))
+    xctr = xygs[0,0]
+    yctr = xygs[0,1]
 
-    proj=ccrs.LambertConformal(central_longitude=gridparms.ctrlon, central_latitude=gridparms.ctrlat,
-                 false_easting=xctr, false_northing=yctr,
-                 standard_parallels=gridparms.stdlats, globe=None)
+    x_corners = np.zeros(5)
+    y_corners = np.zeros(5)
 
-    lonlat_sw = carr.transform_point(0.0,0.0,proj)
+    half_x = 0.5*xsize
+    half_y = 0.5*ysize
+
+    x_corners[0] = xctr - half_x; y_corners[0] = yctr - half_y
+    x_corners[1] = xctr - half_x; y_corners[1] = yctr + half_y
+    x_corners[2] = xctr + half_x; y_corners[2] = yctr + half_y
+    x_corners[3] = xctr + half_x; y_corners[3] = yctr - half_y
+
+    x_corners[4] = x_corners[0]; y_corners[4] = y_corners[0]
+
+    glonlats = carr.transform_points(proj,x_corners,y_corners)
+
+    lonlat_sw = (glonlats[0,0],glonlats[0,1])
 
     if args.verbose:
         print("Write component output grid Parameters:")
@@ -324,39 +334,12 @@ def setup_out_projection(gridparms):
                  'ctrlon'   : gridparms.ctrlon,
                  'xctr'     : xctr,
                  'yctr'     : yctr,
-                 'x1d'      : x1d,
-                 'y1d'      : y1d,
-                 'lonlat_sw': lonlat_sw }
-
-    if hasattr(gridparms, "sizeinm"):
-        # Get the domain corners based on the domain width
-
-        lat_cr, lon_cr = np.deg2rad(gridparms.ctrlat), np.deg2rad(gridparms.ctrlon)
-
-        glat = np.zeros(5)
-        glon = np.zeros(5)
-
-        glat[0] = lat_cr - 0.5*(gridparms.sizeinm) / __r_earth
-        glat[1] = lat_cr + 0.5*(gridparms.sizeinm) / __r_earth
-        glat[2] = lat_cr + 0.5*(gridparms.sizeinm) / __r_earth
-        glat[3] = lat_cr - 0.5*(gridparms.sizeinm) / __r_earth
-        glat[4] = lat_cr - 0.5*(gridparms.sizeinm) / __r_earth
-
-        glon[0] = lon_cr - 0.5*(gridparms.sizeinm) / (__r_earth * np.cos(glat[0]))
-        glon[1] = lon_cr - 0.5*(gridparms.sizeinm) / (__r_earth * np.cos(glat[1]))
-        glon[2] = lon_cr + 0.5*(gridparms.sizeinm) / (__r_earth * np.cos(glat[2]))
-        glon[3] = lon_cr + 0.5*(gridparms.sizeinm) / (__r_earth * np.cos(glat[3]))
-        glon[4] = lon_cr - 0.5*(gridparms.sizeinm) / (__r_earth * np.cos(glat[4]))
-
-        glon = np.rad2deg(glon)
-        glat = np.rad2deg(glat)
-
-        xygs = proj.transform_points(carr,glon,glat)
-
-        grid_out['glons_corners'] = glon
-        grid_out['glats_corners'] = glat
-        grid_out['x_corners']     = list(xygs[:,0])
-        grid_out['y_corners']     = list(xygs[:,1])
+                 'lonlat_sw': lonlat_sw,
+                 'glons_corners': glonlats[:,0],
+                 'glats_corners': glonlats[:,1],
+                 'x_corners'    : x_corners,
+                 'y_corners'    : y_corners
+                }
 
     return make_namespace(grid_out)
 
@@ -371,6 +354,19 @@ def attach_out_grid(grid,axo):
 
     plt.fill(grid.x_corners, grid.y_corners, linewidth=2.0, alpha=1.0,
              facecolor='none',edgecolor='green',  transform=grid.proj)
+
+    #0
+    #X=np.array([-104.8107, -108.7095, -65.01581, -75.10529,-104.8107]);Y=np.array([25.34124, 50.36163, 46.58085, 22.92313,25.34124])
+    #1
+    #X=np.array([-104.8156, -108.7167, -65.00955, -75.10077,-104.8156]);Y=np.array([25.34081, 50.36096, 46.57904, 22.92195,25.34081])
+    #2
+    #X=np.array([-104.8103, -108.7106, -65.01315, -75.10657,-104.8103]);Y=np.array([25.33688, 50.36623, 46.58514, 22.91895,25.33688])
+    #3
+    #X=np.array([-104.8151, -108.7178, -65.0069, -75.10205,-104.8151]);Y=np.array([25.33645, 50.36555, 46.58333, 22.91778,25.33645])
+
+    #xygs = grid.proj.transform_points(carr,X,Y)
+    #plt.fill(list(xygs[:,0]), list(xygs[:,1]), linewidth=2.0, alpha=1.0,
+    #     facecolor='none',edgecolor='red',  transform=grid.proj)
 
     plt.text(grid.ctrlon,grid.ctrlat,'o',color='g',horizontalalignment='center',
                                         verticalalignment='center',transform=carr)
@@ -589,29 +585,28 @@ if __name__ == "__main__":
                                             ''')
                                      #formatter_class=CustomFormatter)
 
-    parser.add_argument('pts_file',help='MPAS domain file in ASCII or netCDF',nargs='?',default="xxxx")
+    parser.add_argument('gridfile',           help='MPAS domain file in ASCII or netCDF',nargs='?',default="xxxx")
 
-    parser.add_argument('-v','--verbose', help='Verbose output',                        action="store_true")
+    parser.add_argument('-v','--verbose',     help='Verbose output',                        action="store_true")
 
-    parser.add_argument('-c','--center',  help='Central latitude/longitude of the WoFS domain',    type=float, default=None,    nargs = 2)
-    parser.add_argument('-l','--stdlats', help='Lambert Conformal standard latitudes',      type=float, default=(30.0,60.0),    nargs = 2)
-    parser.add_argument('-n','--nxy',     help='number of grid in X/Y direction',           type=int,   default=(301,301),      nargs = 2)
-    parser.add_argument('-d','--dxy',     help='grid resolution in X/Y direction (meter)',  type=float, default=(3000.0,3000.0),nargs = 2)
+    parser.add_argument('-c','--center',      help='Central latitude/longitude of the WoFS domain',    type=float, default=None,           nargs = 2)
+    parser.add_argument('-l','--stdlats',     help='Lambert Conformal standard latitudes',             type=float, default=(30.0,60.0),    nargs = 2)
+    parser.add_argument('-n','--nxy',         help='number of grid in X/Y direction',                  type=int,   default=(301,301),      nargs = 2)
+    parser.add_argument('-d','--dxy',         help='grid resolution in X/Y direction (meter)',         type=float, default=(3000.0,3000.0),nargs = 2)
 
-    parser.add_argument('-s','--station',     help='Station name to center the WOFS grid on',         type=str,   default=None              )
-    parser.add_argument('-w','--width',       help='Size of WOFS domain in km',                       type=float, default=_default_WOFS_size)
-    parser.add_argument('-nudge',             help='Nudge the box X/Y km from station point: DX DY',  type=int,   default=(0,0), nargs = 2  )
-    parser.add_argument('-f','--station_file',help='Station file name to read station locations',     type=str,   default=_station_file     )
-    parser.add_argument('-g','--radar_file',  help='Radar file name for locations',                   type=str,   default=_radar_file       )
+    parser.add_argument('-s','--station',     help='Station name to center the WOFS grid on',          type=str,   default=None              )
+    #parser.add_argument('-w','--width',       help='Size of WOFS domain in km',                        type=float, default=_default_WOFS_size)
+    parser.add_argument('-nudge',             help='Nudge the box X/Y km from station point: DX DY',   type=int,   default=(0,0), nargs = 2  )
+    parser.add_argument('-f','--station_file',help='Station file name to read station locations',      type=str,   default=_station_file     )
+    parser.add_argument('-g','--radar_file',  help='Radar file name for locations',                    type=str,   default=_radar_file       )
 
-    parser.add_argument('-e','--event',    help='Event date string',    type=str, default=datetime.datetime.now().strftime('%Y%m%d') )
-    parser.add_argument('-name',           help='Name of the WoF grid', type=str, default="WoFS_mpas"                                )
-    parser.add_argument('-o','--outfile',  help='Name of output image or output directory',           type=str, default=None)
+    parser.add_argument('-t','--title',       help='Name of the WoF grid',                             type=str,   default=None              )
+    parser.add_argument('-o','--outfile',     help='Name of output image or output directory',         type=str,   default=None)
 
-    parser.add_argument('-p','--plot',    help="Boolean flag to interactively plot domain",                     default=False, action="store_true")
-    parser.add_argument('-m','--map' ,    help='Base map projection, latlon, stereo or lambert',type=str,default='lambert')
-    parser.add_argument('-range'         ,help='Map range in degrees [lat1,lat2,lon1,lon2] or hrrr',   type=str,default=None)
-    parser.add_argument('-outgrid'       ,help='Plot an output grid, "True", "False" or a filename. When "True", retrieve grid from command line.',type=str, default="False")
+    parser.add_argument('-p','--plot',        help="Boolean flag to interactively display the plot",               default=False, action="store_true")
+    parser.add_argument('-m','--map',         help='Base map projection, latlon, stereo or lambert',     type=str, default='lambert')
+    parser.add_argument('-range',             help='Map range in degrees [lat1,lat2,lon1,lon2] or hrrr', type=str, default=None)
+    parser.add_argument('-outgrid',           help='Plot an output grid, "True", "False" or a filename. When "True", retrieve grid from command line.',type=str, default="False")
 
     args = parser.parse_args()
 
@@ -627,8 +622,11 @@ if __name__ == "__main__":
     # Get MPAS grid
     #
     lats = None; lons = None; fileroot = None
-    if os.path.lexists(args.pts_file):
-        wofs_gridtype,lonlats,mpas_edges = load_wofs_grid(args.pts_file)
+    if os.path.lexists(args.gridfile):
+        fileroot,filext = os.path.splitext(args.gridfile)
+        #print(fileroot, filext)
+
+        wofs_gridtype,lonlats,mpas_edges = load_wofs_grid(args.gridfile,filext)
 
         lats = [ l[1] for l in lonlats]; cenLat = sum(lats) / len(lats)
         lons = [ l[0] for l in lonlats]; cenLon = sum(lons) / len(lons)
@@ -773,13 +771,6 @@ if __name__ == "__main__":
             y_nudge = 1000.*float(args.nudge[1])
             print(f"Set WOFS grid nudge from original center {lon_c,lat_c}, moving the grid DX = {x_nudge} meters,  DY = {y_nudge} meters")
 
-        #
-        # WoFS domain size
-        #
-        print(f"    Set WOFS grid width {color_text(args.width,'cyan')} km.")
-        WOFS_size = 1000. * args.width
-        ogrid['sizeinm'] = WOFS_size
-
     #
     # Output file dir / file name
     #
@@ -794,15 +785,14 @@ if __name__ == "__main__":
         outfile = os.path.basename(args.outfile)
 
     if outfile is None:
-        if fileroot is not None:
-            filename = f"{os.path.basename(fileroot)}.png"
-            outfile = filename.replace("custom",basmap)
-            outfile = filename.replace("grid",basmap)
+        if args.title is not None:
+            name = args.title
         else:
-            outfile = f"{args.name}.{args.event}.{basmap}.png"
+            name = os.path.basename(fileroot).split('.')[0]
 
-    figname = os.path.join(outdir,outfile)
-    envfilename=os.path.join(outdir,f'{args.name}.radars.{args.event}.sh')
+    figname = os.path.join(outdir,f"{name}.{basmap}.png")
+    envfilename=os.path.join(outdir,f'{name}.radars.sh')
+    domtitle=f"{name} Domain"
 
     #-----------------------------------------------------------------------
     #
@@ -890,7 +880,7 @@ if __name__ == "__main__":
         gl.right_labels  = True
         gl.bottom_labels = True
 
-    plt.title(f"{args.name} Domain on {args.event}")
+    plt.title(domtitle)
 
     #-----------------------------------------------------------------------
     #

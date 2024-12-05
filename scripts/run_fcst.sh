@@ -222,6 +222,7 @@ function run_mpas {
     if [[ -z ${h_mom_eddy_visc4} ]];    then h_mom_eddy_visc4=0.0;     fi
     if [[ -z ${h_theta_eddy_visc4} ]];  then h_theta_eddy_visc4=0.25;  fi
     if [[ -z ${h_scalar_eddy_visc4} ]]; then h_scalar_eddy_visc4=0.25; fi
+    if [[ -z ${smdiv} ]];               then smdiv=0.1;                fi
 
     jobarrays=()
     for iens in $(seq 1 $ENS_SIZE); do
@@ -355,7 +356,7 @@ function run_mpas {
     config_monotonic                = true
     config_coef_3rd_order           = ${coef_3rd_order}
     config_epssm                    = 0.1
-    config_smdiv                    = 0.1
+    config_smdiv                    = ${smdiv}
     config_smagorinsky_coef         = ${smagorinsky_coef}
 /
 &damping
