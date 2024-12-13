@@ -321,11 +321,11 @@ def setup_out_projection(gridparms):
     lonlat_sw = (glonlats[0,0],glonlats[0,1])
 
     if args.verbose:
-        print("Write component output grid Parameters:")
-        print(f"    cen_lat = {gridparms.ctrlat}, cen_lon = {gridparms.ctrlon}, stdlat1 = {gridparms.stdlats[0]}, stdlat2 = {gridparms.stdlats[1]}")
-        print(f"    nx = {gridparms.nx}, ny = {gridparms.ny}, dx = {gridparms.dx}, dy = {gridparms.dy}")
+        print("    Write component output grid Parameters:")
+        print(f"        cen_lat = {gridparms.ctrlat}, cen_lon = {gridparms.ctrlon}, stdlat1 = {gridparms.stdlats[0]}, stdlat2 = {gridparms.stdlats[1]}")
+        print(f"        nx = {gridparms.nx}, ny = {gridparms.ny}, dx = {gridparms.dx}, dy = {gridparms.dy}")
 
-        print(f'Output grid: lat1 = {lonlat_sw[1]}, lon1 = {lonlat_sw[0]}')
+        print(f'        Output grid: lat1 = {lonlat_sw[1]}, lon1 = {lonlat_sw[0]}')
 
     grid_out  = {'proj'     : proj,
                  'xsize'    : xsize,
@@ -345,7 +345,7 @@ def setup_out_projection(gridparms):
 
 ########################################################################
 
-def attach_out_grid(grid,axo):
+def attach_out_grid(grid,axo,color,n):
     '''Plot the output grid outlines'''
 
     #axo.add_patch(mpatches.Rectangle(xy=[0, 0], width=grid.xsize, height=grid.ysize,
@@ -353,7 +353,7 @@ def attach_out_grid(grid,axo):
     #                            transform=grid.proj))
 
     plt.fill(grid.x_corners, grid.y_corners, linewidth=2.0, alpha=1.0,
-             facecolor='none',edgecolor='green',  transform=grid.proj)
+             facecolor='none',edgecolor=color,  transform=grid.proj)
 
     #0
     #X=np.array([-104.8107, -108.7095, -65.01581, -75.10529,-104.8107]);Y=np.array([25.34124, 50.36163, 46.58085, 22.92313,25.34124])
@@ -368,14 +368,14 @@ def attach_out_grid(grid,axo):
     #plt.fill(list(xygs[:,0]), list(xygs[:,1]), linewidth=2.0, alpha=1.0,
     #     facecolor='none',edgecolor='red',  transform=grid.proj)
 
-    plt.text(grid.ctrlon,grid.ctrlat,'o',color='g',horizontalalignment='center',
+    plt.text(grid.ctrlon,grid.ctrlat,'o',color=color,horizontalalignment='center',
                                         verticalalignment='center',transform=carr)
 
     transform1 = grid.proj._as_mpl_transform(axo)
 
     plt.annotate(f'({grid.ctrlat}, {grid.ctrlon})', xy=(grid.xctr,grid.yctr), xycoords=transform1,
-                    xytext=(2, 12), textcoords='offset points',
-                    color='green',
+                    xytext=(2, n*12), textcoords='offset points',
+                    color=color,
                     arrowprops=dict(arrowstyle="fancy")
                     )
 
@@ -695,21 +695,28 @@ if __name__ == "__main__":
     elif args.outgrid == "False":
         plt_outgrid = False
         ogrid = {}
-    elif os.path.lexists(args.outgrid):
-        data = []
-        with open(args.outgrid,'r', encoding='ascii') as f:
-            for line in f:
-                if line.lstrip().startswith('#'):
-                    continue
-                data.append(line.lstrip().rstrip())
+    elif isinstance(args.outgrid,str):
+        gridfiles = args.outgrid.split(',')
+        ogrids = []
+        for gfile in gridfiles:
+            if os.path.lexists(gfile):
+                data = []
+                with open(gfile,'r', encoding='ascii') as f:
+                    for line in f:
+                        if line.lstrip().startswith('#'):
+                            continue
+                        data.append(line.lstrip().rstrip())
 
-        # reconstructing the data as a dictionary
-        ogrid = ast.literal_eval(' '.join(data))
+                # reconstructing the data as a dictionary
+                ogrid = ast.literal_eval(' '.join(data))
+
+                ogrid["stdlats"] = [ogrid["stdlat1"],ogrid["stdlat2"]]
+                ogrids.append(ogrid)
 
         plt_outgrid = True
-        ogrid["stdlats"] = [ogrid["stdlat1"],ogrid["stdlat2"]]
-        lat_c = ogrid['ctrlat']
-        lon_c = ogrid['ctrlon']
+        lat_c = ogrids[0]['ctrlat']
+        lon_c = ogrids[0]['ctrlon']
+
     else:
         print("ERROR: need an output grid file or command line arguments.")
         sys.exit(0)
@@ -721,7 +728,7 @@ if __name__ == "__main__":
         plt_radar = False
         if args.radar_file is not None:
             if not os.path.lexists(args.radar_file):
-                print(f"INFO: Radar station file {args.radar_file} not exist.")
+                print(f"    INFO: Radar station file {args.radar_file} not exist.")
                 #parser.print_help()
                 #sys.exit(1)
             else:
@@ -758,8 +765,8 @@ if __name__ == "__main__":
                 parser.print_help()
                 sys.exit(1)
 
-            ogrid['ctrlat']  = lat_c
-            ogrid['ctrlon']  = lon_c
+            ogrids[0]['ctrlat']  = lat_c
+            ogrids[0]['ctrlon']  = lon_c
 
         #
         # Decode nudging option
@@ -819,7 +826,10 @@ if __name__ == "__main__":
             print(f"  Grid center moved, from ({lat_o},{lon_o}) to ({lat_c},{lon_c}).")
 
         # Create Lambert conformal map based on width and height of domain and center point
-        grid_out = setup_out_projection(make_namespace(ogrid))
+        grid_outs = []
+        for ogrid in ogrids:
+            grid_out = setup_out_projection(make_namespace(ogrid))
+            grid_outs.append(grid_out)
 
     #cal_grid_stat(mpas_edges, grid_out)
 
@@ -842,7 +852,7 @@ if __name__ == "__main__":
         ax.set_extent([-scaling * extentX, scaling * extentX, -scaling * extentY, scaling * extentY], crs=proj)
     else:
         if plt_outgrid and args.range != 'hrrr':
-            ax = plt.axes(projection=grid_out.proj)
+            ax = plt.axes(projection=grid_outs[0].proj)
         else:
             ax = plt.axes(projection=grid_hrrr.proj)
 
@@ -906,7 +916,11 @@ if __name__ == "__main__":
     #-----------------------------------------------------------------------
 
     if plt_outgrid:
-        attach_out_grid(grid_out,ax)
+        grid_colors = [ 'green', 'blue', 'purple', 'yellow' ]
+        i = 0
+        for grid_out in grid_outs:
+            attach_out_grid(grid_out,ax,grid_colors[i],i)
+            i += 1
 
     #-----------------------------------------------------------------------
     #
