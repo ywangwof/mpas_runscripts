@@ -127,7 +127,7 @@ function usage {
 #
 function ncattget {
     if which ${nckspath} 2> /dev/null ; then
-        ${nckspath} -x -M "$1" | grep -E "(corner_lats|corner_lons|CEN_LAT|CEN_LON|TRUELAT1|TRUELAT2)"
+        ${nckspath} -x -M "$1" | grep -E "(corner_lats|corner_lons|CEN_LAT|CEN_LON|TRUELAT[12]|STAND_LON|MOAD_CEN_LAT|DX|DY|[ij]_parent)"
     else
         mecho0 "${RED}ERROR${NC}: Program ${BLUE}${nckspath}${NC} not found."
         exit $?
@@ -158,6 +158,7 @@ function run_geogrid {
     dx="3000.0"
     dy="3000.0"
     trulats=("30.0" "60.0")
+    standlon="${cen_lon}"
 
     ln -sf ${FIXDIR}/WRFV4.0/GEOGRID.TBL.ARW GEOGRID.TBL
 
@@ -187,7 +188,7 @@ function run_geogrid {
   ref_lon = ${cen_lon},
   truelat1 = ${trulats[0]},
   truelat2 = ${trulats[1]},
-  stand_lon = ${cen_lon}
+  stand_lon = ${standlon}
   geog_data_path = '${WPSGEOG_PATH}',
   opt_geogrid_tbl_path = './',
 /
@@ -206,7 +207,7 @@ EOF
     'ctrlon'  : ${cen_lon},
     'stdlat1' : ${trulats[0]},
     'stdlat2' : ${trulats[1]},
-    'stdlon'  : ${cen_lon},
+    'stdlon'  : ${standlon},
     'nx'      : $nx,
     'ny'      : $ny,
     'dx'      : $dx,
@@ -304,7 +305,7 @@ function run_createWOFS {
         #echo "${wrfkey} -> ${vals[@]}"
 
         case $wrfkey in
-        CEN_LAT | CEN_LON)
+        CEN_LAT | CEN_LON )
             newval=${vals[0]%%f}
             declare "$wrfkey=$newval"
             ;;
@@ -426,7 +427,15 @@ function run_projectHexes {
         #echo "${wrfkey} -> ${vals[@]}"
 
         case $wrfkey in
-        CEN_LAT | CEN_LON | TRUELAT? | STAND_LON)
+        CEN_LAT | CEN_LON | TRUELAT? | STAND_LON | MOAD_CEN_LAT )
+            newval=${vals[0]%%f}
+            declare "$wrfkey=$newval"
+            ;;
+        DX | DY )
+            newval=${vals[0]%%.f}
+            declare "$wrfkey=$newval"
+            ;;
+        i_parent_start | i_parent_end | j_parent_start | j_parent_end )
             newval=${vals[0]%%f}
             declare "$wrfkey=$newval"
             ;;
@@ -485,6 +494,7 @@ function run_projectHexes {
   reference_latitude_degrees  = ${CEN_LAT},
   standard_parallel_1_degrees = ${TRUELAT1},
   standard_parallel_2_degrees = ${TRUELAT2},
+  standard_longitude_degrees  = ${STAND_LON},
 /
 EOF
 
