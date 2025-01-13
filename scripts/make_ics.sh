@@ -43,7 +43,7 @@ eventdateDF=$(date -u +%Y%m%d)
 #
 #  Use an existing domain (wofs_mpas)
 #
-#     0. It should be run after "setup_mpas-wofs_grid.sh"
+#     0. It should be run after "setup_mpas-wofs.sh"
 #     1. make_ics.sh [YYYYmmddHH] [run_dirs] [jobnames]
 #
 #-----------------------------------------------------------------------
@@ -160,14 +160,7 @@ EOF
                 [PARTION]="${partition_ics}"
                 [JOBNAME]="ungrb_${jobname}"
                 [CPUSPEC]="${claim_cpu_ungrib}"
-                [MODULE]="${modulename}"
-                [ROOTDIR]="$rootdir"
-                [WRKDIR]="$wrkdir"
-                [EXEDIR]="${exedir}"
                 [PREFIX]="${EXTHEAD}"
-                [ACCTSTR]="${job_account_str}"
-                [EXCLSTR]="${job_exclusive_str}"
-                [RUNCMD]="${job_runexe_str}"
             )
             submit_a_job "$wrkdir" "ungrib" "jobParms" "$TEMPDIR/run_ungrib_array.${mach}" "$jobscript" "${jobarraystr}"
         fi
@@ -330,18 +323,10 @@ EOF
 
     declare -A jobParms=(
         [PARTION]="${partition_ics}"
-        [MACHINE]="${machine}"
         [NOPART]="$npeics"
         [CPUSPEC]="${claim_cpu_ics}"
         [JOBNAME]="invariant_${jobname}"
-        [MODULE]="${modulename}"
-        [ROOTDIR]="$rootdir"
-        [WRKDIR]="$mywrkdir"
-        [EXEDIR]="${exedir}"
         [PREFIX]="${domname}"
-        [ACCTSTR]="${job_account_str}"
-        [EXCLSTR]="${job_exclusive_str}"
-        [RUNMPCMD]="${job_runmpexe_str}"
     )
     # shellcheck disable=SC2154
     if [[ "${mach}" == "pbs" ]]; then
@@ -349,7 +334,7 @@ EOF
         jobParms[NCORES]="${ncores_ics}"
     fi
 
-    submit_a_job $mywrkdir "invariant" "jobParms" $TEMPDIR/run_init.${mach} $jobscript ""
+    submit_a_job "$mywrkdir" "invariant" "jobParms" "$TEMPDIR/run_init.${mach}" "$jobscript" ""
 }
 
 ########################################################################
@@ -515,18 +500,10 @@ EOF
 
         declare -A jobParms=(
             [PARTION]="${partition_ics}"
-            [MACHINE]="${machine}"
-            [NOPART]="$npeics"
+            [NOPART]="${npeics}"
             [CPUSPEC]="${claim_cpu_ics}"
             [JOBNAME]="init_${jobname}"
-            [MODULE]="${modulename}"
-            [ROOTDIR]="$rootdir"
-            [WRKDIR]="$wrkdir"
-            [EXEDIR]="${exedir}"
             [PREFIX]="${domname}"
-            [ACCTSTR]="${job_account_str}"
-            [EXCLSTR]="${job_exclusive_str}"
-            [RUNMPCMD]="${job_runmpexe_str}"
         )
         # shellcheck disable=SC2154
         if [[ "${mach}" == "pbs" ]]; then
@@ -722,7 +699,7 @@ fi
 
 if [[ ! -r ${config_file} ]]; then
     echo -e "${RED}ERROR${NC}: Configuration file ${CYAN}${config_file}${NC} is not found."
-    echo -e "       Please run ${GREEN}setup_mpas-wofs_grid.sh${NC} first."
+    echo -e "       Please run ${GREEN}setup_mpas-wofs.sh${NC} first."
     exit 2
 fi
 readconf ${config_file} COMMON init || exit $?

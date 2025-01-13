@@ -77,6 +77,7 @@ def parse_args():
     parser.add_argument('-v','--verbose',   help='Verbose output',                              action="store_true",    default=False)
     parser.add_argument('-d','--rundir',    help='Directory contains obs_seq.final files in netCDF format', type=str,   default=os.getcwd())
     parser.add_argument('-f','--filename',  help='File name (obs_seq.final) to list its content',           type=str,   default=None)
+    parser.add_argument('-e','--endtime',   help='End time string as HHMM',                                 type=str,   default="0300")
     parser.add_argument('-p','--parms',     help='Parameter to limit selections, [dataqc,dartqc]',          type=str,   default='10,0')
     parser.add_argument('-t','--threshold', help='Threshold for reflectivity',                              type=float, default=None)
     parser.add_argument('-s','--spreadtype', help='''1: ensemble standard deviation, 2: ensemble standard deviation + ob error ("total spread")''',
@@ -1012,23 +1013,45 @@ if __name__ == "__main__":
         dt2 = dt1 + timedelta(days=1)
         nextdatestr = dt2.strftime('%Y%m%d')
 
-        filelist1 = []; filelist2 = []
+        #filelist1 = []; filelist2 = []
+        #filelist  = []
+        #print(f"Reading obs_seq files from {dadir} ...")
+        #for item in os.listdir(dadir):
+        #    dirmatch = re.match('^\d{4,4}$',item)
+        #    dirtime = os.path.join(dadir,item)
+        #    if dirmatch and os.path.isdir(dirtime):
+        #        for myf in os.listdir(dirtime):
+        #            rematch1 = re.match(f'obs_seq.final.{wargs.eventdate}([12][0-9][0-5][05]).nc',myf)
+        #            rematch2 = re.match(f'obs_seq.final.{nextdatestr}(0[0-9][0-5][05]).nc',myf)
+        #            if rematch1:
+        #                filelist1.append(os.path.join(dirtime,rematch1.group(0)))
+        #            elif rematch2:
+        #                filelist2.append(os.path.join(dirtime,rematch2.group(0)))
+        #filelist1.sort()
+        #filelist2.sort()
+        #filelist = filelist1+filelist2
+
+        starttime = "1500"
+        endtime   = cargs.endtime
+
+        dt1 = datetime.strptime(f"{wargs.eventdate} {starttime}",'%Y%m%d %H%M')
+        dt2 = datetime.strptime(f"{wargs.eventdate} {endtime}",  '%Y%m%d %H%M')
+        if endtime < "1200":
+            dt2 =  + timedelta(days=1)
+
         filelist  = []
         print(f"Reading obs_seq files from {dadir} ...")
-        for item in os.listdir(dadir):
-            dirmatch = re.match('^\d{4,4}$',item)
-            dirtime = os.path.join(dadir,item)
-            if dirmatch and os.path.isdir(dirtime):
-                for myf in os.listdir(dirtime):
-                    rematch1 = re.match(f'obs_seq.final.{wargs.eventdate}([12][0-9][0-5][05]).nc',myf)
-                    rematch2 = re.match(f'obs_seq.final.{nextdatestr}(0[0-9][0-5][05]).nc',myf)
-                    if rematch1:
-                        filelist1.append(os.path.join(dirtime,rematch1.group(0)))
-                    elif rematch2:
-                        filelist2.append(os.path.join(dirtime,rematch2.group(0)))
-        filelist1.sort()
-        filelist2.sort()
-        filelist = filelist1+filelist2
+        dt = dt1
+        while dt <= dt2:
+            dirhmin = dt.strftime("%H%M")
+            filedate = dt.strftime("%Y%m%d%H%M")
+            filepath= os.path.join(dadir,dirhmin,f"obs_seq.final.{filedate}.nc")
+            if os.path.lexists(filepath):
+                filelist.append(filepath)
+            else:
+                print(f"ERROR: {dirhmin}: {filepath} not exist.")
+
+            dt = dt + timedelta(minutes=15)
 
         if len(filelist) <= 5:
             print(f"ERROR: found no enough obs_seq.final files in {dadir}: {filelist}.")

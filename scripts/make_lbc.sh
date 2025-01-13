@@ -176,14 +176,7 @@ EOF
             [PARTION]="${partition_lbc}"
             [JOBNAME]="ungrb_${jobname}"
             [CPUSPEC]="${claim_cpu_ungrib}"
-            [MODULE]="${modulename}"
-            [ROOTDIR]="$rootdir"
-            [WRKDIR]="$wrkdir"
-            [EXEDIR]="${exedir}"
             [PREFIX]="${EXTHEAD}"
-            [ACCTSTR]="${job_account_str}"
-            [EXCLSTR]="${job_exclusive_str}"
-            [RUNCMD]="${job_runexe_str}"
         )
         # shellcheck disable=SC2154
         submit_a_job "$wrkdir" "ungrib" "jobParms" "$TEMPDIR/run_ungrib_array.${mach}" "$jobscript" "${jobarraystr}"
@@ -364,18 +357,10 @@ EOF
 
         declare -A jobParms=(
             [PARTION]="${partition_lbc}"
-            [MACHINE]="${machine}"
             [NOPART]="$npelbc"
             [CPUSPEC]="${claim_cpu_lbc}"
             [JOBNAME]="lbc_${jobname}"
-            [MODULE]="${modulename}"
-            [ROOTDIR]="$rootdir"
-            [WRKDIR]="$wrkdir"
-            [EXEDIR]="${exedir}"
             [PREFIX]="${domname}"
-            [ACCTSTR]="${job_account_str}"
-            [EXCLSTR]="${job_exclusive_str}"
-            [RUNMPCMD]="${job_runmpexe_str}"
         )
         # shellcheck disable=SC2154
         if [[ "${mach}" == "pbs" ]]; then
@@ -612,7 +597,7 @@ fi
 
 if [[ ! -r ${config_file} ]]; then
     echo -e "${RED}ERROR${NC}: Configuration file ${CYAN}${config_file}${NC} is not found."
-    echo -e "       Please run ${GREEN}setup_mpas-wofs_grid.sh${NC} first."
+    echo -e "       Please run ${GREEN}setup_mpas-wofs.sh${NC} first."
     exit 2
 fi
 readconf ${config_file} COMMON lbc || exit $?

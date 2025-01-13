@@ -214,7 +214,7 @@ done
 
 exedir="$(dirname "${desdir}")/exec"
 cd "$exedir" || exit 1
-ln -sf ${tool_dir}/bin/gpmetis  .
+#ln -sf ${tool_dir}/bin/gpmetis  .
 
 for pkg in "${packages[@]}"; do
     case ${pkg^^} in
@@ -347,8 +347,8 @@ for pkg in "${packages[@]}"; do
         echo "     CWD: $desdir"
 
         staticfiles=(CAM_ABS_DATA.DBL  CAM_AEROPT_DATA.DBL GENPARM.TBL       LANDUSE.TBL    \
-                OZONE_DAT.TBL     OZONE_LAT.TBL       OZONE_PLEV.TBL    RRTMG_LW_DATA  \
-                RRTMG_LW_DATA.DBL RRTMG_SW_DATA       RRTMG_SW_DATA.DBL VEGPARM.TBL )
+                     OZONE_DAT.TBL     OZONE_LAT.TBL       OZONE_PLEV.TBL    RRTMG_LW_DATA  \
+                     RRTMG_LW_DATA.DBL RRTMG_SW_DATA       RRTMG_SW_DATA.DBL )
 
         echo ""
         echo "  -- ${cmdnote} runtime static files to ${desdir} ...."

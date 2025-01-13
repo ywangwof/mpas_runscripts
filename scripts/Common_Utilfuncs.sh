@@ -12,7 +12,7 @@
 # o intersection             # Intersection of two arrays, pass in as two strings and pass out as one intersected string
 # o typeset2array            # Typeset output to an associative array
 # o string2array             # '_' separated string to an array
-# o readconf                 # Read config file, written from "setup_mpas-wofs_grid.sh"
+# o readconf                 # Read config file, written from "setup_mpas-wofs.sh"
 # o convert2days             # Convert date/time strings to days/seconds since 1601-01-01
 # o convertS2days            # Convert epoch seconds to days/seconds since 1601-01-01
 # o convert2date             # Convert days/seconds since 1601-01-01 to date/time strings
@@ -184,7 +184,9 @@ function submit_a_job {
     #   1      2       3       4       5        6
     # wrkdir jobname jobparms jobtemp jobscript joboption
     #
-    # Use global variables: $verb, $dorun, $runcmd
+    # Use global variables: $verb, $dorun, $runcmd, $exedir
+    #          $relative_path, $rootdir, $modulename, $machine
+    #          $job_account_str, $job_exclusive_str, $job_runexe_str, $job_runmpexe_str
     #
     # Purpose:
     #
@@ -205,29 +207,56 @@ function submit_a_job {
     local myjobscript=$5
     local myjoboption=$6
 
-    cd $mywrkdir  || return
+    cd ${mywrkdir}  || return
 
     local sedfile
     sedfile=$(mktemp -t ${myjobname}.sed_XXXX)
+
+    # shellcheck disable=SC2154
+    case ${relative_path} in
+    true  ) jobdir="."         ;;
+    false ) jobdir="${wrkdir}" ;;
+    *     ) mecho0 "${RED}ERROR${NC}: Hi, what is this <${relative_path}>?"; exit 1;;
+    esac
+    #
+    # Common parameters for all jobs
+    #
+    declare -A commparms=(
+        [WRKDIR]="${jobdir}"
+        [ROOTDIR]="${rootdir}"
+        [MODULE]="${modulename}"
+        [ACCTSTR]="${job_account_str}"
+        [EXCLSTR]="${job_exclusive_str}"
+        [MACHINE]="${machine}"
+        [RUNCMD]="${job_runexe_str}"
+        [RUNMPCMD]="${job_runmpexe_str}"
+        [EXEDIR]="${exedir}"
+    )
+    # If the job passes in a specific value for any of the common parameters
+    # it will be taken. Merge the two arrays
     for parm in "${!jparms_ref[@]}"; do
-        echo "s^${parm}^${jparms_ref[$parm]}^g" >> $sedfile
+        commparms[$parm]="${jparms_ref[$parm]}"
     done
 
-    sed -f $sedfile $myjobtemp > $myjobscript
+    for parm in "${!commparms[@]}"; do
+        echo "s^${parm}^${commparms[$parm]}^g" >> ${sedfile}
+    done
+
+    sed -f ${sedfile} ${myjobtemp} > ${myjobscript}
     # shellcheck disable=SC2154
     if [[ ${verb} -eq 1 ]]; then
-        mecho1 "Generated job script: ${WHITE}$myjobscript${NC}"
-        mecho1 "from template       : ${BLUE}$myjobtemp${NC} "
-        mecho1 "using sed file      : ${DARK}$sedfile${NC}  "
+        mecho1 "Generated job script: ${WHITE}${myjobscript}${NC}"
+        mecho1 "from template       : ${BLUE}${myjobtemp}${NC} "
+        mecho1 "using sed file      : ${DARK}${sedfile}${NC}  "
     else
-        rm -f $sedfile
+        rm -f ${sedfile}
     fi
 
     # shellcheck disable=SC2154
-    if [[ $dorun == true ]]; then mecho1n "Submitting $myjobscript .... "; fi
+    if [[ $dorun == true ]]; then mecho1n "Submitting ${myjobscript} .... "; fi
     # shellcheck disable=SC2154
     $runcmd ${myjoboption} "$myjobscript"
-    if [[ $dorun == true && $? -eq 0 ]]; then touch $mywrkdir/queue.$myjobname; fi
+    if [[ $dorun == true && $? -eq 0 ]]; then touch ${mywrkdir}/queue.${myjobname}; fi
     echo " "
 }
 
@@ -599,7 +628,7 @@ function readconf {
     local debug=0
 
     if [[ ! -e $configfile ]]; then
-        echo -e "${RED}ERROR${NC}: Case configuration file: $configfile not exist. Have you run ${BROWN}setup_mpas-wofs_grid.sh${NC}?"
+        echo -e "${RED}ERROR${NC}: Case configuration file: $configfile not exist. Have you run ${BROWN}setup_mpas-wofs.sh${NC}?"
         exit 1
     fi
 
@@ -913,7 +942,9 @@ function split_graph {
     local dorun=$5
     local verb=$6
 
+    local wrkdir
     wrkdir=$(pwd)
+
     IFS=$'/' read -r -a outdirs <<< "$rundir"; unset IFS
     shortdir="${outdirs[-2]}/${outdirs[-1]}"
 

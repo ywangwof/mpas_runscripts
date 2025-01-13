@@ -222,6 +222,7 @@ function run_mpas {
     if [[ -z ${h_mom_eddy_visc4} ]];    then h_mom_eddy_visc4=0.0;     fi
     if [[ -z ${h_theta_eddy_visc4} ]];  then h_theta_eddy_visc4=0.25;  fi
     if [[ -z ${h_scalar_eddy_visc4} ]]; then h_scalar_eddy_visc4=0.25; fi
+    if [[ -z ${smdiv} ]];               then smdiv=0.1;                fi
 
     jobarrays=()
     for iens in $(seq 1 $ENS_SIZE); do
@@ -241,6 +242,13 @@ function run_mpas {
         mkwrkdir $memwrkdir 1
         cd $memwrkdir || return
 
+        if ${relative_path}; then
+            casedir=$(realpath -m --relative-to=. ${rundir})
+            dadir=$(realpath -m --relative-to=. $dawrkdir)
+        else
+            casedir=${rundir}
+            dadir=${dawrkdir}
+        fi
         #
         # init files
         #
@@ -250,13 +258,13 @@ function run_mpas {
             do_restart="true"
             do_dacyle="true"
         fi
-        initfile="$dawrkdir/fcst_${memstr}/${domname}_${memstr}.${damode}.${currtime_fil}.nc"
+
+        initfile="${dadir}/fcst_${memstr}/${domname}_${memstr}.${damode}.${currtime_fil}.nc"
         ln -sf ${initfile} .
-        ln -sf $rundir/init/${domname}.invariant.nc .
+        ln -sf ${casedir}/init/${domname}.invariant.nc .
 
         if [[ $verb -eq 1 ]]; then
-            realinit=$(realpath ${initfile})
-            mecho0 "Member: $iens init file: ${realinit##"${WORKDIR}"/}";
+            mecho0 "Member: $iens init file: ${initfile}";
         fi
 
         #
@@ -266,7 +274,7 @@ function run_mpas {
         mlbcstr=$(printf "%02d" $jens)
 
         mpastime_str=$(date -u -d @$iseconds +%Y-%m-%d_%H.%M.%S)
-        lbc_dafile=${dawrkdir}/fcst_${memstr}/${domname}_${memstr}.lbc.${mpastime_str}.nc
+        lbc_dafile=${dadir}/fcst_${memstr}/${domname}_${memstr}.lbc.${mpastime_str}.nc
         lbc_myfile=${domname}_${memstr}.lbc.${mpastime_str}.nc
         if [[ $dorun == true ]]; then
             if [[ ! -e ${lbc_dafile} ]]; then     # impossible condition unless not actual run
@@ -276,8 +284,7 @@ function run_mpas {
         fi
         ln -sf ${lbc_dafile} ${lbc_myfile}
         if [[ $verb -eq 1 ]]; then
-            realdalbc=$(realpath ${lbc_dafile})
-            mecho0 "Member: $iens lbc file ${mpastime_str}: ${realdalbc##"${WORKDIR}"/}";
+            mecho0 "Member: $iens lbc file ${mpastime_str}: ${lbc_dafile}";
         fi
 
         for ((i=EXTINVL;i<=fcst_seconds;i+=EXTINVL)); do
@@ -285,15 +292,14 @@ function run_mpas {
             jsec=$(( iseconds/3600*3600+i )) # External GRIB file provided around to whole hour
             lbctime_str=$(date -u -d @$jsec +%Y-%m-%d_%H.%M.%S)
             mpastime_str=$(date -u -d @$isec +%Y-%m-%d_%H.%M.%S)
-            lbc_file="$rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str}.nc"
+            lbc_file="${casedir}/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str}.nc"
             ln -sf $lbc_file ${domname}_${memstr}.lbc.${mpastime_str}.nc
             if [[ $verb -eq 1 ]]; then
-                reallbc=$(realpath ${lbc_file})
-                mecho0 "Member: $iens lbc file ${mpastime_str}: ${reallbc##"${WORKDIR}"/}";
+                mecho0 "Member: $iens lbc file ${mpastime_str}: ${lbc_file}";
             fi
         done
 
-        ln -sf $rundir/$domname/$domname.graph.info.part.${npefcst} .
+        ln -sf ${casedir}/${domname}/$domname.graph.info.part.${npefcst} .
 
         streamlists=(stream_list.atmosphere.diagnostics_fcst stream_list.atmosphere.output stream_list.atmosphere.surface)
         for fn in "${streamlists[@]}"; do
@@ -350,7 +356,7 @@ function run_mpas {
     config_monotonic                = true
     config_coef_3rd_order           = ${coef_3rd_order}
     config_epssm                    = 0.1
-    config_smdiv                    = 0.1
+    config_smdiv                    = ${smdiv}
     config_smagorinsky_coef         = ${smagorinsky_coef}
 /
 &damping
@@ -551,14 +557,6 @@ EOF
         [JOBNAME]="mpas-${eventdate:4:4}_${eventtime}"
         [CPUSPEC]="${claim_cpu_fcst}"
         [CLAIMTIME]="${claim_time_fcst}"
-        [MODULE]="${modulename}"
-        [ROOTDIR]="$rootdir"
-        [WRKDIR]="$wrkdir"
-        [EXEDIR]="${exedir}"
-        [MACHINE]="${machine}"
-        [ACCTSTR]="${job_account_str}"
-        [EXCLSTR]="${job_exclusive_str}"
-        [RUNMPCMD]="${job_runmpexe_str}"
     )
     if [[ "${mach}" == "pbs" ]]; then
         jobParms[NNODES]="${nnodes_fcst}"
@@ -729,8 +727,7 @@ function run_mpassit_onetime {
 
         declare -A jobParms=(
             [PARTION]="${partition_post}"
-            [NOPART]="$npepost"
-            [MODULE]="${modulename}"
+            [NOPART]="${npepost}"
             [JOBNAME]="mpassit${minstr}_${eventtime}"
             [CPUSPEC]="${claim_cpu_post}"
             [CLAIMTIME]="${claim_time_mpassit_onetime}"
@@ -738,13 +735,6 @@ function run_mpassit_onetime {
             [FCST_START]="${i}"
             [FCST_END]="${i}"
             [FCST_INTVL]="${OUTINVL}"
-            [ROOTDIR]="$rootdir"
-            [WRKDIR]="$wrkdir"
-            [EXEDIR]="${exedir}"
-            [MACHINE]="${machine}"
-            [ACCTSTR]="${job_account_str}"
-            [EXCLSTR]="${job_exclusive_str}"
-            [RUNMPCMD]="${job_runmpexe_str}"
         )
         if [[ "${mach}" == "pbs" ]]; then
             jobParms[NNODES]="${nnodes_post}"
@@ -795,12 +785,12 @@ function run_mpassit_alltimes {
         # Create job script and submit it
         #
         cd $wrkdir || return
+
         jobscript="run_mpassit.${mach}"
 
         declare -A jobParms=(
             [PARTION]="${partition_post}"
             [NOPART]="$npepost"
-            [MODULE]="${modulename}"
             [JOBNAME]="mpassit_${eventtime}"
             [CPUSPEC]="${claim_cpu_post}"
             [CLAIMTIME]="${claim_time_mpassit_alltimes}"
@@ -808,13 +798,6 @@ function run_mpassit_alltimes {
             [FCST_START]="${minsec}"
             [FCST_END]="${maxsec}"
             [FCST_INTVL]="${OUTINVL}"
-            [ROOTDIR]="$rootdir"
-            [WRKDIR]="$wrkdir"
-            [EXEDIR]="${exedir}"
-            [MACHINE]="${machine}"
-            [ACCTSTR]="${job_account_str}"
-            [EXCLSTR]="${job_exclusive_str}"
-            [RUNMPCMD]="${job_runmpexe_str}"
         )
         if [[ "${mach}" == "pbs" ]]; then
             jobParms[NNODES]="${nnodes_post}"
@@ -859,15 +842,22 @@ function prepare_mpassit_onetime {
         mkwrkdir $memdir 0
         cd $memdir || return
 
+        if ${relative_path}; then
+            casedir=$(realpath -m --relative-to=. ${rundir})
+            fcstmemdir="../.."
+        else
+            casedir=${rundir}
+            fcstmemdir=$(upnlevels $memdir 2)
+        fi
+
         rm -f core.*           # Maybe core-dumped, resubmission will solves the problem if the machine is unstable.
 
-        fcstmemdir=$(upnlevels $memdir 2)
         histfile="$fcstmemdir/fcst_$memstr/${domname}_${memstr}.history.${fcst_time_str}.nc"
         diagfile="$fcstmemdir/fcst_$memstr/${domname}_${memstr}.diag.${fcst_time_str}.nc"
 
         if [[ $dorun == true ]]; then
             for fn in $histfile $diagfile; do
-                #mecho0 "Checking ${fn##$rundir/} ..."
+                #mecho0 "Checking ${fn} ..."
                 while [[ ! -f $fn ]]; do
                     if [[ $jobwait -eq 0 ]]; then    # do not wait for it
                         (( missing+=1 ))
@@ -890,12 +880,12 @@ function prepare_mpassit_onetime {
         nmlfile="namelist.fcst_$minstr"
         cat << EOF > $nmlfile
 &config
-    grid_file_input_grid = "$rundir/init/${domname}_${memstr}.init.nc"
+    grid_file_input_grid = "${casedir}/init/${domname}_${memstr}.init.nc"
     hist_file_input_grid = "$histfile"
     diag_file_input_grid = "$diagfile"
-    file_target_grid     = "$rundir/${domname/*_/geo_}/geo_em.d01.nc"
+    file_target_grid     = "${casedir}/${domname/*_/geo_}/geo_em.d01.nc"
     target_grid_type     = "file"
-    output_file          = "$memdir/MPASSIT_${memstr}.${fcst_time_str}.nc"
+    output_file          = "./MPASSIT_${memstr}.${fcst_time_str}.nc"
     interp_diag          = .true.
     interp_hist          = .true.
     wrf_mod_vars         = .true.
@@ -1086,7 +1076,6 @@ EOF
         #
         cd $wrkdir || return
         if [[ ${#jobarrays} -gt 0 ]]; then
-
             jobscript="run_upp$minstr.slurm"
             jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
 
@@ -1098,16 +1087,8 @@ EOF
                 [HHMINSTR]="$minstr"
                 [UPPDATE]="$upptimestr"
                 [EVENTDATE]="$eventtimestr"
-                [MODULE]="${modulename}"
-                [ROOTDIR]="$rootdir"
-                [WRKDIR]="$wrkdir"
-                [EXEDIR]="${exedir}"
-                [MACHINE]="${machine}"
-                [ACCTSTR]="${job_account_str}"
-                [EXCLSTR]="${job_exclusive_str}"
-                [RUNMPCMD]="${job_runmpexe_str}"
             )
-            submit_a_job $wrkdir "upp$minstr" "jobParms" $TEMPDIR/run_upp_array.slurm $jobscript $jobarraystr
+            submit_a_job "$wrkdir" "upp$minstr" "jobParms" "$TEMPDIR/run_upp_array.slurm" "$jobscript" "$jobarraystr"
         fi
     done
 }
@@ -1610,26 +1591,31 @@ done
 #-----------------------------------------------------------------------
 #% PLATFORM
 
-if [[ $machine == "Jet" ]]; then
+case $machine in
+Jet )
     modulename="build_jet_Rocky8_intel_smiol"
 
     source /etc/profile.d/modules.sh
     module purge
     module use ${rootdir}/modules
     module load $modulename
-elif [[ $machine == "Hercules" ]]; then
+    ;;
+Hercules )
     modulename="build_hercules_intel"
 
     module purge
     module use ${rootdir}/modules
     module load $modulename
-elif [[ $machine == "Cheyenne" ]]; then
+    ;;
+Cheyenne )
     runcmd="qsub"
     modulename="defaults"
-else    # Vecna at NSSL
+    ;;
+* )    # Vecna at NSSL
     modulename="env.mpas_smiol"
     source ${rootdir}/modules/${modulename} || exit $?
-fi
+    ;;
+esac
 
 if [[ $dorun == false ]]; then
     runcmd="echo $runcmd"
@@ -1677,7 +1663,7 @@ fi
 
 if [[ ! -r ${config_file} ]]; then
     echo -e "${RED}ERROR${NC}: Configuration file ${CYAN}${config_file}${NC} is not found."
-    echo -e "       Please run ${GREEN}setup_mpas-wofs_grid.sh${NC} first or use ${BLUE}-h${NC} to show help."
+    echo -e "       Please run ${GREEN}setup_mpas-wofs.sh${NC} first or use ${BLUE}-h${NC} to show help."
     exit 2
 else
     echo -e "Reading case (${GREEN}${eventdate}${NC}) configuration file: ${CYAN}${config_file}${NC} ...."
@@ -1717,7 +1703,8 @@ if [[ ! -d $rundir ]]; then
     mkdir -p $rundir
 fi
 
-exedir="$rootdir/exec"
+# shellcheck disable=SC2034
+exedir="$rootdir/exec"        # will be used in submit_a_job
 
 echo    "---- Jobs ($$) started $(date '+%m-%d_%H:%M:%S (%Z)') on host $(hostname) ----"
 echo -e "  Event date : ${GREEN}$eventdate${NC} ${YELLOW}${eventtime}${NC} --> ${LIGHT_BLUE}${enddatetime:0:8}${NC} ${YELLOW}${enddatetime:8:4}${NC}"

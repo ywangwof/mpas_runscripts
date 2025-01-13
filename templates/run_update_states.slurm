@@ -35,6 +35,7 @@ rm -rf error.update_states_$memstr queue.update_states_$memstr
 
 #-----------------------------------------------------------------------
 # Copy working file
+# Do copy here instead of the driver script for parallelism
 #-----------------------------------------------------------------------
 
 ((iensidx = mem-1))
@@ -63,7 +64,7 @@ fi
 # Run the job itself
 #-----------------------------------------------------------------------
 
-RUNMPCMD -n NOPART EXEDIR/update_mpas_states
+RUNCMD -n NOPART EXEDIR/update_mpas_states
 
 if [[ $? -eq 0 ]]; then
     touch done.update_states_${memstr}

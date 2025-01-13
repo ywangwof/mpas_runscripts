@@ -2,7 +2,7 @@
 
 script_dir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 top_dir=$(realpath "$(dirname "${script_dir}")")
-mpas_dir=$(dirname ${top_dir})
+mpas_dir=$(dirname "${top_dir}")
 
 eventdateDF=$(date -u +%Y%m%d%H%M)
 
@@ -151,6 +151,8 @@ if [[ -z $show ]]; then
     askconfirm=false
 fi
 
+launch_dir=$(pwd)
+
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
 
@@ -206,7 +208,7 @@ for taskname in "${tasknames[@]}"; do
         askconfirm=false
         echo -e "${LIGHT_RED}INFO${NC}: ${BROWN}${script_dir}/run_dacycles.sh${NC} ${LIGHT_BLUE}${eventdate}${runtime}${NC} ${run_dir} ${GREEN}clean${NC}" "${doclean_args[@]}"
 
-        ${script_dir}/run_dacycles.sh -f config.${eventdate}${affix} ${eventdate} ${run_dir} clean "${doclean_args[@]}"
+        "${script_dir}/run_dacycles.sh" -f "config.${eventdate}${affix}" "${eventdate}" "${run_dir}" clean "${doclean_args[@]}"
 
         #cd "${run_dir}/${eventdate}/dacycles${affix}/${wrksubdir}" || exit 1
         #if [[ -z ${runtime} ]]; then             # All time cycles
@@ -230,7 +232,7 @@ for taskname in "${tasknames[@]}"; do
         askconfirm=false
         echo -e "${LIGHT_RED}INFO${NC}: ${BROWN}${script_dir}/run_fcst.sh${NC} ${LIGHT_BLUE}${eventdate}${runtime}${NC} ${run_dir} ${GREEN}clean${NC}" "${doclean_args[@]}"
 
-        ${script_dir}/run_fcst.sh -f config.${eventdate}${affix} ${eventdate} ${run_dir} clean "${doclean_args[@]}"
+        "${script_dir}/run_fcst.sh" -f "config.${eventdate}${affix}" "${eventdate}" "${run_dir}" clean "${doclean_args[@]}"
 
         #cd "${run_dir}/${eventdate}/fcst${affix}/${wrksubdir}" || exit 1
         #$show find . -name "wofs_mpas_??.{history,diag}.*" -exec rm {} \;
@@ -286,13 +288,14 @@ for taskname in "${tasknames[@]}"; do
     esac
 
     #6. confirm
+    cd "${launch_dir}" || exit 0
     if [[ $askconfirm == true ]]; then
         echo -ne  "\n${BROWN}WARNING${NC}: Do you want to execute the tasks. [${YELLOW}YES,NO${NC}]? "
         read -r doit
         if [[ ${doit^^} == "YES" ]]; then
             echo -e "${BROWN}WARNING${NC}: Cleaning in process ...\n"
             saved_args+=("-c" "-noask")
-            $0 "${saved_args[@]}" ${taskname}
+            $0 "${saved_args[@]}" "${taskname}"
         else
             echo -e "Get ${PURPLE}${doit^^}${NC}, do nothing."
         fi

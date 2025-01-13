@@ -11,7 +11,7 @@ MAILTO=Yunheng.Wang@noaa.gov
 # |  |  |  |  |
 # *  *  *  *  * command to be executed
 
-rootdir=/scratch/ywang/MPAS/gnu/mpas_scripts
+rootdir=/scratch/ywang/MPAS/intel/mpas_scripts
 rundirs=$rootdir/run_dirs
 PATH=/usr/bin:/bin:/apps-local/slurm/default/bin
 
@@ -37,3 +37,11 @@ SHELL=/bin/bash
 
 # Fcst
 55      23      * * * $rootdir/scripts/runmpasjobs.sh fcst
+
+# Post processing to be run on wof-epyc8.
+# at 02:55 $rootdir/scripts/runmpasjobs.sh [post|plot|verif|diag]
+
+#55      02      * * * $rootdir/scripts/runmpasjobs.sh post
+#55      06      * * * $rootdir/scripts/runmpasjobs.sh plot
+#00      07      * * * $rootdir/scripts/runmpasjobs.sh verif
+#55      02      * * * $rootdir/scripts/runmpasjobs.sh diag
