@@ -1331,7 +1331,6 @@ function run_filter {
                            't2m',                   'QTY_2M_TEMPERATURE',
                            'q2',                    'QTY_2M_SPECIFIC_HUMIDITY',
                            'surface_pressure',      'QTY_SURFACE_PRESSURE',
-                           'rt_diabatic_tend',      'QTY_CONDENSATIONAL_HEATING',
                            'refl10cm',              'QTY_RADAR_REFLECTIVITY',
                            'qv',                    'QTY_VAPOR_MIXING_RATIO',
 EOF
@@ -2024,13 +2023,13 @@ function run_update_bc {
         jobarrays+=("$iens")
     done
 
-    cd $wrkdir || return
-
     #------------------------------------------------------
     # Run update_bc for all ensemble members as a job array
     #------------------------------------------------------
 
     if [[ ${run_updatebc} == true ]]; then
+
+        cd $wrkdir || return
 
         jobscript="run_update_bc.${mach}"
 
@@ -2053,6 +2052,9 @@ function run_update_bc {
         jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
 
         submit_a_job $wrkdir "update_bc" jobParms $TEMPDIR/$jobscript $jobscript "${jobarraystr}"
+    else
+        sleep 10
+        mecho0 "Skip program ${BLUE}update_bc${NC}."
     fi
 }
 

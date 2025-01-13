@@ -232,7 +232,7 @@ for ((s=start_s;s<=end_s;s+=900)); do
 done
 
 if [[ ! -e done.zigzag ]]; then
-    ${show} ${rootdir}/python/plot_dartzig.py ${eventdate} -d ${rundir}/${eventdate}/${dadir} -r 300 2>/dev/null
+    ${show} ${rootdir}/python/plot_dartzig.py ${eventdate} -e ${endtime} -d ${rundir}/${eventdate}/${dadir} -r 300 2>/dev/null
 
     if [[ -z ${show} ]]; then
         cd ${rundir}/${eventdate}/${dadir}/obs_diag || exit 1
