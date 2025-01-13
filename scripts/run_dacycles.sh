@@ -2322,6 +2322,7 @@ function run_mpas {
     # Preparation for each member
     #
     if [[ -z ${coef_3rd_order} ]];      then coef_3rd_order=0.25;      fi
+    if [[ -z ${smagorinsky_coef} ]];    then smagorinsky_coef=0.125;   fi
     if [[ -z ${visc4_2dsmag} ]];        then visc4_2dsmag=0.05;        fi
     if [[ -z ${h_mom_eddy_visc4} ]];    then h_mom_eddy_visc4=0.0;     fi
     if [[ -z ${h_theta_eddy_visc4} ]];  then h_theta_eddy_visc4=0.25;  fi
@@ -2435,7 +2436,7 @@ function run_mpas {
     config_coef_3rd_order           = ${coef_3rd_order}
     config_epssm                    = 0.1
     config_smdiv                    = 0.1
-    config_smagorinsky_coef         = 0.25
+    config_smagorinsky_coef         = ${smagorinsky_coef}
 /
 &damping
     config_mpas_cam_coef             = 2.0
