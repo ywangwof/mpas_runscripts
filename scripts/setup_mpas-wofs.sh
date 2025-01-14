@@ -1288,8 +1288,9 @@ function write_config {
 #    coef_3rd_order=0.25    # nearly 4th order advection
 #
 [MPAS_OPTIONS]
-    coef_3rd_order=0.25
-    visc4_2dsmag=0.05
+    coef_3rd_order=1.0
+    smagorinsky_coef=0.25
+    visc4_2dsmag=0.125
     h_mom_eddy_visc4=0.0
     h_theta_eddy_visc4=0.25
     h_scalar_eddy_visc4=0.25
@@ -1946,7 +1947,7 @@ Cheyenne )
     export LD_LIBRARY_PATH=/scratch/ywang/MPAS/tools/lib
     nclpath="/scratch/software/miniconda3/bin/ncl"
 
-    OBS_DIR="/scratch/ywang/MPAS/gnu/mpas_scripts/run_dirs/OBS_SEQ"
+    OBS_DIR="/scratch/ywang/MPAS/intel/run_dirs/OBS_SEQ"
 
     hrrr_dir="/scratch/wofuser/MODEL_DATA/HRRRE"
 

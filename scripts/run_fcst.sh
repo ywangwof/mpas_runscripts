@@ -216,9 +216,9 @@ function run_mpas {
     # Preparation for each member
     # nenslbc/pbl_schemes/sfclayer_schemes are from the config file
     #
-    if [[ -z ${coef_3rd_order} ]];      then coef_3rd_order=0.25;      fi
-    if [[ -z ${smagorinsky_coef} ]];    then smagorinsky_coef=0.125;   fi
-    if [[ -z ${visc4_2dsmag} ]];        then visc4_2dsmag=0.05;        fi
+    if [[ -z ${coef_3rd_order} ]];      then coef_3rd_order=1.0;       fi
+    if [[ -z ${smagorinsky_coef} ]];    then smagorinsky_coef=0.25;    fi
+    if [[ -z ${visc4_2dsmag} ]];        then visc4_2dsmag=0.125;       fi
     if [[ -z ${h_mom_eddy_visc4} ]];    then h_mom_eddy_visc4=0.0;     fi
     if [[ -z ${h_theta_eddy_visc4} ]];  then h_theta_eddy_visc4=0.25;  fi
     if [[ -z ${h_scalar_eddy_visc4} ]]; then h_scalar_eddy_visc4=0.25; fi
