@@ -616,9 +616,11 @@ function run_obsmerge {
             echo "cat ${obsflists[*]} to obsflist"
         fi
         cat "${obsflists[@]}" > obsflist
+        obs_found=true
     else
         mecho0 "${YELLOW}No valid observation was found${NC}."
-        exit 0
+        obs_found=false
+        return
     fi
 
     #===================================================================
@@ -781,6 +783,7 @@ function run_filter {
     #------------------------------------------------------
 
     inf_initial_restart=(".false." ".false.")
+
     if [[ $ADAPTIVE_INF == true ]]; then
         if [[ -e ${parentdir}/${event_pre}/output_priorinf_mean.nc ]]; then
             ln -sf ${parentdir}/${event_pre}/output_priorinf_mean.nc input_priorinf_mean.nc
@@ -849,7 +852,9 @@ function run_filter {
     mp_state_variables['qi']='QTY_ICE_MIXING_RATIO'
     mp_state_variables['qs']='QTY_SNOW_MIXING_RATIO'
     mp_state_variables['qg']='QTY_GRAUPEL_MIXING_RATIO'
-    mp_variables_keys=('qc' 'qr' 'qi' 'qs' 'qg')
+    mp_state_variables['nr']='QTY_RAIN_NUMBER_CONCENTR'
+    mp_state_variables['ni']='QTY_ICE_NUMBER_CONCENTRATION'
+    mp_variables_keys=('qc' 'qr' 'qi' 'qs' 'qg' 'nr' 'ni')
     mp_state_bounds="'0.0','NULL','CLAMP'"
 
     lbc_mp_nssl_variables=".false."
@@ -858,12 +863,10 @@ function run_filter {
         mp_state_variables['volg']='QTY_GRAUPEL_VOLUME'
         mp_state_variables['volh']='QTY_HAIL_VOLUME'
         mp_state_variables['nc']='QTY_DROPLET_NUMBER_CONCENTR'
-        mp_state_variables['nr']='QTY_RAIN_NUMBER_CONCENTR'
-        mp_state_variables['ni']='QTY_ICE_NUMBER_CONCENTRATION'
         mp_state_variables['ns']='QTY_SNOW_NUMBER_CONCENTR'
         mp_state_variables['ng']='QTY_GRAUPEL_NUMBER_CONCENTR'
         mp_state_variables['nh']='QTY_HAIL_NUMBER_CONCENTR'
-        mp_variables_keys+=('qh' 'nc' 'nr' 'ni' 'ns' 'ng' 'nh' 'volg' 'volh')
+        mp_variables_keys+=('qh' 'nc' 'ns' 'ng' 'nh' 'volg' 'volh')
         lbc_mp_nssl_variables=".true."
     fi
 
@@ -1940,7 +1943,7 @@ function run_update_bc {
     # Prepare update_bc by copying/linking the background files
     #------------------------------------------------------
 
-    jobarrays=(); lbcfiles_org=(); lbcfiles_mem=()
+    jobarrays=(); lbcfiles_org=(); lbcfiles_mem=(); lbcfiles_next=()
     for iens in $(seq 1 $ENS_SIZE); do
         #(( jindex=iens-1 ))
 
@@ -1980,14 +1983,8 @@ function run_update_bc {
 
         # MPAS expected boundary file times
         mpastime_str1=$(date -u -d @${iseconds}  +%Y-%m-%d_%H.%M.%S)
-        if [[ ${run_updatebc} == true ]]; then
-            mpastime_str2=${lbctime_str2}
-            icycle_lbcgap=$(( isec_nlbc2-iseconds ))
-        else
-            isec_elbc=$((iseconds+EXTINVL))
-            mpastime_str2=$(date -u -d @${isec_elbc} +%Y-%m-%d_%H.%M.%S)
-            icycle_lbcgap=${EXTINVL}
-        fi
+        mpastime_str2=${lbctime_str2}
+        icycle_lbcgap=$(( isec_nlbc2-iseconds ))
         if [[ $verb -eq 1 ]]; then
             mecho0 "Member: $iens use lbc files from $rundir/lbc:"
             mecho0 "        ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc  ${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc";
@@ -2000,25 +1997,22 @@ function run_update_bc {
         esac
 
         #ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc ${domname}_${memstr}.lbc.${mpastime_str1}.nc
-        lbc_file0="${lbcdir}/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc"
+        lbc_file1="${lbcdir}/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc"
+        lbc_file2="${lbcdir}/${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc"
         lbc_filem="./${domname}_${memstr}.lbc.${mpastime_str1}.nc"
 
-        if [[ ${run_updatebc} == true ]]; then
-            # Should copy the initial boundary file as a starting point.
-            # it is moved to the job script for parallelization to save time.
-            echo "$lbc_filem" >> ${update_output_file_list}
-            sed -i "/update_boundary_file_list/s/=.*/= '${update_output_file_list}'/" input.nml
-            echo "${input_file_array[0]}" >> ${update_input_file_list}
-            sed -i "/update_analysis_file_list/s/=.*/= '${update_input_file_list}'/" input.nml
+        # Should copy the initial boundary file as a starting point.
+        # it is moved to the job script for parallelization to save time.
+        echo "$lbc_filem" >> ${update_output_file_list}
+        sed -i "/update_boundary_file_list/s/=.*/= '${update_output_file_list}'/" input.nml
+        echo "${input_file_array[0]}" >> ${update_input_file_list}
+        sed -i "/update_analysis_file_list/s/=.*/= '${update_input_file_list}'/" input.nml
 
-            lbcfiles_org+=("${lbc_file0}")
-            lbcfiles_mem+=("${lbc_filem}")
-        else             # do not need to run update_bc, just link the files
-            ln -sf ${lbc_file0} ${lbc_filem}
-            touch "$memwrkdir/done.update_bc_${memstr}"
-        fi
+        lbcfiles_org+=("${lbc_file1}")
+        lbcfiles_next+=("${lbc_file2}")
+        lbcfiles_mem+=("${lbc_filem}")
 
-        ln -sf ${lbcdir}/${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc ${domname}_${memstr}.lbc.${mpastime_str2}.nc
+        ln -sf "${lbc_file2}" "${domname}_${memstr}.lbc.${mpastime_str2}.nc"
 
         jobarrays+=("$iens")
     done
@@ -2027,35 +2021,31 @@ function run_update_bc {
     # Run update_bc for all ensemble members as a job array
     #------------------------------------------------------
 
-    if [[ ${run_updatebc} == true ]]; then
+    cd $wrkdir || return
 
-        cd $wrkdir || return
+    jobscript="run_update_bc.${mach}"
 
-        jobscript="run_update_bc.${mach}"
-
-        declare -A jobParms=(
-            [PARTION]="${partition_filter}"
-            [NOPART]="1"
-            [JOBNAME]="updatebc_${eventtime}"
-            [CPUSPEC]="${claim_cpu_update}"
-            [EXEDIR]="${exedir}/dart"
-            [CPCMD]="${cpcmd}"
-            [MPSCHEME]="${mpscheme}"
-            [LBCFILEORGSTR]="${lbcfiles_org[*]}"
-            [LBCFILEMEMSTR]="${lbcfiles_mem[*]}"
-        )
-        if [[ "${mach}" == "pbs" ]]; then
-            jobParms[NNODES]="1"
-            jobParms[NCORES]="1"
-        fi
-
-        jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
-
-        submit_a_job $wrkdir "update_bc" jobParms $TEMPDIR/$jobscript $jobscript "${jobarraystr}"
-    else
-        sleep 10
-        mecho0 "Skip program ${BLUE}update_bc${NC}."
+    declare -A jobParms=(
+        [PARTION]="${partition_filter}"
+        [NOPART]="1"
+        [JOBNAME]="updatebc_${eventtime}"
+        [CPUSPEC]="${claim_cpu_update}"
+        [EXEDIR]="${exedir}/dart"
+        [CPCMD]="${cpcmd}"
+        [MPSCHEME]="${mpscheme}"
+        [LBCFILEORGSTR]="${lbcfiles_org[*]}"
+        [LBCFILEMEMSTR]="${lbcfiles_mem[*]}"
+        [LBCFILENEXTSTR]="${lbcfiles_next[*]}"
+        [UPDATEBC]="${run_updatebc}"
+    )
+    if [[ "${mach}" == "pbs" ]]; then
+        jobParms[NNODES]="1"
+        jobParms[NCORES]="1"
     fi
+
+    jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
+
+    submit_a_job $wrkdir "update_bc" jobParms $TEMPDIR/$jobscript $jobscript "${jobarraystr}"
 }
 
 ########################################################################
@@ -2475,8 +2465,8 @@ function run_mpas {
     config_sst_update                = false
     config_sstdiurn_update           = false
     config_deepsoiltemp_update       = false
-    config_radtlw_interval           = '00:04:00'
-    config_radtsw_interval           = '00:04:00'
+    config_radtlw_interval           = '00:05:00'
+    config_radtsw_interval           = '00:05:00'
     config_bucket_update             = 'none'
     config_lsm_scheme                = '${MPASLSM}'
     num_soil_layers                  = ${MPASNFLS}
@@ -2671,13 +2661,6 @@ function dacycle_driver() {
     for isec in $(seq $start_sec $intvl_sec $end_sec ); do
         timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
         eventtime=$(date -u -d @$isec +%H%M)
-
-        if [[ ${run_updatebc} == true ]]; then
-            min_passhr=$(date -u -d @$isec +%M)
-            icycle_lbcgap=$(( EXTINVL-(min_passhr*60) ))             # Seconds to next available boundary time
-        else
-            icycle_lbcgap=${EXTINVL}
-        fi
 
         dawrkdir=${wrkdir}/${eventtime}
         mkwrkdir $dawrkdir 0    # keep original directory
@@ -3549,7 +3532,9 @@ stoptime_sec=$(date -u -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
 if [[ -z $config_file ]]; then
     config_file="$WORKDIR/config.${eventdate}"
 else
-    if [[ -e ${WORKDIR}/${config_file} ]]; then
+    if [[ -r ${config_file} ]]; then
+        :
+    elif [[ -e ${WORKDIR}/${config_file} ]]; then
         config_file="${WORKDIR}/${config_file}"
     else
         echo -e "${RED}ERROR${NC}: file ${CYAN}${WORKDIR}/${config_file}${NC} not exist."
@@ -3624,7 +3609,7 @@ Cheyenne )
     # Load Python Enviroment if necessary
     if [[ ${run_trimvr} == true || ${run_addnoise} == true ]]; then
         echo -e "Enabling Python micromamba environment - ${YELLOW}wofs_an${NC} ...."
-        source /home/yunheng.wang/.pythonrc  || exit $?
+        source ${rootdir}/modules/env.python  || exit $?
     fi
     ;;
 esac

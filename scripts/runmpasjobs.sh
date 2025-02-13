@@ -243,13 +243,13 @@ case $task in
 #1. dacycles
 dacycles )
     cd "${script_dir}" || exit 1
-    cmds=("${script_dir}/run_dacycles.sh" -f "config.${eventdate}${affix}" -e "${endtime}" "${runtime}" -r)
+    cmds=("${script_dir}/run_dacycles.sh" -f "config.${eventdate}${affix}" -e "${endtime}" "${runtime}" "${run_dir}" -r)
     if [[ -n "${taskopt}" ]]; then cmds+=("${taskopt}"); fi
     ;;
 #2. fcst
 fcst )
     cd "${script_dir}" || exit 1
-    cmds=("${script_dir}/run_fcst.sh" -f "config.${eventdate}${affix}" -e "${endtime}" "${runtime}" -r -w)
+    cmds=("${script_dir}/run_fcst.sh" -f "config.${eventdate}${affix}" -e "${endtime}" "${runtime}" "${run_dir}" -r -w)
     if [[ -n "${taskopt}" ]]; then cmds+=("${taskopt}"); fi
     ;;
 
@@ -325,7 +325,7 @@ verif )
 #6. diag
 diag )
     cd "${script_dir}" || exit 1
-    cmds=("${script_dir}/plot_allobs.sh" -e "${endtime}" "${eventdate}")
+    cmds=("${script_dir}/plot_allobs.sh" -e "${endtime}" "${eventdate}" "${run_dir}")
     if [[ -n "${affix}" ]];   then cmds+=(-x "${affix}"); fi
     if [[ -n "${taskopt}" ]]; then cmds+=("${taskopt}");  fi
 

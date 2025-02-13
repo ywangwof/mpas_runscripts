@@ -1037,7 +1037,7 @@ if __name__ == "__main__":
         dt1 = datetime.strptime(f"{wargs.eventdate} {starttime}",'%Y%m%d %H%M')
         dt2 = datetime.strptime(f"{wargs.eventdate} {endtime}",  '%Y%m%d %H%M')
         if endtime < "1200":
-            dt2 =  + timedelta(days=1)
+            dt2 +=  timedelta(days=1)
 
         filelist  = []
         print(f"Reading obs_seq files from {dadir} ...")
