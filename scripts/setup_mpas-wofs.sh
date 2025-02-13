@@ -1239,7 +1239,7 @@ function write_config {
 #               if not empty, use dacyles.\${daffix}/fcst.\${daffix}
 #   damode:     DA cycles mode, either "restart" or "init"
 #
-#   mpscheme:   Microphysics scheme, valid values are ('mp_nssl2m', 'Thompson')
+#   mpscheme:   Microphysics scheme, valid values are ('mp_nssl2m', 'mp_thompson', 'mp_tempo')
 #   sfclayer_schemes:   suite,sf_monin_obukhov_rev,sf_monin_obukhov,sf_mynn,off
 #   pbl_schemes:        suite,bl_ysu,bl_myj,bl_mynn,off
 #

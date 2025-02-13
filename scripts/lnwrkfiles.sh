@@ -357,8 +357,11 @@ for pkg in "${packages[@]}"; do
         run_cmd "${runcmd}" "${srcmodel}/src/core_atmosphere/physics/TEMPO/tables" CCN_ACTIVATE.BIN
 
         if [[ ${realrun} == true ]]; then
-            thompsonfiles=(MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL \
-                           MP_THOMPSON_QRacrQG_DATA.DBL MP_THOMPSON_QRacrQS_DATA.DBL CCN_ACTIVATE.BIN)
+            thompsonfiles=(MP_THOMPSON_freezeH2O_DATA.DBL      MP_THOMPSON_QIautQS_DATA.DBL  \
+                           MP_THOMPSON_QRacrQG_DATA.DBL        MP_THOMPSON_QRacrQS_DATA.DBL  \
+                           MP_TEMPO_freezeH2O_DATA.DBL         MP_TEMPO_QIautQS_DATA.DBL     \
+                           MP_TEMPO_QRacrQG_DATA.DBL           MP_TEMPO_QRacrQS_DATA.DBL     \
+                           MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL CCN_ACTIVATE.BIN )
 
             cd "${desdir}" || exit 1
 

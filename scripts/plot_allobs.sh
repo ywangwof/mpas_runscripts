@@ -5,22 +5,36 @@ rootdir=$(realpath "$(dirname "${script_dir}")")
 mpasdir=$(dirname "$rootdir")
 
 rundir="${mpasdir}/run_dirs"
-imagedir="${rundir}/image_files"
 
 eventdateDF=$(date -u +%Y%m%d)
 
 host="$(hostname)"
 
+NC='\033[0m'            # No Color
+BLACK='\033[0;30m';     DARK='\033[1;30m'
+RED='\033[0;31m';       LIGHT_RED='\033[1;31m'
+GREEN='\033[0;32m';     LIGHT_GREEN='\033[1;32m'
+BROWN='\033[0;33m';     YELLOW='\033[1;33m'
+BLUE='\033[0;34m';      LIGHT_BLUE='\033[1;34m'
+PURPLE='\033[0;35m';    LIGHT_PURPLE='\033[1;35m'
+CYAN='\033[0;36m';      LIGHT_CYAN='\033[1;36m'
+LIGHT='\033[0;37m';     WHITE='\033[1;37m'
+
+DIR_CLR='\033[0;97;44m'; DIRa_CLR='\033[0;95;44m';
+
 #-----------------------------------------------------------------------
 
 function usage {
     echo " "
-    echo "    USAGE: $0 [options] DATETIME"
+    echo "    USAGE: $0 [options] DATETIME [WORKDIR]"
     echo " "
     echo "    PURPOSE: Plot data assimilation diagnostics."
     echo " "
     echo "    DATETIME - Case date and time in YYYYmmdd."
     echo "               YYYYmmdd:     run the plot for this event date."
+    echo " "
+    echo -e "    WORKDIR  - Top level ${LIGHT_BLUE}run_dir${NC} for all tasks"
+    echo -e "               Normally, it will contain ${DIR_CLR}YYYYmmdd/dacycles${DIRa_CLR}{x}${NC} & ${DIR_CLR}image_files${NC}."
     echo " "
     echo "    OPTIONS:"
     echo "              -h                  Display this message"
@@ -118,6 +132,8 @@ while [[ $# -gt 0 ]]; do
         *)
             if [[ $key =~ ^[0-9]{8}$ ]]; then
                 eventdate=${key}
+            elif [[ -d $key ]]; then
+                rundir=$key
             else
                 echo ""
                 echo "ERROR: unknown argument, get [$key]."
@@ -233,6 +249,8 @@ done
 
 if [[ ! -e done.zigzag ]]; then
     ${show} ${rootdir}/python/plot_dartzig.py ${eventdate} -e ${endtime} -d ${rundir}/${eventdate}/${dadir} -r 300 2>/dev/null
+
+    imagedir="${rundir}/image_files"
 
     if [[ -z ${show} ]]; then
         cd ${rundir}/${eventdate}/${dadir}/obs_diag || exit 1
