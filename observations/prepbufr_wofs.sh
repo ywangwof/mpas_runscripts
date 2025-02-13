@@ -87,6 +87,7 @@ function usage {
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
     echo "              -s  start_time      Run task from start_time, default $starthour"
+    echo "              -f  conf_file       Runtime configuration file, make it the last argument (after WORKDIR)."
     echo " "
     echo " "
     echo "                                     -- By Y. Wang (2024.04.26)"
@@ -101,6 +102,7 @@ verb=false
 eventdate=${eventdateDF:0:8}
 eventhour=${eventdateDF:8:2}
 cmd=""
+conf_file=""
 
 if [[ $((10#$eventhour)) -lt 12 ]]; then
     eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
@@ -142,6 +144,17 @@ while [[ $# -gt 0 ]]; do
             fi
             shift
             ;;
+        -f)
+            if [[ -f ${2} ]]; then
+                conf_file=$2
+            elif [[ -f ${run_dir}/$2 ]]; then
+                conf_file=${run_dir}/$2
+            else
+                echo "ERROR: Runtime configruation file not found, get [$2]."
+                usage 2
+            fi
+            shift
+            ;;
         -*)
             echo "Unknown option: $key"
             usage 2
@@ -175,7 +188,10 @@ while [[ $# -gt 0 ]]; do
     shift # past argument or value
 done
 
-conf_file="${run_dir}/config.${eventdate}"
+if [[ ${conf_file} == "" ]]; then
+    conf_file="${run_dir}/config.${eventdate}"
+fi
+
 if [[ -e ${conf_file} ]]; then
     eval "$(sed -n "/OBS_DIR=/p" ${conf_file})"
     WORK_dir=${OBS_DIR}/Bufr
@@ -187,6 +203,8 @@ else
         exit 0
     fi
 fi
+
+echo -e "\nUse runtime Configruation file: ${CYAN}${conf_file}${NC}.\n"
 
 if [[ $((10#$start_time)) -gt 1200 ]]; then
     timebeg="${eventdate}${start_time}"
