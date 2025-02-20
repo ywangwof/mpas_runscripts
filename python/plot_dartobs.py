@@ -13,6 +13,7 @@ import sys
 import re
 import math
 import argparse
+import textwrap
 
 from datetime import datetime, timedelta, timezone
 
@@ -362,41 +363,91 @@ def attach_wofs_grid(wofs_gridtype,axo,carr,lonlats,skipedges,mpas_grid):
 def parse_args():
     """ Parse command line arguments
     """
-    parser = argparse.ArgumentParser(description='Plot DART obs_seq.fial in netCDF format',
-                                     epilog="""        ---- Yunheng Wang (2023-07-24).
-                                            """)
-                                     #formatter_class=CustomFormatter)
+    parser = argparse.ArgumentParser(description='Plot a DART obs_seq file',
+                                     epilog="\n        ---- Yunheng Wang (2023-07-24)\n ",
+                                     formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument('obsfiles',
+                        help='DART obs_seq file, either in netCDF format or ASCII sequence file.')
 
-    parser.add_argument('obsfiles',help='DART obs_seq.fial in netCDF format')
-    parser.add_argument('obstypes',help='Interger number that denotes observation type or a list of "," seperated numbers, or None to plot all observation in this file',
-                        type=str,nargs='?',default=None)
+    parser.add_argument('obstypes',
+                        help='Integer number denoting the observation type, a list of comma-separated numbers, \n'
+                             'or None (default) to plot all observation types in the file. \nUse "list" to display the '
+                             'contents of the sequence file.',
+                        type=str, nargs='?', default=None)
 
-    parser.add_argument('-v','--verbose',   help='Verbose output',                                        action="store_true", default=False)
-    parser.add_argument('-p','--parms',     help='Specify variable copy and quality, [copy,qc_flag] or [copy] only', type=str, default=None)
-    parser.add_argument('-l','--vertLevels',help='Vertical levels to be plotted [level,value,tolerance]',            type=str, default=None)
-    parser.add_argument('-e','--filter_by_obs_error',help='Select observations by minimum observation error',      type=float, default=None)
-    parser.add_argument('-s','--filter_by_rms',      help='Select observations by minimum observation rms',        type=float, default=None)
-    parser.add_argument('-c','--cntLevels', help='Contour levels [cmin,cmax,cinc]',                                type=str,   default=None)
-    parser.add_argument('--scatter'      ,  help='Scatter plot [mean,spread] of assimilated observations',         type=str,   default=None)
-    parser.add_argument('--fill'         ,  help='Value to fill masked values, apply to the scatter plot only',    type=float, default=None)
-    parser.add_argument('-latlon'        ,  help='Base map latlon or lambert',                             action='store_true',default=False)
-    parser.add_argument('-range'         ,  help='Map range in degrees [lat1,lon1,lat2,lon2]',                     type=str,   default=None)
-    parser.add_argument('-g','--gridfile',  help='Model file that provide grids',                                  type=str,   default=None)
-    parser.add_argument('-o','--outfile' ,  help='Name of the output image file or an output directory',           type=str,   default=None)
-    parser.add_argument('-r','--resolution',help='Resolution of the output image',                                 type=int,   default=100)
-    parser.add_argument('-t','--ctypes' ,   help='Type Numbers of observation that contains cloud lines for decoding ASCII sequence files',
-                                                                                                    default="124,125,126,229", type=str)
+    parser.add_argument('-v', '--verbose',
+                        help='Enable verbose output.\n ',
+                        action="store_true", default=False)
+
+    parser.add_argument('-p', '--parms',
+                        help='Specify variable copy and quality flag as [copy, qc_flag] or [copy] alone.\n'
+                             '  - copy = 0: Plot all observations with different colors based on their QC flags.\n'
+                             '  - copy > 0: Plot actual values. Use "list" to display CopyMeta indices in the file.\n'
+                             '  - If qc_flag is omitted, all observations are plotted.\n'
+                             '    Otherwise, only those with the specified QC flag are plotted.',
+                        type=str, default=None)
+
+    parser.add_argument('-l', '--vertLevels',
+                        help='Specify vertical levels to be plotted as [level_type, value, tolerance].',
+                        type=str, default=None)
+
+    parser.add_argument('-e', '--filter_by_obs_error',
+                        help='Filter observations by a minimum observation error threshold.',
+                        type=float, default=None)
+
+    parser.add_argument('-s', '--filter_by_rms',
+                        help='Filter observations by a minimum root mean square (RMS) value.',
+                        type=float, default=None)
+
+    parser.add_argument('-t', '--ctypes',
+                        help='Specify observation type numbers that contain cloud lines. \nUsed only for decoding ASCII sequence files.\n ',
+                        default="124,125,126,229", type=str)
+
+    parser.add_argument('--scatter',
+                        help='Generate a scatter plot [mean, spread] of assimilated observations.',
+                        type=str, default=None)
+
+    parser.add_argument('--fill',
+                        help='Specify a value to fill masked values. Applies only to scatter plots.\n ',
+                        type=float, default=None)
+
+    parser.add_argument('-c', '--cntLevels',
+                        help='Define contour levels as [cmin, cmax, cinc].',
+                        type=str, default=None)
+
+    parser.add_argument('-g', '--gridfile',
+                        help='Specify a model file that provides grid data.',
+                        type=str, default=None)
+
+    parser.add_argument('-m', '--map',
+                        help='Select a base map projection: latlon, stereo, or lambert.',
+                        type=str, default='latlon')
+
+    parser.add_argument('-range',
+                        help='Define the map range in degrees as [lat1, lat2, lon1, lon2].\n ',
+                        type=str, default=None)
+
+    parser.add_argument('-o', '--outfile',
+                        help='Specify the name of the output image file or an output directory.',
+                        type=str, default=None)
+
+    parser.add_argument('-r', '--resolution',
+                        help='Set the resolution of the output image.',
+                        type=int, default=100)
+
 
     args = parser.parse_args()
 
     parsed_args = {}
-    parsed_args['basmap'] = "lambert"
-    if args.latlon:
-        parsed_args['basmap'] = "latlon"
+    if args.map in ['latlon', 'lambert', 'stereo']:
+        parsed_args['basmap'] = args.map
+    else:
+        print(f"ERROR: basemap must be one of ('latlon', 'lambert', 'stereo') Got \"{args.map}\"")
+        sys.exit(0)
 
     if args.vertLevels is not None:
         rlist = [item for item in args.vertLevels.split(',')]
-        parsed_args['t_level_type'] = rlist[0]
+        parsed_args['t_level_type'] = int(rlist[0])
         parsed_args['t_level']      = float(rlist[1])
         parsed_args['t_level_tolr'] = float(rlist[2])
     else:
@@ -440,10 +491,17 @@ def parse_args():
     #
     # Set observation type
     #
+    retype = re.compile(r"^(\d+,?)+$")
     if len(types) == 0:
         type = None
     elif len(types) == 1:
-        type = types[0].split(',')
+        if retype.match(types[0]):
+            type = types[0].split(',')
+        elif types[0] == 'list':
+            type = types
+        else:
+            print(f"ERROR: observation type must be integers. Got \"{types}\"")
+            sys.exit(0)
     else:
         print(f"Variable type can only be one. Got \"{types}\"")
         sys.exit(0)
@@ -478,7 +536,7 @@ def parse_args():
     elif args.range is not None:
         rlist = [float(item) for item in args.range.split(',')]
         if len(rlist) < 4:
-            print("-range expects 4 or more degrees as [lat1,lat2,lon1,lon2, ...].")
+            print("-range expects 4 degrees as [lat1,lat2,lon1,lon2].")
             sys.exit(0)
         rlist = [float(item) for item in args.range.split(',')]
 
@@ -492,8 +550,12 @@ def parse_args():
             pass
         else:
             if parsed_args['t_copy'] is None:
-                print('ERROR: need option "-p" to know which observation copy to be plotted.')
+                print('\nERROR: need option "-p" to know which observation copy to plot. Use "list" command to show CopyMeta in the file.\n')
                 sys.exit(1)
+
+    elif args.scatter not in ('mean','spread'):
+        print('ERROR: Valid scatter parameter can only be one of ["mean", "spread"].')
+        sys.exit(1)
 
     #if args.scatter is None and parsed_args['varnames'][0] != "list":
     #    if args.grid is None:
@@ -663,7 +725,8 @@ def load_variables(args):
                     '4' : 'PFfail',        # 4: prior forward failed, not used
                     '5' : 'NA',            # 5: not used because not selected in namelist
                     '6' : 'QCrejected',    # 6: incoming qc value was larger than threshold
-                    '7' : 'outlier'        # 7: Outlier threshold test failed
+                    '7' : 'outlier',       # 7: Outlier threshold test failed
+                    '10': 'inlier'         # 10: Inlier threshold test failed
                     }
     else:
         print(f"ERROR: file {args.obsfile} not found")
@@ -782,7 +845,8 @@ def load_obs_seq(filename,cloud_types,verbose):
 
     qclabels = { '0' : 'assim', '1' : 'eval', '2' : 'APFfail',
                  '3' : 'EPFfail',  '4' : 'PFfail',
-                 '5' : 'NA',   '6' : 'QCrejected', '7' : 'outlier' }
+                 '5' : 'NA',   '6' : 'QCrejected', '7' : 'outlier',
+                 '10': 'inlier' }
 
     varlabels={
                 '1' : 'ObsValue',
@@ -982,9 +1046,9 @@ def print_meta(varobj):
     print("")
 
     if len(varobj.validqc) == 1:
-        print(f"Valid QC values: {sorted(varobj.validqcval)}")
+        print(f"Valid QC values: {sorted(varobj.validqcval, key=int)}")
     else:
-        print(f"Valid QC values: {sorted(varobj.validqcval)} and meanings")
+        print(f"Valid QC values: {sorted(varobj.validqcval, key=int)} and meanings")
         for key,val in QCValMeta.items():
             if int(key) in varobj.validqcval:
                 print(f"    {key}: {val}")
@@ -998,7 +1062,7 @@ def print_meta(varobj):
                  ' 4' : 'ISSCALEHEIGHT'
                 }
 
-    print(f"Valid vertical coordinates are: {sorted(varobj.validverts)} and meanings")
+    print(f"Valid vertical coordinates are: {sorted(varobj.validverts, key=int)} and meanings")
     for key,val in VertMeta.items():
         if int(key) in varobj.validverts:
             if key == ' 2':     # ISPRESSURE
@@ -1077,7 +1141,7 @@ def retrieve_plotvar(varargs,vtype,varobj):
         else:
             l_flag = varobj.varvert[n]
             l_val  = varobj.varloc[n,2]
-            if l_flag == int(varargs.t_level_type):
+            if l_flag == varargs.t_level_type:
                 if l_val >= t_level_min and l_val <= t_level_max:
                     obs_index.append(n)
     print(f"    Got {len(obs_index)} observations")
@@ -1135,7 +1199,9 @@ def retrieve_plotvar(varargs,vtype,varobj):
         varmeta['varlabel'] = "QC"
         vardat  = varobj.varqc[obs_index,1]
         validqcs = np.unique(vardat)
-        varmeta['validqcs'] = validqcs
+        validqcs_lst = sorted([qc for qc in validqcs], key=int)
+        varmeta['validqcs'] = [qc for qc in validqcs_lst]
+        #print(f"varmeta = {varmeta['validqcs']}")
     else:
         ivar = int(varargs.t_copy)
         varmeta['varlabel'] = varobj.varlabels[str(ivar)]
@@ -1355,7 +1421,7 @@ def make_plot(wargs,obstype,wobj):
 
     #-----------------------------------------------------------------------
     #
-    # Process the plot variables
+    # Set plot ranges
     #
     #-----------------------------------------------------------------------
 
@@ -1375,18 +1441,7 @@ def make_plot(wargs,obstype,wobj):
     else:
         ranges = wargs.ranges
 
-    #-----------------------------------------------------------------------
-    #
-    # Lambert grid for HRRR
-    #
-    #-----------------------------------------------------------------------
-
     carr= ccrs.PlateCarree()
-
-    if wargs.basmap == "lambert":
-        proj_hrrr = setup_hrrr_projection(carr).proj
-    else:
-        proj_hrrr = None
 
     #-----------------------------------------------------------------------
     #
@@ -1401,13 +1456,29 @@ def make_plot(wargs,obstype,wobj):
     if wargs.basmap == "latlon":
         #carr._threshold = carr._threshold/10.
         ax = plt.axes(projection=carr)
+
+        y_position = 0.75
+        ax.set_extent(ranges,crs=carr)
+    elif wargs.basmap == "stereo":
+        earthRadius = 6371229.0
+        cenLat = (ranges[3] + ranges[2])/2.0
+        cenLon = (ranges[1] + ranges[0])/2.0
+        extentY = math.radians(ranges[3] - ranges[2]) * earthRadius
+        extentX = math.radians(ranges[1] - ranges[0]) * math.cos(math.radians(cenLat)) * earthRadius
+        #print(f"    extent = {extentX/1000.:8.2f} km X {extentY/1000.:8.2f} km")
+
+        scaling = 0.5
+        proj = ccrs.Stereographic(cenLat, cenLon)
+        ax = plt.axes(projection=proj)
+        ax.set_extent([-scaling * extentX, scaling * extentX, -scaling * extentY, scaling * extentY], crs=proj)
+
         y_position = 0.75
     else:
+        proj_hrrr = setup_hrrr_projection(carr).proj
         ax = plt.axes(projection=proj_hrrr)
-        #ax.set_extent(ranges,crs=carr)        #[-125.0,-70.0,22.0,52.0],crs=carr)
-        y_position = 0.85
 
-    ax.set_extent(ranges,crs=carr)
+        y_position = 0.85
+        ax.set_extent(ranges,crs=carr)
 
     ax.coastlines(resolution='50m')
     #ax.stock_img()
@@ -1418,7 +1489,7 @@ def make_plot(wargs,obstype,wobj):
     ax.add_feature(cfeature.BORDERS)
     ax.add_feature(cfeature.STATES,linewidth=0.1)
     #if wargs.basmap == "latlon":
-    lonrange=list(range(-140,-50,10))
+    lonrange=list(range(-140,-50,5))
     latrange=list(range(10,60,5))
     gl = ax.gridlines(draw_labels=True,linewidth=0.2, color='gray', alpha=0.7, linestyle='--')
     gl.xlocator = mticker.FixedLocator(lonrange)
@@ -1483,8 +1554,8 @@ def make_plot(wargs,obstype,wobj):
     # obsvar=       REFORM(outdata[5,*])
 
     if wargs.t_copy == "0":
-        mks = ['o', 'x', '+', '*', 's', 'D', '^', '1']
-        cls = ['g', 'r', 'm', 'c', 'k', 'y', 'b', 'k']
+        mks = ['o', '+', 'D', '*', 's', 'x', '^', '1']
+        cls = ['g', 'b', 'r', 'c', 'k', 'y', 'm', 'k']
         j = 0
         for qc in plot_meta.validqcs:
             lons = glons[vardata == qc]
@@ -1510,7 +1581,7 @@ def make_plot(wargs,obstype,wobj):
             alphaval = 0.2
 
         varname = plot_meta.varlabel
-        if 'RADAR_REFLECTIVITY' in plot_meta.type_label.upper():                # obstype == '120':
+        if 'RADAR_REFLECTIVITY' in plot_meta.type_label.upper():        # obstype == '120':
             varname = 'refl'
 
         color_map, normc = get_var_contours(varname,vardata,wargs.cntlevel)
@@ -1581,8 +1652,8 @@ def make_scatter(cargs,wargs,obstype,wobj):
 
     #fig,ax = plt.subplots()
 
-    colors  = ['g','b','m','c','r','y','k']
-    markers = ['o','^','d','H','+','X','-']
+    colors  = ['g','r','b','c','m','y','k']
+    markers = ['o','D','+','H','^','X','-']
 
     #
     # Get prior & posterior
@@ -1609,7 +1680,9 @@ def make_scatter(cargs,wargs,obstype,wobj):
 
     # Plot post points
     i = 0
-    for qc,dats in dta_s.items():
+    qc_vals = sorted(dta_s.keys(), key=int)
+    for qc in qc_vals:
+        dats = dta_s[qc]
         countstr = get_array_lenstr(dats['post'])
         qclable = f"{plot_meta.qc_label[qc]} ({countstr})"
 
