@@ -81,7 +81,7 @@ function usage {
     echo    "              -nn                 Show command to be run (one level deeper), but not run it"
     echo    "              -v                  Verbose mode"
     echo    "              -e                  Last time in HHMM format"
-    echo    "              -x                  Directory affix"
+    echo    "              -x  affix           Directory affix"
     echo    " "
     echo    "   DEFAULTS:"
     echo    "              eventdt    = $eventdateDF"
@@ -214,6 +214,8 @@ post | plot | diag | verif)
     ;;
 esac
 
+config_file="${run_dir}/config.${eventdate}${affix}"
+
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 log_dir="${run_dir}/${eventdate}"
@@ -257,6 +259,14 @@ fcst )
 post )
 
     if [[ ! -e ${donepost} ]]; then
+
+        #damode=$(grep '^ *damode=' "${config_file}" | cut -d'=' -f2 | tr -d '"')
+        #if [[ ${damode} == "restart" ]]; then
+            fcstbegs="5"
+        #else
+        #    fcstbegs="0"
+        #fi
+
         if ((10#$endtime < 1200)); then
             enddate=$(date -d "$eventdate 1 day" +%Y%m%d)
         else
@@ -264,7 +274,7 @@ post )
         fi
         if [[ ! -e ${run_dir}/FCST/${eventdate}${affix}/fcst_${enddate}${endtime}_start ]]; then
             # To make sure the correct FCST files are used, "-c"
-            cmds=("${script_dir}/lnmpasfcst.sh" -c -e "${endtime}" -src "${run_dir}")
+            cmds=("${script_dir}/lnmpasfcst.sh" -c -e "${endtime}" -b "$fcstbegs" -src "${run_dir}")
             if [[ -n ${affix} ]]; then
                 cmds+=(-x "${affix}")
             fi

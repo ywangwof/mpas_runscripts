@@ -1340,7 +1340,7 @@ function write_config {
     run_updatebc=true                   # run mpas_update_bc
     run_obs2nc=true                     # run obs_seq_to_netcdf after filter
     run_obsdiag=true                    # run obs_diag after filter for each cycle
-    run_addnoise=false                  # run WoFS add_noise facility (Python)
+    run_addnoise=true                   # run WoFS add_noise facility (Python)
     run_trimvr=true                     # Trim NaNs from radial velocity observations (Python)
     python_machine="${pythonmachine}"   # if not empty, you should have set up passwordless access on it and the
                                         # Python environment is properly set in run_noise_mask.slurm & run_noise_pert.slurm

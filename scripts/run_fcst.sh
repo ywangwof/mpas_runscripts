@@ -131,10 +131,11 @@ function usage {
     echo "              -t  DIR             Template directory for runtime files"
     echo "              -w                  Hold script to wait for all job conditions are satified and submitted (for mpassit & upp)."
     echo "                                  By default, the script will exit after submitting all possible jobs."
-    echo "              -c                  Works with Clean command only"
-    echo "                                  None (default): Delete log/standard output files only."
-    echo "                                  mpas/mpassit:   Delete netCDF output files also from the specific task."
-    echo "              -a                  Works with Clean command only. Same as -c for deep clean the whole directory"
+    echo "              -a/-c/-d            Works with the Clean command only, accept one argument {mpas,mpassit} or nothing."
+    echo "                                  Default (Nothing): Deletes output files (log/standard output, etc.) only."
+    echo "                                  -a: Deep clean of the whole working directory"
+    echo "                                  -c: Delete output (netCDF) files from the specific task but keep done files."
+    echo "                                  -d: Delete all done files"
     echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
     echo "              -i  YYYYmmddHHMM    Initial time, default: same as start time from the command line argument"
     echo "              -s  YYYYmmddHHMM    Start date & time of the forecast cycles"
@@ -1284,6 +1285,9 @@ function run_clean {
                             #ls $memdir/${domname}_??.{diag,history}.*.nc
                             if [[ "$coption" == "-c" ]]; then
                                 ${show} rm -f $memdir/${domname}_??.{diag,history}.*.nc
+                            elif [[ "$coption" == "-d" ]]; then
+                                ${show} rm -f $memdir/${domname}_??.{diag,history}.*.nc
+                                ${show} rm -f fcst_??/done.fcst_* done.fcst
                             fi
                         fi
                     done
@@ -1315,6 +1319,7 @@ function run_clean {
                                         #rm $donefile
                                         (( done+=1 ))
                                     fi
+                                    ${show} rm -f $memdir/PET*.ESMF_LogFile
                                 done
 
                                 if [[ $done -eq $ENS_SIZE ]]; then
@@ -1325,6 +1330,9 @@ function run_clean {
                             done
                             if [[ "$coption" == "-c" ]]; then
                                 ${show} rm -f ${mywrkdir}/mem??/MPASSIT_*.nc
+                            elif [[ "$coption" == "-d" ]]; then
+                                ${show} rm -f ${mywrkdir}/mem??/MPASSIT_*.nc
+                                ${show} rm -f done.mpassit done.mpassit* mem*/done.mpassit*
                             fi
                         fi
                     fi
@@ -1367,6 +1375,8 @@ function run_clean {
                     ;;
                 esac
             done
+        else
+            mecho0 "${RED}ERROR${NC}: Working directory ${CYAN}${fcstwrkdir}${NC} does not exist."
         fi
     done
 }
@@ -1446,7 +1456,7 @@ while [[ $# -gt 0 ]]
         -w)
             jobwait=1
             ;;
-        -c | -a)
+        -c | -a | -d )
             cleanoption="$key"
             if [[ "$2" == "mpas" || "$2" == "mpassit" ]]; then
                 cleanjobs+=("$2")
@@ -1536,6 +1546,7 @@ while [[ $# -gt 0 ]]
                 else
                     eventdate=${key:0:8}
                 fi
+                endhrmin=${key:8:4}
             elif [[ $key =~ ^[0-9]{8}$ ]]; then
                 eventdate=${key}
             elif [[ $key =~ ^[0-9]{4}$ ]]; then

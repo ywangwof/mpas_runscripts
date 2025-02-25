@@ -117,10 +117,11 @@ function usage {
     echo "              -v                  Verbose mode"
     echo "              -k  [0,1,2]         Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
     echo "                                  Default is 0 for ungrib, mpassit, upp and 1 for others"
-    echo "              -c                  Works with Clean command only"
-    echo "                                  None (default): Delete output files also."
-    echo "                                  filter/mpas:    Delete output files from the specific task only."
-    echo "              -a                  Works with Clean command only. Same as -c for deep clean the whole directory"
+    echo "              -a/-c/-d            Works with the Clean command only, accept one argument {filter,mpas} or nothing."
+    echo "                                  Default (Nothing): Deletes output files (log/standard output, etc.) only."
+    echo "                                  -a: Deep clean of the whole working directory"
+    echo "                                  -c: Delete output (netCDF) files from the specific task but keep done files."
+    echo "                                  -d: Delete all done files"
     echo "              -t  DIR             Template directory for runtime files"
     echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
     echo "              -i  YYYYmmddHHMM    Initial time, default: same as start time from the command line argument"
@@ -852,21 +853,22 @@ function run_filter {
     mp_state_variables['qi']='QTY_ICE_MIXING_RATIO'
     mp_state_variables['qs']='QTY_SNOW_MIXING_RATIO'
     mp_state_variables['qg']='QTY_GRAUPEL_MIXING_RATIO'
-    mp_state_variables['nr']='QTY_RAIN_NUMBER_CONCENTR'
-    mp_state_variables['ni']='QTY_ICE_NUMBER_CONCENTRATION'
-    mp_variables_keys=('qc' 'qr' 'qi' 'qs' 'qg' 'nr' 'ni')
+    #mp_state_variables['nr']='QTY_RAIN_NUMBER_CONCENTR'
+    #mp_state_variables['ni']='QTY_ICE_NUMBER_CONCENTRATION'
+    mp_variables_keys=('qc' 'qr' 'qi' 'qs' 'qg' )
     mp_state_bounds="'0.0','NULL','CLAMP'"
 
     lbc_mp_nssl_variables=".false."
     if [[ ${mpscheme} == "mp_nssl2m" ]]; then
         mp_state_variables['qh']='QTY_HAIL_MIXING_RATIO'
-        mp_state_variables['volg']='QTY_GRAUPEL_VOLUME'
-        mp_state_variables['volh']='QTY_HAIL_VOLUME'
-        mp_state_variables['nc']='QTY_DROPLET_NUMBER_CONCENTR'
-        mp_state_variables['ns']='QTY_SNOW_NUMBER_CONCENTR'
-        mp_state_variables['ng']='QTY_GRAUPEL_NUMBER_CONCENTR'
-        mp_state_variables['nh']='QTY_HAIL_NUMBER_CONCENTR'
-        mp_variables_keys+=('qh' 'nc' 'ns' 'ng' 'nh' 'volg' 'volh')
+        #mp_state_variables['volg']='QTY_GRAUPEL_VOLUME'
+        #mp_state_variables['volh']='QTY_HAIL_VOLUME'
+        #mp_state_variables['nc']='QTY_DROPLET_NUMBER_CONCENTR'
+        #mp_state_variables['ns']='QTY_SNOW_NUMBER_CONCENTR'
+        #mp_state_variables['ng']='QTY_GRAUPEL_NUMBER_CONCENTR'
+        #mp_state_variables['nh']='QTY_HAIL_NUMBER_CONCENTR'
+        #mp_variables_keys+=('qh' 'nc' 'ns' 'ng' 'nh' 'volg' 'volh')
+        mp_variables_keys+=('qh')
         lbc_mp_nssl_variables=".true."
     fi
 
@@ -947,7 +949,7 @@ function run_filter {
 &quality_control_nml
    input_qc_threshold = 5,
    outlier_threshold  = 3.5,
-   inlier_threshold   = 0.25,
+   inlier_threshold   = 0.0,
    enable_special_outlier_code = .false.,
   /
 
@@ -1286,7 +1288,7 @@ function run_filter {
     rho_snow                   =   100.0 ,
     allow_wet_graupel          = .false. ,
     microphysics_type          =       5 ,
-    allow_dbztowt_conv         = .true.
+    allow_dbztowt_conv         =  .true. ,
 /
 &obs_def_cwp_nml
     pressure_top               = 15000.0,
@@ -1914,7 +1916,7 @@ function run_update_bc {
     #
     conditions=("${rundir}/lbc/done.${domname}")
 
-    if [[ $run_addnoise == true ]]; then
+    if [[ $run_addnoise == true && $icycle -gt 0 ]]; then
         conditions+=("${wrkdir}/done.add_noise")
     else
         conditions+=("${wrkdir}/done.update_states")
@@ -1932,7 +1934,7 @@ function run_update_bc {
         done
     fi
 
-    if [[ $icycle -ge 0 && ${run_updatebc} == true ]]; then
+    if [[ ${run_updatebc} == true ]]; then
         cpcmd="cp"
         #cpcmd="rsync -a"
     else
@@ -2712,7 +2714,7 @@ function dacycle_driver() {
         # 3. Add noise (must run after update_states)
         #------------------------------------------------------
 
-        if [[ $run_addnoise == true ]]; then
+        if [[ $run_addnoise == true && $icyc -gt 0 ]]; then
             # check and set update_states status
             if [[ ! -e done.update_states ]]; then
                 #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
@@ -2727,7 +2729,7 @@ function dacycle_driver() {
         # 4. Run update_bc for all ensemble members
         #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " update_bc " ]]; then
-            if [[ ${run_addnoise} == true ]]; then   # check and set add_noise status
+            if [[ ${run_addnoise} == true && $icyc -gt 0 ]]; then   # check and set add_noise status
                 if [[ ! -e done.add_noise ]]; then
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
                     check_job_status "add_noise fcst_" $dawrkdir $ENS_SIZE run_noise_pert.${mach} ${num_resubmit}
@@ -3246,7 +3248,7 @@ function run_clean {
 
     for isec in $(seq $start_sec $intvl_sec $end_sec ); do
         timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
-        eventtime=$(date -u -d @$isec +%H%M)
+        eventtime=$(date    -u -d @$isec +%H%M)
         timestr_file=$(date -u -d @$isec +%Y-%m-%d_%H.%M.%S)
 
         dawrkdir=$wrkdir/$eventtime
@@ -3277,6 +3279,9 @@ function run_clean {
                         ${show} rm -f fcst_??/${domname}_??.{restart,init}.*.nc
                     elif [[ "$coption" == "-a" ]]; then
                         ${show} rm -rf fcst_??
+                    elif [[ "$coption" == "-d" ]]; then
+                        ${show} rm -f fcst_??/${domname}_??.{restart,init}.*.nc
+                        ${show} rm -rf fcst_??/done.fcst_* fcst_??/done.update_{bc,states}_*
                     fi
                     ;;
                 filter )
@@ -3290,6 +3295,9 @@ function run_clean {
                         elif [[ "$coption" == "-a" ]]; then
                             cd $wrkdir || return
                             ${show} rm -rf $eventtime
+                        elif [[ "$coption" == "-d" ]]; then
+                            ${show} rm -f ${domname}_??.analysis
+                            ${show} rm -f done.fcst done.filter done.update_bc done.update_states
                         fi
                     fi
                     ;;
@@ -3305,6 +3313,8 @@ function run_clean {
                     ;;
                 esac
             done
+        else
+            mecho0 "${RED}ERROR${NC}: ${CYAN}$dawrkdir${NC} not exist."
         fi
     done
 }
@@ -3381,7 +3391,7 @@ while [[ $# -gt 0 ]]; do
                 usage 1
             fi
             ;;
-        -c | -a)
+        -c | -a | -d )
             cleanoption="$key"
             if [[ "$2" == "filter" || "$2" == "mpas" ]]; then
                 cleanjobs+=("$2")
@@ -3471,6 +3481,7 @@ while [[ $# -gt 0 ]]; do
                 else
                     eventdate=${key:0:8}
                 fi
+                endhrmin=${key:8:4}
             elif [[ $key =~ ^[0-9]{8}$ ]]; then
                 eventdate=${key}
             elif [[ $key =~ ^[0-9]{4}$ ]]; then
