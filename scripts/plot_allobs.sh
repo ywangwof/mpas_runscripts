@@ -1,8 +1,9 @@
 #!/bin/bash
 script_dir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${script_dir}")")
-#rootdir="/scratch/ywang/MPAS/gnu/mpas_scripts"
-mpasdir=$(dirname "$rootdir")
+
+up_dir=$(dirname $rootdir)
+mpasdir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
 
 rundir="${mpasdir}/run_dirs"
 
@@ -272,7 +273,7 @@ if [[ ! -e done.zigzag ]]; then
         done
 
         if [[ ${estatus} -eq 0 ]]; then
-            cp /scratch/ywang/MPAS/gnu/frdd-wofs-post/json/wofs_run_metadata_obsdiag.json ${image_destdir}/wofs_run_metadata.json
+            cp ${up_dir}/frdd-wofs-post/json/wofs_run_metadata_obsdiag.json ${image_destdir}/wofs_run_metadata.json
             ${show} touch "done.zigzag"
         fi
     fi

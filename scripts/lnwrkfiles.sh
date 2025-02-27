@@ -299,7 +299,7 @@ for pkg in "${packages[@]}"; do
             echo "  -- ${cmdnote} DART static to $(pwd) ...."
             run_cmd "${runcmd}" "$srcdart/assimilation_code/programs/gen_sampling_err_table/work" "sampling_error_correction_table.nc"
 
-            coef_rootdir="/scratch/tajones/software/nvidia/rttov13/rtcoef_rttov13"
+            coef_rootdir="/scratch/thomas.jones/software/nvidia/rttov13/rtcoef_rttov13"
 
             coef_files=(    rttov9pred54L/rtcoef_goes_16_abi.dat                          \
                             rttov13pred54L/rtcoef_goes_16_abi_7gas.dat                    \

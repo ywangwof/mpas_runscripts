@@ -4,7 +4,7 @@
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "$scpdir")")
-mpasdir=$(dirname "${rootdir}")
+#mpasdir=$(dirname "${rootdir}")
 
 eventdateDF=$(date -u +%Y%m%d)
 
@@ -119,6 +119,148 @@ function usage {
     echo "                                     -- By Y. Wang (2023.05.24)"
     echo " "
     exit "$1"
+}
+
+########################################################################
+#
+# Handle command line arguments
+#
+########################################################################
+
+function parse_args {
+
+    declare -Ag args
+
+    #-------------------------------------------------------------------
+    # Parse command line arguments
+    #-------------------------------------------------------------------
+
+     while [[ $# -gt 0 ]]; do
+        key="$1"
+
+        case $key in
+            -h)
+                usage 0
+                ;;
+            -n)
+                args["dorun"]=false
+                ;;
+            -v)
+                args["verb"]=1
+                ;;
+            -k)
+                if [[ $2 =~ [012] ]]; then
+                    args["overwrite"]=$2
+                    shift
+                else
+                    echo -e "${RED}ERROR${NC}: option for ${BLUE}-k${NC} can only be [${YELLOW}0-2${NC}], but got ${PURPLE}$2${NC}."
+                    usage 1
+                fi
+                ;;
+            -t)
+                if [[ -d $2 ]]; then
+                    args["TEMPDIR"]=$2
+                else
+                    echo -e "${RED}ERROR${NC}: Template directory ${BLUE}$2${NC} does not exist."
+                    usage 1
+                fi
+                shift
+                ;;
+            -m)
+                if [[ ${2^^} == "JET" ]]; then
+                    args["machine"]=Jet
+                elif [[ ${2^^} == "VECNA" ]]; then
+                    args["machine"]=Vecna
+                elif [[ ${2^^} == "HERCULES" ]]; then
+                    args["machine"]=Hercules
+                elif [[ ${2^^} == "CHEYENNE" || ${2^^} == "DERECHO" ]]; then
+                    args["machine"]=Cheyenne
+                else
+                    echo -e "${RED}ERROR${NC}: Unsupported machine name, got ${PURPLE}$2${NC}."
+                    usage 1
+                fi
+                shift
+                ;;
+
+        -M)
+            if [[ ${2,,} == "init" || ${2,,} == "restart" ]]; then
+                args["damode"]="${2,,}"
+            else
+                echo -e "${RED}ERROR${NC}: unknow argument. Expect: ${YELLOW}init${NC} or ${YELLOW}restart${NC}. Got: ${PURPLE}${2,,}${NC}"
+                usage 1
+            fi
+            shift
+            ;;
+        -d)
+            args["domname"]=$2
+            shift
+            ;;
+        -x)
+            args["affix"]="$2"
+            shift
+            ;;
+        -l)
+            fixed_level="${FIXDIR}/$2"
+            if [[ ! -e ${fixed_level} ]]; then
+                echo -e "${RED}ERROR${NC}: ${BLUE}${fixed_level}${NC} not exist."
+                usage 1
+            fi
+            args["level_file"]=${fixed_level}
+            shift
+            ;;
+        -c)
+            if [[ $2 =~ ^[0-9.]+,[0-9.-]+$ ]]; then
+                #latlons=(${2//,/ })
+                #mapfile -t latlons <<< "${2//,/ }"
+                IFS="," read -r -a latlons <<< "$2"
+                args["cen_lat"]=${latlons[0]}
+                args["cen_lon"]=${latlons[1]}
+            else
+                echo -e "${RED}ERROR${NC}: Domain center is required as ${BLUE}-c lat,lon${NC}, get: ${PURPLE}$2${NC}."
+                usage 1
+            fi
+            shift
+            ;;
+        -a)
+            args["hpcaccount"]=$2
+            shift
+            ;;
+        -o)
+            args["caseconfig"]=$2
+            shift
+            ;;
+
+            -*)
+                echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
+                usage 2
+                ;;
+            static* | geogrid* | createWOFS | projectHexes | meshplot* | ungrib* | rotate* | clean* | setup | check*)
+                args["jobs"]="${key//,/ }"
+                ;;
+            *)
+                if [[ $key =~ ^[0-9]{12}$ ]]; then
+                    args["eventdate"]=${key:0:8}
+                    args["eventtime"]=${key:8:4}
+                elif [[ $key =~ ^[0-9]{8}$ ]]; then
+                    args["eventdate"]=${key}
+                elif [[ -d $key ]]; then
+                    WORKDIR=$key
+                    lastdir=$(basename $WORKDIR)
+                    if [[ $lastdir =~ ^[0-9]{8}$ ]]; then
+                        args["WORKDIR"]=$(dirname ${WORKDIR})
+                        args["eventdate"]=${lastdir}
+                    else
+                        args["WORKDIR"]=$WORKDIR
+                    fi
+                    #echo $WORKDIR,$eventdate,$eventtime
+                else
+                    echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}$key${NC}."
+                    usage 3
+                fi
+                ;;
+        esac
+        shift # past argument or value
+    done
 }
 
 ########################################################################
@@ -482,8 +624,8 @@ function run_projectHexes {
     cat <<EOF > namelist.projections
 &mesh
   cell_spacing_km  =      3.,
-  mesh_length_x_km =   1000.,
-  mesh_length_y_km =   1000.,
+  mesh_length_x_km =    910.,
+  mesh_length_y_km =    910.,
   earth_radius_km  = 6378.14,
 /
 &projection
@@ -862,6 +1004,7 @@ EOF
     #
     jobscript="run_ungrib.${mach}"
 
+    # shellcheck disable=SC2034
     declare -A jobParms=(
         [PARTION]="${partition_wps}"
         [JOBNAME]="ungrb_hrrr_${jobname}"
@@ -1078,150 +1221,13 @@ function write_config {
         fi
     fi
 
-    #-------------------------------------------------------------------
-    # Machine specific setting for init, lbc, dacycles & fcst
-    #-------------------------------------------------------------------
-
-    pythonmachine=""
-    case $machine in
-    "Jet" )
-        # ICs
-        npeics=24; ncores_ics=2
-        partition_ics="ujet,tjet,xjet,vjet,kjet"
-        claim_cpu_ics="--cpus-per-task=2"
-        claim_cpu_ungrib="--cpus-per-task=12 --mem-per-cpu=10G"
-
-        # LBCs
-        npelbc=24;  ncores_lbc=2
-        partition_lbc="ujet,tjet,xjet,vjet,kjet"
-        claim_cpu_lbc="--cpus-per-task=2"
-
-        # DA cycles
-        ncores_dafcst=6;  ncores_filter=6
-        partition_dafcst="ujet,tjet,xjet,vjet,kjet"; claim_cpu_dafcst="--cpus-per-task=2"
-        partition_filter="ujet,tjet,xjet,vjet,kjet"; claim_cpu_filter="--cpus-per-task=2"
-                                                     claim_cpu_update="--cpus-per-task=1 --mem-per-cpu=8G"
-        npedafcst=48        #; nnodes_fcst=$(( npefcst/ncores_fcst ))
-        npefilter=1536      #; nnodes_filter=$(( npefilter/ncores_filter ))
-        nnodes_filter="1"
-        nnodes_dafcst="1"
-
-        # FCST cycles
-        ncores_fcst=6;  ncores_post=6
-        partition_fcst="ujet,tjet,xjet,vjet,kjet";   claim_cpu_fcst="--cpus-per-task=2"
-        partition_post="ujet,tjet,xjet,vjet,kjet";   claim_cpu_post="--cpus-per-task=12"
-
-        npefcst=48     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
-        npepost=48     ; nnodes_post=$(( npepost/ncores_post ))
-        ;;
-
-    "Hercules" )
-        # ICs
-        npeics=24; ncores_ics=2
-        partition_ics="batch"
-        claim_cpu_ics="--cpus-per-task=2"
-        claim_cpu_ungrib="--cpus-per-task=12 --mem-per-cpu=10G"
-
-        # LBCs
-        npelbc=24;  ncores_lbc=2
-        partition_lbc="batch"
-        claim_cpu_lbc="--cpus-per-task=2"
-
-        # DA cycles
-        ncores_dafcst=40;  ncores_filter=40
-        partition_dafcst="batch"; claim_cpu_dafcst="--cpus-per-task=2"
-        partition_filter="batch"; claim_cpu_filter="--cpus-per-task=2"
-                                  claim_cpu_update="--cpus-per-task=1 --mem-per-cpu=8G"
-        npedafcst=40       #; nnodes_fcst=$(( npefcst/ncores_fcst ))
-        npefilter=160      #; nnodes_filter=$(( npefilter/ncores_filter ))
-        nnodes_filter="1"
-        nnodes_dafcst="1"
-
-        # FCST cycles
-        ncores_fcst=40;  ncores_post=40
-        partition_fcst="batch";   claim_cpu_fcst="--cpus-per-task=2"
-        partition_post="batch";   claim_cpu_post="--cpus-per-task=12"
-
-        npefcst=40     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
-        npepost=40     ; nnodes_post=$(( npepost/ncores_post ))
-        ;;
-
-    "Cheyenne" )
-        pythonmachine=""
-        mpas_wofs_python="/glade/work/ywang/wofs_new_noise"
-
-        # Derecho node has 128 processors
-        # ICs
-        npeics=32; ncores_ics=32
-        partition_ics="preempt"
-        claim_cpu_ics="ncpus=${ncores_ics}"
-        claim_cpu_ungrib=""
-
-        # LBCs
-        npelbc=32;  ncores_lbc=32
-        partition_lbc="preempt"
-        claim_cpu_lbc="ncpus=${ncores_lbc}"
-
-        # DA cycles
-        ncores_filter=128; ncores_dafcst=128
-        # main, preempt, regular
-        partition_dafcst="preempt" ; claim_cpu_dafcst="ncpus=${ncores_dafcst}"
-        partition_filter="preempt" ; claim_cpu_filter="ncpus=${ncores_filter}"
-        claim_cpu_update="ncpus=${ncores_filter}"
-
-        npefilter=128     ; nnodes_filter=$(( npefilter/ncores_filter   ))
-        npedafcst=128     ; nnodes_dafcst=$(( npefcst/ncores_dafcst ))
-
-        # FCST cycles
-        ncores_post=32; ncores_fcst=128
-        partition_fcst="preempt"   ; claim_cpu_fcst="ncpus=${ncores_fcst}"
-        partition_post="preempt"   ; claim_cpu_post="ncpus=${ncores_post}"
-
-        npepost=32      ; nnodes_post=$(( npepost/ncores_post   ))
-        npefcst=128     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
-        ;;
-
-    * )    # Vecna at NSSL
-
-        pythonmachine=""
-        mpas_wofs_python="/scratch/ywang/MPAS/wofs_new_noise"
-
-        # ICs
-        npeics=24;   ncores_ics=96
-        partition_ics="batch"
-        claim_cpu_ics="--ntasks-per-node=${ncores_ics}"
-        claim_cpu_ungrib=""
-
-        # LBCs
-        npelbc=24;  ncores_lbc=96
-        partition_lbc="batch"
-        claim_cpu_lbc="--ntasks-per-node=${ncores_lbc}"
-        claim_cpu_ungrib=""
-
-        # DA cycles
-        ncores_filter=96; ncores_dafcst=96
-
-        npefilter=768           ; nnodes_filter=1
-        npedafcst=56            ; nnodes_dafcst=1
-
-        partition_dafcst="batch"  ; claim_cpu_dafcst="";
-        partition_filter="batch"  ; claim_cpu_filter="--ntasks-per-node=\${ncores_filter}"
-                                    claim_cpu_update="--ntasks-per-node=1 --mem-per-cpu=120G"   # 4 jobs each node
-
-        # FCST cycles
-        ncores_post=24; ncores_fcst=96
-        partition_fcst="batch"      ; claim_cpu_fcst="";
-        partition_post="batch"      ; claim_cpu_post=""
-
-        npepost=24      ; nnodes_post=1
-        npefcst=80      ; nnodes_fcst=1
-        ;;
-    esac
+    default_site_settings "${machine}"
 
     #-------------------------------------------------------------------
     # Write out default configuration file
     #-------------------------------------------------------------------
 
+    # shellcheck disable=SC2154
     cat <<EOF > $configname
 #!/bin/bash
 # shellcheck disable=SC1035,SC1020,SC1073,SC1072
@@ -1239,7 +1245,7 @@ function write_config {
 #               if not empty, use dacyles.\${daffix}/fcst.\${daffix}
 #   damode:     DA cycles mode, either "restart" or "init"
 #
-#   mpscheme:   Microphysics scheme, valid values are ('mp_nssl2m', 'Thompson')
+#   mpscheme:   Microphysics scheme, valid values are ('mp_nssl2m', 'mp_thompson')
 #   sfclayer_schemes:   suite,sf_monin_obukhov_rev,sf_monin_obukhov,sf_mynn,off
 #   pbl_schemes:        suite,bl_ysu,bl_myj,bl_mynn,off
 #
@@ -1342,8 +1348,6 @@ function write_config {
     run_obsdiag=true                    # run obs_diag after filter for each cycle
     run_addnoise=true                   # run WoFS add_noise facility (Python)
     run_trimvr=true                     # Trim NaNs from radial velocity observations (Python)
-    python_machine="${pythonmachine}"   # if not empty, you should have set up passwordless access on it and the
-                                        # Python environment is properly set in run_noise_mask.slurm & run_noise_pert.slurm
     WOFSAN_PATH="${mpas_wofs_python}"
 
     OUTIOTYPE="netcdf4"
@@ -1354,8 +1358,8 @@ function write_config {
 
     partition_fcst="${partition_dafcst}";
     partition_filter="${partition_filter}"
-    npefcst="${npedafcst}";   ncores_fcst="${ncores_dafcst}";   nnodes_filter="${nnodes_filter}"
-    npefilter="${npefilter}"; ncores_filter="${ncores_filter}"; nnodes_fcst="${nnodes_dafcst}"
+    npefcst="${npedafcst}";   ncores_fcst="${ncores_dafcst}";   nnodes_fcst="${nnodes_dafcst}"
+    npefilter="${npefilter}"; ncores_filter="${ncores_filter}"; nnodes_filter="${nnodes_filter}"
 
     claim_cpu_fcst="${claim_cpu_dafcst}"
     claim_cpu_filter="${claim_cpu_filter}"
@@ -1559,6 +1563,7 @@ function check_obs_files {
     mapfile -t my_array < <( ${rootdir}/observations/run_cwpobs.sh check ${eventdate} )
     #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/prepbufr_wofs.sh check ${eventdate} && printf '\0')
     read -r -a obsfiles <<< "${my_array[-1]}"
+    # shellcheck disable=SC2154
     echo -e "${DARK}observations/run_cwpobs.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} CWP files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${srcdir}${NC}."
     n=0
     for fn in "${obsfiles[@]}"; do
@@ -1656,310 +1661,70 @@ function check_obs_files {
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #@ MAIN
 
-#jobs=(geogrid ungrib_hrrr createWOFS static)
-#jobs=(geogrid ungrib_hrrr rotate meshplot_py static)
-jobs=(geogrid ungrib_hrrr projectHexes meshplot_py static)
-
-WORKDIR="${mpasdir}/run_dirs"
-TEMPDIR="${rootdir}/templates"
-FIXDIR="${rootdir}/fix_files"
-
-eventdate="$eventdateDF"
-eventtime="1500"
-domname="wofs_mpas"
-affix=""
-
-runcmd="sbatch"
-dorun=true
-verb=0
-overwrite=0
-machine="Jet"
-
-myhostname=$(hostname)
-if [[ "${myhostname}" == ln? ]]; then
-    machine="Vecna"
-elif [[ "${myhostname}" == hercules* ]]; then
-    machine="Hercules"
-elif [[ "${myhostname}" == cheyenne* || "${myhostname}" == derecho* ]]; then
-    machine="Cheyenne"
-else
-    machine="Jet"
-fi
-
-fixed_level="${FIXDIR}/L60.txt"
-damode="init"
-
 source "${scpdir}/Common_Utilfuncs.sh" || exit $?
 
 relative_path=true
 
 #-----------------------------------------------------------------------
 #
-# Handle command line arguments
+# Handle command line arguments (override default settings)
 #
 #-----------------------------------------------------------------------
 #% ARGS
 
-while [[ $# -gt 0 ]]
-    do
-    key="$1"
+parse_args "$@"
 
-    case $key in
-        -h)
-            usage 0
-            ;;
-        -n)
-            runcmd="echo $runcmd"
-            dorun=false
-            ;;
-        -v)
-            verb=1
-            ;;
-        -k)
-            if [[ $2 =~ [012] ]]; then
-                overwrite=$2
-                shift
-            else
-                echo -e "${RED}ERROR${NC}: option for ${BLUE}-k${NC} can only be [${YELLOW}0-2${NC}], but got ${PURPLE}$2${NC}."
-                usage 1
-            fi
-            ;;
-        -t)
-            if [[ -d $2 ]]; then
-                TEMPDIR=$2
-            else
-                echo -e "${RED}ERROR${NC}: Template directory ${BLUE}$2${NC} does not exist."
-                usage 1
-            fi
-            shift
-            ;;
-        -M)
-            if [[ ${2,,} == "init" || ${2,,} == "restart" ]]; then
-                damode="${2,,}"
-            else
-                echo -e "${RED}ERROR${NC}: unknow argument. Expect: ${YELLOW}init${NC} or ${YELLOW}restart${NC}. Got: ${PURPLE}${2,,}${NC}"
-                usage 1
-            fi
-            shift
-            ;;
-        -d)
-            domname=$2
-            shift
-            ;;
-        -x)
-            affix="$2"
-            shift
-            ;;
-        -l)
-            fixed_level="${FIXDIR}/$2"
-            if [[ ! -e ${fixed_level} ]]; then
-                echo -e "${RED}ERROR${NC}: ${BLUE}${fixed_level}${NC} not exist."
-                usage 1
-            fi
-            shift
-            ;;
-        -c)
-            if [[ $2 =~ ^[0-9.]+,[0-9.-]+$ ]]; then
-                #latlons=(${2//,/ })
-                #mapfile -t latlons <<< "${2//,/ }"
-                IFS="," read -r -a latlons <<< "$2"
-                cen_lat=${latlons[0]}
-                cen_lon=${latlons[1]}
-            else
-                echo -e "${RED}ERROR${NC}: Domain center is required as ${BLUE}-c lat,lon${NC}, get: ${PURPLE}$2${NC}."
-                usage 1
-            fi
-            shift
-            ;;
-        -m)
-            if [[ ${2^^} == "JET" ]]; then
-                machine=Jet
-            elif [[ ${2^^} == "VECNA" ]]; then
-                machine=Vecna
-            elif [[ ${2^^} == "CHEYENNE" ]]; then
-                machine=Cheyenne
-            elif [[ ${2^^} == "HERCULES" ]]; then
-                machine=Hercules
-            else
-                echo -e "${RED}ERROR${NC}: Unsupported machine name, got ${PURPLE}$2${NC}."
-                usage 1
-            fi
-            shift
-            ;;
-        -a)
-            hpcaccount=$2
-            shift
-            ;;
-        -o)
-            caseconfig=$2
-            shift
-            ;;
-        -*)
-            echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
-            usage 2
-            ;;
-        static* | geogrid* | createWOFS | projectHexes | meshplot* | ungrib* | rotate* | clean* | setup | check*)
-            #jobs=(${key//,/ })
-            IFS="," read -r -a jobs <<< "$key"
-            ;;
-        *)
-            if [[ $key =~ ^[0-9]{8}$ ]]; then
-                eventdate="$key"
-            elif [[ $key =~ ^[0-9]{10}$ ]]; then
-                eventdate="${key:0:8}"
-                eventtime="${key:8:2}"
-            elif [[ -d $key ]]; then
-                WORKDIR=$key
-                lastdir=$(basename $WORKDIR)
-                if [[ $lastdir =~ ^[0-9]{8}$ ]]; then
-                    eventstr=${lastdir}
-                    WORKDIR=$(dirname ${WORKDIR})
-                    eventdate=${eventstr:0:8}
-                fi
-                #echo $WORKDIR,${jobs[*]},$eventdate,$eventtime
-            else
-                 echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}$key${NC}."
-                 usage 3
-            fi
-            ;;
-    esac
-    shift # past argument or value
-done
+[[ -v args["verb"] ]]      && verb=${args["verb"]}           || verb=0
+[[ -v args["overwrite"] ]] && overwrite=${args["overwrite"]} || overwrite=0
+[[ -v args["dorun"] ]]     && dorun=${args["dorun"]}         || dorun=true
+
+[[ -v args["damode"] ]]     && damode="${args['damode']}"     || damode="init"
+[[ -v args["domname"] ]]    && domname="${args['domname']}"   || domname="wofs_mpas"
+[[ -v args["affix"] ]]      && affix="${args['affix']}"       || affix=""
+
+[[ -v args["hpcaccount"] ]]   && hpcaccount="${args['hpcaccount']}" || hpcaccount=""
+[[ -v args["cen_lat"] ]]      && cen_lat="${args['cen_lat']}"       || cen_lat=""
+[[ -v args["cen_lon"] ]]      && cen_lon="${args['cen_lon']}"       || cen_lon=""
 
 #-----------------------------------------------------------------------
 #
-# Platform specific initialization
+# Get jobs to run
 #
 #-----------------------------------------------------------------------
-#% PLATFORM
 
-case ${machine} in
-Jet )
-    partition_wps="ujet,tjet,xjet,vjet,kjet"
-    partition_static="ujet,tjet,xjet,vjet,kjet"  ; claim_cpu_static="--cpus-per-task=12"
-    partition_create="bigmem"                    ; claim_cpu_create="--mem-per-cpu=128G"
+[[ -v args["jobs"] ]] && read -r -a jobs <<< "${args['jobs']}" || jobs=(geogrid ungrib_hrrr projectHexes meshplot_py static)
 
-    npestatic=24
+#-----------------------------------------------------------------------
+#
+# Set up working environment
+#
+#-----------------------------------------------------------------------
 
-    mach="slurm"
-    job_exclusive_str="#SBATCH --exclusive"
-    job_account_str="#SBATCH -A ${hpcaccount-wof}"
-    job_runmpexe_str="srun"
-    job_runexe_str="srun"
-    runcmd_str=""
+FIXDIR="${rootdir}/fix_files"
+# shellcheck disable=SC2034
+EXEDIR="${rootdir}/exec"                                                # use inside submit_a_job
 
-    modulename="build_jet_Rocky8_intel_smiol"
-    WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
+source "${scpdir}/Site_Runtime.sh" || exit $?
 
-    source /etc/profile.d/modules.sh
-    module purge
-    module use "${rootdir}/modules"
-    module load $modulename
-    #module load nco
-    module load wgrib2/2.0.8
-    wgrib2path="/apps/wgrib2/2.0.8/intel/18.0.5.274/bin/wgrib2"
-    nckspath="/apps/nco/4.9.3/gnu/9.2.0/bin/ncks"
-    gpmetis="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/bin/gpmetis"
+setup_machine "${args['machine']}" "$rootdir" true true
 
-    OBS_DIR="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/OBSGEN"
+[[ $dorun == false ]]    && runcmd="echo $runcmd"
 
-    hrrr_dir="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MODEL_DATA/HRRRE"
-    ;;
-Hercules )
-    partition_wps="batch"
-    partition_static="batch"  ; claim_cpu_static="--cpus-per-task=12"
-    partition_create="batch"  ; claim_cpu_create="--mem-per-cpu=128G"
+[[ -v args["WORKDIR"] ]] && WORKDIR=${args["WORKDIR"]} || WORKDIR="${workdirDF}"
+[[ -v args["TEMPDIR"] ]] && TEMPDIR=${args["TEMPDIR"]} || TEMPDIR="${rootdir}/templates"
 
-    npepost=40
 
-    mach="slurm"
-    job_exclusive_str="#SBATCH --exclusive"
-    job_account_str="#SBATCH -A ${hpcaccount-wof}"
-    job_runmpexe_str="srun"
-    job_runexe_str="srun"
+[[ -v args["level_file"] ]] && fixed_level="${args['level_file']}"  || fixed_level="${FIXDIR}/L60.txt"
 
-    modulename="build_hercules_intel"
-    WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
+#-----------------------------------------------------------------------
+#
+# Set Event Date and Time
+#
+#-----------------------------------------------------------------------
+[[ -v args["eventdate"] ]] && eventdate="${args['eventdate']}" || eventdate="$eventdateDF"
+[[ -v args["eventtime"] ]] && eventtime="${args['eventtime']}" || eventtime="1500"
 
-    module purge
-    module use "${rootdir}/modules"
-    module load $modulename
-
-    wgrib2path="/work2/noaa/wof/ywang/tools/hpc-stack/intel-oneapi-compilers-2022.2.1/wgrib2/2.0.8/bin/wgrib2"
-    nckspath="/work2/noaa/wof/ywang/tools/hpc-stack/intel-oneapi-compilers-2022.2.1/nco/5.0.6/bin/ncks"
-    gpmetis="/home/yhwang/local/bin/gpmetis"
-
-    OBS_DIR="/work2/noaa/wof/ywang/MPAS/OBSGEN"
-
-    hrrr_dir="/work2/noaa/wof/ywang/MPAS/MODEL_DATA/HRRRE"
-    ;;
-Cheyenne )
-    if [[ $dorun == true ]]; then
-        runcmd="qsub"
-    fi
-    ncores_static=32
-    partition_wps="main"
-    partition_static="main" ; claim_cpu_static="ncpus=${ncores_static}"
-    partition_create="main" ; claim_cpu_create="ncpus=${ncores_static}"
-
-    npestatic=72
-
-    mach="pbs"
-    job_exclusive_str="#PBS -l job_priority=economy"
-    job_account_str="#PBS -A ${hpcaccount-NMMM0021}"
-    job_runmpexe_str="mpiexec"
-    job_runexe_str="mpiexec"
-    runcmd_str=""
-
-    wgrib2path="/glade/u/apps/derecho/23.09/spack/opt/spack/wgrib2/3.1.1/gcc/7.5.0/i5h5/bin/wgrib2"
-    nckspath="/glade/u/apps/derecho/23.09/spack/opt/spack/nco/5.2.4/gcc/12.2.0/c2uf/bin/ncks"
-    gpmetis="/glade/work/ywang/tools/bin/gpmetis"
-
-    OBS_DIR="/glade/work/ywang/observations"
-
-    hrrr_dir="/glade/derecho/scratch/ywang/tmp"
-
-    modulename="defaults"
-    WPSGEOG_PATH="/glade/work/ywang/WPS_GEOG/"
-    ;;
-* )    # Vecna at NSSL
-    ncores_static=96
-    partition_wps="batch"
-    partition_static="batch"    ; claim_cpu_static=""
-    partition_create="batch"    ; claim_cpu_create="--mem-per-cpu=128G"
-
-    npestatic=24
-
-    mach="slurm"
-    #job_exclusive_str="#SBATCH --exclude=cn11,cn14"
-    job_exclusive_str="#SBATCH --exclusive"
-    job_account_str=""
-    job_runmpexe_str="srun"
-    job_runexe_str="srun"
-    runcmd_str="srun -n 1"
-
-    modulename="env.mpas_smiol"
-    #source ${rootdir}/modules/${modulename}
-    WPSGEOG_PATH="/scratch/ywang/MPAS/WPS_GEOG/"
-    wgrib2path="/scratch/ywang/tools/gnu/bin/wgrib2"
-    nckspath="/home/yunheng.wang/tools/micromamba/envs/wofs_an/bin/ncks"
-    gpmetis="/scratch/ywang/tools/bin/gpmetis"
-    export LD_LIBRARY_PATH=/scratch/ywang/MPAS/tools/lib
-    nclpath="/scratch/software/miniconda3/bin/ncl"
-
-    OBS_DIR="/scratch/ywang/MPAS/intel/run_dirs/OBS_SEQ"
-
-    hrrr_dir="/scratch/wofuser/MODEL_DATA/HRRRE"
-
-    # Load Python Enviroment if necessary
-    if [[ " ${jobs[*]} " =~ " meshplot_py " ]]; then
-        echo    ""
-        echo -e "Enabling Python micromamba environment - ${BROWN}wofs_an${NC} ...."
-        echo    ""
-        source /home/yunheng.wang/.pythonrc  || exit $?
-    fi
-    ;;
-esac
+[[ -v args["caseconfig"] ]] && caseconfig="${args['caseconfig']}" || caseconfig="${WORKDIR}/config.${eventdate}${affix}"
 
 #
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1997,13 +1762,9 @@ hrrr_sub_lbc="postprd_mem00"         # + 2-digit member string
 
 hrrrfile0="${hrrr_dir}/${eventdate}/${hrrr_time_ics}/${hrrr_sub_ics}01/wrfnat_hrrre_newse_mem0001_01.grib2"
 
-if $dorun && [ " ${jobs[*]} " != " clean " ] && ! check_hrrr_subdir; then
-    exit $?
-fi
-
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 
-if [[ " ${jobs[*]} " =~ [[:space:]]check[bgobs]*[[:space:]]  ]]; then
+if [[ " ${jobs[*]} " =~ [[:space:]]check(bg|obs)*[[:space:]]  ]]; then
     if [[ " ${jobs[*]} " == " check " ]]; then
         checkmodel=true
         checkobs=true
@@ -2019,6 +1780,10 @@ if [[ " ${jobs[*]} " =~ [[:space:]]check[bgobs]*[[:space:]]  ]]; then
     exit 0
 fi
 
+if $dorun && [ " ${jobs[*]} " != " clean " ] && ! check_hrrr_subdir; then
+    exit $?
+fi
+
 starttime_str=$(date -u -d "${eventdate} ${eventtime}" +%Y-%m-%d_%H:%M:%S)
 
 rundir="$WORKDIR/${eventdate}"
@@ -2029,12 +1794,10 @@ fi
 
 jobname="${eventdate:4:4}"
 
-exedir="$rootdir/exec"
 #
 # write runtime configuration file
 #
 if [[ " ${jobs[*]} " != " clean " ]]; then
-    caseconfig="${WORKDIR}/${caseconfig-config.${eventdate}${affix}}"
     write_config "$caseconfig"
 fi
 

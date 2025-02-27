@@ -2,7 +2,8 @@
 
 script_dir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 top_dir=$(realpath "$(dirname "${script_dir}")")
-mpas_dir=$(dirname "${top_dir}")
+
+mpas_dir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
 
 eventdateDF=$(date -u +%Y%m%d%H%M)
 

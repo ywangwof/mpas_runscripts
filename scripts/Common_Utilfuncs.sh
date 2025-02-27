@@ -230,7 +230,7 @@ function submit_a_job {
         [MACHINE]="${machine}"
         [RUNCMD]="${job_runexe_str}"
         [RUNMPCMD]="${job_runmpexe_str}"
-        [EXEDIR]="${exedir}"
+        [EXEDIR]="${EXEDIR}"
     )
     # If the job passes in a specific value for any of the common parameters
     # it will be taken. Merge the two arrays
@@ -360,6 +360,7 @@ function check_job_status {
             while [[ ! -e $memdonefile && ! -e $donefile ]]; do
                 if compgen -G "$mywrkdir/${jobname}_${mem}_*.log" > /dev/null; then
                     # Handle occasionally machine errors on Vecna
+                    # shellcheck disable=SC2012
                     lastestfile=$(ls -t $mywrkdir/${jobname}_${mem}_*.log | head -1)
                     #if grep -q "srun: Job step aborted:" ${lastestfile}; then
                     if grep -q "slurmstepd: error:" ${lastestfile}; then

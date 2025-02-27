@@ -46,16 +46,16 @@
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
-mpasdir=$(dirname "${rootdir}")
+mpasdir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
 
 BUFR_DIR=/work/rt_obs/SBUFR
-DART_DIR=/scratch/ywang/MPAS/intel/frdd-DART
+DART_DIR=/scratch/yunheng.wang/MPAS/intel/frdd-DART
 
 DART_exec_dir=${DART_DIR}/observations/obs_converters/NCEP/prep_bufr/exe
 NML_TEMPLATE=${scpdir}/input.nml.bufrobs.template
 
 run_dir="${mpasdir}/run_dirs"
-WORK_dir=${run_dir}/OBS_SEQ/Bufr
+WORK_dir=${mpasdir}/OBS_SEQ/Bufr
 
 convert=yes
 
@@ -97,8 +97,8 @@ function usage {
 
 ########################################################################
 
-show=""
-verb=false
+#show=""
+#verb=false
 eventdate=${eventdateDF:0:8}
 eventhour=${eventdateDF:8:2}
 cmd=""
@@ -128,12 +128,12 @@ while [[ $# -gt 0 ]]; do
         -h)
             usage 0
             ;;
-        -n)
-            show="echo"
-            ;;
-        -v)
-            verb=true
-            ;;
+        #-n)
+        #    show="echo"
+        #    ;;
+        #-v)
+        #    verb=true
+        #    ;;
         -s)
             if [[ $2 =~ ^[0-9]{4}$ ]]; then
                 start_time="$2"
@@ -289,7 +289,7 @@ for((i=timebeg_s;i<=timeend_s;i+=3600)); do
         # clear any old intermediate (text) files
         #rm -f temp_obs prepqm.in prepqm.out
         #rm -f dart_log*
-        rm -rf *
+        rm -rf -- *
 
         ## MODIFY input.nml with correct date
         sedfile=$(mktemp -t "sbufr_${timestr}.sed_XXXX")
@@ -350,5 +350,8 @@ elif [[ "$cmd" == "fix" ]]; then
         echo -e "    ${RED}$filename${NC}"
     done
 fi
+
+cd "${WORK_dir}" || exit 0
+rm -rf "${WORK_dir}/work"
 
 exit 0

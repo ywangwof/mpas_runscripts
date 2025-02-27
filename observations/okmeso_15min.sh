@@ -12,22 +12,20 @@
 #
 #--------------------------------------------------------------
 
-#rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
-mpasdir=$(dirname "${rootdir}")
+mpasdir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
 
 MESO_DIR=/work/rt_obs/Mesonet
-DART_DIR=/scratch/ywang/MPAS/intel/frdd-DART
+DART_DIR=/scratch/yunheng.wang/MPAS/intel/frdd-DART
 
 TEMPLATE_FILE=${scpdir}/input.nml.mesonet
 MESOINFO_FILE=${scpdir}/geoinfo.csv
 convert_okmeso=${DART_DIR}/observations/obs_converters/ok_mesonet/work/convert_ok_mesonet
 obs_preprocess=${DART_DIR}/models/mpas_atm/work/mpas_dart_obs_preprocess
-#convert_date=/scratch/ywang/MPAS/gnu/frdd-DART/models/wrf/work/convertdate
 
 run_dir="${mpasdir}/run_dirs"
-WORK_dir=${run_dir}/OBS_SEQ/Mesonet
+WORK_dir=${mpasdir}/OBS_SEQ/Mesonet
 
 eventdateDF=$(date -u +%Y%m%d%H%M)
 
@@ -67,8 +65,8 @@ function usage {
 
 ########################################################################
 
-show=""
-verb=false
+#show=""
+#verb=false
 eventdate=${eventdateDF:0:8}
 eventhour=${eventdateDF:8:2}
 cmd=""
@@ -98,12 +96,12 @@ while [[ $# -gt 0 ]]; do
         -h)
             usage 0
             ;;
-        -n)
-            show="echo"
-            ;;
-        -v)
-            verb=true
-            ;;
+        #-n)
+        #    show="echo"
+        #    ;;
+        #-v)
+        #    verb=true
+        #    ;;
         -s)
             if [[ $2 =~ ^[0-9]{4}$ ]]; then
                 start_time="$2"
@@ -345,5 +343,8 @@ elif [[ "$cmd" == "fix" ]]; then
         echo -e "    ${RED}$filename${NC}"
     done
 fi
+
+cd ${WORK_dir} || exit $?
+rm -rf ${WORK_dir}/work
 
 exit 0

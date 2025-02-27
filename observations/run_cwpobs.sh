@@ -1,14 +1,14 @@
 #!/bin/bash
 
-#rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
-mpasdir=$(dirname "${rootdir}")
+mpasdir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
 
-srcdir=/work2/wof/realtime/OBSGEN/CLOUD_OBS
+srcdir="/work2/wof/realtime/OBSGEN/CLOUD_OBS"
+#hard_srcdir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT/OBS_SEQ.3km/CWP.nc"
 
 run_dir="${mpasdir}/run_dirs"
-destdir="${run_dir}/OBS_SEQ/CWP"
+destdir="${mpasdir}/OBS_SEQ/CWP"
 
 eventdateDF=$(date -u +%Y%m%d%H%M)
 
@@ -43,8 +43,8 @@ function usage {
 
 ########################################################################
 
-show=""
-verb=false
+#show=""
+#verb=false
 eventdate=${eventdateDF:0:8}
 eventhour=${eventdateDF:8:2}
 cmd=""
@@ -77,12 +77,12 @@ while [[ $# -gt 0 ]]; do
         -h)
             usage 0
             ;;
-        -n)
-            show="echo"
-            ;;
-        -v)
-            verb=true
-            ;;
+        #-n)
+        #    show="echo"
+        #    ;;
+        #-v)
+        #    verb=true
+        #    ;;
         -s)
             if [[ $2 =~ ^[0-9]{4}$ ]]; then
                 starthour="$2"
@@ -250,6 +250,7 @@ case $cmd in
         export MAMBA_EXE='/home/yunheng.wang/tools/micromamba/bin/micromamba';
         export MAMBA_ROOT_PREFIX='/home/yunheng.wang/tools/micromamba';
         __mamba_setup="$("$MAMBA_EXE" shell hook --shell zsh --root-prefix "$MAMBA_ROOT_PREFIX" 2> /dev/null)"
+        # shellcheck disable=SC2181
         if [ $? -eq 0 ]; then
             eval "$__mamba_setup"
         else
@@ -265,6 +266,10 @@ case $cmd in
         if [[ $nextday == true ]]; then
             python cwpobs2dart.py -i "${srcdir}/${nextdate}/d1" -o "${destdir}" -d "${nextdate}"
         fi
+        #python cwpobs2dart.py -i "${hard_srcdir}" -o "${destdir}" -d "${eventdate}"
+        #if [[ $nextday == true ]]; then
+        #    python cwpobs2dart.py -i "${hard_srcdir}" -o "${destdir}" -d "${nextdate}"
+        #fi
 
         ;;
 esac

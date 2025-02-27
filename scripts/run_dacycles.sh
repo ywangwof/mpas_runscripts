@@ -145,6 +145,167 @@ function usage {
 }
 
 ########################################################################
+#
+# Handle command line arguments
+#
+########################################################################
+
+function parse_args {
+
+    declare -Ag args
+
+    #-------------------------------------------------------------------
+    # Parse command line arguments
+    #-------------------------------------------------------------------
+
+    while [[ $# -gt 0 ]]; do
+        key="$1"
+
+        case $key in
+            -h)
+                usage 0
+                ;;
+            -n)
+                args["dorun"]=false
+                ;;
+            -v)
+                args["verb"]=1
+                ;;
+            -r)
+                args["rt_run"]=true
+                ;;
+            -k)
+                if [[ $2 =~ [012] ]]; then
+                    args["overwrite"]=$2
+                    shift
+                else
+                    echo -e "${RED}ERROR${NC}: option for ${BLUE}-k${NC} can only be [${YELLOW}0-2${NC}], but got ${PURPLE}$2${NC}."
+                    usage 1
+                fi
+                ;;
+            -c | -a | -d )
+                args["cleanoption"]="$key"
+                if [[ "$2" == "filter" || "$2" == "mpas" ]]; then
+                    args["cleanjobs"]+=" $2"
+                    shift
+                fi
+                ;;
+            -t)
+                if [[ -d $2 ]]; then
+                    args["TEMPDIR"]=$2
+                else
+                    echo -e "${RED}ERROR${NC}: Template directory ${BLUE}$2${NC} does not exist."
+                    usage 1
+                fi
+                shift
+                ;;
+            -m)
+                if [[ ${2^^} == "JET" ]]; then
+                    args["machine"]=Jet
+                elif [[ ${2^^} == "VECNA" ]]; then
+                    args["machine"]=Vecna
+                elif [[ ${2^^} == "HERCULES" ]]; then
+                    args["machine"]=Hercules
+                elif [[ ${2^^} == "CHEYENNE" || ${2^^} == "DERECHO" ]]; then
+                    args["machine"]=Cheyenne
+                else
+                    echo -e "${RED}ERROR${NC}: Unsupported machine name, got ${PURPLE}$2${NC}."
+                    usage 1
+                fi
+                shift
+                ;;
+            -f)
+                args["config_file"]="$2"
+                shift
+                ;;
+            -i)
+                if [[ $2 =~ ^[0-9]{12}$ ]]; then
+                    args["initdatetime"]=$2
+                else
+                    echo -e "${RED}ERROR${NC}: Initial time should be ${GREEN}YYYYmmddHHMM${NC}, got ${PURPLE}$2${NC}."
+                    usage 1
+                fi
+                shift
+                ;;
+            -s )
+                if [[ $2 =~ ^[0-9]{12}$ ]]; then
+                    args["eventtime"]=${2:8:4}
+                    eventhour=${2:8:2}
+                    if ((10#$eventhour < 12)); then
+                        args["eventdate"]=$(date -u -d "${2:0:8} 1 day ago" +%Y%m%d)
+                    else
+                        args["eventdate"]=${2:0:8}
+                    fi
+                elif [[ $2 =~ ^[0-9]{4}$ ]]; then
+                    args["eventtime"]="${2}"
+                else
+                    echo -e "${RED}ERROR${NC}: Start time should be in ${GREEN}YYYYmmddHHMM${NC} or ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
+                    usage 1
+                fi
+                shift
+                ;;
+            -e )
+                if [[ $2 =~ ^[0-9]{12}$ ]]; then
+                    args["enddatetime"]=$2
+                elif [[ $2 =~ ^[0-9]{4}$ ]]; then
+                    args["endhrmin"]=$2
+                else
+                    echo -e "${RED}ERROR${NC}: End time should be in ${GREEN}YYYYmmddHHMM${NC} or ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
+                    usage 1
+                fi
+                shift
+                ;;
+            -*)
+                echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
+                usage 2
+                ;;
+            filter* | mpas* | update_states* | update_bc* | clean* | obs_diag* | obs_final2nc )
+                args["jobs"]="${key//,/ }"
+                ;;
+            *)
+                if [[ $key =~ ^[0-9]{12}$ ]]; then
+                    args["enddatetime"]=${key}
+                    args["eventtime"]=${key:8:4}
+                    eventhour=${key:8:2}
+                    if ((10#$eventhour < 12)); then
+                        args["eventdate"]=$(date -u -d "${key:0:8} 1 day ago" +%Y%m%d)
+                    else
+                        args["eventdate"]=${key:0:8}
+                    fi
+                    args["endhrmin"]=${key:8:4}
+                elif [[ $key =~ ^[0-9]{8}$ ]]; then
+                    args["eventdate"]=${key}
+                elif [[ $key =~ ^[0-9]{4}$ ]]; then
+                    args["eventtime"]=${key}
+                elif [[ -d $key ]]; then
+                    WORKDIR=$key
+                    lastdir=$(basename $WORKDIR)
+                    if [[ $lastdir =~ ^[0-9]{8}$ ]]; then
+                        args["WORKDIR"]=$(dirname ${WORKDIR})
+                        args["eventdate"]=${lastdir}
+                    elif [[ $lastdir =~ ^[0-9]{12}$ ]]; then
+                        args["WORKDIR"]=$(upnlevels ${WORKDIR} 3)
+                        args["eventdate"]=${lastdir:0:8}
+                        args["eventtime"]=${lastdir:8:4}
+                        eventhour=${lastdir:8:2}
+                        if ((10#$eventhour < 12)); then
+                            args["eventdate"]=$(date -u -d "args['eventdate'] 1 day ago" +%Y%m%d)
+                        fi
+                    else
+                        args["WORKDIR"]=$WORKDIR
+                    fi
+                    #echo $WORKDIR,$eventdate,$eventtime
+                else
+                    echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}$key${NC}."
+                    usage 3
+                fi
+                ;;
+        esac
+        shift # past argument or value
+    done
+}
+
+########################################################################
 
 function run_obsmerge {
     # $1        $2          $3
@@ -180,7 +341,7 @@ function run_obsmerge {
 
     rm -fr obsflist.bufr obsflist.meso obsflist.sat obsflist.mrms obsflist.radvr obsflist obs_seq.*
 
-    obspreprocess=${exedir}/dart/mpas_dart_obs_preprocess
+    obspreprocess=${EXEDIR}/dart/mpas_dart_obs_preprocess
 
     input_base="${wrkdir}/input.nml"
 
@@ -617,10 +778,10 @@ function run_obsmerge {
             echo "cat ${obsflists[*]} to obsflist"
         fi
         cat "${obsflists[@]}" > obsflist
-        obs_found=true
+        #obs_found=true
     else
         mecho0 "${YELLOW}No valid observation was found${NC}."
-        obs_found=false
+        #obs_found=false
         return
     fi
 
@@ -654,14 +815,14 @@ EOF
     #    filename_out      = 'obs_seq.${timestr_cur}'
     # /
     #
-    if [[ $verb -eq 1 ]]; then echo "Runing ${exedir}/dart/obs_sequence_tool"; fi
-    ${runcmd_str} ${exedir}/dart/obs_sequence_tool >& ${srunout}_sequence_tool
+    if [[ $verb -eq 1 ]]; then echo "Runing ${EXEDIR}/dart/obs_sequence_tool"; fi
+    ${runcmd_str} ${EXEDIR}/dart/obs_sequence_tool >& ${srunout}_sequence_tool
 
     if [[ $? -eq 0 && -e obs_seq.${anlys_date}${anlys_time} ]]; then
         mecho0 "Observation file ${CYAN}${wrkdir##"$WORKDIR"/}/OBSDIR/obs_seq.${anlys_date}${anlys_time}${NC} created"
         mv input.nml input.nml.sequence_tool
     else
-        mecho0 "${RED}ERROR${NC}: ${runcmd_str} ${exedir}/dart/obs_sequence_tool"
+        mecho0 "${RED}ERROR${NC}: ${runcmd_str} ${EXEDIR}/dart/obs_sequence_tool"
     fi
 
     #rm -f ./obs_seq.hfmetar ./obs_seq.meso ./obs_seq.cwp ./obs_seq.mrms ./obs_seq.rad ./obs_seq.vr*
@@ -759,10 +920,12 @@ function run_filter {
     for iens in $(seq 1 $ENS_SIZE); do
         memstr=$(printf "%02d" $iens)
         if [[ $icycle -eq 0 ]]; then
-            input_file="${casedir}/init/${domname}_${memstr}.init.nc"
+            input_file_="${casedir}/init/${domname}_${memstr}.init.nc"
         else
-            input_file="$parentdir/${event_pre}/fcst_${memstr}/${domname}_${memstr}.restart.$currtime_str.nc"
+            input_file_="${parentdir}/${event_pre}/fcst_${memstr}/${domname}_${memstr}.restart.$currtime_str.nc"
         fi
+        input_file="${domname}_${memstr}.prior.$currtime_str.nc"
+        ln -sf ${input_file_} ${input_file}
 
         if [[ $dorun == true && ! -f $input_file ]]; then
             mecho0 "${RED}ERROR${NC}: File ${CYAN}$input_file${NC} not exist."
@@ -1731,7 +1894,7 @@ EOF
         [NOPART]="$npefilter"
         [JOBNAME]="filter-${eventdate:4:4}_${eventtime}"
         [CPUSPEC]="${claim_cpu_filter}"
-        [EXEDIR]="${exedir}/dart"
+        [EXEDIR]="${EXEDIR}/dart"
         [ISECONDS]="${iseconds}"
         [RUNOBS2NC]="${run_obs2nc}"
         [RUNOBSDIAG]="${run_obsdiag}"
@@ -1783,12 +1946,16 @@ function run_update_states {
     fi
 
     # Anaysis background file list, for retrieving update_states output file name
-    state_input_file=$(awk '/input_state_file_list/{print $3}' input.nml)
-    readarray -t input_file_array < ${state_input_file:1:${#state_input_file}-2}
+    #state_input_file=$(awk '/input_state_file_list/{print $3}' input.nml)
+    #readarray -t input_file_array < ${state_input_file:1:${#state_input_file}-2}
+    filter_input_file=$(awk '/input_state_file_list/{print $3}' input.nml)
+    readarray -t filter_infile_array < ${filter_input_file:1:${#filter_input_file}-2}
 
     # update_states input file list, used as update_states input file names
-    update_input_file=$(awk '/update_input_file_list/{print $3}' input.nml)
-    readarray -t update_file_array < ${update_input_file:1:${#update_input_file}-2}
+    #update_input_file=$(awk '/update_input_file_list/{print $3}' input.nml)
+    #readarray -t update_file_array < ${update_input_file:1:${#update_input_file}-2}
+    filter_output_file=$(awk '/output_state_file_list/{print $3}' input.nml)
+    readarray -t update_infile_array < ${filter_output_file:1:${#filter_output_file}-2}
 
     jobarrays=(); stateinfiles=(); stateoutfiles=()
     for iens in $(seq 1 $ENS_SIZE); do
@@ -1805,32 +1972,32 @@ function run_update_states {
             cp ../input.nml .
         fi
 
-        update_input_file_list='update_states_in.txt'
-        rm -rf ${update_input_file_list}
-        echo "../${update_file_array[$jindex]}" > ${update_input_file_list}
+        update_input_file='update_states_in.txt'
+        rm -rf ${update_input_file}
+        echo "../${update_infile_array[$jindex]}" > ${update_input_file}
 
-        update_output_file_list='update_states_out.txt'
-        rm -rf ${update_output_file_list}
+        update_output_file='update_states_out.txt'
+        rm -rf ${update_output_file}
 
-        if ${relative_path}; then
-            fn="../${input_file_array[$jindex]}"        # Use relative path
-        else
-            fn="${input_file_array[$jindex]}"           # Use absolute path
-        fi
+        fn="../${filter_infile_array[$jindex]}"
         fnbase=$(basename $fn)
-        srcfn=${fnbase/.restart./.${damode}.}
+        srcfn=${fnbase/.prior./.${damode}.}
         if [[ "$srcfn" =~ ^${domname}_[0-9]{2}.init.nc$ ]]; then     # insert time to init.nc
             srcfn="${srcfn//.nc}.${currtime_fil}.nc"
         fi
-        echo "./${srcfn}" > ${update_output_file_list}
-        sed -i "/update_input_file_list/s/=.*/= '${update_input_file_list}'/" input.nml
-        sed -i "/update_output_file_list/s/=.*/= '${update_output_file_list}'/" input.nml
+        echo "./${srcfn}" > ${update_output_file}
+        sed -i "/update_input_file_list/s/=.*/= '${update_input_file}'/" input.nml
+        sed -i "/update_output_file_list/s/=.*/= '${update_output_file}'/" input.nml
         filename_mesh="${rundir}/init/${domname}_${memstr}.init.nc"
         sed -i "/init_template_filename/s#=.*#= '${filename_mesh}'#" input.nml
 
         if [[ ! -e done.update_states_${memstr} ]]; then
             jobarrays+=("$iens")
-            stateinfiles+=("$fn")
+            if $relative_path; then
+                stateinfiles+=("$(realpath -m --relative-to=${memwrkdir} $fn)")
+            else
+                stateinfiles+=("$(realpath -m $fn)")
+            fi
             stateoutfiles+=("./$srcfn")
             if [[ $no_observation == true ]]; then
                 ln -sf $fn $srcfn
@@ -1878,7 +2045,7 @@ function run_update_states {
         [NOPART]="1"
         [JOBNAME]="updatestates_${eventtime}"
         [CPUSPEC]="${claim_cpu_update}"
-        [EXEDIR]="${exedir}/dart"
+        [EXEDIR]="${EXEDIR}/dart"
         [CPCMD]="${cpcmd}"
         [STATEINFILESSTR]="${stateinfiles[*]}"
         [STATEOUTFILESSTR]="${stateoutfiles[*]}"
@@ -1955,10 +2122,10 @@ function run_update_bc {
         mkwrkdir $memwrkdir 0
         cd $memwrkdir  || return
 
-        update_output_file_list='update_bc_inout.txt'
-        update_input_file_list='update_bc_in.txt'
-        rm -rf ${update_output_file_list}
-        rm -rf ${update_input_file_list}
+        update_output_file='update_bc_inout.txt'
+        update_input_file='update_bc_in.txt'
+        rm -rf ${update_output_file}
+        rm -rf ${update_input_file}
 
         if [[ ! -e input.nml ]]; then
             mecho0 "Should have run mpas_update_states first."
@@ -2005,10 +2172,10 @@ function run_update_bc {
 
         # Should copy the initial boundary file as a starting point.
         # it is moved to the job script for parallelization to save time.
-        echo "$lbc_filem" >> ${update_output_file_list}
-        sed -i "/update_boundary_file_list/s/=.*/= '${update_output_file_list}'/" input.nml
-        echo "${input_file_array[0]}" >> ${update_input_file_list}
-        sed -i "/update_analysis_file_list/s/=.*/= '${update_input_file_list}'/" input.nml
+        echo "$lbc_filem" >> ${update_output_file}
+        sed -i "/update_boundary_file_list/s/=.*/= '${update_output_file}'/" input.nml
+        echo "${input_file_array[0]}" >> ${update_input_file}
+        sed -i "/update_analysis_file_list/s/=.*/= '${update_input_file}'/" input.nml
 
         lbcfiles_org+=("${lbc_file1}")
         lbcfiles_next+=("${lbc_file2}")
@@ -2032,7 +2199,7 @@ function run_update_bc {
         [NOPART]="1"
         [JOBNAME]="updatebc_${eventtime}"
         [CPUSPEC]="${claim_cpu_update}"
-        [EXEDIR]="${exedir}/dart"
+        [EXEDIR]="${EXEDIR}/dart"
         [CPCMD]="${cpcmd}"
         [MPSCHEME]="${mpscheme}"
         [LBCFILEORGSTR]="${lbcfiles_org[*]}"
@@ -2120,12 +2287,7 @@ function run_add_noise {
         #
         # Create job script and submit it
         #
-        mymachine="${machine}"
         runexe_str="${job_runexe_str} -n 1"
-        if [[ -n "${python_machine}" ]]; then
-            mymachine=${python_machine}
-            runexe_str=""
-        fi
 
         jobscript="run_noise_mask.${mach}"
 
@@ -2134,7 +2296,7 @@ function run_add_noise {
             [NOPART]="1"
             [JOBNAME]="noise_mask_${eventtime}"
             [CPUSPEC]="${claim_cpu_update}"
-            [MACHINE]="${mymachine}"
+            [MACHINE]="${machine}"
             [SEQFILE]="${seqfile}"
             [INVFILE]="${invfile}"
             [WAN_PATH]="${WOFSAN_PATH}"
@@ -2147,14 +2309,7 @@ function run_add_noise {
             jobParms[NCORES]="1"
         fi
 
-        if [[ -n "${python_machine}" ]]; then    # run the job on the submitted machine
-            sed -f "$sedfile" "$TEMPDIR/$jobscript" > "$jobscript"
-            mecho0 "Running ${BROWN}${jobscript}${NC} on ${LIGHT_BLUE}${python_machine}${NC} at $(date +%H:%M:%S)..."
-            # shellcheck disable=SC2029
-            ssh ${python_machine} "cd ${wrkdir};bash ${jobscript} &> noise_mask.log" &>/dev/null
-        else
-            submit_a_job $wrkdir "noise_mask" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
-        fi
+        submit_a_job $wrkdir "noise_mask" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
     fi
 
     #------------------------------------------------------
@@ -2209,14 +2364,8 @@ function run_add_noise {
     #
     if [[ ${#jobarrays[@]} -gt 0 ]]; then
         jobscript="run_noise_pert.${mach}"
-        sedfile=$(mktemp -t pert_${eventtime}.sed_XXXX)
 
-        mymachine="${machine}"
         runexe_str="${job_runexe_str} -n 1"
-        if [[ -n "${python_machine}" ]]; then
-            mymachine=${python_machine}
-            runexe_str=""
-        fi
 
         declare -A jobParms=(
             [PARTION]="${partition_filter}"
@@ -2224,7 +2373,7 @@ function run_add_noise {
             [JOBNAME]="noist_pert_${eventtime}"
             [CPUSPEC]="${claim_cpu_update}"
             [INVFILE]="${invfile}"
-            [MACHINE]="${mymachine}"
+            [MACHINE]="${machine}"
             [SEQFILE]="${seqfile}"
             [WAN_PATH]="${WOFSAN_PATH}"
             [EVENTDAYS]="${days_secs[0]}"
@@ -2236,16 +2385,8 @@ function run_add_noise {
             jobParms[NCORES]="1"
         fi
 
-        if [[ -n "${python_machine}" ]]; then
-            sed -f "$sedfile" "$TEMPDIR/$jobscript" > "$jobscript"
-            sed -i "s/MEMARRAY/${jobarrays[*]}/" "$jobscript"
-            mecho0 "Running ${BROWN}${jobscript}${NC} on ${LIGHT_BLUE}${python_machine}${NC} at $(date +%H:%M:%S)..."
-            # shellcheck disable=SC2029
-            ssh ${python_machine} "cd ${wrkdir};bash ${jobscript} &> noise_pert.log" &>/dev/null
-        else
-            jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
-            submit_a_job $wrkdir "add_noise" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" "${jobarraystr}"
-        fi
+        jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
+        submit_a_job $wrkdir "add_noise" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" "${jobarraystr}"
     fi
 }
 
@@ -2888,7 +3029,7 @@ EOF
         [NOPART]="1"
         [JOBNAME]="obsdiag_${eventdate:4:4}"
         [CPUSPEC]="${claim_cpu_update}"
-        [EXEDIR]="${exedir}/dart"
+        [EXEDIR]="${EXEDIR}/dart"
         [EXENAME]="obs_diag"
         [PRONAME]="obs_diag"
     )
@@ -2962,8 +3103,8 @@ function run_obs_final2nc {
     #------------------------------------------------------
     # Run obs_diag for all analysis
     #------------------------------------------------------
-    #    echo "    Running ${exedir}/dart/obs_seq_to_netcdf"
-    #    ${runcmd_str} ${exedir}/dart/obs_seq_to_netcdf >& $srunout
+    #    echo "    Running ${EXEDIR}/dart/obs_seq_to_netcdf"
+    #    ${runcmd_str} ${EXEDIR}/dart/obs_seq_to_netcdf >& $srunout
     #    mv obs_epoch_001.nc obs_seq.final.${timestr_cur}.nc
 
     jobscript="run_obs_final2nc.${mach}"
@@ -2973,7 +3114,7 @@ function run_obs_final2nc {
         [NOPART]="1"
         [JOBNAME]="obsdiag_${eventdate:4:4}"
         [CPUSPEC]="${claim_cpu_update}"
-        [EXEDIR]="${exedir}/dart"
+        [EXEDIR]="${EXEDIR}/dart"
         [START_S]="${start_sec}"
         [END_S]="${end_sec}"
         [INTVL_S]="${intvl_sec}"
@@ -3225,6 +3366,8 @@ function run_clean {
         declare -A cleanmsg=(
             [mpas]="all MPAS forecast files"
             [filter]="the whole DA cycle directory"
+            [update_states]="all update_states files"
+            [update_bc]="all update_bc files"
         )
         for job in "${jobs[@]}"; do
             mecho0  "${YELLOW}WARNING${NC}: Delete ${cleanmsg[$job]} from $(date -u -d @${start_sec} +%Y%m%d_%H:%M:%S) to $(date -u -d @${end_sec} +%Y%m%d_%H:%M:%S)"
@@ -3259,7 +3402,7 @@ function run_clean {
 
             for dirname in "${jobs[@]}"; do
 
-                cd $dawrkdir || return
+                cd $dawrkdir || continue
 
                 case $dirname in
                 mpas )
@@ -3271,16 +3414,16 @@ function run_clean {
                         :       # keep lbc/{restart,init} for run MPAS free forecasts later
                     else
                         ${show} rm -f fcst_??/${domname}_??.lbc.${timestr_file}.nc
-                        ${show} rm -f fcst_??/${domname}_??.{restart,init}.${timestr_file}.nc
+                        ${show} rm -f fcst_??/${domname}_??.{restart,init,prior}.${timestr_file}.nc
                     fi
 
                     ${show} rm -f fcst_??/mpas_XYZ.pkl fcst_??/wofs_mpas_grid_kdtree.pkl fcst_??/refl_*.{txt,pkl}
                     if [[ "$coption" == "-c" ]]; then
-                        ${show} rm -f fcst_??/${domname}_??.{restart,init}.*.nc
+                        ${show} rm -f fcst_??/${domname}_??.{restart,init,prior}.*.nc
                     elif [[ "$coption" == "-a" ]]; then
                         ${show} rm -rf fcst_??
                     elif [[ "$coption" == "-d" ]]; then
-                        ${show} rm -f fcst_??/${domname}_??.{restart,init}.*.nc
+                        ${show} rm -f fcst_??/${domname}_??.{restart,init,prior}.*.nc
                         ${show} rm -rf fcst_??/done.fcst_* fcst_??/done.update_{bc,states}_*
                     fi
                     ;;
@@ -3295,6 +3438,7 @@ function run_clean {
                         elif [[ "$coption" == "-a" ]]; then
                             cd $wrkdir || return
                             ${show} rm -rf $eventtime
+                            break
                         elif [[ "$coption" == "-d" ]]; then
                             ${show} rm -f ${domname}_??.analysis
                             ${show} rm -f done.fcst done.filter done.update_bc done.update_states
@@ -3321,41 +3465,9 @@ function run_clean {
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #
-# Default Settings
+#@ MAIN entry
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#@ MAIN
-
-WORKDIR="${mpasdir}/run_dirs"
-TEMPDIR="${rootdir}/templates"
-FIXDIR="${rootdir}/fix_files"
-
-eventdate="$eventdateDF"
-eventtime="1500"
-
-verb=0
-overwrite=0
-runcmd="sbatch"
-dorun=true
-rt_run=false            # realtime run?
-
-cleanoption="clean"
-cleanjobs=()
-
-machine="Jet"
-
-myhostname=$(hostname)
-if [[ "${myhostname}" == ln? ]]; then
-    machine="Vecna"
-elif [[ "${myhostname}" == hercules* ]]; then
-    machine="Hercules"
-elif [[ "${myhostname}" == cheyenne* || "${myhostname}" == derecho* ]]; then
-    machine="Cheyenne"
-else
-    machine="Jet"
-fi
-
-jobs=(filter update_states update_bc mpas clean)
 
 source $scpdir/Common_Utilfuncs.sh || exit $?
 
@@ -3366,170 +3478,70 @@ source $scpdir/Common_Utilfuncs.sh || exit $?
 #-----------------------------------------------------------------------
 #% ARGS
 
-while [[ $# -gt 0 ]]; do
-    key="$1"
+parse_args "$@"
 
-    case $key in
-        -h)
-            usage 0
-            ;;
-        -n)
-            dorun=false
-            ;;
-        -v)
-            verb=1
-            ;;
-        -r)
-            rt_run=true
-            ;;
-        -k)
-            if [[ $2 =~ [012] ]]; then
-                overwrite=$2
-                shift
-            else
-                echo -e "${RED}ERROR${NC}: option for ${BLUE}-k${NC} can only be [${YELLOW}0-2${NC}], but got ${PURPLE}$2${NC}."
-                usage 1
-            fi
-            ;;
-        -c | -a | -d )
-            cleanoption="$key"
-            if [[ "$2" == "filter" || "$2" == "mpas" ]]; then
-                cleanjobs+=("$2")
-                shift
-            fi
-            ;;
-        -t)
-            if [[ -d $2 ]]; then
-                TEMPDIR=$2
-            else
-                echo -e "${RED}ERROR${NC}: Template directory ${BLUE}$2${NC} does not exist."
-                usage 1
-            fi
-            shift
-            ;;
-        -m)
-            if [[ ${2^^} == "JET" ]]; then
-                machine=Jet
-            elif [[ ${2^^} == "VECNA" ]]; then
-                machine=Vecna
-            elif [[ ${2^^} == "HERCULES" ]]; then
-                machine=Hercules
-            elif [[ ${2^^} == "CHEYENNE" || ${2^^} == "DERECHO" ]]; then
-                machine=Cheyenne
-            else
-                echo -e "${RED}ERROR${NC}: Unsupported machine name, got ${PURPLE}$2${NC}."
-                usage 1
-            fi
-            shift
-            ;;
-        -f)
-            config_file="$2"
-            shift
-            ;;
-        -i)
-            if [[ $2 =~ ^[0-9]{12}$ ]]; then
-                initdatetime=$2
-            else
-                echo -e "${RED}ERROR${NC}: Initial time should be ${GREEN}YYYYmmddHHMM${NC}, got ${PURPLE}$2${NC}."
-                usage 1
-            fi
-            shift
-            ;;
-        -s )
-            if [[ $2 =~ ^[0-9]{12}$ ]]; then
-                eventtime=${2:8:4}
-                eventhour=${2:8:2}
-                if [[ $((10#$eventhour)) -lt 12 ]]; then
-                    eventdate=$(date -u -d "${2:0:8} 1 day ago" +%Y%m%d)
-                else
-                    eventdate=${2:0:8}
-                fi
-            elif [[ $2 =~ ^[0-9]{4}$ ]]; then
-                eventtime="${2}"
-            else
-                echo -e "${RED}ERROR${NC}: Start time should be in ${GREEN}YYYYmmddHHMM${NC} or ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
-                usage 1
-            fi
-            shift
-            ;;
-        -e )
-            if [[ $2 =~ ^[0-9]{12}$ ]]; then
-                enddatetime=$2
-            elif [[ $2 =~ ^[0-9]{4}$ ]]; then
-                endhrmin=$2
-            else
-                echo -e "${RED}ERROR${NC}: End time should be in ${GREEN}YYYYmmddHHMM${NC} or ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
-                usage 1
-            fi
-            shift
-            ;;
-        -*)
-            echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
-            usage 2
-            ;;
-        filter* | mpas* | update_states* | update_bc* | clean* | obs_diag* | obs_final2nc )
-            #jobs=(${key//,/ })
-            IFS="," read -r -a jobs <<< "$key"
-            ;;
-        *)
-            if [[ $key =~ ^[0-9]{12}$ ]]; then
-                enddatetime=${key}
-                eventtime=${key:8:4}
-                eventhour=${key:8:2}
-                if [[ $((10#$eventhour)) -lt 12 ]]; then
-                    eventdate=$(date -u -d "${key:0:8} 1 day ago" +%Y%m%d)
-                else
-                    eventdate=${key:0:8}
-                fi
-                endhrmin=${key:8:4}
-            elif [[ $key =~ ^[0-9]{8}$ ]]; then
-                eventdate=${key}
-            elif [[ $key =~ ^[0-9]{4}$ ]]; then
-                eventtime=${key}
-            elif [[ -d $key ]]; then
-                WORKDIR=$key
-                lastdir=$(basename $WORKDIR)
-                if [[ $lastdir =~ ^[0-9]{8}$ ]]; then
-                    WORKDIR=$(dirname ${WORKDIR})
-                    eventdate=${lastdir}
-                elif [[ $lastdir =~ ^[0-9]{12}$ ]]; then
-                    WORKDIR=$(upnlevels ${WORKDIR} 3)
-                    eventdate=${lastdir:0:8}
-                    eventtime=${lastdir:8:4}
-                    eventhour=${lastdir:8:2}
-                    if [[ $eventhour -lt 12 ]]; then
-                        eventdate=$(date -u -d "$eventdate 1 day ago" +%Y%m%d)
-                    fi
-                fi
-                #echo $WORKDIR,$eventdate,$eventtime
-            else
-                echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}$key${NC}."
-                usage 3
-            fi
-            ;;
-    esac
-    shift # past argument or value
-done
+[[ -v args["verb"] ]]      && verb=${args["verb"]}           || verb=0
+[[ -v args["overwrite"] ]] && overwrite=${args["overwrite"]} || overwrite=0
+
+[[ -v args["dorun"] ]]     && dorun=${args["dorun"]}   || dorun=true
+[[ -v args["rt_run"] ]]    && rt_run=${args["rt_run"]} || rt_run=false
+
+[[ -v args["cleanoption"] ]] && cleanoption=${args["cleanoption"]}              || cleanoption="clean"
+[[ -v args["cleanjobs"] ]]   && read -r -a cleanjobs <<< "${args['cleanjobs']}" || cleanjobs=()
+
+#-----------------------------------------------------------------------
+#
+# Get jobs to run
+#
+#-----------------------------------------------------------------------
+
+[[ -v args["jobs"] ]] && read -r -a jobs <<< "${args['jobs']}" || jobs=(filter update_states update_bc mpas clean)
+
+#-----------------------------------------------------------------------
+#
+# Set up working environment
+#
+#-----------------------------------------------------------------------
+FIXDIR="${rootdir}/fix_files"
+EXEDIR="${rootdir}/exec"
+
+source "${scpdir}/Site_Runtime.sh" || exit $?
+
+#[[ ${run_trimvr} == true || ${run_addnoise} == true ]] && use_python=true || use_python=false
+setup_machine "${args['machine']}" "$rootdir" true false
+
+[[ $dorun == false ]] && runcmd="echo $runcmd"
+
+[[ -v args["WORKDIR"] ]]    && WORKDIR=${args["WORKDIR"]} || WORKDIR="${workdirDF}"
+[[ -v args["TEMPDIR"] ]]    && TEMPDIR=${args["TEMPDIR"]} || TEMPDIR="${rootdir}/templates"
+
+#-----------------------------------------------------------------------
+# Set Event Date and Time
+#-----------------------------------------------------------------------
+
+[[ -v args["eventdate"] ]] && eventdate="${args['eventdate']}" || eventdate="$eventdateDF"
+[[ -v args["eventtime"] ]] && eventtime="${args['eventtime']}" || eventtime="1500"
+[[ -v args["initdatetime"] ]] && initdatetime="${args['initdatetime']}" || initdatetime="${eventdate}1500"
 
 eventhour=${eventtime:0:2}
-if [[ $eventhour -lt 12 ]]; then
+if ((10#$eventhour < 12)); then
     startday="1 day"
 else
     startday=""
 fi
 
-if [[ -z ${initdatetime} ]]; then
-    initdatetime="${eventdate}1500"
-fi
 
-if [[ -n ${endhrmin} ]]; then
+if [[ -v args["endhrmin"] ]]; then
+    endhrmin="${args['endhrmin']}"
     endhour=${endhrmin:0:2}
-    if [[ $((10#$endhour)) -lt 12 ]]; then
+    if ((10#$endhour < 12)); then
         enddatetime=$(date -u -d "$eventdate $endhrmin 1 day" +%Y%m%d%H%M)
     else
         enddatetime=$(date -u -d "$eventdate $endhrmin" +%Y%m%d%H%M)
     fi
-elif [[ -z ${enddatetime} ]]; then
+elif [[ -v args["enddatetime"] ]]; then
+    enddatetime="${args['enddatetime']}"
+else
     enddatetime=$(date -u -d "$eventdate 03:00 1 day" +%Y%m%d%H%M)
 fi
 
@@ -3537,12 +3549,13 @@ inittime_sec=$(date -u -d "${initdatetime:0:8} ${initdatetime:8:4}" +%s)
 starttime_sec=$(date -u -d "$eventdate ${eventtime} $startday"      +%s)
 stoptime_sec=$(date -u -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
 
-#
+#-----------------------------------------------------------------------
 # read configurations that is not set from command line
-#
-if [[ -z $config_file ]]; then
-    config_file="$WORKDIR/config.${eventdate}"
-else
+#-----------------------------------------------------------------------
+
+if [[ -v args["config_file"] ]]; then
+    config_file="${args['config_file']}"
+
     if [[ -r ${config_file} ]]; then
         :
     elif [[ -e ${WORKDIR}/${config_file} ]]; then
@@ -3551,6 +3564,8 @@ else
         echo -e "${RED}ERROR${NC}: file ${CYAN}${WORKDIR}/${config_file}${NC} not exist."
         usage 1
     fi
+else
+    config_file="$WORKDIR/config.${eventdate}"
 fi
 
 if [[ ! -r ${config_file} ]]; then
@@ -3573,60 +3588,11 @@ else
     usage 1
 fi
 
-if [[ "${mpscheme}" == "mp_nssl2m" || "${mpscheme}" == "Thompson" ]]; then
+if [[ "${mpscheme}" =~ ^(mp_nssl2m|mp_thompson)$ ]]; then
     :
 else
     echo -e "${RED}ERROR${NC}: mpscheme=${PURPLE}${mpscheme}${NC} is not supported."
     usage 1
-fi
-
-#first_cycle_sec=$((inittime_sec+intvl_sec))
-#frsttime_str=$(date -u -d @${first_cycle_sec} +%Y-%m-%d_%H.%M.%S)
-#inittime_str=$(date -u -d @${inittime_sec} +%H%M)
-
-#-----------------------------------------------------------------------
-#
-# Handle machine specific configuraitons
-#
-#-----------------------------------------------------------------------
-#% PLATFORM
-
-case $machine in
-Jet )
-    modulename="build_jet_Rocky8_intel_smiol"
-
-    source /etc/profile.d/modules.sh
-    module purge
-    module use ${rootdir}/modules
-    module load ${modulename}
-    ;;
-Hercules )
-    modulename="build_hercules_intel"
-
-    module purge
-    module use ${rootdir}/modules
-    module load ${modulename}
-    ;;
-Cheyenne )
-    runcmd="qsub"
-
-    modulename="defaults"
-    ;;
-* )    # Vecna at NSSL
-    modulename="env.mpas_smiol"
-    source /usr/share/Modules/init/bash
-    source ${rootdir}/modules/${modulename} || exit $?
-
-    # Load Python Enviroment if necessary
-    if [[ ${run_trimvr} == true || ${run_addnoise} == true ]]; then
-        echo -e "Enabling Python micromamba environment - ${YELLOW}wofs_an${NC} ...."
-        source ${rootdir}/modules/env.python  || exit $?
-    fi
-    ;;
-esac
-
-if [[ $dorun == false ]]; then
-    runcmd="echo $runcmd"
 fi
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -3640,8 +3606,6 @@ rundir="$WORKDIR/${eventdate}"
 if [[ ! -d $rundir ]]; then
     mkdir -p $rundir
 fi
-
-exedir="$rootdir/exec"
 
 echo    ""
 echo -e "---- Jobs ($$) started $(date '+%m-%d_%H:%M:%S (%Z)') on host $(hostname) ----\n"

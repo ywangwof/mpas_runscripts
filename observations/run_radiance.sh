@@ -1,13 +1,13 @@
 #!/bin/bash
-#rootdir="/scratch/ywang/MPAS/mpas_runscripts"
+
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
-mpasdir=$(dirname "${rootdir}")
+mpasdir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
 
 srcdir=/work2/wof/realtime/OBSGEN/CLOUD_OBS
 
 run_dir="${mpasdir}/run_dirs"
-destdir="${run_dir}/OBS_SEQ/Radiance"
+destdir="${mpasdir}/OBS_SEQ/Radiance"
 
 eventdateDF=$(date -u +%Y%m%d%H%M)
 

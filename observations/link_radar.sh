@@ -1,14 +1,13 @@
 #!/bin/bash
 
-#rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
-mpasdir=$(dirname "${rootdir}")
+mpasdir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
 
-srcdir="/work2/wof/realtime/OBSGEN/CLOUD_OBS"
+srcdir="/work2/wof/realtime/OBSGEN/CLOUD_OBS/RT"
 
 run_dir="${mpasdir}/run_dirs"
-destdir="${run_dir}/OBS_SEQ"
+destdir="${mpasdir}/OBS_SEQ"
 
 eventdateDF=$(date -u +%Y%m%d%H%M)
 
@@ -53,7 +52,7 @@ function join_by {
 ########################################################################
 
 show=""
-verb=false
+#verb=false
 eventdate=${eventdateDF:0:8}
 eventhour=${eventdateDF:8:2}
 cmd=""
@@ -86,9 +85,9 @@ while [[ $# -gt 0 ]]; do
         -n)
             show="echo"
             ;;
-        -v)
-            verb=true
-            ;;
+        #-v)
+        #    verb=true
+        #    ;;
         -s)
             if [[ $2 =~ ^[0-9]{4}$ ]]; then
                 start_time="$2"

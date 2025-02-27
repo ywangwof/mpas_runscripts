@@ -1,18 +1,17 @@
 #!/bin/bash
+# shellcheck disable=SC2034
 
 script_dir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 top_dir=$(realpath "$(dirname "${script_dir}")")
-#top_dir="/scratch/ywang/MPAS/gnu/mpas_scripts"
-mpas_dir=$(dirname "$top_dir")
 
+mpas_dir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
 eventdateDF=$(date -u +%Y%m%d%H%M)
 
 #
 # To run MPAS-WoFS tasks interactively or using at/cron at background
 #
 
-run_dir=${mpas_dir}/run_dirs
-post_dir=${mpas_dir}/frdd-wofs-post/wofs/scripts
+post_dir=$(dirname ${top_dir})/frdd-wofs-post/wofs/scripts
 script_dir=${top_dir}/scripts
 
 host="$(hostname)"
@@ -96,91 +95,110 @@ function usage {
 }
 
 ########################################################################
-
-show=""
-verb=false
-eventdate=${eventdateDF:0:8}
-eventhour=${eventdateDF:8:2}
-task=""
-taskopt=""
-
-if ((10#$eventhour < 12)); then
-    eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
-fi
-
-runtime="$eventdate"
-
-affix=""
-endtime="0300"
-
-noscript=false
-
-#-----------------------------------------------------------------------
 #
-# Handle command line arguments (override default settings)
+# Handle command line arguments
 #
-#-----------------------------------------------------------------------
+########################################################################
+
+function parse_args {
+
+    declare -gA args
+
+    while [[ $# -gt 0 ]]; do
+        key="$1"
+
+        case $key in
+            -h)
+                usage 0
+                ;;
+            -n)
+                args["show"]="echo"
+                ;;
+            -nn)
+                args["taskopt"]="-n"
+                ;;
+            -v)
+                args["verb"]=true
+                ;;
+            -x)
+                args["affix"]="$2"
+                shift
+                ;;
+            -e)
+                args["endtime"]="$2"
+                shift
+                ;;
+            -*)
+                echo -e "${RED}ERROR${NC}: Unknown option: ${YELLOW}$key${NC}"
+                usage 2
+                ;;
+            dacycles | fcst | post | plot | diag | verif)
+                args["task"]=$key
+                ;;
+            noscript )
+                args["noscript"]=true
+                ;;
+            *)
+                if [[ $key =~ ^[0-9]{12}$ ]]; then
+                    eventhour=${key:8:2}
+                    if ((10#$eventhour < 12)); then
+                        args["eventdate"]=$(date -u -d "${key:0:8} 1 day ago" +%Y%m%d)
+                    else
+                        args["eventdate"]=${key:0:8}
+                    fi
+                    args["runtime"]="$key"
+                elif [[ $key =~ ^[0-9]{8}$ ]]; then
+                    args["eventdate"]=${key}
+                elif [[ -d $key ]]; then
+                    args["run_dir"]=$key
+                else
+                    echo ""
+                    echo -e "${RED}ERROR${NC}: unknown argument, get [${YELLOW}$key${NC}]."
+                    usage 3
+                fi
+                ;;
+        esac
+        shift # past argument or value
+    done
+}
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#
+#@ MAIN entry
+#
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #% ARGS
 
 saved_args="$*"
 
-while [[ $# -gt 0 ]]; do
-    key="$1"
+parse_args "$@"
 
-    case $key in
-        -h)
-            usage 0
-            ;;
-        -n)
-            show="echo"
-            ;;
-        -nn)
-            taskopt="-n"
-            ;;
-        -v)
-            verb=true
-            ;;
-        -x)
-            affix="$2"
-            shift
-            ;;
-        -e)
-            endtime="$2"
-            shift
-            ;;
-        -*)
-            echo -e "${RED}ERROR${NC}: Unknown option: ${YELLOW}$key${NC}"
-            usage 2
-            ;;
-        dacycles | fcst | post | plot | diag | verif)
-            task=$key
-            ;;
-        noscript )
-            noscript=true
-            ;;
-        *)
-            if [[ $key =~ ^[0-9]{12}$ ]]; then
-                eventhour=${key:8:2}
-                if [[ $((10#$eventhour)) -lt 12 ]]; then
-                    eventdate=$(date -u -d "${key:0:8} 1 day ago" +%Y%m%d)
-                else
-                    eventdate=${key:0:8}
-                fi
-                runtime="$key"
-            elif [[ $key =~ ^[0-9]{8}$ ]]; then
-                eventdate=${key}
-                runtime=${eventdate}
-            elif [[ -d $key ]]; then
-                run_dir=$key
-            else
-                echo ""
-                echo -e "${RED}ERROR${NC}: unknown argument, get [${YELLOW}$key${NC}]."
-                usage 3
-            fi
-            ;;
-    esac
-    shift # past argument or value
-done
+[[ -v args["verb"] ]]     && verb=${args["verb"]}         || verb=false
+[[ -v args["show"] ]]     && show=${args["show"]}         || show=""
+
+[[ -v args["affix"] ]]    && affix=${args["affix"]}       || affix=""
+[[ -v args["taskopt"] ]]  && taskopt=${args["taskopt"]}   || taskopt=""
+[[ -v args["task"] ]]     && task=${args["task"]}         || task=""
+
+[[ -v args["noscript"] ]] && noscript=${args["noscript"]} || noscript=false
+
+if [[ -v args["eventdate"] ]]; then
+    eventdate=${args["eventdate"]}
+else
+    eventdate=${eventdateDF:0:8}
+    eventhour=${eventdateDF:8:2}
+
+    if ((10#$eventhour < 12)); then
+        eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
+    fi
+fi
+
+[[ -v args["runtime"] ]] && runtime=${args["runtime"]} || runtime="$eventdate"
+[[ -v args["endtime"] ]] && endtime=${args["endtime"]} || endtime="0300"
+
+[[ -v args["run_dir"] ]] && run_dir=${args["run_dir"]} || run_dir="${mpas_dir}/run_dirs"
+
+########################################################################
 
 # Load Python environment as needed
 case $task in
@@ -214,9 +232,10 @@ post | plot | diag | verif)
     ;;
 esac
 
-config_file="${run_dir}/config.${eventdate}${affix}"
+#config_file="${run_dir}/config.${eventdate}${affix}"
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#% ENTRY
 
 log_dir="${run_dir}/${eventdate}"
 if [[ ! -d ${log_dir} ]]; then

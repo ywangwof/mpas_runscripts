@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC1090,SC1091,SC2086,SC2154
+# shellcheck disable=SC2317,SC1090,SC1091,SC2086,SC2154
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
@@ -155,6 +155,170 @@ function usage {
     echo "                                     -- By Y. Wang (2023.06.01)"
     echo " "
     exit "$1"
+}
+
+########################################################################
+#
+# Handle command line arguments
+#
+########################################################################
+
+function parse_args {
+
+    declare -Ag args
+
+    #-------------------------------------------------------------------
+    # Parse command line arguments
+    #-------------------------------------------------------------------
+
+    while [[ $# -gt 0 ]]; do
+        key="$1"
+
+        case $key in
+            -h)
+                usage 0
+                ;;
+            -n)
+                args["dorun"]=false
+                ;;
+            -v)
+                args["verb"]=1
+                ;;
+            -r)
+                args["rt_run"]=true
+                ;;
+            -k)
+                if [[ $2 =~ [012] ]]; then
+                    args["overwrite"]=$2
+                    shift
+                else
+                    echo -e "${RED}ERROR${NC}: option for ${BLUE}-k${NC} can only be [${YELLOW}0-2${NC}], but got ${PURPLE}$2${NC}."
+                    usage 1
+                fi
+                ;;
+            -w)
+                args["jobwait"]=1
+                ;;
+            -c | -a | -d )
+                args["cleanoption"]="$key"
+                if [[ "$2" == "mpassit" || "$2" == "mpas" ]]; then
+                    args["cleanjobs"]+=" $2"
+                    shift
+                fi
+                ;;
+            -t)
+                if [[ -d $2 ]]; then
+                    args["TEMPDIR"]=$2
+                else
+                    echo -e "${RED}ERROR${NC}: Template directory ${BLUE}$2${NC} does not exist."
+                    usage 1
+                fi
+                shift
+                ;;
+            -m)
+                if [[ ${2^^} == "JET" ]]; then
+                    args["machine"]=Jet
+                elif [[ ${2^^} == "VECNA" ]]; then
+                    args["machine"]=Vecna
+                elif [[ ${2^^} == "HERCULES" ]]; then
+                    args["machine"]=Hercules
+                elif [[ ${2^^} == "CHEYENNE" || ${2^^} == "DERECHO" ]]; then
+                    args["machine"]=Cheyenne
+                else
+                    echo -e "${RED}ERROR${NC}: Unsupported machine name, got ${PURPLE}$2${NC}."
+                    usage 1
+                fi
+                shift
+                ;;
+            -f)
+                args["config_file"]="$2"
+                shift
+                ;;
+            #-i)
+            #    if [[ $2 =~ ^[0-9]{12}$ ]]; then
+            #        args["initdatetime"]=$2
+            #    else
+            #        echo -e "${RED}ERROR${NC}: Initial time should be ${GREEN}YYYYmmddHHMM${NC}, got ${PURPLE}$2${NC}."
+            #        usage 1
+            #    fi
+            #    shift
+            #    ;;
+            -s )
+                if [[ $2 =~ ^[0-9]{12}$ ]]; then
+                    args["eventtime"]=${2:8:4}
+                    eventhour=${2:8:2}
+                    if ((10#$eventhour < 12)); then
+                        args["eventdate"]=$(date -u -d "${2:0:8} 1 day ago" +%Y%m%d)
+                    else
+                        args["eventdate"]=${2:0:8}
+                    fi
+                elif [[ $2 =~ ^[0-9]{4}$ ]]; then
+                    args["eventtime"]="${2}"
+                else
+                    echo -e "${RED}ERROR${NC}: Start time should be in ${GREEN}YYYYmmddHHMM${NC} or ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
+                    usage 1
+                fi
+                shift
+                ;;
+            -e )
+                if [[ $2 =~ ^[0-9]{12}$ ]]; then
+                    args["enddatetime"]=$2
+                elif [[ $2 =~ ^[0-9]{4}$ ]]; then
+                    args["endhrmin"]=$2
+                else
+                    echo -e "${RED}ERROR${NC}: End time should be in ${GREEN}YYYYmmddHHMM${NC} or ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
+                    usage 1
+                fi
+                shift
+                ;;
+            -*)
+                echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
+                usage 2
+                ;;
+            mpassit* | mpas* | upp* | clean* )
+                args["jobs"]="${key//,/ }"
+                ;;
+            *)
+                if [[ $key =~ ^[0-9]{12}$ ]]; then
+                    args["enddatetime"]=${key}
+                    args["eventtime"]=${key:8:4}
+                    eventhour=${key:8:2}
+                    if ((10#$eventhour < 12)); then
+                        args["eventdate"]=$(date -u -d "${key:0:8} 1 day ago" +%Y%m%d)
+                    else
+                        args["eventdate"]=${key:0:8}
+                    fi
+                    args["endhrmin"]=${key:8:4}
+                elif [[ $key =~ ^[0-9]{8}$ ]]; then
+                    args["eventdate"]=${key}
+                elif [[ $key =~ ^[0-9]{4}$ ]]; then
+                    args["eventtime"]=${key}
+                elif [[ -d $key ]]; then
+                    WORKDIR=$key
+                    lastdir=$(basename $WORKDIR)
+                    if [[ $lastdir =~ ^[0-9]{8}$ ]]; then
+                        args["WORKDIR"]=$(dirname ${WORKDIR})
+                        args["eventdate"]=${lastdir}
+                    elif [[ $lastdir =~ ^[0-9]{12}$ ]]; then
+                        args["WORKDIR"]=$(upnlevels ${WORKDIR} 3)
+                        args["eventdate"]=${lastdir:0:8}
+                        args["eventtime"]=${lastdir:8:4}
+                        eventhour=${lastdir:8:2}
+                        if ((10#$eventhour < 12)); then
+                            args["eventdate"]=$(date -u -d "${args["eventdate"]} 1 day ago" +%Y%m%d)
+                        fi
+                    else
+                        args["WORKDIR"]=$WORKDIR
+                    fi
+                    #echo $WORKDIR,$eventdate,$eventtime
+                else
+                    echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}$key${NC}."
+                    usage 3
+                fi
+                ;;
+        esac
+        shift # past argument or value
+    done
 }
 
 ########################################################################
@@ -1061,6 +1225,7 @@ EOF
             jobscript="run_upp$minstr.slurm"
             jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
 
+            # shellcheck disable=SC2034
             declare -A jobParms=(
                 [PARTION]="${partition_post}"
                 [NOPART]="$npepost"
@@ -1383,40 +1548,9 @@ function run_clean {
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #
-# Default Settings
+#@ MAIN entry
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#@ MAIN
-
-WORKDIR="${mpasdir}/run_dirs"
-TEMPDIR="${rootdir}/templates"
-FIXDIR="${rootdir}/fix_files"
-
-eventdate="$eventdateDF"
-eventtime="1700"
-
-verb=0
-overwrite=0
-jobwait=0
-runcmd="sbatch"
-dorun=true
-rt_run=false            # realtime run?
-
-cleanjobs=()
-cleanoption="clean"
-
-myhostname=$(hostname)
-if [[ "${myhostname}" == ln? ]]; then
-    machine="Vecna"
-elif [[ "${myhostname}" == hercules* ]]; then
-    machine="Hercules"
-elif [[ "${myhostname}" == cheyenne* || "${myhostname}" == derecho* ]]; then
-    machine="Cheyenne"
-else
-    machine="Jet"
-fi
-
-jobs=(mpas mpassit clean)
 
 source $scpdir/Common_Utilfuncs.sh || exit $?
 
@@ -1427,211 +1561,71 @@ source $scpdir/Common_Utilfuncs.sh || exit $?
 #-----------------------------------------------------------------------
 #% ARGS
 
-while [[ $# -gt 0 ]]
-    do
-    key="$1"
+parse_args "$@"
 
-    case $key in
-        -h)
-            usage 0
-            ;;
-        -n)
-            dorun=false
-            ;;
-        -v)
-            verb=1
-            ;;
-        -r)
-            rt_run=true
-            ;;
-        -k)
-            if [[ $2 =~ [012] ]]; then
-                overwrite=$2
-                shift
-            else
-                echo -e "${RED}ERROR${NC}: option for ${BLUE}-k${NC} can only be [${YELLOW}0-2${NC}], but got ${PURPLE}$2${NC}."
-                usage 1
-            fi
-            ;;
-        -w)
-            jobwait=1
-            ;;
-        -c | -a | -d )
-            cleanoption="$key"
-            if [[ "$2" == "mpas" || "$2" == "mpassit" ]]; then
-                cleanjobs+=("$2")
-                shift
-            fi
-            ;;
-        -t)
-            if [[ -d $2 ]]; then
-                TEMPDIR=$2
-            else
-                echo -e "${RED}ERROR${NC}: Template directory ${BLUE}$2${NC} does not exist."
-                usage 1
-            fi
-            shift
-            ;;
-        -m)
-            if [[ ${2^^} == "JET" ]]; then
-                machine=Jet
-            elif [[ ${2^^} == "VECNA" ]]; then
-                machine=Vecna
-            elif [[ ${2^^} == "HERCULES" ]]; then
-                machine=Hercules
-            elif [[ ${2^^} == "CHEYENNE" ]]; then
-                machine=Cheyenne
-            else
-                echo -e "${RED}ERROR${NC}: Unsupported machine name, got ${PURPLE}$2${NC}."
-                usage 1
-            fi
-            shift
-            ;;
-        -i)
-            if [[ $2 =~ ^[0-9]{12}$ ]]; then
-                initdatetime=$2
-            else
-                echo -e "${RED}ERROR${NC}: Initial time should be ${GREEN}YYYYmmddHHMM${NC}, got ${PURPLE}$2${NC}."
-                usage 1
-            fi
-            shift
-            ;;
-        -s )
-            if [[ $2 =~ ^[0-9]{12}$ ]]; then
-                eventtime=${2:8:4}
-                eventhour=${2:8:2}
-                if [[ $((10#$eventhour)) -lt 12 ]]; then
-                    eventdate=$(date -u -d "${2:0:8} 1 day ago" +%Y%m%d)
-                else
-                    eventdate=${2:0:8}
-                fi
-            elif [[ $2 =~ ^[0-9]{4}$ ]]; then
-                eventtime=${2}
-            else
-                echo -e "${RED}ERROR${NC}: Start time should be in ${GREEN}YYYYmmddHHMM${NC} or ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
-                usage 1
-            fi
-            shift
-            ;;
-        -e )
-            if [[ $2 =~ ^[0-9]{12}$ ]]; then
-                enddatetime=$2
-            elif [[ $2 =~ ^[0-9]{4}$ ]]; then
-                endhrmin=$2
-            else
-                echo -e "${RED}ERROR${NC}: End time should be in ${GREEN}YYYYmmddHHMM${NC} or ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
-                usage 1
-            fi
-            shift
-            ;;
-        -f)
-            config_file="$2"
-            shift
-            ;;
-        -*)
-            echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
-            usage 2
-            ;;
-        mpassit* | mpas* | upp* | clean* )
-            #jobs=(${key//,/ })
-            IFS="," read -r -a jobs <<< "$key"
-            ;;
-        *)
-            if [[ $key =~ ^[0-9]{12}$ ]]; then
-                enddatetime=${key}
-                eventtime=${key:8:4}
-                eventhour=${key:8:2}
-                if [[ $((10#$eventhour)) -lt 12 ]]; then
-                    eventdate=$(date -u -d "${key:0:8} 1 day ago" +%Y%m%d)
-                else
-                    eventdate=${key:0:8}
-                fi
-                endhrmin=${key:8:4}
-            elif [[ $key =~ ^[0-9]{8}$ ]]; then
-                eventdate=${key}
-            elif [[ $key =~ ^[0-9]{4}$ ]]; then
-                eventtime=${key}
-            elif [[ -d $key ]]; then
-                WORKDIR=$key
-                lastdir=$(basename $WORKDIR)
-                if [[ $lastdir =~ ^[0-9]{8}$ ]]; then
-                    WORKDIR=$(dirname ${WORKDIR})
-                    eventdate=${lastdir}
-                elif [[ $lastdir =~ ^[0-9]{12}$ ]]; then
-                    WORKDIR=$(upnlevels ${WORKDIR} 3)
-                    eventdate=${lastdir:0:8}
-                    eventtime=${lastdir:8:4}
-                    eventhour=${lastdir:8:2}
-                    if [[ $eventhour -lt 12 ]]; then
-                        eventdate=$(date -u -d "$eventdate 1 day ago" +%Y%m%d)
-                    fi
-                fi
-                #echo $WORKDIR,$eventdate,$eventtime
-            else
-                echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}$key${NC}."
-                usage 3
-            fi
-            ;;
-    esac
-    shift # past argument or value
-done
+[[ -v args["verb"] ]]        && verb=${args["verb"]}           || verb=0
+[[ -v args["overwrite"] ]]   && overwrite=${args["overwrite"]} || overwrite=0
+
+[[ -v args["dorun"] ]]       && dorun=${args["dorun"]}         || dorun=true
+[[ -v args["rt_run"] ]]      && rt_run=${args["rt_run"]}       || rt_run=false  # realtime run?
+[[ -v args["jobwait"] ]]     && jobwait=${args["jobwait"]}     || jobwait=0
+
+[[ -v args["cleanoption"] ]] && cleanoption=${args["cleanoption"]}              || cleanoption="clean"
+[[ -v args["cleanjobs"] ]]   && read -r -a cleanjobs <<< "${args['cleanjobs']}" || cleanjobs=()
 
 #-----------------------------------------------------------------------
 #
-# Handle machine specific configuraitons
+# Get jobs to run
 #
 #-----------------------------------------------------------------------
-#% PLATFORM
 
-case $machine in
-Jet )
-    modulename="build_jet_Rocky8_intel_smiol"
+[[ -v args["jobs"] ]] && read -r -a jobs <<< "${args['jobs']}" || jobs=(mpas mpassit clean)
 
-    source /etc/profile.d/modules.sh
-    module purge
-    module use ${rootdir}/modules
-    module load $modulename
-    ;;
-Hercules )
-    modulename="build_hercules_intel"
+#-----------------------------------------------------------------------
+#
+# Set up working environment
+#
+#-----------------------------------------------------------------------
+FIXDIR="${rootdir}/fix_files"
+# shellcheck disable=SC2034
+EXEDIR="${rootdir}/exec"                                                # use inside submit_a_job
 
-    module purge
-    module use ${rootdir}/modules
-    module load $modulename
-    ;;
-Cheyenne )
-    runcmd="qsub"
-    modulename="defaults"
-    ;;
-* )    # Vecna at NSSL
-    modulename="env.mpas_smiol"
-    source ${rootdir}/modules/${modulename} || exit $?
-    ;;
-esac
+source "${scpdir}/Site_Runtime.sh" || exit $?
 
-if [[ $dorun == false ]]; then
-    runcmd="echo $runcmd"
-fi
+setup_machine "${args['machine']}" "$rootdir" false false
+
+[[ $dorun == false ]] && runcmd="echo $runcmd"
+
+[[ -v args["WORKDIR"] ]] && WORKDIR=${args["WORKDIR"]} || WORKDIR="${workdirDF}"
+[[ -v args["TEMPDIR"] ]] && TEMPDIR=${args["TEMPDIR"]} || TEMPDIR="${rootdir}/templates"
+
+#-----------------------------------------------------------------------
+#
+# Set Event Date and Time
+#
+#-----------------------------------------------------------------------
+[[ -v args["eventdate"] ]] && eventdate="${args['eventdate']}" || eventdate="$eventdateDF"
+[[ -v args["eventtime"] ]] && eventtime="${args['eventtime']}" || eventtime="1700"
+#[[ -v args["initdatetime"] ]] && initdatetime="${args['initdatetime']}" || initdatetime="${eventdate}1700"
 
 eventhour=${eventtime:0:2}
-if [[ $((10#$eventhour)) -lt 12 ]]; then
+if ((10#$eventhour < 12)); then
     startday="1 day"
 else
     startday=""
 fi
 
-if [[ -z ${initdatetime} ]]; then
-    initdatetime="${eventdate}1500"
-fi
-
-if [[ -n ${endhrmin} ]]; then
+if [[ -v args["endhrmin"] ]]; then
+    endhrmin="${args['endhrmin']}"
     endhour=${endhrmin:0:2}
-    if [[ $((10#$endhour)) -lt 12 ]]; then
+    if ((10#$endhour < 12)); then
         enddatetime=$(date -u -d "$eventdate $endhrmin 1 day" +%Y%m%d%H%M)
     else
         enddatetime=$(date -u -d "$eventdate $endhrmin" +%Y%m%d%H%M)
     fi
-elif [[ -z ${enddatetime} ]]; then
+elif [[ -v args["enddatetime"] ]]; then
+    enddatetime="${args['enddatetime']}"
+else
     enddatetime=$(date -u -d "$eventdate 03:00 1 day" +%Y%m%d%H%M)
 fi
 
@@ -1639,18 +1633,24 @@ fi
 starttime_sec=$(date -u -d "${eventdate} ${eventtime} $startday"     +%s)
 stoptime_sec=$(date  -u -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
 
+#-----------------------------------------------------------------------
 #
 # read configurations that is not set from command line
 #
-if [[ -z $config_file ]]; then
-    config_file="$WORKDIR/config.${eventdate}"
-else
-    if [[ -e ${WORKDIR}/${config_file} ]]; then
+#-----------------------------------------------------------------------
+if [[  -v args["config_file"] ]]; then
+    config_file="${args['config_file']}"
+
+    if [[ -r ${config_file} ]]; then
+        :
+    elif [[ -e ${WORKDIR}/${config_file} ]]; then
         config_file="${WORKDIR}/${config_file}"
     else
         echo -e "${RED}ERROR${NC}: file ${CYAN}${config_file}${NC} not exist."
         usage 1
     fi
+else
+    config_file="$WORKDIR/config.${eventdate}"
 fi
 
 if [[ ! -r ${config_file} ]]; then
@@ -1675,13 +1675,12 @@ else
     usage 1
 fi
 
-if [[ "${mpscheme}" == "mp_nssl2m" || "${mpscheme}" == "Thompson" ]]; then
+if [[ "${mpscheme}" =~ ^(mp_nssl2m|mp_thompson)$ ]]; then
     :
 else
     echo -e "${RED}ERROR${NC}: mpscheme=${mpscheme} is not supported."
     usage 1
 fi
-
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
@@ -1694,9 +1693,6 @@ rundir="$WORKDIR/${eventdate}"
 if [[ ! -d $rundir ]]; then
     mkdir -p $rundir
 fi
-
-# shellcheck disable=SC2034
-exedir="$rootdir/exec"        # will be used in submit_a_job
 
 echo    "---- Jobs ($$) started $(date '+%m-%d_%H:%M:%S (%Z)') on host $(hostname) ----"
 echo -e "  Event date : ${GREEN}$eventdate${NC} ${YELLOW}${eventtime}${NC} --> ${LIGHT_BLUE}${enddatetime:0:8}${NC} ${YELLOW}${enddatetime:8:4}${NC}"
