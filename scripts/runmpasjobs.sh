@@ -4,6 +4,8 @@
 script_dir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 top_dir=$(realpath "$(dirname "${script_dir}")")
 
+up_dir=$(dirname $top_dir)
+
 mpas_dir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
 eventdateDF=$(date -u +%Y%m%d%H%M)
 
@@ -11,7 +13,7 @@ eventdateDF=$(date -u +%Y%m%d%H%M)
 # To run MPAS-WoFS tasks interactively or using at/cron at background
 #
 
-post_dir=$(dirname ${top_dir})/frdd-wofs-post/wofs/scripts
+post_dir=${up_dir}/frdd-wofs-post/wofs/scripts
 script_dir=${top_dir}/scripts
 
 host="$(hostname)"

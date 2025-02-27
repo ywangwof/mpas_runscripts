@@ -1946,14 +1946,10 @@ function run_update_states {
     fi
 
     # Anaysis background file list, for retrieving update_states output file name
-    #state_input_file=$(awk '/input_state_file_list/{print $3}' input.nml)
-    #readarray -t input_file_array < ${state_input_file:1:${#state_input_file}-2}
     filter_input_file=$(awk '/input_state_file_list/{print $3}' input.nml)
     readarray -t filter_infile_array < ${filter_input_file:1:${#filter_input_file}-2}
 
     # update_states input file list, used as update_states input file names
-    #update_input_file=$(awk '/update_input_file_list/{print $3}' input.nml)
-    #readarray -t update_file_array < ${update_input_file:1:${#update_input_file}-2}
     filter_output_file=$(awk '/output_state_file_list/{print $3}' input.nml)
     readarray -t update_infile_array < ${filter_output_file:1:${#filter_output_file}-2}
 
@@ -3173,10 +3169,10 @@ function run_mpassit {
     # Prepare MPASSIT working files
     #
     if [[ ${#fcst_minutes[@]} -gt 0 ]]; then
-        if [[ "${mpscheme}" == "Thompson" ]]; then
-            fileappend="THOM"
-        else
+        if [[ "${mpscheme}" == "mp_nssl2m" ]]; then
             fileappend="NSSL"
+        else
+            fileappend="THOM"
         fi
 
         jobarrays=()
