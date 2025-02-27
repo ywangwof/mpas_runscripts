@@ -38,6 +38,8 @@ function setup_machine {
 
     runcmd="sbatch"
 
+    echo -e "\nLoading  working environment on ${LIGHT_RED}${machine}${NC} ...."
+
     case $machine in
     Jet )
         modulename="build_jet_Rocky8_intel_smiol"
@@ -143,7 +145,7 @@ function setup_machine {
         # Vecna at NSSL
         modulename="env.mpas_smiol"
         source /usr/share/Modules/init/bash
-        source ${root_dir}/modules/${modulename} || exit $?
+        source ${root_dir}/modules/${modulename} > /dev/null || exit $?
 
         # Load Python Enviroment if necessary
         if [[ ${use_python} == true ]]; then

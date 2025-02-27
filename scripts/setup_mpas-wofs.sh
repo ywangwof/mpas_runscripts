@@ -98,8 +98,9 @@ function usage {
     echo "              -v              Verbose mode"
     echo "              -k  [0,1,2]     Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
     echo "                              Default is 0 for ungrib, mpassit, upp and 1 for others"
-    echo "              -t  DIR         Template directory for runtime files"
     echo "              -m  Machine     Machine name to run on, [Jet, Derecho, Vecna]."
+    echo "              --template/--fix/--exec  DIR"
+    echo "                              Directory for runtime files, job template/fixed static file/executable programs."
     echo "              -a  wof         Account name for job submission."
     echo "              -M  init        DA cycles mode, either init or restart. default: init"
     echo "              -c  lat,lon     Domain central lat/lon, for example, 43.33296,-84.24593. Program \"geogrid\" requires them."
@@ -111,10 +112,11 @@ function usage {
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt = ${eventdate}"
-    echo "              rootdir = $rootdir"
+    echo "              rootdir = ${rootdir}"
     echo "              WORKDIR = ${WORKDIR}"
-    echo "              TEMPDIR = $rootdir/templates"
-    echo "              FIXDIR  = $rootdir/fix_files"
+    echo "              TEMPDIR = ${rootdir}/templates"
+    echo "              FIXDIR  = ${rootdir}/fix_files"
+    echo "              EXEDIR  = ${rootdir}/exec"
     echo " "
     echo "                                     -- By Y. Wang (2023.05.24)"
     echo " "
@@ -157,11 +159,29 @@ function parse_args {
                     usage 1
                 fi
                 ;;
-            -t)
+            --template)
                 if [[ -d $2 ]]; then
                     args["TEMPDIR"]=$2
                 else
                     echo -e "${RED}ERROR${NC}: Template directory ${BLUE}$2${NC} does not exist."
+                    usage 1
+                fi
+                shift
+                ;;
+            --fix)
+                if [[ -d $2 ]]; then
+                    args["FIXDIR"]=$2
+                else
+                    echo -e "${RED}ERROR${NC}: Fixed file directory ${BLUE}$2${NC} does not exist."
+                    usage 1
+                fi
+                shift
+                ;;
+            --exec)
+                if [[ -d $2 ]]; then
+                    args["EXEDIR"]=$2
+                else
+                    echo -e "${RED}ERROR${NC}: Program directory ${BLUE}$2${NC} does not exist."
                     usage 1
                 fi
                 shift
@@ -1275,6 +1295,10 @@ function write_config {
 
     WPSGEOG_PATH="${WPSGEOG_PATH}"
 
+    FIXDIR="${FIXDIR}"
+    TEMPDIR="${TEMPDIR}"
+    EXEDIR="${EXEDIR}"
+
     wgrib2path="${wgrib2path}"
     gpmetis="${gpmetis}"
 
@@ -1700,10 +1724,6 @@ parse_args "$@"
 #
 #-----------------------------------------------------------------------
 
-FIXDIR="${rootdir}/fix_files"
-# shellcheck disable=SC2034
-EXEDIR="${rootdir}/exec"                                                # use inside submit_a_job
-
 source "${scpdir}/Site_Runtime.sh" || exit $?
 
 setup_machine "${args['machine']}" "$rootdir" true true
@@ -1712,7 +1732,8 @@ setup_machine "${args['machine']}" "$rootdir" true true
 
 [[ -v args["WORKDIR"] ]] && WORKDIR=${args["WORKDIR"]} || WORKDIR="${workdirDF}"
 [[ -v args["TEMPDIR"] ]] && TEMPDIR=${args["TEMPDIR"]} || TEMPDIR="${rootdir}/templates"
-
+[[ -v args["FIXDIR"] ]]  && FIXDIR=${args["FIXDIR"]}   || FIXDIR="${rootdir}/fix_files"
+[[ -v args["EXEDIR"] ]]  && EXEDIR=${args["EXEDIR"]}   || EXEDIR="${rootdir}/exec"
 
 [[ -v args["level_file"] ]] && fixed_level="${args['level_file']}"  || fixed_level="${FIXDIR}/L60.txt"
 
@@ -1734,11 +1755,16 @@ setup_machine "${args['machine']}" "$rootdir" true true
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
 
-echo -e "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----\n"
-echo -e "  Event date : ${GREEN}$eventdate${NC} ${YELLOW}${eventtime}${NC}"
-echo -e "  Root    dir: $rootdir${GREEN}/exec${NC}|${PURPLE}/templates${NC}|${DARK}/fix_files${NC}|${BROWN}/scripts${NC}"
-echo -e "  Working dir: $WORKDIR${LIGHT_BLUE}/${eventdate}${NC}"
-echo -ne "  Domain name: ${PURPLE}$domname${NC};  MP scheme: ${BROWN}mp_nssl2m${NC}"
+echo    ""
+echo -e "---- Jobs (${YELLOW}$$${NC}) started at $(date +'%m-%d %H:%M:%S (%Z)') on host ${LIGHT_RED}$(hostname)${NC} ----\n"
+echo -e "  Event  date: ${WHITE}$eventdate${NC} ${YELLOW}${eventtime}${NC}"
+echo -e "  ROOT    dir: ${rootdir}${BROWN}/scripts${NC}"
+echo -e "  TEMP    dir: ${PURPLE}${TEMPDIR}${NC}"
+echo -e "  FIXED   dir: ${DARK}${FIXDIR}${NC}"
+echo -e "  EXEC    dir: ${GREEN}${EXEDIR}${NC}"
+echo -e "  Working dir: ${WHITE}${WORKDIR}${LIGHT_BLUE}/${eventdate}${NC}"
+echo -ne "  Domain name: ${RED}$domname${NC};  MP scheme: ${CYAN}mp_nssl2m${NC}"
+
 if [[ -n ${cen_lat} || -n ${cen_lon} ]]; then
     echo -e "; Domain Center: ${WHITE}${cen_lat}${NC},${WHITE}${cen_lon}${NC}"
 else
@@ -1833,7 +1859,7 @@ for job in "${jobs[@]}"; do
 done
 
 echo " "
-echo "==== $0 done $(date +%m-%d_%H:%M:%S) ===="
+echo "==== $0 done $(date +'%m-%d %H:%M:%S (%Z)') ===="
 echo " "
 
 exit 0

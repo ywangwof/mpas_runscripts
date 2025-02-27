@@ -1,12 +1,13 @@
 #!/bin/bash
 # shellcheck disable=SC2317,SC1090,SC1091,SC2086,SC2154
 
-#rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
-mpasdir=$(dirname "${rootdir}")
+
+mpasdir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
 
 eventdateDF=$(date -u +%Y%m%d)
+eventtimeDF="1500"
 
 #-----------------------------------------------------------------------
 #
@@ -105,7 +106,7 @@ function usage {
     echo "    PURPOSE: Run MPAS-WOFS DA cycles."
     echo " "
     echo "    DATETIME - Case date and time in YYYYmmdd/YYYYmmddHHMM, Default eventdate is ${eventdateDF}."
-    echo "               YYYYmmdd:     run all cycles from $eventtime to 0300. Or use options \"-s\" & \"-e\" to specify cycles."
+    echo "               YYYYmmdd:     run all cycles from $eventtimeDF to 0300 UTC. Or use options \"-s\" & \"-e\" to specify cycles."
     echo "               YYYYmmddHHMM: run this DA cycle only."
     echo "    WORKDIR  - Run Directory"
     echo "    JOBS     - One or more jobs from [filter,update_states,update_bc,mpas,obs_diag,obs_final2nc,clean]"
@@ -117,27 +118,24 @@ function usage {
     echo "              -v                  Verbose mode"
     echo "              -k  [0,1,2]         Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
     echo "                                  Default is 0 for ungrib, mpassit, upp and 1 for others"
+    echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
     echo "              -a/-c/-d            Works with the Clean command only, accept one argument {filter,mpas} or nothing."
     echo "                                  Default (Nothing): Deletes output files (log/standard output, etc.) only."
     echo "                                  -a: Deep clean of the whole working directory"
     echo "                                  -c: Delete output (netCDF) files from the specific task but keep done files."
     echo "                                  -d: Delete all done files"
-    echo "              -t  DIR             Template directory for runtime files"
-    echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
-    echo "              -i  YYYYmmddHHMM    Initial time, default: same as start time from the command line argument"
-    echo "              -s  YYYYmmddHHMM    Start date & time of the DA cycles"
-    echo "                  HHMM            Start time of the DA cycles"
-    echo "              -e  YYYYmmddHHMM    End date & time of the DA cycles"
-    echo "                  HHMM            End time of the DA cycles"
-    echo "              -r                  Realtime run, will wait for observations, default: retrospective run"
+    echo "              -i  YYYYmmddHHMM    Initial time, default: ${eventdateDF}$eventtimeDF UTC."
+    echo "              -s  YYYYmmddHHMM    Start date & time of the DA cycles."
+    echo "                  HHMM            Start time of the DA cycles."
+    echo "              -e  YYYYmmddHHMM    End date & time of the DA cycles."
+    echo "                  HHMM            End time of the DA cycles."
+    echo "              -r                  Realtime run, will wait for observations, default: research mode (no waiting)."
     echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt = $eventdateDF"
     echo "              rootdir = $rootdir"
     echo "              WORKDIR = $mpasdir/run_dirs"
-    echo "              TEMPDIR = $rootdir/templates"
-    echo "              FIXDIR  = $rootdir/fix_files"
     echo " "
     echo "                                     -- By Y. Wang (2023.05.31)"
     echo " "
@@ -189,15 +187,6 @@ function parse_args {
                     args["cleanjobs"]+=" $2"
                     shift
                 fi
-                ;;
-            -t)
-                if [[ -d $2 ]]; then
-                    args["TEMPDIR"]=$2
-                else
-                    echo -e "${RED}ERROR${NC}: Template directory ${BLUE}$2${NC} does not exist."
-                    usage 1
-                fi
-                shift
                 ;;
             -m)
                 if [[ ${2^^} == "JET" ]]; then
@@ -1892,7 +1881,7 @@ EOF
     declare -A jobParms=(
         [PARTION]="${partition_filter}"
         [NOPART]="$npefilter"
-        [JOBNAME]="filter-${eventdate:4:4}_${eventtime}"
+        [JOBNAME]="filter-${jobname}_${eventtime}"
         [CPUSPEC]="${claim_cpu_filter}"
         [EXEDIR]="${EXEDIR}/dart"
         [ISECONDS]="${iseconds}"
@@ -2753,7 +2742,7 @@ EOF
         [PARTION]="${partition_fcst}"
         [NOPART]="$npefcst"
         [NNODES]="${nnodes_fcst}"
-        [JOBNAME]="mfrd-${eventdate:4:4}_${eventtime}"
+        [JOBNAME]="mfrd-${jobname}_${eventtime}"
         [CPUSPEC]="${claim_cpu_fcst}"
         [CLAIMTIME]="${claim_time_fcst}"
     )
@@ -3049,7 +3038,7 @@ EOF
     declare -A jobParms=(
         [PARTION]="${partition_filter}"
         [NOPART]="1"
-        [JOBNAME]="obsdiag_${eventdate:4:4}"
+        [JOBNAME]="obsdiag_${jobname}"
         [CPUSPEC]="${claim_cpu_update}"
         [EXEDIR]="${EXEDIR}/dart"
         [EXENAME]="obs_diag"
@@ -3134,7 +3123,7 @@ function run_obs_final2nc {
     declare -A jobParms=(
         [PARTION]="${partition_filter}"
         [NOPART]="1"
-        [JOBNAME]="obsdiag_${eventdate:4:4}"
+        [JOBNAME]="obsdiag_${jobname}"
         [CPUSPEC]="${claim_cpu_update}"
         [EXEDIR]="${EXEDIR}/dart"
         [START_S]="${start_sec}"
@@ -3524,8 +3513,6 @@ parse_args "$@"
 # Set up working environment
 #
 #-----------------------------------------------------------------------
-FIXDIR="${rootdir}/fix_files"
-EXEDIR="${rootdir}/exec"
 
 source "${scpdir}/Site_Runtime.sh" || exit $?
 
@@ -3534,8 +3521,7 @@ setup_machine "${args['machine']}" "$rootdir" true false
 
 [[ $dorun == false ]] && runcmd="echo $runcmd"
 
-[[ -v args["WORKDIR"] ]]    && WORKDIR=${args["WORKDIR"]} || WORKDIR="${workdirDF}"
-[[ -v args["TEMPDIR"] ]]    && TEMPDIR=${args["TEMPDIR"]} || TEMPDIR="${rootdir}/templates"
+[[ -v args["WORKDIR"] ]] && WORKDIR=${args["WORKDIR"]} || WORKDIR="${workdirDF}"
 
 #-----------------------------------------------------------------------
 # Set Event Date and Time
@@ -3595,7 +3581,7 @@ if [[ ! -r ${config_file} ]]; then
     echo -e "       Please run ${GREEN}setup_mpas-wofs.sh${NC} first."
     exit 2
 else
-    echo -e "Reading case (${GREEN}${eventdate}${NC}) configuration file: ${CYAN}${config_file}${NC} ...."
+    echo -e "Reading case configuration file: ${CYAN}${config_file}${NC} ...."
 fi
 readconf ${config_file} COMMON MPAS_OPTIONS dacycles || exit $?
 # get ENS_SIZE, time_step, EXTINVL, ADAPTIVE_INF, update_in_place
@@ -3630,12 +3616,17 @@ if [[ ! -d $rundir ]]; then
 fi
 
 echo    ""
-echo -e "---- Jobs ($$) started $(date '+%m-%d_%H:%M:%S (%Z)') on host $(hostname) ----\n"
-echo -e "  Event date : ${GREEN}$eventdate${NC} ${YELLOW}${eventtime}${NC} --> ${LIGHT_BLUE}${enddatetime:0:8}${NC} ${YELLOW}${enddatetime:8:4}${NC}"
-echo -e "  Root    dir: $rootdir${GREEN}/exec${NC}|${PURPLE}/templates${NC}|${DARK}/fix_files${NC}|${BROWN}/scripts${NC}"
-echo -e "  Working dir: $WORKDIR${LIGHT_BLUE}/${eventdate}/dacycles${daffix}${NC}"
-echo -e "  Domain name: ${PURPLE}$domname${NC};  MP scheme: ${BROWN}${mpscheme}${NC}"
+echo -e "---- Jobs (${YELLOW}$$${NC}) started at $(date +'%m-%d %H:%M:%S (%Z)') on host ${LIGHT_RED}$(hostname)${NC} ----\n"
+echo -e "  Event  date: ${WHITE}$eventdate${NC} ${YELLOW}${eventtime}${NC} --> ${WHITE}${enddatetime:0:8}${NC} ${YELLOW}${enddatetime:8:4}${NC}"
+echo -e "  ROOT    dir: ${rootdir}${BROWN}/scripts${NC}"
+echo -e "  TEMP    dir: ${PURPLE}${TEMPDIR}${NC}"
+echo -e "  FIXED   dir: ${DARK}${FIXDIR}${NC}"
+echo -e "  EXEC    dir: ${GREEN}${EXEDIR}${NC}"
+echo -e "  Working dir: ${WHITE}${WORKDIR}${LIGHT_BLUE}/${eventdate}/dacycles${daffix}${NC}"
+echo -e "  Domain name: ${RED}$domname${NC};  MP scheme: ${CYAN}${mpscheme}${NC}"
 echo    " "
+
+jobname="${eventdate:4:4}"
 
 RSTINVL=${intvl_sec}
 if [[ ${outwrf} == true ]]; then
@@ -3669,6 +3660,6 @@ elif [[ " ${jobs[*]} " =~ " clean " ]]; then
     run_clean "${starttime_sec}" "${stoptime_sec}" "${cleanoption}" "${cleanjobs[*]}"
 fi
 
-echo -e "\n==== Jobs done $(date '+%m-%d_%H:%M:%S (%Z)') ====\n"
+echo -e "\n==== Jobs done $(date +'%m-%d %H:%M:%S (%Z)') ====\n"
 
 exit 0

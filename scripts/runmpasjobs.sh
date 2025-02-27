@@ -260,7 +260,8 @@ if [[ -z $show ]]; then                 # Actually run the task
     fi
 fi
 
-echo -e "${YELLOW}===${NC} ${PURPLE}$(date +%Y%m%d_%H:%M:%S)${NC} - ${BROWN}$0 ${saved_args}${NC} ${YELLOW}===${NC}"
+echo -e "\n=== === === === ===\n"
+echo -e "${PURPLE}$(date +'%Y%m%d %H:%M:%S')${NC} - ${BROWN}$0 ${saved_args}${NC}"
 
 case $task in
 #1. dacycles
@@ -289,7 +290,7 @@ post )
         #fi
 
         if ((10#$endtime < 1200)); then
-            enddate=$(date -d "$eventdate 1 day" +%Y%m%d)
+            enddate=$(date -u -d "$eventdate 1 day" +%Y%m%d)
         else
             enddate=${eventdate}
         fi
@@ -368,9 +369,9 @@ diag )
 esac
 
 if [ -t 1 ]; then # "interactive"
-    echo -e "\n${DARK}Interactivly running: ${BROWN}${task}${NC} ${LIGHT_BLUE}${runtime}${NC} from ${YELLOW}$(pwd)${NC} at ${PURPLE}$(date '+%Y%m%d_%H:%M:%S(%Z)')${NC}\n"
+    echo -e "\n${DARK}Interactivly running: ${BROWN}${task}${NC} from ${YELLOW}$(pwd)${NC} at ${PURPLE}$(date +'%Y%m%d_%H:%M:%S(%Z)')${NC}\n"
 else
-    echo -e "\n${DARK}Background running: ${BROWN}${task}${NC} ${LIGHT_BLUE}${runtime}${NC} from ${BLYELLOWUE}$(pwd)${NC} at ${PURPLE}$(date '+%Y%m%d_%H:%M:%S(%Z)')${NC}\n"
+    echo -e "\n${PURPLE}$(date +'%Y%m%d %H:%M:%S(%Z)')${NC} - ${DARK}Background running: ${BROWN}${task}${NC} from ${BLYELLOWUE}$(pwd)${NC}\n"
 fi
 
 if [[ -z ${show} ]]; then echo -e "${GREEN}${cmds[*]}${NC}"; fi

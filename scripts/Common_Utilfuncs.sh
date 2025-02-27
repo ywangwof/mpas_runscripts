@@ -685,7 +685,7 @@ function readconf {
 
     done < $configfile
 
-    mecho0 "Reading in sections are: ${YELLOW}${read_sections[*]}${NC}"
+    mecho0 "Reading in sections are - ${YELLOW}${read_sections[*]}${NC}."
 }
 
 ########################################################################
