@@ -66,7 +66,6 @@ function usage {
     echo "              -k  [0,1,2]         Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
     echo "                                  Default is 0 for ungrib, mpassit, upp and 1 for others"
     echo "              -a                  Clean the \"ungrib\" directory completely when JOBS contain \"clean\""
-    echo "              -t  DIR             Template directory for runtime files"
     echo "              -w                  Hold script to wait for all job conditions are satified and submitted (for mpassit & upp)."
     echo "                                  By default, the script will exit after submitting all possible jobs."
     echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
@@ -77,8 +76,6 @@ function usage {
     echo "              eventdt = $eventdateDF"
     echo "              rootdir = $rootdir"
     echo "              WORKDIR = $mpasdir/run_dirs"
-    echo "              TEMPDIR = $rootdir/templates"
-    echo "              FIXDIR  = $rootdir/fix_files"
     echo " "
     echo "                                     -- By Y. Wang (2023.05.25)"
     echo " "
@@ -126,15 +123,6 @@ function parse_args {
                 ;;
             -a )
                 args["cleanall"]=true
-                ;;
-            -t)
-                if [[ -d $2 ]]; then
-                    args["TEMPDIR"]=$2
-                else
-                    echo -e "${RED}ERROR${NC}: Template directory ${BLUE}$2${NC} does not exist."
-                    usage 1
-                fi
-                shift
                 ;;
             -m)
                 if [[ ${2^^} == "JET" ]]; then
@@ -691,9 +679,6 @@ parse_args "$@"
 # Set up working environment
 #
 #-----------------------------------------------------------------------
-FIXDIR="${rootdir}/fix_files"
-# shellcheck disable=SC2034
-EXEDIR="${rootdir}/exec"                                                # use inside submit_a_job
 
 source "${scpdir}/Site_Runtime.sh" || exit $?
 
@@ -702,7 +687,6 @@ setup_machine "${args['machine']}" "$rootdir" false false
 [[ $dorun == false ]] && runcmd="echo $runcmd"
 
 [[ -v args["WORKDIR"] ]] && WORKDIR=${args["WORKDIR"]} || WORKDIR="${workdirDF}"
-[[ -v args["TEMPDIR"] ]] && TEMPDIR=${args["TEMPDIR"]} || TEMPDIR="${rootdir}/templates"
 
 #-----------------------------------------------------------------------
 #
@@ -756,24 +740,26 @@ fi
 #
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
-
-echo -e "---- Jobs ($$) started $(date +%m-%d_%H:%M:%S) on host $(hostname) ----\n"
-echo -e "  Event date : ${GREEN}$eventdate${NC} ${YELLOW}${eventtime}${NC}"
-echo -e "  Root    dir: $rootdir${GREEN}/exec${NC}|${PURPLE}/templates${NC}|${DARK}/fix_files${NC}|${BROWN}/scripts${NC}"
-echo -e "  Working dir: $WORKDIR${LIGHT_BLUE}/${eventdate}/init${NC}"
-echo -e "  Domain name: ${PURPLE}$domname${NC}; HRRRE time: ${DARK}${hrrr_time}${NC}; NENSIC: ${WHITE}${nensics}${NC}"
-echo    " "
-
-starttime_str=$(date -u -d "$eventdate ${eventtime}" +%Y-%m-%d_%H:%M:%S)
-stoptime_str=$(date -u -d "$eventdate  ${eventtime}" +%Y-%m-%d_%H:%M:%S)
-
 rundir="$WORKDIR/${eventdate}"
-
 if [[ ! -d $rundir ]]; then
     mkdir -p $rundir
 fi
 
+echo    ""
+echo -e "---- Jobs (${YELLOW}$$${NC}) started at $(date +'%m-%d %H:%M:%S (%Z)') on host ${LIGHT_RED}$(hostname)${NC} ----\n"
+echo -e "  Event  date: ${WHITE}$eventdate${NC} ${YELLOW}${eventtime}${NC}"
+echo -e "  ROOT    dir: ${rootdir}${BROWN}/scripts${NC}"
+echo -e "  TEMP    dir: ${PURPLE}${TEMPDIR}${NC}"
+echo -e "  FIXED   dir: ${DARK}${FIXDIR}${NC}"
+echo -e "  EXEC    dir: ${GREEN}${EXEDIR}${NC}"
+echo -e "  Working dir: ${WHITE}${WORKDIR}${LIGHT_BLUE}/${eventdate}/init${NC}"
+echo -e "  Domain name: ${RED}$domname${NC}; HRRRE time: ${DARK}${hrrr_time}${NC}; NENSIC: ${WHITE}${nensics}${NC}"
+echo    " "
+
 jobname="${eventdate:4:4}"
+
+starttime_str=$(date -u -d "$eventdate ${eventtime}" +%Y-%m-%d_%H:%M:%S)
+stoptime_str=$(date  -u -d "$eventdate ${eventtime}" +%Y-%m-%d_%H:%M:%S)
 
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 
@@ -797,7 +783,7 @@ for job in "${jobs[@]}"; do
 done
 
 echo " "
-echo "==== Jobs done $(date +%m-%d_%H:%M:%S) ===="
+echo "==== Jobs done $(date +'%m-%d %H:%M:%S (%Z)') ===="
 echo " "
 
 exit 0
