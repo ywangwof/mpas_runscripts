@@ -65,26 +65,59 @@ def make_namespace(d: dict,lvl=0,level=None):
 ########################################################################
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Plot DART obs_seq.fial sequences',
-                                     epilog="""        ---- Yunheng Wang (2023-11-10).
-                                            """)
-                                     #formatter_class=CustomFormatter)
+    parser = argparse.ArgumentParser(description='Plot DART obs_seq.fial sequences from the WoFS data assimilation cycles',
+                                     epilog="        ---- Yunheng Wang (2023-11-10).\n ",
+                                     formatter_class=argparse.RawTextHelpFormatter)
 
-    parser.add_argument('date',    help='MPAS-WoFS event date',type=str, nargs='?',default=None)
-    parser.add_argument('obstype', help='An integer number that denotes the observation type or a list of "," seperated numbers, or None to plot all observation in this file',
-                                   type=str, nargs='?',default=None)
+    parser.add_argument('date',
+                        help='MPAS-WoFS event date.',
+                        type=str, nargs='?',default=None)
 
-    parser.add_argument('-v','--verbose',   help='Verbose output',                              action="store_true",    default=False)
-    parser.add_argument('-d','--rundir',    help='Directory contains obs_seq.final files in netCDF format', type=str,   default=os.getcwd())
-    parser.add_argument('-f','--filename',  help='File name (obs_seq.final) to list its content',           type=str,   default=None)
-    parser.add_argument('-e','--endtime',   help='End time string as HHMM',                                 type=str,   default="0300")
-    parser.add_argument('-p','--parms',     help='Parameter to limit selections, [dataqc,dartqc]',          type=str,   default='10,0')
-    parser.add_argument('-t','--threshold', help='Threshold for reflectivity',                              type=float, default=None)
-    parser.add_argument('-s','--spreadtype', help='''1: ensemble standard deviation, 2: ensemble standard deviation + ob error ("total spread")''',
-                                                     #3: ensemble standard deviation + ob error (use average value)''',
-                                                                                                            type=int,   default=2)
-    parser.add_argument('-o','--outfile',   help='Name of output image or output directory',                type=str,   default=None)
-    parser.add_argument('-r','--resolution',help='Resolution of the output image',                          type=int,   default=100)
+    parser.add_argument('obstype',
+                        help='An integer number that denotes the observation type or a list of comma-separated numbers,\n'
+                             'or None to plot all observation types in the file.\n'
+                             'Use "list" to display the contents of the sequence file.',
+                        type=str, nargs='?',default=None)
+
+    parser.add_argument('-v','--verbose',   help='Verbose output.\n ',
+                        action="store_true",    default=False)
+
+    parser.add_argument('-d','--rundir',
+                        help='Directory contains obs_seq.final files in netCDF format.\n'
+                             '{run_dirs} or {run_dirs}/YYYYMMDD (default: dacycles/)\n'
+                             'or {run_dirs}/YYYYMMDD/dacycles_{xxx} or {run_dirs}/YYYYMMDD/dacycles_{xxx}/obs_diag.\n'
+                             'Default: ./',
+                        type=str,   default=os.getcwd())
+
+    parser.add_argument('-f','--filename',
+                        help='File name (obs_seq.final) to list its content',
+                        type=str,   default=None)
+
+    parser.add_argument('-e','--endtime',   help='End time string as HHMM.\n ',
+                        type=str,   default="0300")
+
+    parser.add_argument('-p','--parms',
+                        help='Filter observations by QC flags, [dataqc,dartqc]\n'
+                             'observations QC[:,0] < dataqc and QC[:,1] == dartqc',
+                        type=str,   default='10,0')
+
+    parser.add_argument('-t','--threshold', help='Filter reflectivity by threshold (>= threshold)',
+                        type=float, default=None)
+
+    parser.add_argument('-s','--spreadtype',
+                        help='1: ensemble standard deviation, \n'
+                             '2: ensemble standard deviation + ob error ("total spread")\n'
+                             #3: ensemble standard deviation + ob error (use average value)'''
+                             'Default: 2.\n ',
+                        type=int,   default=2)
+
+    parser.add_argument('-o','--outfile',
+                        help='Specify the name of output image or an output directory (default: ./).',
+                        type=str,   default=None)
+
+    parser.add_argument('-r','--resolution',
+                        help='Set the resolution of the output image (default: 100).',
+                        type=int,   default=100)
 
     args = parser.parse_args()
 
@@ -528,6 +561,8 @@ def load_variables(cargs,wargs, filelist):
             print(f"time = {timestr}, number of obs = {nobs_type} for {var_obj['type_label']}")
             var_obj['times'].append( timestr )
 
+    #print(f"qc_numbers: {var_obj['qc_numbers']}")
+
     # finally, make the return objects a set of namespaces
     for otype in var_objs.keys():
         var_objs[otype] = make_namespace(var_objs[otype],level=1)
@@ -691,7 +726,7 @@ def print_meta(wargs,obsfile):
         print(f"    {key:>3}: {varobj.validtypes[key]} {validtypeqccount[key]}")
     print("")
 
-    print(f"Valid QC values: {sorted(varobj.validqcval)} and meanings")
+    print(f"Valid QC values: {sorted(varobj.validqcval, key=int)} and meanings")
     for key,val in QCValMeta.items():
         if int(key) in varobj.validqcval:
             print(f"    {key}: {val}")
@@ -705,7 +740,7 @@ def print_meta(wargs,obsfile):
                  ' 4' : 'ISSCALEHEIGHT'
                 }
 
-    print(f"Valid vertical coordinates are: {sorted(varobj.validverts)} and meanings")
+    print(f"Valid vertical coordinates are: {sorted(varobj.validverts, key=int)} and meanings")
     for key,val in VertMeta.items():
         if int(key) in varobj.validverts:
             if key == ' 2':     # ISPRESSURE
@@ -841,9 +876,12 @@ def plot_qcnumbers(cargs,wargs,wobj):
     ax = figure.add_axes([0.1, 0.2, 0.8, 0.6])       # main axes
 
     mks = ['o', 'D', '+', '*', 's', 'x', '^', '1']
-    cls = ['r', 'g', 'b', 'c', 'k', 'y', 'm', 'k']
+    cls = ['g', 'r', 'b', 'c', 'k', 'y', 'm', 'k']
 
-    for j,qcval in enumerate(wobj.qc_numbers.keys()):
+    qc_vals = sorted(wobj.qc_numbers.keys(), key=int)
+    #print(f"qc_vals = {qc_vals}")
+
+    for j,qcval in enumerate(qc_vals):
         ax.plot(wobj.times,wobj.qc_numbers[qcval],color=cls[j],label=QCValMeta[qcval])
         x=np.array(wobj.times)
         y=np.array(wobj.qc_numbers[qcval])

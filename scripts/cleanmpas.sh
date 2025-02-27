@@ -2,7 +2,8 @@
 
 script_dir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 top_dir=$(realpath "$(dirname "${script_dir}")")
-mpas_dir=$(dirname "${top_dir}")
+
+mpas_dir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
 
 eventdateDF=$(date -u +%Y%m%d%H%M)
 
@@ -30,7 +31,7 @@ function usage {
     echo "               mpas:     Delete run-time file in a MPAS run direcotry"
     echo "               mpasm:    Delete MPAS run-time files for all ensemble members in \"fcst_??\""
     echo "               dacycles: Delete wofs_mpas_??.restart.* at all DA cycles except for the top hour (00)"
-    echo "               post:     Delate all summary files for this time"
+    echo "               post:     Delete all summary files for this time"
     echo " "
     echo "    OPTIONS:"
     echo "              -h                  Display this message"
@@ -245,7 +246,7 @@ for taskname in "${tasknames[@]}"; do
         notasks=0
         if [[ -d ${eventdate}${affix} ]]; then
             if [[ $verb == true ]]; then
-                echo "Delete ${eventdate}${affix} FCST files from ${FCST_dir} ..."
+                echo "Deleting ${eventdate}${affix} FCST files from ${FCST_dir} ..."
             fi
             ((notasks++))
 
@@ -257,7 +258,7 @@ for taskname in "${tasknames[@]}"; do
 
         if [[ -d ${eventdate}${affix} ]]; then
             if [[ $verb == true ]]; then
-                echo "Delete ${eventdate}${affix} Summary files from ${post_dir} ..."
+                echo "Deleting ${eventdate}${affix} Summary files from ${post_dir} ..."
             fi
             ((notasks++))
 
@@ -269,7 +270,7 @@ for taskname in "${tasknames[@]}"; do
 
         if [[ -d ${eventdate}${affix} ]]; then
             if [[ $verb == true ]]; then
-                echo "Delete Image files ${eventdate}${affix} from ${image_dir} ..."
+                echo "Deleting Image files ${eventdate}${affix} from ${image_dir} ..."
             fi
             ((notasks++))
 

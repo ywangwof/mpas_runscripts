@@ -1,10 +1,8 @@
 #!/bin/bash
 
-fcst_root="/scratch/ywang/MPAS/intel/run_dirs"
+fcst_root="/scratch/yunheng.wang/MPAS/MPAS_PROJECT/run_dirs"
 
 eventdateDF=$(date -u +%Y%m%d)
-
-eventdate=${1-"${eventdateDF}"}
 
 fcstlength=$((6*3600))
 fcstintvl=300
@@ -24,16 +22,16 @@ function usage {
     echo "              -h                  Display this message"
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
-    echo "              -x                  FCST Directory affix. Defaut: empty"
+    echo "              -x    affix         FCST Directory affix. Defaut: empty"
     echo "              -src  fcst_root     FCST cycles directory. Default: ${fcst_root}"
     echo "              -dest dest_root     WRF FCST directory name. Default: \${fcst_root}/FCST"
-    echo "              -s starttime        in HHMM. Default: 1700"
-    echo "              -e endtime          in HHMM. Default: 0300"
-    echo "              -b 5                Forecast first available time in minutes. Default: 5 minutes"
+    echo "              -s    starttime     in HHMM. Default: 1700"
+    echo "              -e    endtime       in HHMM. Default: 0300"
+    echo "              -b    5             Forecast first available time in minutes. Default: 5 minutes"
     echo "              -c                  Overwritten existing files, otherwise, keep existing files"
     echo " "
     echo "   DEFAULTS:"
-    echo "              eventdt    = $eventdate"
+    echo "              eventdt    = $eventdateDF"
     echo "              fcst_root  = $fcst_root"
     echo "              dest_root  = $fcst_root/FCST"
     echo " "
@@ -42,101 +40,124 @@ function usage {
     exit "$1"
 }
 
-#-----------------------------------------------------------------------
+########################################################################
 #
-# Handle command line arguments (override default settings)
+# Handle command line arguments
 #
-#-----------------------------------------------------------------------
+########################################################################
+
+function parse_args {
+
+    declare -Ag args
+
+    #-------------------------------------------------------------------
+    # Parse command line arguments
+    #-------------------------------------------------------------------
+
+    while [[ $# -gt 0 ]]; do
+        key="$1"
+
+        case $key in
+            -h)
+                usage 0
+                ;;
+            -n)
+                args["show"]="echo"
+                ;;
+            -v)
+                args["verb"]=true
+                ;;
+            -c)
+                args["force_clean"]=true
+                ;;
+            -x)
+                args["affix"]="$2"
+                shift
+                ;;
+            -src)
+                if [[ ! -d ${2} ]]; then
+                    echo "ERROR: directory ${2} not exist"
+                else
+                    args["fcst_root"]="$2"
+                fi
+                shift
+                ;;
+           -dest)
+                if [[ ! -d ${2} ]]; then
+                    echo "ERROR: directory ${2} not exist"
+                else
+                    args["dest_root"]="$2"
+                fi
+                shift
+                ;;
+            -b)
+                args["fcstbeg"]="$2"
+                if [[ ! ${2} =~ ^[0-9]+$ ]]; then
+                    echo "ERROR: ${2} is not digits."
+                    usage 1
+                fi
+                shift
+                ;;
+            -s )
+                if [[ $2 =~ ^[0-9]{4}$ ]]; then
+                    args["starttime"]="${2}"
+                else
+                    echo "ERROR: Start time should be in HHMM, got \"$2\"."
+                    usage 1
+                fi
+                shift
+                ;;
+            -e )
+                if [[ $2 =~ ^[0-9]{4}$ ]]; then
+                    args["endtime"]=$2
+                else
+                    echo "ERROR: End time should be in HHMM, got \"$2\"."
+                    usage 1
+                fi
+                shift
+                ;;
+
+            -*)
+                echo "Unknown option: $key"
+                usage 2
+                ;;
+            *)
+                if [[ $key =~ ^[0-9]{8}$ ]]; then
+                    args["eventdate"]=${key}
+                else
+                    echo ""
+                    echo "ERROR: unknown argument, get [$key]."
+                    usage 3
+                fi
+                ;;
+        esac
+        shift # past argument or value
+    done
+}
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#
+#@ MAIN entry
+#
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #% ARGS
-show=""
-verb=false
-force_clean=false
 
-eventdate=${eventdateDF}
-starttime="1700"
-endtime="0300"
-affix=""
-fcstbeg="5"
+parse_args "$@"
 
-while [[ $# -gt 0 ]]; do
-    key="$1"
+[[ -v args["verb"] ]] && verb=${args["verb"]} || verb=false
+[[ -v args["show"] ]] && show=${args["show"]} || show=""
 
-    case $key in
-        -h)
-            usage 0
-            ;;
-        -n)
-            show="echo"
-            ;;
-        -v)
-            verb=true
-            ;;
-        -c)
-            force_clean=true
-            ;;
-        -x)
-            affix="$2"
-            shift
-            ;;
-        -src)
-            if [[ ! -d ${2} ]]; then
-                echo "ERROR: directory ${2} not exist"
-            else
-                fcst_root="$2"
-            fi
-            shift
-            ;;
-       -dest)
-            if [[ ! -d ${2} ]]; then
-                echo "ERROR: directory ${2} not exist"
-            else
-                dest_root="$2"
-            fi
-            shift
-            ;;
-        -b)
-            fcstbeg="$2"
-            if [[ ! ${fcstbeg} =~ ^[0-9]+$ ]]; then
-                echo "ERROR: ${fcstbeg} is not digits."
-                usage 1
-            fi
-            shift
-            ;;
-        -s )
-            if [[ $2 =~ ^[0-9]{4}$ ]]; then
-                starttime="${2}"
-            else
-                echo "ERROR: Start time should be in HHMM, got \"$2\"."
-                usage 1
-            fi
-            shift
-            ;;
-        -e )
-            if [[ $2 =~ ^[0-9]{4}$ ]]; then
-                endtime=$2
-            else
-                echo "ERROR: End time should be in HHMM, got \"$2\"."
-                usage 1
-            fi
-            shift
-            ;;
+[[ -v args["force_clean"] ]] && force_clean=${args["force_clean"]} || force_clean=false
+[[ -v args["fcstbeg"] ]]     && fcstbeg=${args["fcstbeg"]}         || fcstbeg=5
 
-        -*)
-            echo "Unknown option: $key"
-            usage 2
-            ;;
-        *)
-            if [[ $key =~ ^[0-9]{8}$ ]]; then
-                eventdate=${key}
-            else
-                echo ""
-                echo "ERROR: unknown argument, get [$key]."
-                usage 3
-            fi
-            ;;
-    esac
-    shift # past argument or value
-done
+[[ -v args["affix"] ]]       && affix=${args["affix"]}             || affix=""
+
+[[ -v args["fcst_root"] ]] && fcst_root=${args["fcst_root"]}
+[[ -v args["dest_root"] ]] && dest_root=${args["fcst_root"]} || dest_root="${fcst_root}/FCST"
+
+[[ -v args["eventdate"] ]] && eventdate=${args["eventdate"]} || eventdate=${eventdateDF}
+[[ -v args["starttime"] ]] && starttime=${args["starttime"]} || starttime="1700"
+[[ -v args["endtime"] ]]   && endtime=${args["endtime"]}     || endtime="0300"
 
 fcstdir="fcst${affix}"
 
@@ -145,11 +166,8 @@ if [[ ! -d ${fcst_root}/${eventdate}/${fcstdir} ]]; then
     usage 1
 fi
 
-if [[ -z ${dest_root} ]]; then
-    dest_root="${fcst_root}/FCST"
-fi
-
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#% ENTRY
 
 starthour=${starttime:0:2}
 if [[ $((10#$starthour)) -lt 12 ]]; then

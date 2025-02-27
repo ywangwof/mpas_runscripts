@@ -402,9 +402,9 @@ def parse_args():
     parser.add_argument('-p','--patchfile', help='Name of the MPAS patch file that contains cell patches',type=str, default=None)
     parser.add_argument('-k','--vertLevels',help='Vertical levels to be plotted [l1,l2,l3,...]',  type=str, default=None)
     parser.add_argument('-c','--cntLevels', help='Contour levels [cmin,cmax,cinc]',               type=str, default=None)
-    parser.add_argument('-o','--outfile',   help='Name of output image or output directory',              type=str, default=None)
-    parser.add_argument('-range',           help='Map range in degrees [lat1,lat2,lon1,lon2]',type=str, default=None)
-    parser.add_argument('-m','--map',       help='Base map projection, latlon, stereo or lambert',type=str,default='latlon')
+    parser.add_argument('-o','--outfile',   help='Name of output image or output directory',      type=str, default=None)
+    parser.add_argument('-range',           help='Map range in degrees [lat1,lat2,lon1,lon2]',    type=str, default=None)
+    parser.add_argument('-m','--map',       help='Base map projection, latlon, stereo or lambert',type=str, default='latlon')
 
     args = parser.parse_args()
 
@@ -467,7 +467,7 @@ def parse_args():
     elif args.range is not None:
         rlist = [float(item) for item in args.range.split(',')]
         if len(rlist) < 4:
-            print("-range expects 4 or more degrees as [lat1,lon1,lat2,lon2, ...].")
+            print("-range expects 4 degrees as [lat1,lat2,lon1,lon2].")
             sys.exit(0)
         rlist = [float(item) for item in args.range.split(',')]
 

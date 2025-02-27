@@ -620,12 +620,17 @@ def process_obs(obs_in, obs_out, cargs,rargs):
     if hasattr(rargs, "s_type"):
         for it in obs_records:
             if it.kind == rargs.s_type:
-                if len(it.values) > 1:
-                    print(f"ERROR: expect one values for record {it.iobs}, but found {len(it.values)}.")
-                    sys.exit(1)
-                orgvalue = it.values[0]
-                it.values[0] = rargs.s_value
-                print(f"iobs = {it.iobs}: value changed from {orgvalue} to {rargs.s_value}")
+                if rargs.s_varn == "variance":
+                    orgvalue = it.variance
+                    it.variance = rargs.s_value
+                    print(f"iobs = {it.iobs}: variance changed from {orgvalue} to {rargs.s_value}")
+                else:
+                    if len(it.values) > 1:
+                        print(f"ERROR: expect one values for record {it.iobs}, but found {len(it.values)}.")
+                        sys.exit(1)
+                    orgvalue = it.values[0]
+                    it.values[0] = rargs.s_value
+                    print(f"iobs = {it.iobs}: value changed from {orgvalue} to {rargs.s_value}")
 
     return obs_records
 
@@ -637,11 +642,11 @@ def parse_args():
     obs_fields=("values","variance","time","location","qcs","platform","clouds","visir","mask")
 
     parser = argparse.ArgumentParser(description='Trim DART obs_seq file with nan values',
-                                     epilog="""        ---- Yunheng Wang (2024-01-24).
-                                            """)
-                                     #formatter_class=CustomFormatter)
+                                     epilog='        ---- Yunheng Wang (2024-01-24).\n ',
+                                     formatter_class=argparse.RawTextHelpFormatter)
 
-    parser.add_argument('files',nargs='+',help=f'DART obs_seq files, "list", or one or more from {obs_fields}')
+    parser.add_argument('files',nargs='+',
+                        help=f'DART obs_seq files, "list", or one or more from\n{obs_fields}')
 
     parser.add_argument('-v','--verbose', help='Verbose output',                                    action="store_true", default=False)
     parser.add_argument('-o','--outdir' , help='Name of the output file or an output directory',    default='./',        type=str)
@@ -650,8 +655,11 @@ def parse_args():
                                                                                                     default="124,125,126,229", type=str)
     parser.add_argument('-t','--type'   , help='''Type Numbers of observation to be kept, for examples, 44 or 44,42''',
                                                                                                     default=None,        type=str)
-    parser.add_argument('-s','--set'   , help='''Set values of observation type, for example, clear air reflectivity, 13,-15.0''',
-                                                                                                    default=None,        type=str)
+    parser.add_argument('-s','--set'   ,
+                        help='Set values for an observation type, [type,{value,variance},float].\n'
+                             'for example, clear air reflectivity, 13,value,-15.0 or 13,variance,4.0',
+                        default=None,        type=str)
+
     parser.add_argument('-r','--range' ,  help='Filter records by location range, [lat1-lat2,lon1-lon2]', default=None, type=str)
     parser.add_argument('-k','--keep' ,   help='After drop observations, keep it links as possible',   action="store_true", default=False)
     parser.add_argument('-n','--number' , help='Fist N number of observations to be written',          default=0,           type=int)
@@ -712,7 +720,8 @@ def parse_args():
     if args.set is not None:
         type_value_arr = [x for x in args.set.split(',')]
         rargs['s_type']  = int(type_value_arr[0])
-        rargs['s_value'] = decimal.Decimal(type_value_arr[1])
+        rargs['s_varn']  = type_value_arr[1]
+        rargs['s_value'] = decimal.Decimal(type_value_arr[2])
     #
     # Range filter
     #

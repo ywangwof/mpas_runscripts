@@ -1,14 +1,13 @@
 #!/bin/bash
 
-#rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
-mpasdir=$(dirname "${rootdir}")
+mpasdir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
 
-srcdir="/work2/wof/realtime/OBSGEN/CLOUD_OBS"
+srcdir="/work2/wof/realtime/OBSGEN/CLOUD_OBS/RT"
 
 run_dir="${mpasdir}/run_dirs"
-destdir="${run_dir}/OBS_SEQ"
+destdir="${mpasdir}/OBS_SEQ"
 
 eventdateDF=$(date -u +%Y%m%d%H%M)
 
@@ -36,6 +35,7 @@ function usage {
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
     echo "              -s  start_time      Run task from start_time, default $starthour"
+    echo "              -f  conf_file       Runtime configuration file, make it the last argument (after WORKDIR)."
     echo " "
     echo "                                     -- By Y. Wang (2024.04.26)"
     echo " "
@@ -52,10 +52,11 @@ function join_by {
 ########################################################################
 
 show=""
-verb=false
+#verb=false
 eventdate=${eventdateDF:0:8}
 eventhour=${eventdateDF:8:2}
 cmd=""
+conf_file=""
 
 if [[ $((10#$eventhour)) -lt 12 ]]; then
     eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
@@ -84,9 +85,9 @@ while [[ $# -gt 0 ]]; do
         -n)
             show="echo"
             ;;
-        -v)
-            verb=true
-            ;;
+        #-v)
+        #    verb=true
+        #    ;;
         -s)
             if [[ $2 =~ ^[0-9]{4}$ ]]; then
                 start_time="$2"
@@ -94,6 +95,17 @@ while [[ $# -gt 0 ]]; do
                 echo ""
                 echo "ERROR: expecting HHMM, get [$key]."
                 usage 3
+            fi
+            shift
+            ;;
+        -f)
+            if [[ -f ${2} ]]; then
+                conf_file=$2
+            elif [[ -f ${run_dir}/$2 ]]; then
+                conf_file=${run_dir}/$2
+            else
+                echo "ERROR: Runtime configruation file not found, get [$2]."
+                usage 2
             fi
             shift
             ;;
@@ -130,7 +142,10 @@ while [[ $# -gt 0 ]]; do
     shift # past argument or value
 done
 
-conf_file="${run_dir}/config.${eventdate}"
+if [[ ${conf_file} == "" ]]; then
+    conf_file="${run_dir}/config.${eventdate}"
+fi
+
 if [[ -e ${conf_file} ]]; then
     eval "$(sed -n "/OBS_DIR=/p" ${conf_file})"
     destdir=${OBS_DIR}
@@ -142,6 +157,8 @@ else
         exit 0
     fi
 fi
+
+echo -e "\nUse runtime Configruation file: ${CYAN}${conf_file}${NC}.\n"
 
 if [[ $((10#$start_time)) -gt 1200 ]]; then
     timebeg="${eventdate}${start_time}"

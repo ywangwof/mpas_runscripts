@@ -71,18 +71,121 @@ function usage {
     echo "                                  By default, the script will exit after submitting all possible jobs."
     echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
     echo "              -a                  Clean \"ungrib\" subdirectory"
-    echo "              -f conf_file        Configuration file for this case. Default: ${WORKDIR}/config.${eventdate}"
+    echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
     echo " "
     echo "   DEFAULTS:"
-    echo "              eventdt = $eventdate"
+    echo "              eventdt = $eventdateDF"
     echo "              rootdir = $rootdir"
-    echo "              WORKDIR = $WORKDIR"
+    echo "              WORKDIR = $mpasdir/run_dirs"
     echo "              TEMPDIR = $rootdir/templates"
     echo "              FIXDIR  = $rootdir/fix_files"
     echo " "
     echo "                                     -- By Y. Wang (2023.05.25)"
     echo " "
     exit "$1"
+}
+
+########################################################################
+#
+# Handle command line arguments
+#
+########################################################################
+
+function parse_args {
+
+    declare -Ag args
+
+    #-------------------------------------------------------------------
+    # Parse command line arguments
+    #-------------------------------------------------------------------
+
+    while [[ $# -gt 0 ]]; do
+        key="$1"
+
+        case $key in
+            -h)
+                usage 0
+                ;;
+            -n)
+                args["dorun"]=false
+                ;;
+            -v)
+                args["verb"]=1
+                ;;
+            -k)
+                if [[ $2 =~ [012] ]]; then
+                    args["overwrite"]=$2
+                    shift
+                else
+                    echo -e "${RED}ERROR${NC}: option for ${BLUE}-k${NC} can only be [${YELLOW}0-2${NC}], but got ${PURPLE}$2${NC}."
+                    usage 1
+                fi
+                ;;
+            -w)
+                args["jobwait"]=1
+                ;;
+            -a )
+                args["cleanall"]=true
+                ;;
+            -t)
+                if [[ -d $2 ]]; then
+                    args["TEMPDIR"]=$2
+                else
+                    echo -e "${RED}ERROR${NC}: Template directory ${BLUE}$2${NC} does not exist."
+                    usage 1
+                fi
+                shift
+                ;;
+            -m)
+                if [[ ${2^^} == "JET" ]]; then
+                    args["machine"]=Jet
+                elif [[ ${2^^} == "VECNA" ]]; then
+                    args["machine"]=Vecna
+                elif [[ ${2^^} == "HERCULES" ]]; then
+                    args["machine"]=Hercules
+                elif [[ ${2^^} == "CHEYENNE" || ${2^^} == "DERECHO" ]]; then
+                    args["machine"]=Cheyenne
+                else
+                    echo -e "${RED}ERROR${NC}: Unsupported machine name, got ${PURPLE}$2${NC}."
+                    usage 1
+                fi
+                shift
+                ;;
+            -f)
+                args["config_file"]="$2"
+                shift
+                ;;
+            -*)
+                echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
+                usage 2
+                ;;
+            ungrib* | init* | clean* )
+                args["jobs"]="${key//,/ }"
+                ;;
+            *)
+                if [[ $key =~ ^[0-9]{12}$ ]]; then
+                    args["eventdate"]=${key:0:8}
+                    args["eventtime"]=${key:8:4}
+                elif [[ $key =~ ^[0-9]{8}$ ]]; then
+                    args["eventdate"]=${key}
+                elif [[ -d $key ]]; then
+                    WORKDIR=$key
+                    lastdir=$(basename $WORKDIR)
+                    if [[ $lastdir =~ ^[0-9]{8}$ ]]; then
+                        args["WORKDIR"]=$(dirname ${WORKDIR})
+                        args["eventdate"]=${lastdir}
+                    else
+                        args["WORKDIR"]=$WORKDIR
+                    fi
+                    #echo $WORKDIR,$eventdate,$eventtime
+                else
+                    echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}$key${NC}."
+                    usage 3
+                fi
+                ;;
+        esac
+        shift # past argument or value
+    done
 }
 
 ########################################################################
@@ -508,6 +611,7 @@ EOF
         # shellcheck disable=SC2154
         if [[ "${mach}" == "pbs" ]]; then
             jobParms[NNODES]="${nnodes_ics}"
+            # shellcheck disable=SC2034
             jobParms[NCORES]="${ncores_ics}"
         fi
 
@@ -551,156 +655,89 @@ function run_clean {
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #
-# Default values
+#@ MAIN entry
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#@ MAIN
-
-jobs=(ungrib init clean)
-
-WORKDIR="${mpasdir}/run_dirs"
-TEMPDIR="${rootdir}/templates"
-FIXDIR="${rootdir}/fix_files"
-eventdate="$eventdateDF"
-eventtime="1500"
-
-runcmd="sbatch"
-dorun=true
-verb=0
-overwrite=0
-jobwait=0
-cleanall=false
-
-machine="Jet"
-
-myhostname=$(hostname)
-if [[ "${myhostname}" == ln? ]]; then
-    machine="Vecna"
-elif [[ "${myhostname}" == hercules* ]]; then
-    machine="Hercules"
-elif [[ "${myhostname}" == cheyenne* || "${myhostname}" == derecho* ]]; then
-    machine="Cheyenne"
-else
-    machine="Jet"
-fi
 
 source $scpdir/Common_Utilfuncs.sh || exit $?
 
 #-----------------------------------------------------------------------
 #
-# Handle command line arguments
+# Handle command line arguments (override default settings)
 #
 #-----------------------------------------------------------------------
 #% ARGS
 
-while [[ $# -gt 0 ]]
-    do
-    key="$1"
+parse_args "$@"
 
-    case $key in
-        -h)
-            usage 0
-            ;;
-        -n)
-            runcmd="echo $runcmd"
-            dorun=false
-            ;;
-        -v)
-            verb=1
-            ;;
-        -a)
-            cleanall=true
-            ;;
-        -k)
-            if [[ $2 =~ [012] ]]; then
-                overwrite=$2
-                shift
-            else
-                echo -e "${RED}ERROR${NC}: option for ${BLUE}-k${NC} can only be [${YELLOW}0-2${NC}], but got ${PURPLE}$2${NC}."
-                usage 1
-            fi
-            ;;
-        -w)
-            jobwait=1
-            ;;
-        -t)
-            if [[ -d $2 ]]; then
-                TEMPDIR=$2
-            else
-                echo -e "${RED}ERROR${NC}: Template directory ${BLUE}$2${NC} does not exist."
-                usage 1
-            fi
-            shift
-            ;;
-        -m)
-            if [[ ${2^^} == "JET" ]]; then
-                machine=Jet
-            elif [[ ${2^^} == "VECNA" ]]; then
-                machine=Vecna
-            elif [[ ${2^^} == "HERCULES" ]]; then
-                machine=Hercules
-            elif [[ ${2^^} == "CHEYENNE" || ${2^^} == "DERECHO" ]]; then
-                machine=Cheyenne
-            else
-                echo -e "${RED}ERROR${NC}: Unsupported machine name, got ${PURPLE}$2${NC}."
-                usage 1
-            fi
-            shift
-            ;;
-        -f)
-            config_file="$2"
-            shift
-            ;;
-        -*)
-            echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
-            usage 2
-            ;;
-        ungrib* | init* | clean* )
-            #jobs=(${key//,/ })
-            IFS="," read -r -a jobs <<< "$key"
-            jobwait=0
-            ;;
-        *)
-            if [[ $key =~ ^[0-9]{8}$ ]]; then
-                eventdate="$key"
-            elif [[ $key =~ ^[0-9]{12}$ ]]; then
-                eventtime=${key:8:4}
-                eventdate=${key:0:8}
-            elif [[ -d $key ]]; then
-                WORKDIR=$key
-                lastdir=$(basename $WORKDIR)
-                if [[ $lastdir =~ ^[0-9]{8}$ ]]; then
-                    eventstr=${lastdir}
-                    WORKDIR=${WORKDIR%%/"$lastdir"}
-                    eventdate=${eventstr:0:8}
-                fi
-            else
-                echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}$key${NC}."
-                usage 3
-            fi
-            ;;
-    esac
-    shift # past argument or value
-done
+[[ -v args["verb"] ]]      && verb=${args["verb"]}           || verb=0
+[[ -v args["overwrite"] ]] && overwrite=${args["overwrite"]} || overwrite=0
 
+[[ -v args["dorun"] ]]     && dorun=${args["dorun"]}         || dorun=true
+[[ -v args["jobwait"] ]]   && jobwait=${args["jobwait"]}     || jobwait=0
+
+[[ -v args["cleanall"] ]]  && cleanall=${args["cleanall"]}   || cleanall=false  # realtime run?
+
+#-----------------------------------------------------------------------
+#
+# Get jobs to run
+#
+#-----------------------------------------------------------------------
+
+[[ -v args["jobs"] ]] && read -r -a jobs <<< "${args['jobs']}" || jobs=(ungrib init clean)
+
+#-----------------------------------------------------------------------
+#
+# Set up working environment
+#
+#-----------------------------------------------------------------------
+FIXDIR="${rootdir}/fix_files"
+# shellcheck disable=SC2034
+EXEDIR="${rootdir}/exec"                                                # use inside submit_a_job
+
+source "${scpdir}/Site_Runtime.sh" || exit $?
+
+setup_machine "${args['machine']}" "$rootdir" false false
+
+[[ $dorun == false ]] && runcmd="echo $runcmd"
+
+[[ -v args["WORKDIR"] ]] && WORKDIR=${args["WORKDIR"]} || WORKDIR="${workdirDF}"
+[[ -v args["TEMPDIR"] ]] && TEMPDIR=${args["TEMPDIR"]} || TEMPDIR="${rootdir}/templates"
+
+#-----------------------------------------------------------------------
+#
+# Set Event Date and Time
+#
+#-----------------------------------------------------------------------
+[[ -v args["eventdate"] ]] && eventdate="${args['eventdate']}" || eventdate="$eventdateDF"
+[[ -v args["eventtime"] ]] && eventtime="${args['eventtime']}" || eventtime="1500"
+
+#-----------------------------------------------------------------------
 #
 # read configurations that is not set from command line
 #
-if [[ -z $config_file ]]; then
-    config_file="$WORKDIR/config.${eventdate}"
-else
-    if [[ -e ${WORKDIR}/${config_file} ]]; then
+#-----------------------------------------------------------------------
+if [[ -v args["config_file"] ]]; then
+    config_file="${args['config_file']}"
+
+    if [[ -r ${config_file} ]]; then
+        :
+    elif [[ -e ${WORKDIR}/${config_file} ]]; then
         config_file="${WORKDIR}/${config_file}"
     else
         echo -e "${RED}ERROR${NC}: file ${CYAN}${config_file}${NC} not exist."
         usage 1
     fi
+else
+    config_file="$WORKDIR/config.${eventdate}"
 fi
 
 if [[ ! -r ${config_file} ]]; then
     echo -e "${RED}ERROR${NC}: Configuration file ${CYAN}${config_file}${NC} is not found."
-    echo -e "       Please run ${GREEN}setup_mpas-wofs.sh${NC} first."
+    echo -e "       Please run ${GREEN}setup_mpas-wofs.sh${NC} first or use ${BLUE}-h${NC} to show help."
     exit 2
+else
+    echo -e "Reading case (${GREEN}${eventdate}${NC}) configuration file: ${CYAN}${config_file}${NC} ...."
 fi
 readconf ${config_file} COMMON init || exit $?
 # get ENS_SIZE, time_step, EXTINVL, OUTINVL, OUTIOTYPE
@@ -711,39 +748,6 @@ if [[ -e ${vertLevel_file} ]]; then
 else
     echo -e "${RED}ERROR${NC}: vertLevel_file=${BLUE}${vertLevel_file}${NC} not exist."
     usage 1
-fi
-
-#-----------------------------------------------------------------------
-#
-# Platform specific initialization
-#
-#-----------------------------------------------------------------------
-#% PLATFORM
-
-if [[ $machine == "Jet" ]]; then
-    modulename="build_jet_Rocky8_intel_smiol"
-
-    source /etc/profile.d/modules.sh
-    module purge
-    module use ${rootdir}/modules
-    module load $modulename
-    module load wgrib2/2.0.8
-elif [[ $machine == "Hercules" ]]; then
-    modulename="build_hercules_intel"
-
-    module purge
-    module use ${rootdir}/modules
-    module load $modulename
-elif [[ $machine == "Cheyenne" ]]; then
-    if [[ $dorun == true ]]; then
-        runcmd="qsub"
-    else
-        runcmd="echo qsub"
-    fi
-    modulename="defaults"
-else    # Vecna at NSSL
-    modulename="env.mpas_smiol"
-    source ${rootdir}/modules/${modulename}
 fi
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -770,9 +774,6 @@ if [[ ! -d $rundir ]]; then
 fi
 
 jobname="${eventdate:4:4}"
-
-exedir="$rootdir/exec"
-
 
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 

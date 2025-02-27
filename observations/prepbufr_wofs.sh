@@ -46,16 +46,16 @@
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
-mpasdir=$(dirname "${rootdir}")
+mpasdir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
 
 BUFR_DIR=/work/rt_obs/SBUFR
-DART_DIR=/scratch/ywang/MPAS/intel/frdd-DART
+DART_DIR=/scratch/yunheng.wang/MPAS/intel/frdd-DART
 
 DART_exec_dir=${DART_DIR}/observations/obs_converters/NCEP/prep_bufr/exe
 NML_TEMPLATE=${scpdir}/input.nml.bufrobs.template
 
 run_dir="${mpasdir}/run_dirs"
-WORK_dir=${run_dir}/OBS_SEQ/Bufr
+WORK_dir=${mpasdir}/OBS_SEQ/Bufr
 
 convert=yes
 
@@ -87,6 +87,7 @@ function usage {
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
     echo "              -s  start_time      Run task from start_time, default $starthour"
+    echo "              -f  conf_file       Runtime configuration file, make it the last argument (after WORKDIR)."
     echo " "
     echo " "
     echo "                                     -- By Y. Wang (2024.04.26)"
@@ -96,11 +97,12 @@ function usage {
 
 ########################################################################
 
-show=""
-verb=false
+#show=""
+#verb=false
 eventdate=${eventdateDF:0:8}
 eventhour=${eventdateDF:8:2}
 cmd=""
+conf_file=""
 
 if [[ $((10#$eventhour)) -lt 12 ]]; then
     eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
@@ -126,12 +128,12 @@ while [[ $# -gt 0 ]]; do
         -h)
             usage 0
             ;;
-        -n)
-            show="echo"
-            ;;
-        -v)
-            verb=true
-            ;;
+        #-n)
+        #    show="echo"
+        #    ;;
+        #-v)
+        #    verb=true
+        #    ;;
         -s)
             if [[ $2 =~ ^[0-9]{4}$ ]]; then
                 start_time="$2"
@@ -139,6 +141,17 @@ while [[ $# -gt 0 ]]; do
                 echo ""
                 echo "ERROR: expecting HHMM, get [$key]."
                 usage 3
+            fi
+            shift
+            ;;
+        -f)
+            if [[ -f ${2} ]]; then
+                conf_file=$2
+            elif [[ -f ${run_dir}/$2 ]]; then
+                conf_file=${run_dir}/$2
+            else
+                echo "ERROR: Runtime configruation file not found, get [$2]."
+                usage 2
             fi
             shift
             ;;
@@ -175,7 +188,10 @@ while [[ $# -gt 0 ]]; do
     shift # past argument or value
 done
 
-conf_file="${run_dir}/config.${eventdate}"
+if [[ ${conf_file} == "" ]]; then
+    conf_file="${run_dir}/config.${eventdate}"
+fi
+
 if [[ -e ${conf_file} ]]; then
     eval "$(sed -n "/OBS_DIR=/p" ${conf_file})"
     WORK_dir=${OBS_DIR}/Bufr
@@ -187,6 +203,8 @@ else
         exit 0
     fi
 fi
+
+echo -e "\nUse runtime Configruation file: ${CYAN}${conf_file}${NC}.\n"
 
 if [[ $((10#$start_time)) -gt 1200 ]]; then
     timebeg="${eventdate}${start_time}"
@@ -271,7 +289,7 @@ for((i=timebeg_s;i<=timeend_s;i+=3600)); do
         # clear any old intermediate (text) files
         #rm -f temp_obs prepqm.in prepqm.out
         #rm -f dart_log*
-        rm -rf *
+        rm -rf -- *
 
         ## MODIFY input.nml with correct date
         sedfile=$(mktemp -t "sbufr_${timestr}.sed_XXXX")
@@ -332,5 +350,8 @@ elif [[ "$cmd" == "fix" ]]; then
         echo -e "    ${RED}$filename${NC}"
     done
 fi
+
+cd "${WORK_dir}" || exit 0
+rm -rf "${WORK_dir}/work"
 
 exit 0
