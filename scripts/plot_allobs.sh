@@ -3,7 +3,7 @@ script_dir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${script_dir}")")
 
 up_dir=$(dirname $rootdir)
-mpasdir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
+mpasdir="/scratch/wofs_mpas"
 
 rundir="${mpasdir}/run_dirs"
 

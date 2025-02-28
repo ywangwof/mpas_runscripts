@@ -3,7 +3,7 @@
 script_dir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 top_dir=$(realpath "$(dirname "${script_dir}")")
 
-mpas_dir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
+mpas_dir="/scratch/wofs_mpas"
 
 eventdateDF=$(date -u +%Y%m%d%H%M)
 
@@ -62,7 +62,7 @@ verb=true
 eventdate=${eventdateDF:0:8}
 eventhour=${eventdateDF:8:2}
 
-if [[ $((10#$eventhour)) -lt 12 ]]; then
+if ((10#$eventhour < 12)); then
     eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
 fi
 

@@ -6,7 +6,7 @@ top_dir=$(realpath "$(dirname "${script_dir}")")
 
 up_dir=$(dirname $top_dir)
 
-mpas_dir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
+mpas_dir="/scratch/wofs_mpas"
 eventdateDF=$(date -u +%Y%m%d%H%M)
 
 #
@@ -134,7 +134,7 @@ function parse_args {
                 echo -e "${RED}ERROR${NC}: Unknown option: ${YELLOW}$key${NC}"
                 usage 2
                 ;;
-            dacycles | fcst | post | plot | diag | verif)
+            dacycles | fcst | post | plot | diag | verif | snd )
                 args["task"]=$key
                 ;;
             noscript )
@@ -204,7 +204,7 @@ fi
 
 # Load Python environment as needed
 case $task in
-post | plot | diag | verif)
+post | plot | diag | verif | snd )
     if [[ ! "$host" =~ ^wof-epyc.*$ ]]; then
         echo -e "${RED}ERROR${NC}: Please run ${BROWN}$task${NC} on wof-epyc8 only".
         exit 1
@@ -231,6 +231,7 @@ post | plot | diag | verif)
     donepost="${run_dir}/summary_files/${eventdate}${affix}/${endtime}/wofs_postswt_${endtime}_finished"
     doneplot="${run_dir}/image_files/flags/${eventdate}${affix}/${endtime}/wofs_plotpbl_${endtime}_finished"
     doneverif="${run_dir}/image_files/flags/${eventdate}${affix}/wofs_plotwwa_${endtime}_finished"
+    donesnd="${run_dir}/image_files/flags/${eventdate}${affix}/wofs_plotwwa_${endtime}_finished"
     ;;
 esac
 
@@ -260,8 +261,8 @@ if [[ -z $show ]]; then                 # Actually run the task
     fi
 fi
 
-echo -e "\n=== === === === ===\n"
-echo -e "${PURPLE}$(date +'%Y%m%d %H:%M:%S')${NC} - ${BROWN}$0 ${saved_args}${NC}"
+echo -e "=== === === === ===\n"
+echo -e "${PURPLE}$(date +'%Y%m%d %H:%M:%S (%Z)')${NC} - ${BROWN}$0 ${saved_args}${NC}"
 
 case $task in
 #1. dacycles
@@ -354,7 +355,27 @@ verif )
         exit 2
     fi
     ;;
-#6. diag
+#6. verif
+snd )
+    if [[ ! -e ${donesnd} ]]; then
+        echo -e "${DARK}Waiting for ${donepost} ...."
+        while [[ ! -e "${donepost}" ]]; do
+            sleep 10
+        done
+
+        cd "${post_dir}" || exit 1
+        cmds=(time "./wofs_plot_sounding_MPAS.py" "${eventdate}" "${endtime}")
+        if [[ -n ${affix} ]]; then
+            cmds+=("${affix}")
+        fi
+    else
+        echo -e "${DARK}File ${CYAN}$donesnd${NC} exist"
+        echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} post${NC} before reprocessing."
+        exit 2
+    fi
+    ;;
+
+#7. diag
 diag )
     cd "${script_dir}" || exit 1
     cmds=("${script_dir}/plot_allobs.sh" -e "${endtime}" "${eventdate}" "${run_dir}")
@@ -369,9 +390,9 @@ diag )
 esac
 
 if [ -t 1 ]; then # "interactive"
-    echo -e "\n${DARK}Interactivly running: ${BROWN}${task}${NC} from ${YELLOW}$(pwd)${NC} at ${PURPLE}$(date +'%Y%m%d_%H:%M:%S(%Z)')${NC}\n"
+    echo -e "\n${PURPLE}$(date +'%Y%m%d_%H:%M:%S (%Z)')${NC} - ${DARK}Interactivly running: ${BROWN}${task}${NC} from ${YELLOW}$(pwd)${NC}\n"
 else
-    echo -e "\n${PURPLE}$(date +'%Y%m%d %H:%M:%S(%Z)')${NC} - ${DARK}Background running: ${BROWN}${task}${NC} from ${BLYELLOWUE}$(pwd)${NC}\n"
+    echo -e "\n${PURPLE}$(date +'%Y%m%d %H:%M:%S (%Z)')${NC} - ${DARK}Background running: ${BROWN}${task}${NC} from ${BLYELLOWUE}$(pwd)${NC}\n"
 fi
 
 if [[ -z ${show} ]]; then echo -e "${GREEN}${cmds[*]}${NC}"; fi

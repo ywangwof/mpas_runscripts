@@ -4,7 +4,8 @@
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "$scpdir")")
-#mpasdir=$(dirname "${rootdir}")
+
+mpasdir="/scratch/wofs_mpas"
 
 eventdateDF=$(date -u +%Y%m%d)
 
@@ -83,7 +84,7 @@ function usage {
     echo " "
     echo "    PURPOSE: Set up a MPAS-WOFS grid based on the central lat/lon."
     echo " "
-    echo "    DATETIME - Case date and time in YYYYmmddHHMM, Default for today"
+    echo "    DATETIME - Case date and time in YYYYmmddHHMM, Default: ${eventdateDF}"
     echo "    WORKDIR  - Run Directory"
     echo "    JOBS     - One or more jobs from [geogrid,ungrib_hrrr,rotate,meshplot_{py,ncl},static,createWOFS,projectHexes,clean]"
     echo "               or any one from [check,checkbg,checkobs,setup]."
@@ -100,7 +101,7 @@ function usage {
     echo "                              Default is 0 for ungrib, mpassit, upp and 1 for others"
     echo "              -m  Machine     Machine name to run on, [Jet, Derecho, Vecna]."
     echo "              --template/--fix/--exec  DIR"
-    echo "                              Directory for runtime files, job template/fixed static file/executable programs."
+    echo "                              Directory for runtime files, job templates/fixed static files/executable programs respectively."
     echo "              -a  wof         Account name for job submission."
     echo "              -M  init        DA cycles mode, either init or restart. default: init"
     echo "              -c  lat,lon     Domain central lat/lon, for example, 43.33296,-84.24593. Program \"geogrid\" requires them."
@@ -108,12 +109,12 @@ function usage {
     echo "              -x  affix       Affix attached to the run directory \"dacycles\" or \"fcst\". Default: Null"
     echo "              -l  L60.txt     Vertical level file"
     echo "              -o  filename    Ouput file name of the configuration file for this case"
-    echo "                              Default: $WORKDIR/config.${eventdate}"
+    echo "                              Default: \${WORKDIR}/config.\${eventdate}"
     echo " "
     echo "   DEFAULTS:"
-    echo "              eventdt = ${eventdate}"
-    echo "              rootdir = ${rootdir}"
-    echo "              WORKDIR = ${WORKDIR}"
+    echo "              eventdt = ${eventdateDF}"
+    echo "              ROOTDIR = ${rootdir}"
+    echo "              WORKDIR = ${mpasdir}/run_dirs"
     echo "              TEMPDIR = ${rootdir}/templates"
     echo "              FIXDIR  = ${rootdir}/fix_files"
     echo "              EXEDIR  = ${rootdir}/exec"
@@ -220,7 +221,7 @@ function parse_args {
             shift
             ;;
         -l)
-            fixed_level="${FIXDIR}/$2"
+            fixed_level="$2"
             if [[ ! -e ${fixed_level} ]]; then
                 echo -e "${RED}ERROR${NC}: ${BLUE}${fixed_level}${NC} not exist."
                 usage 1
