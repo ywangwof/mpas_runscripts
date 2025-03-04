@@ -800,8 +800,12 @@ if __name__ == "__main__":
 
         else:  # processs the sequence file to get a new one
 
-            commonprefix = os.path.commonprefix([work_path,filename])
-            short_filename = filename[len(commonprefix):]
+            radarname_re=re.compile(f'obs_seq_([A-Z]+)_VR_*')
+            if radarname_re.search(filename):
+                short_filename = radarname_re.search(filename).group(1)
+            else:
+                commonprefix = os.path.commonprefix([work_path,filename])
+                short_filename = filename[len(commonprefix):]
 
             obs_out = copy(obs_in)
             #obs_out = deepcopy(obs_in)
@@ -836,6 +840,7 @@ if __name__ == "__main__":
             if cargs.verbose:
                 print(f" write_obs_seq: Writing to {outfilename}\n")
             else:
-                print(f"        {short_filename} -> {outfilename}\n        Number of good observations: {obs_out.nobs}")
+                #print(f"        {short_filename} -> {outfilename}\n        Number of good observations: {obs_out.nobs}")
+                print(f"        Number of good observations: {obs_out.nobs}, use {short_filename}")
 
             write_obs_seq(obs_out, outfilename, rargs.number)

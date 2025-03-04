@@ -4,7 +4,7 @@
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
 
-mpasdir="/scratch/wofs_mpas"
+mpasworkdir="/scratch/wofs_mpas"     # platform dependent, it is set in Site_Runtime.sh
 
 eventdateDF=$(date -u +%Y%m%d)
 eventtimeDF="1500"
@@ -124,18 +124,16 @@ function usage {
     echo "                                  -a: Deep clean of the whole working directory"
     echo "                                  -c: Delete output (netCDF) files from the specific task but keep done files."
     echo "                                  -d: Delete all done files"
-    echo "              -i  YYYYmmddHHMM    Initial time, default: ${eventdateDF}$eventtimeDF UTC."
-    echo "              -s  YYYYmmddHHMM    Start date & time of the DA cycles."
-    echo "                  HHMM            Start time of the DA cycles."
-    echo "              -e  YYYYmmddHHMM    End date & time of the DA cycles."
-    echo "                  HHMM            End time of the DA cycles."
+    echo "              -i  HHMM            Initial time, default: 1500."
+    echo "              -s  HHMM            Start time of the DA cycles."
+    echo "              -e  HHMM            End time of the DA cycles."
     echo "              -r                  Realtime run, will wait for observations, default: research mode (no waiting)."
     echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
     echo " "
     echo "   DEFAULTS:"
-    echo "              eventdt = $eventdateDF"
-    echo "              rootdir = $rootdir"
-    echo "              WORKDIR = $mpasdir/run_dirs"
+    echo "              eventdate = $eventdateDF"
+    echo "              rootdir   = $rootdir"
+    echo "              WORKDIR   = $mpasworkdir/run_dirs"
     echo " "
     echo "                                     -- By Y. Wang (2023.05.31)"
     echo " "
@@ -208,38 +206,28 @@ function parse_args {
                 shift
                 ;;
             -i)
-                if [[ $2 =~ ^[0-9]{12}$ ]]; then
-                    args["initdatetime"]=$2
+                if [[ $2 =~ ^[0-9]{4}$ ]]; then
+                    args["inittime"]=$2
                 else
-                    echo -e "${RED}ERROR${NC}: Initial time should be ${GREEN}YYYYmmddHHMM${NC}, got ${PURPLE}$2${NC}."
+                    echo -e "${RED}ERROR${NC}: Initial time should be ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
                     usage 1
                 fi
                 shift
                 ;;
             -s )
-                if [[ $2 =~ ^[0-9]{12}$ ]]; then
-                    args["eventtime"]=${2:8:4}
-                    eventhour=${2:8:2}
-                    if ((10#$eventhour < 12)); then
-                        args["eventdate"]=$(date -u -d "${2:0:8} 1 day ago" +%Y%m%d)
-                    else
-                        args["eventdate"]=${2:0:8}
-                    fi
-                elif [[ $2 =~ ^[0-9]{4}$ ]]; then
+                if [[ $2 =~ ^[0-9]{4}$ ]]; then
                     args["eventtime"]="${2}"
                 else
-                    echo -e "${RED}ERROR${NC}: Start time should be in ${GREEN}YYYYmmddHHMM${NC} or ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
+                    echo -e "${RED}ERROR${NC}: Start time should be in ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
                     usage 1
                 fi
                 shift
                 ;;
             -e )
-                if [[ $2 =~ ^[0-9]{12}$ ]]; then
-                    args["enddatetime"]=$2
-                elif [[ $2 =~ ^[0-9]{4}$ ]]; then
-                    args["endhrmin"]=$2
+                if [[ $2 =~ ^[0-9]{4}$ ]]; then
+                    args["endtime"]=$2
                 else
-                    echo -e "${RED}ERROR${NC}: End time should be in ${GREEN}YYYYmmddHHMM${NC} or ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
+                    echo -e "${RED}ERROR${NC}: End time should be in ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
                     usage 1
                 fi
                 shift
@@ -253,19 +241,16 @@ function parse_args {
                 ;;
             *)
                 if [[ $key =~ ^[0-9]{12}$ ]]; then
-                    args["enddatetime"]=${key}
                     args["eventtime"]=${key:8:4}
+                    args["endtime"]=${key:8:4}
                     eventhour=${key:8:2}
                     if ((10#$eventhour < 12)); then
                         args["eventdate"]=$(date -u -d "${key:0:8} 1 day ago" +%Y%m%d)
                     else
                         args["eventdate"]=${key:0:8}
                     fi
-                    args["endhrmin"]=${key:8:4}
                 elif [[ $key =~ ^[0-9]{8}$ ]]; then
                     args["eventdate"]=${key}
-                elif [[ $key =~ ^[0-9]{4}$ ]]; then
-                    args["eventtime"]=${key}
                 elif [[ -d $key ]]; then
                     WORKDIR=$key
                     lastdir=$(basename $WORKDIR)
@@ -276,14 +261,17 @@ function parse_args {
                         args["WORKDIR"]=$(upnlevels ${WORKDIR} 3)
                         args["eventdate"]=${lastdir:0:8}
                         args["eventtime"]=${lastdir:8:4}
+                        args["endtime"]=${lastdir:8:4}
                         eventhour=${lastdir:8:2}
                         if ((10#$eventhour < 12)); then
-                            args["eventdate"]=$(date -u -d "args['eventdate'] 1 day ago" +%Y%m%d)
+                            args["eventdate"]=$(date -u -d "${args['eventdate']} 1 day ago" +%Y%m%d)
                         fi
                     else
                         args["WORKDIR"]=$WORKDIR
                     fi
                     #echo $WORKDIR,$eventdate,$eventtime
+                elif [[ -f $key ]]; then
+                    args["config_file"]="${key}"
                 else
                     echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}$key${NC}."
                     usage 3
@@ -334,8 +322,8 @@ function run_obsmerge {
 
     input_base="${wrkdir}/input.nml"
 
-    mecho0 "OBS Preprocessing for analysis time: ${anlys_time}, days: ${g_date}, seconds: ${g_sec}"
-    mecho0 "OBS_DIR=${BLUE}${OBS_DIR}${NC}"
+    mecho0 "OBS Preprocessing for analysis time: ${WHITE}${anlys_time}${NC}, days: ${g_date}, seconds: ${g_sec}"
+    mecho0 "OBS_DIR=${LIGHT_BLUE}${OBS_DIR}${NC}"
 
     obsflists=()
     k=1
@@ -3498,38 +3486,10 @@ setup_machine "${args['machine']}" "$rootdir" true false
 [[ -v args["WORKDIR"] ]] && WORKDIR=${args["WORKDIR"]} || WORKDIR="${workdirDF}"
 
 #-----------------------------------------------------------------------
-# Set Event Date and Time
+# Set Event Date
 #-----------------------------------------------------------------------
 
 [[ -v args["eventdate"] ]] && eventdate="${args['eventdate']}" || eventdate="$eventdateDF"
-[[ -v args["eventtime"] ]] && eventtime="${args['eventtime']}" || eventtime="1500"
-[[ -v args["initdatetime"] ]] && initdatetime="${args['initdatetime']}" || initdatetime="${eventdate}1500"
-
-eventhour=${eventtime:0:2}
-if ((10#$eventhour < 12)); then
-    startday="1 day"
-else
-    startday=""
-fi
-
-
-if [[ -v args["endhrmin"] ]]; then
-    endhrmin="${args['endhrmin']}"
-    endhour=${endhrmin:0:2}
-    if ((10#$endhour < 12)); then
-        enddatetime=$(date -u -d "$eventdate $endhrmin 1 day" +%Y%m%d%H%M)
-    else
-        enddatetime=$(date -u -d "$eventdate $endhrmin" +%Y%m%d%H%M)
-    fi
-elif [[ -v args["enddatetime"] ]]; then
-    enddatetime="${args['enddatetime']}"
-else
-    enddatetime=$(date -u -d "$eventdate 03:00 1 day" +%Y%m%d%H%M)
-fi
-
-inittime_sec=$(date -u -d "${initdatetime:0:8} ${initdatetime:8:4}" +%s)
-starttime_sec=$(date -u -d "$eventdate ${eventtime} $startday"      +%s)
-stoptime_sec=$(date -u -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
 
 #-----------------------------------------------------------------------
 # read configurations that is not set from command line
@@ -3538,25 +3498,24 @@ stoptime_sec=$(date -u -d "${enddatetime:0:8}  ${enddatetime:8:4}"  +%s)
 if [[ -v args["config_file"] ]]; then
     config_file="${args['config_file']}"
 
-    if [[ -r ${config_file} ]]; then
-        :
-    elif [[ -e ${WORKDIR}/${config_file} ]]; then
-        config_file="${WORKDIR}/${config_file}"
+    if [[ "$config_file" =~ "/" ]]; then
+        WORKDIR=$(realpath "$(dirname ${config_file})")
     else
-        echo -e "${RED}ERROR${NC}: file ${CYAN}${WORKDIR}/${config_file}${NC} not exist."
-        usage 1
+        config_file="${WORKDIR}/${config_file}"
     fi
+    [[ ${config_file} =~ config\.([0-9]{8}) && ! -v args["eventdate"] ]] && eventdate="${BASH_REMATCH[1]}"
 else
     config_file="$WORKDIR/config.${eventdate}"
 fi
 
-if [[ ! -r ${config_file} ]]; then
+if [[ -r ${config_file} ]]; then
+    echo -e "Reading case configuration file: ${CYAN}${config_file}${NC} ...."
+else
     echo -e "${RED}ERROR${NC}: Configuration file ${CYAN}${config_file}${NC} is not found."
     echo -e "       Please run ${GREEN}setup_mpas-wofs.sh${NC} first."
     exit 2
-else
-    echo -e "Reading case configuration file: ${CYAN}${config_file}${NC} ...."
 fi
+
 readconf ${config_file} COMMON MPAS_OPTIONS dacycles || exit $?
 # get ENS_SIZE, time_step, EXTINVL, ADAPTIVE_INF, update_in_place
 
@@ -3576,6 +3535,24 @@ else
     echo -e "${RED}ERROR${NC}: mpscheme=${PURPLE}${mpscheme}${NC} is not supported."
     usage 1
 fi
+
+#-----------------------------------------------------------------------
+# Set Event End Date and Time
+#-----------------------------------------------------------------------
+
+[[ -v args["inittime"] ]]  && inittime="${args['inittime']}"   || inittime="1500"
+[[ -v args["eventtime"] ]] && eventtime="${args['eventtime']}" || eventtime="1500"
+[[ -v args["endtime"] ]]   && endtime="${args['endtime']}"     || endtime="0300"
+
+inithour=${inittime:0:2}; eventhour=${eventtime:0:2}; endhour=${endtime:0:2}
+(( 10#$eventhour < 10#$inithour )) && startday="1 day" || startday=""
+(( 10#$endhour   < 10#$inithour )) && endday="1 day"   || endday=""
+
+inittime_sec=$(date  -u -d "${eventdate} ${inittime}"            +%s)
+starttime_sec=$(date -u -d "${eventdate} ${eventtime} $startday" +%s)
+stoptime_sec=$(date  -u -d "${eventdate} ${endtime}   $endday"   +%s)
+
+enddatetime=$(date   -u -d @$stoptime_sec +%Y%m%d%H%M%S)
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #

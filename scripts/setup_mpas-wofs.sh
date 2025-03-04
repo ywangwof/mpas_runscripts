@@ -5,7 +5,7 @@
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "$scpdir")")
 
-mpasdir="/scratch/wofs_mpas"
+mpasworkdir="/scratch/wofs_mpas"     # platform dependent, it is set in Site_Runtime.sh
 
 eventdateDF=$(date -u +%Y%m%d)
 
@@ -91,7 +91,7 @@ function usage {
     echo "               setup    - just write set up configuration file"
     echo "               checkbg  - Check the availability of the HRRRE datasets"
     echo "               checkobs - Check the availability of observations"
-    echo "               Default  - All jobs in order from [geogrid,ungrib_hrrr,projectHexes,meshplot_py,static]."
+    echo "               Default  - All jobs in sequence order: [geogrid,ungrib_hrrr,projectHexes,meshplot_py,static]."
     echo " "
     echo "    OPTIONS:"
     echo "              -h              Display this message"
@@ -109,17 +109,15 @@ function usage {
     echo "              -x  affix       Affix attached to the run directory \"dacycles\" or \"fcst\". Default: Null"
     echo "              -l  L60.txt     Vertical level file"
     echo "              -o  filename    Ouput file name of the configuration file for this case"
-    echo "                              Default: \${WORKDIR}/config.\${eventdate}"
+    echo "                              Default: \${WORKDIR}/config.\${eventdate}\${affix}"
     echo " "
     echo "   DEFAULTS:"
-    echo "              eventdt = ${eventdateDF}"
-    echo "              ROOTDIR = ${rootdir}"
-    echo "              WORKDIR = ${mpasdir}/run_dirs"
-    echo "              TEMPDIR = ${rootdir}/templates"
-    echo "              FIXDIR  = ${rootdir}/fix_files"
-    echo "              EXEDIR  = ${rootdir}/exec"
+    echo    "              eventdate             = ${eventdateDF}"
+    echo    "              WORKDIR               = ${mpasworkdir}/run_dirs"
+    echo -e "  ${DARK}(*auto)${NC}     ROOTDIR/SCPDIR        = $rootdir${BROWN}/scripts${NC}"
+    echo -e "  ${DARK}(%config)${NC}   TEMPDIR/FIXDIR/EXEDIR = $rootdir${BROWN}${PURPLE}/templates${NC}|${DARK}/fix_files${NC}|${GREEN}/exec${NC}"
     echo " "
-    echo "                                     -- By Y. Wang (2023.05.24)"
+    echo "                                     -- By Y. Wang (2025.03.01)"
     echo " "
     exit "$1"
 }
@@ -1205,6 +1203,7 @@ function run_clean {
                 donestatic="$rundir/$domname/done.static"
                 if [[ -e $donestatic ]]; then
                     rm -f log.init_atmosphere.* static_*.log  #$EXTHEAD:*
+                    rm -f gpmetis.out*
                 fi
             fi
             ;;
