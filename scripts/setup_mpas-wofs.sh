@@ -1261,8 +1261,6 @@ function write_config {
 #
 # [COMMON] variables
 #
-#   daffix:     DA & fcst cycle work directory affix, default: dacycles/fcst
-#               if not empty, use dacyles.\${daffix}/fcst.\${daffix}
 #   damode:     DA cycles mode, either "restart" or "init"
 #
 #   mpscheme:   Microphysics scheme, valid values are ('mp_nssl2m', 'mp_thompson')
@@ -1281,7 +1279,6 @@ function write_config {
     EXTINVL=3600
 
     domname="${domname}"
-    daffix="${affix}"
     damode="${damode}"
 
     MPASLSM='sf_ruc'
@@ -1366,6 +1363,8 @@ function write_config {
     use_MESO=true                       # for a realtime run
     use_CWP=true
     use_RAD=true
+    use_REF=true
+    use_VEL=true
 
     run_updatebc=true                   # run mpas_update_bc
     run_obs2nc=true                     # run obs_seq_to_netcdf after filter

@@ -179,7 +179,6 @@ parse_args "$@"
 [[ -v args["verb"] ]]     && verb=${args["verb"]}         || verb=false
 [[ -v args["show"] ]]     && show=${args["show"]}         || show=""
 
-#[[ -v args["affix"] ]]    && affix=${args["affix"]}       || affix=""
 [[ -v args["taskopt"] ]]  && taskopt=${args["taskopt"]}   || taskopt=""
 [[ -v args["task"] ]]     && task=${args["task"]}         || task=""
 
@@ -207,14 +206,21 @@ if [[ -v args["config_file"] ]]; then
     else
         config_file="${run_dir}/${config_file}"
     fi
-    [[ ${config_file} =~ config\.([0-9]{8}) && ! -v args["eventdate"] ]] && eventdate="${BASH_REMATCH[1]}"
+
+    if [[ ${config_file} =~ config\.([0-9]{8})(.*) ]]; then
+        [[ -v args["eventdate"] ]] || eventdate="${BASH_REMATCH[1]}"
+        affix="${BASH_REMATCH[2]}"
+    else
+        echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not the right format config.YYYYmmdd[_*]."
+        exit 1
+    fi
 else
     config_file="${run_dir}/config.${eventdate}"
+    affix=""
 fi
 
 if [[ -f ${config_file} ]]; then
     fcstlength=$(grep '^ *fcst_length_seconds=' "${config_file}" | cut -d'=' -f2 | cut -d' ' -f1 | tr -d '(')
-    affix=$(grep '^ *daffix=' "${config_file}" | cut -d'=' -f2 | tr -d '"')
 else
     echo " "
     echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not exist."
@@ -274,6 +280,8 @@ post | plot | diag | verif | snd )
     esac
 
     post_config="${run_dir}/summary_files/WOFS_MPAS_config_${eventdate}${affix}.yaml"
+
+    rm -f ${post_config}
 
     # modify the configuration file
     sedfile=$(mktemp -t post.sed_XXXX)

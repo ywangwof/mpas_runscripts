@@ -1592,9 +1592,17 @@ if [[  -v args["config_file"] ]]; then
     else
         config_file="${WORKDIR}/${config_file}"
     fi
-    [[ ${config_file} =~ config\.([0-9]{8}) && ! -v args["eventdate"] ]] && eventdate="${BASH_REMATCH[1]}"
+
+    if [[ ${config_file} =~ config\.([0-9]{8})(.*) ]]; then
+        [[ -v args["eventdate"] ]] || eventdate="${BASH_REMATCH[1]}"
+        daffix="${BASH_REMATCH[2]}"
+    else
+        echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not the right format config.YYYYmmdd[_*]."
+        exit 1
+    fi
 else
     config_file="$WORKDIR/config.${eventdate}"
+    daffix=""
 fi
 
 if [[ -r ${config_file} ]]; then

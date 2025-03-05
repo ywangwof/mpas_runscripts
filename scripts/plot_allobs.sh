@@ -169,14 +169,20 @@ if [[ -v args["config_file"] ]]; then
     else
         config_file="${run_dir}/${config_file}"
     fi
-    [[ ${config_file} =~ config\.([0-9]{8}) && ! -v args["eventdate"] ]] && eventdate="${BASH_REMATCH[1]}"
+
+    if [[ ${config_file} =~ config\.([0-9]{8})(.*) ]]; then
+        [[ -v args["eventdate"] ]] || eventdate="${BASH_REMATCH[1]}"
+        affix="${BASH_REMATCH[2]}"
+    else
+        echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not the right format config.YYYYmmdd[_*]."
+        exit 1
+    fi
 else
     config_file="${run_dir}/config.${eventdate}"
+    affix=""
 fi
 
-if [[ -f ${config_file} ]]; then
-    affix=$(grep '^ *daffix=' "${config_file}" | cut -d'=' -f2 | tr -d '"')
-else
+if [[ ! -f ${config_file} ]]; then
     echo " "
     echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not exist."
     usage 1

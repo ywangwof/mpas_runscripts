@@ -152,8 +152,6 @@ parse_args "$@"
 [[ -v args["force_clean"] ]] && force_clean=${args["force_clean"]} || force_clean=false
 [[ -v args["fcstbeg"] ]]     && fcstbeg=${args["fcstbeg"]}         || fcstbeg=5
 
-#[[ -v args["affix"] ]]       && affix=${args["affix"]}             || affix=""
-
 [[ -v args["fcst_root"] ]] && fcst_root=${args["fcst_root"]} || fcst_root="${mpasworkdir}"
 [[ -v args["dest_root"] ]] && dest_root=${args["fcst_root"]} || dest_root="${fcst_root}/FCST"
 
@@ -171,14 +169,21 @@ if [[ -v args["config_file"] ]]; then
     else
         config_file="${fcst_root}/${config_file}"
     fi
-    [[ ${config_file} =~ config\.([0-9]{8}) && ! -v args["eventdate"] ]] && eventdate="${BASH_REMATCH[1]}"
+
+    if [[ ${config_file} =~ config\.([0-9]{8})(.*) ]]; then
+        [[ -v args["eventdate"] ]] || eventdate="${BASH_REMATCH[1]}"
+        affix="${BASH_REMATCH[2]}"
+    else
+        echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not the right format config.YYYYmmdd[_*]."
+        exit 1
+    fi
 else
     config_file="${fcst_root}/config.${eventdate}"
+    affix=""
 fi
 
 if [[ -f ${config_file} ]]; then
     fcstlength=$(grep '^ *fcst_length_seconds=' "${config_file}" | cut -d'=' -f2 | cut -d' ' -f1 | tr -d '(')
-    affix=$(grep '^ *daffix=' "${config_file}" | cut -d'=' -f2 | tr -d '"')
 else
     echo " "
     echo "ERROR: Config file - ${config_file} not exist."
