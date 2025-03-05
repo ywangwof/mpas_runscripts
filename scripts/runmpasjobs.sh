@@ -2,19 +2,19 @@
 # shellcheck disable=SC2034
 
 script_dir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
-top_dir=$(realpath "$(dirname "${script_dir}")")
+rootdir=$(realpath "$(dirname "${script_dir}")")
 
-up_dir=$(dirname $top_dir)
+MPASdir=$(dirname $(dirname "$rootdir"))
 
-mpas_dir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
+mpasworkdir="/scratch/wofs_mpas"
 eventdateDF=$(date -u +%Y%m%d%H%M)
 
 #
 # To run MPAS-WoFS tasks interactively or using at/cron at background
 #
 
-post_dir=${up_dir}/frdd-wofs-post/wofs/scripts
-script_dir=${top_dir}/scripts
+post_dir=${MPASdir}/frdd-wofs-post
+script_dir=${rootdir}/scripts
 
 host="$(hostname)"
 
@@ -82,12 +82,12 @@ function usage {
     echo    "              -nn                 Show command to be run (one level deeper), but not run it"
     echo    "              -v                  Verbose mode"
     echo    "              -e                  Last time in HHMM format"
-    echo    "              -x  affix           Directory affix"
+    echo    "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
     echo    " "
     echo    "   DEFAULTS:"
-    echo    "              eventdt    = $eventdateDF"
-    echo    "              rootdir    = $top_dir"
-    echo    "              run_dir    = $run_dir"
+    echo    "              eventdate  = $eventdateDF"
+    echo    "              WORKDIR    = ${mpasworkdir}/run_dir"
+    echo    "              rootdir    = $rootdir"
     echo    "              script_dir = $script_dir"
     echo    "              post_dir   = $post_dir"
     echo    " "
@@ -122,8 +122,8 @@ function parse_args {
             -v)
                 args["verb"]=true
                 ;;
-            -x)
-                args["affix"]="$2"
+            -f)
+                args["config_file"]="$2"
                 shift
                 ;;
             -e)
@@ -134,7 +134,7 @@ function parse_args {
                 echo -e "${RED}ERROR${NC}: Unknown option: ${YELLOW}$key${NC}"
                 usage 2
                 ;;
-            dacycles | fcst | post | plot | diag | verif)
+            dacycles | fcst | post | plot | diag | verif | snd )
                 args["task"]=$key
                 ;;
             noscript )
@@ -148,11 +148,12 @@ function parse_args {
                     else
                         args["eventdate"]=${key:0:8}
                     fi
-                    args["runtime"]="$key"
                 elif [[ $key =~ ^[0-9]{8}$ ]]; then
                     args["eventdate"]=${key}
                 elif [[ -d $key ]]; then
                     args["run_dir"]=$key
+                elif [[ -f $key ]]; then
+                    args["config_file"]="${key}"
                 else
                     echo ""
                     echo -e "${RED}ERROR${NC}: unknown argument, get [${YELLOW}$key${NC}]."
@@ -178,7 +179,6 @@ parse_args "$@"
 [[ -v args["verb"] ]]     && verb=${args["verb"]}         || verb=false
 [[ -v args["show"] ]]     && show=${args["show"]}         || show=""
 
-[[ -v args["affix"] ]]    && affix=${args["affix"]}       || affix=""
 [[ -v args["taskopt"] ]]  && taskopt=${args["taskopt"]}   || taskopt=""
 [[ -v args["task"] ]]     && task=${args["task"]}         || task=""
 
@@ -195,16 +195,43 @@ else
     fi
 fi
 
-[[ -v args["runtime"] ]] && runtime=${args["runtime"]} || runtime="$eventdate"
 [[ -v args["endtime"] ]] && endtime=${args["endtime"]} || endtime="0300"
+[[ -v args["run_dir"] ]] && run_dir=${args["run_dir"]} || run_dir="${mpasworkdir}/run_dirs"
 
-[[ -v args["run_dir"] ]] && run_dir=${args["run_dir"]} || run_dir="${mpas_dir}/run_dirs"
+if [[ -v args["config_file"] ]]; then
+    config_file="${args['config_file']}"
+
+    if [[ "$config_file" =~ "/" ]]; then
+        run_dir=$(realpath "$(dirname "${config_file}")")
+    else
+        config_file="${run_dir}/${config_file}"
+    fi
+
+    if [[ ${config_file} =~ config\.([0-9]{8})(.*) ]]; then
+        [[ -v args["eventdate"] ]] || eventdate="${BASH_REMATCH[1]}"
+        affix="${BASH_REMATCH[2]}"
+    else
+        echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not the right format config.YYYYmmdd[_*]."
+        exit 1
+    fi
+else
+    config_file="${run_dir}/config.${eventdate}"
+    affix=""
+fi
+
+if [[ -f ${config_file} ]]; then
+    fcstlength=$(grep '^ *fcst_length_seconds=' "${config_file}" | cut -d'=' -f2 | cut -d' ' -f1 | tr -d '(')
+else
+    echo " "
+    echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not exist."
+    usage 1
+fi
 
 ########################################################################
 
 # Load Python environment as needed
 case $task in
-post | plot | diag | verif)
+post | plot | diag | verif | snd )
     if [[ ! "$host" =~ ^wof-epyc.*$ ]]; then
         echo -e "${RED}ERROR${NC}: Please run ${BROWN}$task${NC} on wof-epyc8 only".
         exit 1
@@ -231,11 +258,75 @@ post | plot | diag | verif)
     donepost="${run_dir}/summary_files/${eventdate}${affix}/${endtime}/wofs_postswt_${endtime}_finished"
     doneplot="${run_dir}/image_files/flags/${eventdate}${affix}/${endtime}/wofs_plotpbl_${endtime}_finished"
     doneverif="${run_dir}/image_files/flags/${eventdate}${affix}/wofs_plotwwa_${endtime}_finished"
+    donesnd="${run_dir}/image_files/flags/${eventdate}${affix}/wofs_plotwwa_${endtime}_finished"
+
+    post_script_dir="${MPASdir}/frdd-wofs-post/wofs/scripts"
+    post_config_orig="${MPASdir}/frdd-wofs-post/conf/WOFS_MPAS_config.yaml"
+
+    case ${fcstlength} in
+    21600 )
+        nt=72
+        qpe_mode_string="['qpe_15m', 'qpe_1hr', 'qpe_3hr', 'qpe_6hr']"
+        ;;
+    10800 )
+        nt=36
+        qpe_mode_string="['qpe_15m', 'qpe_1hr', 'qpe_3hr']"
+        ;;
+    * )
+        echo -e "${RED}ERROR${NC}: fcstlength = ${PURPLE}${fcstlength}${NC} is not supported."
+        exit 1
+        ;;
+    esac
+
+    post_config="${run_dir}/summary_files/WOFS_MPAS_config_${eventdate}${affix}.yaml"
+    #rm -f "${post_config}"
+
+    if [[ ! -f "${post_config}" ]]; then
+        ((10#$endtime < 1200)) && oneday="1 day" || oneday=""
+
+        fbeg_s=$(date -u -d "${eventdate} 1700" +%s)
+        fbeg_e=$(date -u -d "${eventdate} ${endtime} ${oneday}" +%s)
+
+        fcst_times=""
+        for ((ftime=fbeg_s;ftime<=fbeg_e;ftime+=3600)); do
+            fcst_time=$(date -u -d @$ftime +%H%M)
+            fcst_times+=" '${fcst_time}',"
+        done
+
+        # modify the configuration file
+        sedfile=$(mktemp -t post.sed_XXXX)
+        cat << EOF > "${sedfile}"
+/^rundate :/s/: .*/: '${eventdate}'/
+/^date_ext :/s/: .*/: '${affix}'/
+/^process_times :/s/: .*/: [${fcst_times%,} ]/
+/^nt :/s/: .*/: $nt/
+/^fcstpath: /s#: .*#: ${run_dir}/FCST/#
+/^sumpath: /s#: .*#: ${run_dir}/summary_files/#
+/^flagpath: /s#: .*#: ${run_dir}/image_files/flags/#
+/^wrfinputpath: /s#: .*#: ${run_dir}/#
+/^imagepath: /s#: .*#: ${run_dir}/image_files/#
+/^jsonpath: /s#: .*#: ${post_dir}/json/#
+EOF
+        if [[ ! -f "${post_config_orig}" ]]; then
+            echo " "
+            echo -e "${RED}ERROR${NC}: Config template file - ${CYAN}${post_config_orig}${NC} not exist."
+            echo " "
+            exit 1
+        fi
+
+        sed -f "${sedfile}" "${post_config_orig}" > "${post_config}"
+        rm  -f "${sedfile}"
+    fi
+
+    if [[ "$task" == "verif" ]]; then
+        # modify the verif script
+        verif_script="${post_script_dir}/wofs_plot_verification_MPAS.py"
+        sed -i "/plot_modes_qpe =/s/\[.*\]/${qpe_mode_string}/" "${verif_script}"
+    fi
     ;;
 esac
 
-#config_file="${run_dir}/config.${eventdate}${affix}"
-
+#
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
 
@@ -260,20 +351,20 @@ if [[ -z $show ]]; then                 # Actually run the task
     fi
 fi
 
-echo -e "\n=== === === === ===\n"
-echo -e "${PURPLE}$(date +'%Y%m%d %H:%M:%S')${NC} - ${BROWN}$0 ${saved_args}${NC}"
+echo -e "=== === === === ===\n"
+echo -e "${PURPLE}$(date +'%Y%m%d %H:%M:%S (%Z)')${NC} - ${BROWN}$0 ${saved_args}${NC}"
 
 case $task in
 #1. dacycles
 dacycles )
     cd "${script_dir}" || exit 1
-    cmds=("${script_dir}/run_dacycles.sh" -f "config.${eventdate}${affix}" -e "${endtime}" "${runtime}" "${run_dir}" -r)
+    cmds=("${script_dir}/run_dacycles.sh" -e "${endtime}" "${config_file}" -r)
     if [[ -n "${taskopt}" ]]; then cmds+=("${taskopt}"); fi
     ;;
 #2. fcst
 fcst )
     cd "${script_dir}" || exit 1
-    cmds=("${script_dir}/run_fcst.sh" -f "config.${eventdate}${affix}" -e "${endtime}" "${runtime}" "${run_dir}" -r -w)
+    cmds=("${script_dir}/run_fcst.sh" -e "${endtime}" "${config_file}" -r -w)
     if [[ -n "${taskopt}" ]]; then cmds+=("${taskopt}"); fi
     ;;
 
@@ -296,22 +387,16 @@ post )
         fi
         if [[ ! -e ${run_dir}/FCST/${eventdate}${affix}/fcst_${enddate}${endtime}_start ]]; then
             # To make sure the correct FCST files are used, "-c"
-            cmds=("${script_dir}/lnmpasfcst.sh" -c -e "${endtime}" -b "$fcstbegs" -src "${run_dir}")
-            if [[ -n ${affix} ]]; then
-                cmds+=(-x "${affix}")
-            fi
+            cmds=("${script_dir}/lnmpasfcst.sh" -c -b "$fcstbegs" -e "${endtime}" "${config_file}" )
             cmds+=("${eventdate}")
             ${show} "${cmds[@]}"
         fi
 
-        cd "${post_dir}" || exit 1
-        cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${eventdate}" "${endtime}")
-        if [[ -n ${affix} ]]; then
-            cmds+=("${affix}")
-        fi
+        cd "${post_script_dir}" || exit 1
+        cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${post_config}")
     else
         echo -e "${DARK}File ${CYAN}$donepost${NC} exist"
-        echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} post${NC} before reprocessing."
+        echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${config_file} post${NC} before reprocessing."
         exit 1
     fi
     ;;
@@ -324,11 +409,8 @@ plot )
             sleep 10
         done
 
-        cd "${post_dir}" || exit 1
-        cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${eventdate}" "${endtime}")
-        if [[ -n ${affix} ]]; then
-            cmds+=("${affix}")
-        fi
+        cd "${post_script_dir}" || exit 1
+        cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${post_config}")
     else
         echo -e "${DARK}File ${CYAN}$doneplot${NC} exist"
         echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} post${NC} before reprocessing."
@@ -343,38 +425,51 @@ verif )
             sleep 10
         done
 
-        cd "${post_dir}" || exit 1
-        cmds=(time "./wofs_plot_verification_MPAS.py" "${eventdate}" "${endtime}")
-        if [[ -n ${affix} ]]; then
-            cmds+=("${affix}")
-        fi
+        cd "${post_script_dir}" || exit 1
+        cmds=(time "./wofs_plot_verification_MPAS.py" "${post_config}")
     else
         echo -e "${DARK}File ${CYAN}$doneverif${NC} exist"
         echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} post${NC} before reprocessing."
         exit 2
     fi
     ;;
-#6. diag
+#6. snd
+snd )
+    if [[ ! -e ${donesnd} ]]; then
+        echo -e "${DARK}Waiting for ${donepost} ...."
+        while [[ ! -e "${donepost}" ]]; do
+            sleep 10
+        done
+
+        cd "${post_script_dir}" || exit 1
+        cmds=(time "./wofs_plot_sounding_MPAS.py" "${post_config}")
+    else
+        echo -e "${DARK}File ${CYAN}$donesnd${NC} exist"
+        echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} post${NC} before reprocessing."
+        exit 2
+    fi
+    ;;
+
+#7. diag
 diag )
     cd "${script_dir}" || exit 1
-    cmds=("${script_dir}/plot_allobs.sh" -e "${endtime}" "${eventdate}" "${run_dir}")
-    if [[ -n "${affix}" ]];   then cmds+=(-x "${affix}"); fi
+    cmds=("${script_dir}/plot_allobs.sh" -e "${endtime}" "${config_file}")
     if [[ -n "${taskopt}" ]]; then cmds+=("${taskopt}");  fi
-
     ;;
 * )
-    echo -e "${RED}ERROR${NC}: Unknown task - ${PURPLE}$task${NC}"
+    echo -e "${RED}ERROR${NC}: Unknown task - ${PURPLE}$task${NC}\n"
     exit 3
     ;;
 esac
 
 if [ -t 1 ]; then # "interactive"
-    echo -e "\n${DARK}Interactivly running: ${BROWN}${task}${NC} from ${YELLOW}$(pwd)${NC} at ${PURPLE}$(date +'%Y%m%d_%H:%M:%S(%Z)')${NC}\n"
+    echo -e "\n${PURPLE}$(date +'%Y%m%d_%H:%M:%S (%Z)')${NC} - ${DARK}Interactivly running: ${BROWN}${task}${NC} from ${YELLOW}$(pwd)${NC}\n"
 else
-    echo -e "\n${PURPLE}$(date +'%Y%m%d %H:%M:%S(%Z)')${NC} - ${DARK}Background running: ${BROWN}${task}${NC} from ${BLYELLOWUE}$(pwd)${NC}\n"
+    echo -e "\n${PURPLE}$(date +'%Y%m%d %H:%M:%S (%Z)')${NC} - ${DARK}Background running: ${BROWN}${task}${NC} from ${BLYELLOWUE}$(pwd)${NC}\n"
 fi
 
 if [[ -z ${show} ]]; then echo -e "${GREEN}${cmds[*]}${NC}"; fi
 ${show} "${cmds[@]}"
+echo " "
 
 exit 0

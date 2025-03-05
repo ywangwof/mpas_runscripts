@@ -1,6 +1,6 @@
 #!/bin/bash
 
-fcst_root="/scratch/yunheng.wang/MPAS/MPAS_PROJECT/run_dirs"
+mpasworkdir="/scratch/wofs_mpas/run_dirs"
 
 eventdateDF=$(date -u +%Y%m%d)
 
@@ -22,18 +22,18 @@ function usage {
     echo "              -h                  Display this message"
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
-    echo "              -x    affix         FCST Directory affix. Defaut: empty"
     echo "              -src  fcst_root     FCST cycles directory. Default: ${fcst_root}"
     echo "              -dest dest_root     WRF FCST directory name. Default: \${fcst_root}/FCST"
     echo "              -s    starttime     in HHMM. Default: 1700"
     echo "              -e    endtime       in HHMM. Default: 0300"
     echo "              -b    5             Forecast first available time in minutes. Default: 5 minutes"
     echo "              -c                  Overwritten existing files, otherwise, keep existing files"
+    echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt    = $eventdateDF"
-    echo "              fcst_root  = $fcst_root"
-    echo "              dest_root  = $fcst_root/FCST"
+    echo "              fcst_root  = $mpasworkdir"
+    echo "              dest_root  = $mpasworkdir/FCST"
     echo " "
     echo "                                     -- By Y. Wang (2024.04.17)"
     echo " "
@@ -70,10 +70,6 @@ function parse_args {
             -c)
                 args["force_clean"]=true
                 ;;
-            -x)
-                args["affix"]="$2"
-                shift
-                ;;
             -src)
                 if [[ ! -d ${2} ]]; then
                     echo "ERROR: directory ${2} not exist"
@@ -88,6 +84,10 @@ function parse_args {
                 else
                     args["dest_root"]="$2"
                 fi
+                shift
+                ;;
+            -f)
+                args["config_file"]="$2"
                 shift
                 ;;
             -b)
@@ -117,13 +117,15 @@ function parse_args {
                 shift
                 ;;
 
-            -*)
+            -* )
                 echo "Unknown option: $key"
                 usage 2
                 ;;
-            *)
+            * )
                 if [[ $key =~ ^[0-9]{8}$ ]]; then
                     args["eventdate"]=${key}
+                elif [[ -f $key ]]; then
+                    args["config_file"]="${key}"
                 else
                     echo ""
                     echo "ERROR: unknown argument, get [$key]."
@@ -150,34 +152,65 @@ parse_args "$@"
 [[ -v args["force_clean"] ]] && force_clean=${args["force_clean"]} || force_clean=false
 [[ -v args["fcstbeg"] ]]     && fcstbeg=${args["fcstbeg"]}         || fcstbeg=5
 
-[[ -v args["affix"] ]]       && affix=${args["affix"]}             || affix=""
-
-[[ -v args["fcst_root"] ]] && fcst_root=${args["fcst_root"]}
+[[ -v args["fcst_root"] ]] && fcst_root=${args["fcst_root"]} || fcst_root="${mpasworkdir}"
 [[ -v args["dest_root"] ]] && dest_root=${args["fcst_root"]} || dest_root="${fcst_root}/FCST"
 
 [[ -v args["eventdate"] ]] && eventdate=${args["eventdate"]} || eventdate=${eventdateDF}
 [[ -v args["starttime"] ]] && starttime=${args["starttime"]} || starttime="1700"
 [[ -v args["endtime"] ]]   && endtime=${args["endtime"]}     || endtime="0300"
 
-fcstdir="fcst${affix}"
+[[ -v args["config_file"] ]] && config_file=${args["config_file"]} || config_file="${fcst_root}/config.${eventdate}"
 
-if [[ ! -d ${fcst_root}/${eventdate}/${fcstdir} ]]; then
-    echo "ERROR: ${fcst_root}/${eventdate}/${fcstdir} not exist."
+if [[ -v args["config_file"] ]]; then
+    config_file=${args["config_file"]}
+
+    if [[ "$config_file" =~ "/" ]]; then
+        fcst_root=$(realpath "$(dirname "${config_file}")")
+    else
+        config_file="${fcst_root}/${config_file}"
+    fi
+
+    if [[ ${config_file} =~ config\.([0-9]{8})(.*) ]]; then
+        [[ -v args["eventdate"] ]] || eventdate="${BASH_REMATCH[1]}"
+        affix="${BASH_REMATCH[2]}"
+    else
+        echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not the right format config.YYYYmmdd[_*]."
+        exit 1
+    fi
+else
+    config_file="${fcst_root}/config.${eventdate}"
+    affix=""
+fi
+
+if [[ -f ${config_file} ]]; then
+    fcstlength=$(grep '^ *fcst_length_seconds=' "${config_file}" | cut -d'=' -f2 | cut -d' ' -f1 | tr -d '(')
+else
+    echo " "
+    echo "ERROR: Config file - ${config_file} not exist."
     usage 1
 fi
 
+fcstdir="fcst${affix}"
+
+if [[ ! -d ${fcst_root}/${eventdate}/${fcstdir} ]]; then
+    echo " "
+    echo "ERROR: Forecast directory - ${fcst_root}/${eventdate}/${fcstdir} not exist."
+    usage 1
+fi
+
+#
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
 
 starthour=${starttime:0:2}
-if [[ $((10#$starthour)) -lt 12 ]]; then
+if (( 10#$starthour < 12 )); then
     startdatetime=$(date -u -d "$eventdate $starttime 1 day" "+%Y%m%d %H%M")
 else
     startdatetime=$(date -u -d "$eventdate $starttime" "+%Y%m%d %H%M")
 fi
 
 endhour=${endtime:0:2}
-if [[ $((10#$endhour)) -lt 12 ]]; then
+if (( 10#$endhour < 12 )); then
     enddatetime=$(date -u -d "$eventdate $endtime 1 day" "+%Y%m%d %H%M")
 else
     enddatetime=$(date -u -d "$eventdate $endtime" "+%Y%m%d %H%M")

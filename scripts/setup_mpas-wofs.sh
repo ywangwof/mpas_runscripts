@@ -4,7 +4,8 @@
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "$scpdir")")
-#mpasdir=$(dirname "${rootdir}")
+
+mpasworkdir="/scratch/wofs_mpas"     # platform dependent, it is set in Site_Runtime.sh
 
 eventdateDF=$(date -u +%Y%m%d)
 
@@ -83,14 +84,14 @@ function usage {
     echo " "
     echo "    PURPOSE: Set up a MPAS-WOFS grid based on the central lat/lon."
     echo " "
-    echo "    DATETIME - Case date and time in YYYYmmddHHMM, Default for today"
+    echo "    DATETIME - Case date and time in YYYYmmddHHMM, Default: ${eventdateDF}"
     echo "    WORKDIR  - Run Directory"
     echo "    JOBS     - One or more jobs from [geogrid,ungrib_hrrr,rotate,meshplot_{py,ncl},static,createWOFS,projectHexes,clean]"
     echo "               or any one from [check,checkbg,checkobs,setup]."
     echo "               setup    - just write set up configuration file"
     echo "               checkbg  - Check the availability of the HRRRE datasets"
     echo "               checkobs - Check the availability of observations"
-    echo "               Default  - All jobs in order from [geogrid,ungrib_hrrr,projectHexes,meshplot_py,static]."
+    echo "               Default  - All jobs in sequence order: [geogrid,ungrib_hrrr,projectHexes,meshplot_py,static]."
     echo " "
     echo "    OPTIONS:"
     echo "              -h              Display this message"
@@ -100,7 +101,7 @@ function usage {
     echo "                              Default is 0 for ungrib, mpassit, upp and 1 for others"
     echo "              -m  Machine     Machine name to run on, [Jet, Derecho, Vecna]."
     echo "              --template/--fix/--exec  DIR"
-    echo "                              Directory for runtime files, job template/fixed static file/executable programs."
+    echo "                              Directory for runtime files, job templates/fixed static files/executable programs respectively."
     echo "              -a  wof         Account name for job submission."
     echo "              -M  init        DA cycles mode, either init or restart. default: init"
     echo "              -c  lat,lon     Domain central lat/lon, for example, 43.33296,-84.24593. Program \"geogrid\" requires them."
@@ -108,17 +109,15 @@ function usage {
     echo "              -x  affix       Affix attached to the run directory \"dacycles\" or \"fcst\". Default: Null"
     echo "              -l  L60.txt     Vertical level file"
     echo "              -o  filename    Ouput file name of the configuration file for this case"
-    echo "                              Default: $WORKDIR/config.${eventdate}"
+    echo "                              Default: \${WORKDIR}/config.\${eventdate}\${affix}"
     echo " "
     echo "   DEFAULTS:"
-    echo "              eventdt = ${eventdate}"
-    echo "              rootdir = ${rootdir}"
-    echo "              WORKDIR = ${WORKDIR}"
-    echo "              TEMPDIR = ${rootdir}/templates"
-    echo "              FIXDIR  = ${rootdir}/fix_files"
-    echo "              EXEDIR  = ${rootdir}/exec"
+    echo    "              eventdate             = ${eventdateDF}"
+    echo    "              WORKDIR               = ${mpasworkdir}/run_dirs"
+    echo -e "  ${DARK}(*auto)${NC}     ROOTDIR/SCPDIR        = $rootdir${BROWN}/scripts${NC}"
+    echo -e "  ${DARK}(%config)${NC}   TEMPDIR/FIXDIR/EXEDIR = $rootdir${BROWN}${PURPLE}/templates${NC}|${DARK}/fix_files${NC}|${GREEN}/exec${NC}"
     echo " "
-    echo "                                     -- By Y. Wang (2023.05.24)"
+    echo "                                     -- By Y. Wang (2025.03.01)"
     echo " "
     exit "$1"
 }
@@ -220,7 +219,7 @@ function parse_args {
             shift
             ;;
         -l)
-            fixed_level="${FIXDIR}/$2"
+            fixed_level="$2"
             if [[ ! -e ${fixed_level} ]]; then
                 echo -e "${RED}ERROR${NC}: ${BLUE}${fixed_level}${NC} not exist."
                 usage 1
@@ -1204,6 +1203,7 @@ function run_clean {
                 donestatic="$rundir/$domname/done.static"
                 if [[ -e $donestatic ]]; then
                     rm -f log.init_atmosphere.* static_*.log  #$EXTHEAD:*
+                    rm -f gpmetis.out*
                 fi
             fi
             ;;
@@ -1261,8 +1261,6 @@ function write_config {
 #
 # [COMMON] variables
 #
-#   daffix:     DA & fcst cycle work directory affix, default: dacycles/fcst
-#               if not empty, use dacyles.\${daffix}/fcst.\${daffix}
 #   damode:     DA cycles mode, either "restart" or "init"
 #
 #   mpscheme:   Microphysics scheme, valid values are ('mp_nssl2m', 'mp_thompson', 'mp_tempo')
@@ -1281,7 +1279,6 @@ function write_config {
     EXTINVL=3600
 
     domname="${domname}"
-    daffix="${affix}"
     damode="${damode}"
 
     MPASLSM='sf_ruc'
@@ -1366,6 +1363,8 @@ function write_config {
     use_MESO=true                       # for a realtime run
     use_CWP=true
     use_RAD=true
+    use_REF=true
+    use_VEL=true
 
     run_updatebc=true                   # run mpas_update_bc
     run_obs2nc=true                     # run obs_seq_to_netcdf after filter

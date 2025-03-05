@@ -5,6 +5,8 @@
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
 
+mpasworkdir="/scratch/wofs_mpas"     # platform dependent, it is set in Site_Runtime.sh
+
 eventdateDF=$(date -u +%Y%m%d)
 
 #-----------------------------------------------------------------------
@@ -72,12 +74,12 @@ function usage {
     echo "              -e  YYYYmmddHHMM    End date & time for the LBC preparation"
     echo "                  HHMM            End time"
     echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
-    echo "              -f conf_file        Configuration file for this case. Default: ${WORKDIR}/config.${eventdate}"
+    echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt = $eventdate"
     echo "              rootdir = $rootdir"
-    echo "              WORKDIR = $WORKDIR"
+    echo "              WORKDIR = $mpasworkdir/run_dirs"
     echo " "
     echo "                                     -- By Y. Wang (2023.05.25)"
     echo " "
@@ -147,12 +149,11 @@ function parse_args {
                 ;;
             -s )
                 if [[ $2 =~ ^[0-9]{12}$ ]]; then
+                    args["eventdate"]=${2:0:8}
                     args["eventtime"]=${2:8:4}
                     eventhour=${2:8:2}
                     if ((10#$eventhour < 12)); then
                         args["eventdate"]=$(date -u -d "${2:0:8} 1 day ago" +%Y%m%d)
-                    else
-                        args["eventdate"]=${2:0:8}
                     fi
                 elif [[ $2 =~ ^[0-9]{4}$ ]]; then
                     args["eventtime"]="${2}"
@@ -166,7 +167,7 @@ function parse_args {
                 if [[ $2 =~ ^[0-9]{12}$ ]]; then
                     args["enddatetime"]=$2
                 elif [[ $2 =~ ^[0-9]{4}$ ]]; then
-                    args["endhrmin"]=$2
+                    args["endtime"]=$2
                 else
                     echo -e "${RED}ERROR${NC}: End time should be in ${GREEN}YYYYmmddHHMM${NC} or ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
                     usage 1
@@ -184,6 +185,8 @@ function parse_args {
                 if [[ $key =~ ^[0-9]{12}$ ]]; then
                     args["eventdate"]=${key:0:8}
                     args["eventtime"]=${key:8:4}
+                    args["enddatetime"]=${key}
+                    args["endtime"]=${key:8:4}
                 elif [[ $key =~ ^[0-9]{8}$ ]]; then
                     args["eventdate"]=${key}
                 elif [[ -d $key ]]; then
@@ -196,6 +199,8 @@ function parse_args {
                         args["WORKDIR"]=$WORKDIR
                     fi
                     #echo $WORKDIR,$eventdate,$eventtime
+                elif [[ -f $key ]]; then
+                    args["config_file"]="${key}"
                 else
                     echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}$key${NC}."
                     usage 3
@@ -575,26 +580,11 @@ setup_machine "${args['machine']}" "$rootdir" false false
 
 #-----------------------------------------------------------------------
 #
-# Set Event Date and Time
+# Set Event Date and Start Time
 #
 #-----------------------------------------------------------------------
 [[ -v args["eventdate"] ]] && eventdate="${args['eventdate']}" || eventdate="$eventdateDF"
 [[ -v args["eventtime"] ]] && eventtime="${args['eventtime']}" || eventtime="1500"
-
-if [[ -v args["endhrmin"] ]]; then
-    endhrmin="${args['endhrmin']}"
-    endhour=${endhrmin:0:2}
-    if ((10#$endhour < 12)); then
-        enddatetime=$(date -u -d "$eventdate $endhrmin 1 day" +%Y%m%d%H%M)
-    else
-        enddatetime=$(date -u -d "$eventdate $endhrmin" +%Y%m%d%H%M)
-    fi
-elif [[ -v args["enddatetime"] ]]; then
-    enddatetime="${args['enddatetime']}"
-else
-    eventend="0900"
-    enddatetime=$(date -u -d "${eventdate} ${eventend} 1 day" +%Y%m%d%H%M)
-fi
 
 #-----------------------------------------------------------------------
 #
@@ -604,24 +594,22 @@ fi
 if [[ -v args["config_file"] ]]; then
     config_file="${args['config_file']}"
 
-    if [[ -r ${config_file} ]]; then
-        :
-    elif [[ -e ${WORKDIR}/${config_file} ]]; then
-        config_file="${WORKDIR}/${config_file}"
+    if [[ "$config_file" =~ "/" ]]; then
+        WORKDIR=$(realpath "$(dirname ${config_file})")
     else
-        echo -e "${RED}ERROR${NC}: file ${CYAN}${config_file}${NC} not exist."
-        usage 1
+        config_file="${WORKDIR}/${config_file}"
     fi
+    [[ ${config_file} =~ config\.([0-9]{8}) && ! -v args["eventdate"] ]] && eventdate="${BASH_REMATCH[1]}"
 else
     config_file="$WORKDIR/config.${eventdate}"
 fi
 
-if [[ ! -r ${config_file} ]]; then
+if [[ -r ${config_file} ]]; then
+    echo -e "Reading case (${GREEN}${eventdate}${NC}) configuration file: ${CYAN}${config_file}${NC} ...."
+else
     echo -e "${RED}ERROR${NC}: Configuration file ${CYAN}${config_file}${NC} is not found."
     echo -e "       Please run ${GREEN}setup_mpas-wofs.sh${NC} first or use ${BLUE}-h${NC} to show help."
     exit 2
-else
-    echo -e "Reading case (${GREEN}${eventdate}${NC}) configuration file: ${CYAN}${config_file}${NC} ...."
 fi
 readconf ${config_file} COMMON lbc || exit $?
 # get ENS_SIZE, EXTINVL, LBCIOTYPE
@@ -632,6 +620,26 @@ if [[ -e ${vertLevel_file} ]]; then
 else
     echo -e "${RED}ERROR${NC}: vertLevel_file=${BLUE}${vertLevel_file}${NC} not exist."
     usage 1
+fi
+#-----------------------------------------------------------------------
+#
+# Set Event End Date and Time
+#
+#-----------------------------------------------------------------------
+
+if [[ -v args["enddatetime"] ]]; then
+    enddatetime="${args['enddatetime']}"
+elif [[ -v args["endtime"] ]]; then
+    endtime="${args['endtime']}"
+    endhour=${endtime:0:2}
+    if ((10#$endhour < 12)); then
+        enddatetime=$(date -u -d "${eventdate} ${endtime} 1 day" +%Y%m%d%H%M)
+    else
+        enddatetime=$(date -u -d "${eventdate} $endtime" +%Y%m%d%H%M)
+    fi
+else
+    eventend="0900"
+    enddatetime=$(date -u -d "${eventdate} ${eventend} 1 day" +%Y%m%d%H%M)
 fi
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -658,7 +666,7 @@ echo    " "
 
 jobname="${eventdate:4:4}"
 
-starttime_str=$(date -u -d "$eventdate ${eventtime}"               +%Y-%m-%d_%H:%M:%S)
+starttime_str=$(date -u -d "${eventdate}       ${eventtime}"       +%Y-%m-%d_%H:%M:%S)
 stoptime_str=$(date  -u -d "${enddatetime:0:8} ${enddatetime:8:4}" +%Y-%m-%d_%H:%M:%S)
 
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )

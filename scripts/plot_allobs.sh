@@ -1,11 +1,12 @@
 #!/bin/bash
-script_dir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
+# shellcheck disable=SC2034
+
+script_dir="$( cd "$( dirname "$0" )" && pwd )"                         # dir of script
 rootdir=$(realpath "$(dirname "${script_dir}")")
 
-up_dir=$(dirname $rootdir)
-mpasdir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
+MPASdir=$(dirname $(dirname "$rootdir"))                                # no compiler specific stuffs
 
-rundir="${mpasdir}/run_dirs"
+mpasworkdir="/scratch/wofs_mpas"
 
 eventdateDF=$(date -u +%Y%m%d)
 
@@ -41,7 +42,7 @@ function usage {
     echo "              -h                  Display this message"
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
-    echo "              -x affix            DA cycles subdirectory name affix, default: empty for \"dacycles\""
+    echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
     echo "              -m machine          Default: wof-epyc"
     echo "              -obs value          Plot observation value or variance. Default: none"
     echo "                                  This option can repeat multiple times for plot several variables"
@@ -49,113 +50,162 @@ function usage {
     echo "              -e endtime          in HHMM. Default: 0300"
     echo " "
     echo "   DEFAULTS:"
-    echo "              eventdt    = $eventdateDF"
+    echo "              eventdate  = $eventdateDF"
+    echo "              WORKDIR    = $mpasworkdir/run_dirs"
     echo "              rootdir    = $rootdir"
-    echo "              run_dir    = $rundir"
     echo "              script_dir = $script_dir"
     echo " "
     echo "                                     -- By Y. Wang (2024.04.17)"
     echo " "
-    exit $1
+    exit "$1"
 }
 
-#-----------------------------------------------------------------------
+########################################################################
 #
-# Handle command line arguments (override default settings)
+# Handle command line arguments
 #
-#-----------------------------------------------------------------------
+########################################################################
+
+function parse_args {
+
+    declare -gA args
+
+    while [[ $# -gt 0 ]]; do
+        key="$1"
+
+        case $key in
+            -h)
+                usage 0
+                ;;
+            -n)
+                args["show"]="echo"
+                ;;
+            -v)
+                args["verb"]=true
+                ;;
+            -f)
+                args["config_file"]="$2"
+                shift
+                ;;
+            -m)
+                args["machine"]="$2"
+                shift
+                ;;
+            -obs)
+                if [[ "${2,,}" =~ ^(value|variance)$  ]]; then
+                    args["obsvalues"]+=" ${2,,}"
+                else
+                    echo "ERROR: unknown obsvalue: $2."
+                    usage 1
+                fi
+                shift
+                ;;
+            -s )
+                if [[ $2 =~ ^[0-9]{4}$ ]]; then
+                    args["starttime"]="${2}"
+                else
+                    echo "ERROR: Start time should be in HHMM, got \"$2\"."
+                    usage 1
+                fi
+                shift
+                ;;
+            -e )
+                if [[ $2 =~ ^[0-9]{4}$ ]]; then
+                    args["endtime"]=$2
+                else
+                    echo "ERROR: End time should be in HHMM, got \"$2\"."
+                    usage 1
+                fi
+                shift
+                ;;
+
+            -*)
+                echo "Unknown option: $key"
+                usage 2
+                ;;
+            *)
+                if [[ $key =~ ^[0-9]{8}$ ]]; then
+                    args["eventdate"]=${key}
+                elif [[ -d $key ]]; then
+                    args["run_dir"]=$key
+                elif [[ -f $key ]]; then
+                    args["config_file"]="${key}"
+                else
+                    echo ""
+                    echo "ERROR: unknown argument, get [$key]."
+                    usage 3
+                fi
+                ;;
+        esac
+        shift # past argument or value
+    done
+}
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#
+#@ MAIN entry
+#
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #% ARGS
-show=""
-verb=false
 
-eventdate=${eventdateDF}
-starttime="1500"
-endtime="0300"
-affix=""
-machine="wof-epyc"
-obsvalues=()
+parse_args "$@"
 
-declare -rA obstypes=(["value"]="1" ["variance"]="78")
+[[ -v args["verb"] ]]     && verb=${args["verb"]}         || verb=false
+[[ -v args["show"] ]]     && show=${args["show"]}         || show=""
 
-while [[ $# -gt 0 ]]; do
-    key="$1"
+[[ -v args["eventdate"] ]]   && eventdate=${args["eventdate"]}     || eventdate=${eventdateDF}
+[[ -v args["run_dir"] ]]     && run_dir=${args["run_dir"]}         || run_dir="${mpasworkdir}/run_dirs"
+[[ -v args["machine"] ]]     && machine=${args["machine"]}         || machine="wof-epyc"
+[[ -v args["starttime"] ]]   && starttime=${args["starttime"]}     || starttime="1500"
+[[ -v args["endtime"] ]]     && endtime=${args["endtime"]}         || endtime="0300"
 
-    case $key in
-        -h)
-            usage 0
-            ;;
-        -n)
-            show="echo"
-            ;;
-        -v)
-            verb=true
-            ;;
-        -x)
-            affix="$2"
-            shift
-            ;;
-        -m)
-            machine="$2"
-            shift
-            ;;
-        -obs)
-            if [[ "${2,,}" == "value" || "${2,,}" == "variance" ]]; then
-                obsvalues+=("${2,,}")
-            else
-                echo "ERROR: unknown obsvalue: $2."
-                usage 1
-            fi
-            shift
-            ;;
-        -s )
-            if [[ $2 =~ ^[0-9]{4}$ ]]; then
-                starttime="${2}"
-            else
-                echo "ERROR: Start time should be in HHMM, got \"$2\"."
-                usage 1
-            fi
-            shift
-            ;;
-        -e )
-            if [[ $2 =~ ^[0-9]{4}$ ]]; then
-                endtime=$2
-            else
-                echo "ERROR: End time should be in HHMM, got \"$2\"."
-                usage 1
-            fi
-            shift
-            ;;
+[[ -v args["obsvalues"] ]]   && read -r -a obsvalues <<< "${args['obsvalues']}" || obsvalues=()
 
-        -*)
-            echo "Unknown option: $key"
-            usage 2
-            ;;
-        *)
-            if [[ $key =~ ^[0-9]{8}$ ]]; then
-                eventdate=${key}
-            elif [[ -d $key ]]; then
-                rundir=$key
-            else
-                echo ""
-                echo "ERROR: unknown argument, get [$key]."
-                usage 3
-            fi
-            ;;
-    esac
-    shift # past argument or value
-done
+if [[ -v args["config_file"] ]]; then
+    config_file=${args["config_file"]}
+
+    if [[ "$config_file" =~ "/" ]]; then
+        run_dir=$(realpath "$(dirname "${config_file}")")
+    else
+        config_file="${run_dir}/${config_file}"
+    fi
+
+    if [[ ${config_file} =~ config\.([0-9]{8})(.*) ]]; then
+        [[ -v args["eventdate"] ]] || eventdate="${BASH_REMATCH[1]}"
+        affix="${BASH_REMATCH[2]}"
+    else
+        echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not the right format config.YYYYmmdd[_*]."
+        exit 1
+    fi
+else
+    config_file="${run_dir}/config.${eventdate}"
+    affix=""
+fi
+
+if [[ ! -f ${config_file} ]]; then
+    echo " "
+    echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not exist."
+    usage 1
+fi
 
 dadir="dacycles${affix}"
 
-if [[ ! -d ${rundir}/${eventdate}/${dadir} ]]; then
-    echo "ERROR: DA cycles directory: ${rundir}/${eventdate}/${dadir} not exist."
+if [[ ! -d ${run_dir}/${eventdate}/${dadir} ]]; then
+    echo " "
+    echo -e "${RED}ERROR${NC}: DA cycles directory: ${CYAN}${run_dir}/${eventdate}/${dadir}${NC} not exist."
+    echo " "
     exit 1
 fi
 
 if [[ ! "$host" =~ ^${machine}.*$ ]]; then
-    echo "ERROR: Please run $0 on ${machine} only".
+    echo " "
+    echo -e "${RED}ERROR${NC}: Please run $0 on ${machine} only".
+    echo " "
     exit 1
 fi
+
+########################################################################
+# Load Python environment
 
 if [[ -z ${MAMBA_EXE} || -t 0 ]]; then   # not set micromamba
     if [[ "$host" =~ ^vecna.*$ ]]; then
@@ -185,19 +235,22 @@ if [[ -z ${MAMBA_EXE} || -t 0 ]]; then   # not set micromamba
     echo "Activated Python environment \"${myenv}\" on ${machine} ..."
 fi
 
-#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+declare -rA obstypes=(["value"]="1" ["variance"]="78")
 
-#log_dir="${rundir}/${eventdate}"
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#% ENTRY
+
+#log_dir="${run_dir}/${eventdate}"
 #
 #if [[ ! -d ${log_dir} ]]; then
 #    echo "ERROR: ${log_dir} not exists."
 #    exit 1
 #fi
 
-if [[ ! -d ${rundir}/${eventdate}/${dadir}/obs_diag ]]; then
-    mkdir -p "${rundir}/${eventdate}/${dadir}/obs_diag"
+if [[ ! -d ${run_dir}/${eventdate}/${dadir}/obs_diag ]]; then
+    mkdir -p "${run_dir}/${eventdate}/${dadir}/obs_diag"
 fi
-cd "${rundir}/${eventdate}/${dadir}/obs_diag" || exit
+cd "${run_dir}/${eventdate}/${dadir}/obs_diag" || exit
 
 starthour=${starttime:0:2}
 if [[ $((10#$starthour)) -lt 12 ]]; then
@@ -216,14 +269,14 @@ fi
 start_s=$(date -u -d "${startdatetime}" +%s)
 end_s=$(date -u -d "${enddatetime}" +%s)
 
-grid_file="${rundir}/${eventdate}/wofs_mpas/wofs_mpas.grid.nc"
+grid_file="${run_dir}/${eventdate}/wofs_mpas/wofs_mpas.grid.nc"
 
 for ((s=start_s;s<=end_s;s+=900)); do
     timestr=$(date -u -d @$s +%H%M)
     datestr=$(date -u -d @$s +%Y%m%d%H%M)
 
-    seq_file="${rundir}/${eventdate}/${dadir}/${timestr}/obs_seq.final.${datestr}.nc"
-    donefile="${rundir}/${eventdate}/${dadir}/${timestr}/done.filter"
+    seq_file="${run_dir}/${eventdate}/${dadir}/${timestr}/obs_seq.final.${datestr}.nc"
+    donefile="${run_dir}/${eventdate}/${dadir}/${timestr}/done.filter"
 
     if [[ ! -f ${donefile} ]]; then
         echo "Waiting for ${donefile} ...."
@@ -237,7 +290,8 @@ for ((s=start_s;s<=end_s;s+=900)); do
         for ovalue in "${obsvalues[@]}"; do
             echo -e "\nPlotting ${ovalue} at ${timestr} ..."
             xtype="${obstypes[$ovalue]},0"
-            ${show} ${rootdir}/python/plot_dartobs.py -p ${xtype}  -g ${grid_file} -r 300 -latlon "${seq_file}" 2>/dev/null
+            ${show} "${rootdir}/python/plot_dartobs.py" -p "${xtype}"  -g "${grid_file}" -r 300 -latlon "${seq_file}" 2>/dev/null
+            # shellcheck disable=SC2181
             if [[ $? -eq 0 ]]; then
                 ${show} touch "done.${timestr}"
             fi
@@ -249,16 +303,16 @@ for ((s=start_s;s<=end_s;s+=900)); do
 done
 
 if [[ ! -e done.zigzag ]]; then
-    ${show} ${rootdir}/python/plot_dartzig.py ${eventdate} -e ${endtime} -d ${rundir}/${eventdate}/${dadir} -r 300 2>/dev/null
+    ${show} "${rootdir}/python/plot_dartzig.py" "${eventdate}" -e "${endtime}" -d "${run_dir}/${eventdate}/${dadir}" -r 300 2>/dev/null
 
-    imagedir="${rundir}/image_files"
+    imagedir="${run_dir}/image_files"
 
     if [[ -z ${show} ]]; then
-        cd ${rundir}/${eventdate}/${dadir}/obs_diag || exit 1
+        cd "${run_dir}/${eventdate}/${dadir}/obs_diag" || exit 1
 
         image_destdir="${imagedir}/${eventdate}${affix}/1500"
         if [[ ! -d ${image_destdir} ]]; then
-            mkdir -p ${image_destdir}
+            mkdir -p "${image_destdir}"
         fi
 
         if [[ $verb -eq 1 ]]; then
@@ -268,12 +322,12 @@ if [[ ! -e done.zigzag ]]; then
         estatus=0
         for fn in rms_*.png ratio_*.png number_*.png; do
             destfn="${fn%_*}_f360.png"
-            convert $fn -resize 1100x1100 -trim ${image_destdir}/${destfn}
+            convert "$fn" -resize 1100x1100 -trim "${image_destdir}/${destfn}"
             (( estatus+=$? ))
         done
 
         if [[ ${estatus} -eq 0 ]]; then
-            cp ${up_dir}/frdd-wofs-post/json/wofs_run_metadata_obsdiag.json ${image_destdir}/wofs_run_metadata.json
+            cp "${MPASdir}/frdd-wofs-post/json/wofs_run_metadata_obsdiag.json" "${image_destdir}/wofs_run_metadata.json"
             ${show} touch "done.zigzag"
         fi
     fi

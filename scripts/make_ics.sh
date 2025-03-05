@@ -4,7 +4,8 @@
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
-mpasdir=$(dirname "${rootdir}")
+
+mpasworkdir="/scratch/wofs_mpas"     # platform dependent, it is set in Site_Runtime.sh
 
 eventdateDF=$(date -u +%Y%m%d)
 
@@ -75,7 +76,7 @@ function usage {
     echo "   DEFAULTS:"
     echo "              eventdt = $eventdateDF"
     echo "              rootdir = $rootdir"
-    echo "              WORKDIR = $mpasdir/run_dirs"
+    echo "              WORKDIR = $mpasworkdir/run_dirs"
     echo " "
     echo "                                     -- By Y. Wang (2023.05.25)"
     echo " "
@@ -166,6 +167,8 @@ function parse_args {
                         args["WORKDIR"]=$WORKDIR
                     fi
                     #echo $WORKDIR,$eventdate,$eventtime
+                elif [[ -f $key ]]; then
+                    args["config_file"]="${key}"
                 else
                     echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}$key${NC}."
                     usage 3
@@ -704,24 +707,22 @@ setup_machine "${args['machine']}" "$rootdir" false false
 if [[ -v args["config_file"] ]]; then
     config_file="${args['config_file']}"
 
-    if [[ -r ${config_file} ]]; then
-        :
-    elif [[ -e ${WORKDIR}/${config_file} ]]; then
-        config_file="${WORKDIR}/${config_file}"
+    if [[ "$config_file" =~ "/" ]]; then
+        WORKDIR=$(realpath "$(dirname ${config_file})")
     else
-        echo -e "${RED}ERROR${NC}: file ${CYAN}${config_file}${NC} not exist."
-        usage 1
+        config_file="${WORKDIR}/${config_file}"
     fi
+    [[ ${config_file} =~ config\.([0-9]{8}) && ! -v args["eventdate"] ]] && eventdate="${BASH_REMATCH[1]}"
 else
     config_file="$WORKDIR/config.${eventdate}"
 fi
 
-if [[ ! -r ${config_file} ]]; then
+if [[ -r ${config_file} ]]; then
+    echo -e "Reading case (${GREEN}${eventdate}${NC}) configuration file: ${CYAN}${config_file}${NC} ...."
+else
     echo -e "${RED}ERROR${NC}: Configuration file ${CYAN}${config_file}${NC} is not found."
     echo -e "       Please run ${GREEN}setup_mpas-wofs.sh${NC} first or use ${BLUE}-h${NC} to show help."
     exit 2
-else
-    echo -e "Reading case (${GREEN}${eventdate}${NC}) configuration file: ${CYAN}${config_file}${NC} ...."
 fi
 readconf ${config_file} COMMON init || exit $?
 # get ENS_SIZE, time_step, EXTINVL, OUTINVL, OUTIOTYPE

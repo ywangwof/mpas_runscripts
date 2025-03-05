@@ -113,7 +113,7 @@ function setup_machine {
         runcmd="qsub"
         modulename="defaults"
 
-        workdirDF="/glade/scratch/yunheng.wang/MPAS/MPAS_PROJECT/run_dirs"
+        workdirDF="/glade/scratch/wofs_mpas/run_dirs"
 
         if [[ ${initialize} == true ]]; then
             ncores_static=32
@@ -153,7 +153,7 @@ function setup_machine {
             source ${root_dir}/modules/env.python  || exit $?
         fi
 
-        workdirDF="/scratch/yunheng.wang/MPAS/MPAS_PROJECT/run_dirs"
+        workdirDF="/scratch/wofs_mpas/run_dirs"
 
         if [[ ${initialize} == true ]]; then
             ncores_static=96
@@ -171,14 +171,14 @@ function setup_machine {
             job_runexe_str="srun"
             runcmd_str="srun -n 1"
 
-            WPSGEOG_PATH="/scratch/yunheng.wang/MPAS/MPAS_PROJECT/WPS_GEOG/"   # Should keep last /
+            WPSGEOG_PATH="/scratch/wofs_mpas/WPS_GEOG/"   # Should keep last /
             wgrib2path="/scratch/yunheng.wang/tools/gnu/bin/wgrib2"
             nckspath="/home/yunheng.wang/tools/micromamba/envs/wofs_an/bin/ncks"
             gpmetis="/scratch/yunheng.wang/tools/bin/gpmetis"
             export LD_LIBRARY_PATH=/scratch/yunheng.wang/tools/lib
             nclpath="/scratch/software/miniconda3/bin/ncl"
 
-            OBS_DIR="/scratch/yunheng.wang/MPAS/MPAS_PROJECT/OBS_SEQ"
+            OBS_DIR="/scratch/wofs_mpas/OBS_SEQ"
 
             hrrr_dir="/scratch2/wofuser/MODEL_DATA/HRRRE"
         fi
