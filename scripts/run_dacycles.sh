@@ -1459,8 +1459,8 @@ function run_filter {
    debug                        = 0
    use_u_for_wind               = .false.
    use_rbf_option               = 2
-   update_u_from_reconstruct    = .false.
-   use_increments_for_u_update  = .false.
+   update_u_from_reconstruct    = .true.
+   use_increments_for_u_update  = .true.
   /
 
 !                          'theta',                 'QTY_POTENTIAL_TEMPERATURE',
@@ -1479,6 +1479,11 @@ function run_filter {
 &mpas_vars_nml
     mpas_state_variables = 'theta',                 'QTY_POTENTIAL_TEMPERATURE',
                            'rho',                   'QTY_DENSITY',
+                           'uReconstructZonal',     'QTY_U_WIND_COMPONENT',
+                           'uReconstructMeridional','QTY_V_WIND_COMPONENT',
+                           'w',                     'QTY_VERTICAL_VELOCITY',
+                           'u10',                   'QTY_10M_U_WIND_COMPONENT',
+                           'v10',                   'QTY_10M_V_WIND_COMPONENT',
                            't2m',                   'QTY_2M_TEMPERATURE',
                            'q2',                    'QTY_2M_SPECIFIC_HUMIDITY',
                            'surface_pressure',      'QTY_SURFACE_PRESSURE',
