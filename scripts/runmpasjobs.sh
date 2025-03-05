@@ -279,14 +279,27 @@ post | plot | diag | verif | snd )
         ;;
     esac
 
+    ((10#$endtime < 1200)) && oneday="1 day" || oneday=""
+
+    fbeg_s=$(date -u -d "${eventdate} 1700" +%s)
+    fbeg_e=$(date -u -d "${eventdate} ${endtime} ${oneday}" +%s)
+
+    fcst_times=""
+    for ((ftime=fbeg_s;ftime<=fbeg_e;ftime+=3600)); do
+        fcst_time=$(date -u -d @$ftime +%H%M)
+        fcst_times+=" '${fcst_time}',"
+    done
+
     post_config="${run_dir}/summary_files/WOFS_MPAS_config_${eventdate}${affix}.yaml"
 
-    rm -f ${post_config}
+    rm -f "${post_config}"
 
     # modify the configuration file
     sedfile=$(mktemp -t post.sed_XXXX)
     cat << EOF > "${sedfile}"
 /^rundate :/s/: .*/: ${eventdate}/
+/^date_ext :/s/: .*/: ${affix}/
+/^process_times :/s/: .*/: [${fcst_times%,} ]/
 /^nt :/s/: .*/: $nt/
 /^fcstpath: /s#: .*#: ${run_dir}/FCST/#
 /^sumpath: /s#: .*#: ${run_dir}/summary_files/#
@@ -295,7 +308,6 @@ post | plot | diag | verif | snd )
 /^imagepath: /s#: .*#: ${run_dir}/image_files/#
 /^jsonpath: /s#: .*#: ${post_dir}/json/#
 EOF
-    rm  -f "${post_config}"
     sed -f "${sedfile}" "${post_config_orig}" > "${post_config}"
     rm  -f "${sedfile}"
 
@@ -372,10 +384,7 @@ post )
         fi
 
         cd "${post_script_dir}" || exit 1
-        cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${post_config}" "${endtime}")
-        if [[ -n ${affix} ]]; then
-            cmds+=("${affix}")
-        fi
+        cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${post_config}")
     else
         echo -e "${DARK}File ${CYAN}$donepost${NC} exist"
         echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${config_file} post${NC} before reprocessing."
@@ -392,10 +401,7 @@ plot )
         done
 
         cd "${post_script_dir}" || exit 1
-        cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${post_config}" "${endtime}")
-        if [[ -n ${affix} ]]; then
-            cmds+=("${affix}")
-        fi
+        cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${post_config}")
     else
         echo -e "${DARK}File ${CYAN}$doneplot${NC} exist"
         echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} post${NC} before reprocessing."
@@ -411,10 +417,7 @@ verif )
         done
 
         cd "${post_script_dir}" || exit 1
-        cmds=(time "./wofs_plot_verification_MPAS.py" "${post_config}" "${endtime}")
-        if [[ -n ${affix} ]]; then
-            cmds+=("${affix}")
-        fi
+        cmds=(time "./wofs_plot_verification_MPAS.py" "${post_config}")
     else
         echo -e "${DARK}File ${CYAN}$doneverif${NC} exist"
         echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} post${NC} before reprocessing."
@@ -430,10 +433,7 @@ snd )
         done
 
         cd "${post_script_dir}" || exit 1
-        cmds=(time "./wofs_plot_sounding_MPAS.py" "${post_config}" "${endtime}")
-        if [[ -n ${affix} ]]; then
-            cmds+=("${affix}")
-        fi
+        cmds=(time "./wofs_plot_sounding_MPAS.py" "${post_config}")
     else
         echo -e "${DARK}File ${CYAN}$donesnd${NC} exist"
         echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} post${NC} before reprocessing."
