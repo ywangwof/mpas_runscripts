@@ -4,7 +4,7 @@
 script_dir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${script_dir}")")
 
-top_dir=$(dirname "$rootdir")
+MPASdir=$(dirname $(dirname "$rootdir"))
 
 mpasworkdir="/scratch/wofs_mpas"
 eventdateDF=$(date -u +%Y%m%d%H%M)
@@ -13,7 +13,7 @@ eventdateDF=$(date -u +%Y%m%d%H%M)
 # To run MPAS-WoFS tasks interactively or using at/cron at background
 #
 
-post_dir=${top_dir}/frdd-wofs-post
+post_dir=${MPASdir}/frdd-wofs-post
 script_dir=${rootdir}/scripts
 
 host="$(hostname)"
@@ -260,9 +260,8 @@ post | plot | diag | verif | snd )
     doneverif="${run_dir}/image_files/flags/${eventdate}${affix}/wofs_plotwwa_${endtime}_finished"
     donesnd="${run_dir}/image_files/flags/${eventdate}${affix}/wofs_plotwwa_${endtime}_finished"
 
-
-    post_script_dir="${top_dir}/frdd-wofs-post/wofs/scripts"
-    post_config_orig="${top_dir}/frdd-wofs-post/conf/WOFS_MPAS_config.yaml.orig"
+    post_script_dir="${MPASdir}/frdd-wofs-post/wofs/scripts"
+    post_config_orig="${MPASdir}/frdd-wofs-post/conf/WOFS_MPAS_config.yaml"
 
     case ${fcstlength} in
     21600 )
@@ -279,26 +278,26 @@ post | plot | diag | verif | snd )
         ;;
     esac
 
-    ((10#$endtime < 1200)) && oneday="1 day" || oneday=""
-
-    fbeg_s=$(date -u -d "${eventdate} 1700" +%s)
-    fbeg_e=$(date -u -d "${eventdate} ${endtime} ${oneday}" +%s)
-
-    fcst_times=""
-    for ((ftime=fbeg_s;ftime<=fbeg_e;ftime+=3600)); do
-        fcst_time=$(date -u -d @$ftime +%H%M)
-        fcst_times+=" '${fcst_time}',"
-    done
-
     post_config="${run_dir}/summary_files/WOFS_MPAS_config_${eventdate}${affix}.yaml"
+    #rm -f "${post_config}"
 
-    rm -f "${post_config}"
+    if [[ ! -f "${post_config}" ]]; then
+        ((10#$endtime < 1200)) && oneday="1 day" || oneday=""
 
-    # modify the configuration file
-    sedfile=$(mktemp -t post.sed_XXXX)
-    cat << EOF > "${sedfile}"
-/^rundate :/s/: .*/: ${eventdate}/
-/^date_ext :/s/: .*/: ${affix}/
+        fbeg_s=$(date -u -d "${eventdate} 1700" +%s)
+        fbeg_e=$(date -u -d "${eventdate} ${endtime} ${oneday}" +%s)
+
+        fcst_times=""
+        for ((ftime=fbeg_s;ftime<=fbeg_e;ftime+=3600)); do
+            fcst_time=$(date -u -d @$ftime +%H%M)
+            fcst_times+=" '${fcst_time}',"
+        done
+
+        # modify the configuration file
+        sedfile=$(mktemp -t post.sed_XXXX)
+        cat << EOF > "${sedfile}"
+/^rundate :/s/: .*/: '${eventdate}'/
+/^date_ext :/s/: .*/: '${affix}'/
 /^process_times :/s/: .*/: [${fcst_times%,} ]/
 /^nt :/s/: .*/: $nt/
 /^fcstpath: /s#: .*#: ${run_dir}/FCST/#
@@ -308,12 +307,22 @@ post | plot | diag | verif | snd )
 /^imagepath: /s#: .*#: ${run_dir}/image_files/#
 /^jsonpath: /s#: .*#: ${post_dir}/json/#
 EOF
-    sed -f "${sedfile}" "${post_config_orig}" > "${post_config}"
-    rm  -f "${sedfile}"
+        if [[ ! -f "${post_config_orig}" ]]; then
+            echo " "
+            echo -e "${RED}ERROR${NC}: Config template file - ${CYAN}${post_config_orig}${NC} not exist."
+            echo " "
+            exit 1
+        fi
 
-    # modify the verif script
-    verif_script="${post_script_dir}/wofs_plot_verification_MPAS.py"
-    sed -i "/plot_modes_qpe =/s/\[.*\]/${qpe_mode_string}/" "${verif_script}"
+        sed -f "${sedfile}" "${post_config_orig}" > "${post_config}"
+        rm  -f "${sedfile}"
+    fi
+
+    if [[ "$task" == "verif" ]]; then
+        # modify the verif script
+        verif_script="${post_script_dir}/wofs_plot_verification_MPAS.py"
+        sed -i "/plot_modes_qpe =/s/\[.*\]/${qpe_mode_string}/" "${verif_script}"
+    fi
     ;;
 esac
 

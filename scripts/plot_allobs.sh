@@ -1,10 +1,10 @@
 #!/bin/bash
 # shellcheck disable=SC2034
 
-script_dir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
+script_dir="$( cd "$( dirname "$0" )" && pwd )"                         # dir of script
 rootdir=$(realpath "$(dirname "${script_dir}")")
 
-top_dir=$(dirname "$rootdir")
+MPASdir=$(dirname $(dirname "$rootdir"))                                # no compiler specific stuffs
 
 mpasworkdir="/scratch/wofs_mpas"
 
@@ -327,7 +327,7 @@ if [[ ! -e done.zigzag ]]; then
         done
 
         if [[ ${estatus} -eq 0 ]]; then
-            cp "${top_dir}/frdd-wofs-post/json/wofs_run_metadata_obsdiag.json" "${image_destdir}/wofs_run_metadata.json"
+            cp "${MPASdir}/frdd-wofs-post/json/wofs_run_metadata_obsdiag.json" "${image_destdir}/wofs_run_metadata.json"
             ${show} touch "done.zigzag"
         fi
     fi
