@@ -4,7 +4,7 @@ scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
 mpasdir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
 
-srcdir="/work2/wof/realtime/OBSGEN/CLOUD_OBS/RT"
+srcdir="/work2/wof/realtime/OBSGEN/CLOUD_OBS"
 
 run_dir="${mpasdir}/run_dirs"
 destdir="${mpasdir}/OBS_SEQ"
@@ -14,6 +14,7 @@ eventdateDF=$(date -u +%Y%m%d%H%M)
 starthour=1500
 endhour=0300
 
+# shellcheck disable=SC1091
 source "${rootdir}/scripts/Common_Utilfuncs.sh"
 
 function usage {
@@ -36,10 +37,11 @@ function usage {
     echo "              -v                  Verbose mode"
     echo "              -s  start_time      Run task from start_time, default $starthour"
     echo "              -f  conf_file       Runtime configuration file, make it the last argument (after WORKDIR)."
+    echo "              -d  sub_dir         Subdirectory name after the event date."
     echo " "
     echo "                                     -- By Y. Wang (2024.04.26)"
     echo " "
-    exit $1
+    exit "$1"
 }
 
 ########################################################################
@@ -58,13 +60,17 @@ eventhour=${eventdateDF:8:2}
 cmd=""
 conf_file=""
 
-if [[ $((10#$eventhour)) -lt 12 ]]; then
+if ((10#$eventhour < 12)); then
     eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
 fi
 nextdate=$(date -d "$eventdate 1 day" +%Y%m%d)
+default_date=true
 
 start_time=$starthour
 timeend=${eventdateDF}
+
+#subdir="/d1/DART"
+subdir=""
 
 #-----------------------------------------------------------------------
 #
@@ -85,9 +91,9 @@ while [[ $# -gt 0 ]]; do
         -n)
             show="echo"
             ;;
-        #-v)
-        #    verb=true
-        #    ;;
+        -v)
+            verb=true
+            ;;
         -s)
             if [[ $2 =~ ^[0-9]{4}$ ]]; then
                 start_time="$2"
@@ -109,6 +115,15 @@ while [[ $# -gt 0 ]]; do
             fi
             shift
             ;;
+        -d )
+            if [[ $2 =~ \/.* ]]; then
+                subdir="$2"
+            else
+                echo "ERROR: Subdir must starts with '/', get [$2]."
+                usage 2
+            fi
+            shift
+            ;;
         -*)
             echo "Unknown option: $key"
             usage 2
@@ -121,6 +136,7 @@ while [[ $# -gt 0 ]]; do
                 eventdate=${key}
                 nextdate=$(date -d "$eventdate 1 day" +%Y%m%d)
                 timeend="${nextdate}${endhour}"
+                default_date=false
             elif [[ $key =~ ^[0-9]{12}$ ]]; then
                 eventdate=${key:0:8}
                 eventhour=${key:8:2}
@@ -128,10 +144,12 @@ while [[ $# -gt 0 ]]; do
                     eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
                 fi
                 nextdate=$(date -d "$eventdate 1 day" +%Y%m%d)
-
+                default_date=false
                 timeend="${key}"
             elif [[ -d $key ]]; then
                 run_dir="$key"
+            elif [[ -f $key ]]; then
+                conf_file="${key}"
             else
                 echo ""
                 echo "ERROR: unknown argument, get [$key]."
@@ -142,13 +160,29 @@ while [[ $# -gt 0 ]]; do
     shift # past argument or value
 done
 
-if [[ ${conf_file} == "" ]]; then
+if [[ -z ${conf_file} ]]; then
     conf_file="${run_dir}/config.${eventdate}"
+else
+    if [[ "$conf_file" =~ "/" ]]; then
+        run_dir=$(realpath "$(dirname "${conf_file}")")
+    else
+        config_file="${run_dir}/${conf_file}"
+    fi
+
+    if [[ ${conf_file} =~ config\.([0-9]{8})(.*) ]]; then
+        if [[ "${default_date}" == true ]]; then
+            eventdate="${BASH_REMATCH[1]}"
+            nextdate=$(date -d "$eventdate 1 day" +%Y%m%d)
+            timeend=$(date -d "$eventdate ${endhour} 1 day" +%Y%m%d%H%M)
+        fi
+    else
+        echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not the right format config.YYYYmmdd[_*]."
+        exit 1
+    fi
 fi
 
 if [[ -e ${conf_file} ]]; then
-    eval "$(sed -n "/OBS_DIR=/p" ${conf_file})"
-    destdir=${OBS_DIR}
+    destdir=$(grep '^ *OBS_DIR=' "${conf_file}" | cut -d'=' -f2 | tr -d '"')
 else
     if [[ "$cmd" =~ "check" ]]; then
         :
@@ -160,7 +194,7 @@ fi
 
 echo -e "\nUse runtime Configruation file: ${CYAN}${conf_file}${NC}.\n"
 
-if [[ $((10#$start_time)) -gt 1200 ]]; then
+if ((10#$start_time > 1200)); then
     timebeg="${eventdate}${start_time}"
 else
     timebeg="${nextdate}${start_time}"
@@ -184,19 +218,25 @@ echo "=== $(date +%Y%m%d_%H:%M:%S) - $0 ${saved_args} ==="
 timebeg_s=$(date -d "${timebeg:0:8} ${timebeg:8:4}" +%s)
 timeend_s=$(date -d "${timeend:0:8} ${timeend:8:4}" +%s)
 
+[[ $verb == true ]] && echo "From ${timebeg} to ${timeend}, src_dir = ${srcdir}"
+
 case $cmd in
 
     check | ls | fix )
 
+        #
+        # REF
+        #
         reffiles=();n=0; missedfiles=()
         for((i=timebeg_s;i<=timeend_s;i+=900)); do
             timestr=$(date -d @$i +%Y%m%d%H%M)
             if [[ "$cmd" == "check" ]]; then
-                wrkdir="${srcdir}/${timestr:0:8}/d1/DART"
+                wrkdir="${srcdir}/${timestr:0:8}${subdir}"
             else
                 wrkdir="${destdir}/REF/${eventdate}"
             fi
             file_name="obs_seq_RF_${timestr:0:8}_${timestr:8:4}.out"
+            [[ $verb == true ]] && echo "Checking ${wrkdir}/${file_name} ...."
             if [[ -e ${wrkdir}/${file_name} ]]; then
                 reffiles+=("${wrkdir}/${file_name}")
                 ((n++))
@@ -209,7 +249,7 @@ case $cmd in
             fi
         done
         if [[ -t 1 ]]; then
-            #echo -e "\n${LIGHT_BLUE}${wrkdir}${NC}:"
+            [[ $verb == true ]] && echo -e "\n${LIGHT_BLUE}${wrkdir}${NC}:"
             n=0; prevwrkdir=""
             for filename in "${reffiles[@]}";do
                 if (( n%4 == 0)); then echo ""; fi
@@ -238,12 +278,15 @@ case $cmd in
             echo "${reffiles[*]}"
         fi
 
+        #
+        # VEL
+        #
         declare -A velfiles=()
         n=0; missedfiles=()
         for((i=timebeg_s;i<=timeend_s;i+=900)); do
             timestr=$(date -d @$i +%Y%m%d%H%M)
             if [[ "$cmd" == "check" ]]; then
-                wrkdir="${srcdir}/${timestr:0:8}/d1/DART"
+                wrkdir="${srcdir}/${timestr:0:8}${subdir}"
             else
                 wrkdir="${destdir}/VEL/${eventdate}"
             fi
@@ -270,7 +313,7 @@ case $cmd in
         done
         if [[ -t 1 ]]; then
             if [[ "$cmd" == "check" ]]; then
-                wrkdir="${srcdir}/{${eventdate},${nextdate}}/d1/DART"
+                wrkdir="${srcdir}/{${eventdate},${nextdate}}${subdir}"
             else
                 wrkdir="${destdir}/VEL/${eventdate}"
             fi
@@ -320,7 +363,7 @@ case $cmd in
 
     #-------------------------------------------------------------------
     # REF
-    cd $destdir/REF || exit 1
+    cd "$destdir/REF" || exit 1
 
     if [[ ! -r $eventdate ]]; then
         mkdir -p "${destdir}/REF/${eventdate}"
@@ -332,14 +375,15 @@ case $cmd in
     for((i=timebeg_s;i<=timeend_s;i+=900)); do
         timestr=$(date -d @$i +%Y%m%d%H%M)
         file_name="obs_seq_RF_${timestr:0:8}_${timestr:8:4}.out"
-        if [[ ! -e ${file_name} && -e "${srcdir}/${timestr:0:8}/d1/DART/${file_name}" ]]; then
-            $show ln -sf "${srcdir}/${timestr:0:8}/d1/DART/${file_name}" .
+        [[ $verb == true ]] && echo "Linking ${srcdir}/${timestr:0:8}${subdir}/${file_name} to $(pwd) ...."
+        if [[ ! -e ${file_name} && -e "${srcdir}/${timestr:0:8}${subdir}/${file_name}" ]]; then
+            $show ln -sf "${srcdir}/${timestr:0:8}${subdir}/${file_name}" .
         fi
     done
 
     #-------------------------------------------------------------------
     # VEL
-    cd $destdir/VEL || exit 1
+    cd "${destdir}/VEL" || exit 1
 
     if [[ ! -r $eventdate ]]; then
         mkdir -p "${destdir}/VEL/${eventdate}"
@@ -351,10 +395,12 @@ case $cmd in
         timestr=$(date -d @$i +%Y%m%d%H%M)
 
         file_name="obs_seq_????_VR_${timestr:0:8}_${timestr:8:4}.out"
-        numsrc=$(find "${srcdir}/${timestr:0:8}/d1/DART" -name "${file_name}" | wc -l)
-        numdes=$(find .                                  -name "${file_name}" | wc -l)
+        numsrc=$(find "${srcdir}/${timestr:0:8}${subdir}" -name "${file_name}" | wc -l)
+        numdes=$(find .                                   -name "${file_name}" | wc -l)
+        [[ $verb == true ]] && echo "Linking ${srcdir}/${timestr:0:8}${subdir}/${file_name} to $(pwd) ...."
         if [[ $numdes -lt $numsrc ]]; then
-            $show ln -sf ${srcdir}/${timestr:0:8}/d1/DART/${file_name} .
+            # shellcheck disable=SC2086
+            $show ln -sf "${srcdir}/${timestr:0:8}${subdir}"/${file_name} .
         fi
     done
     ;;
