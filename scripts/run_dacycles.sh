@@ -1899,10 +1899,11 @@ EOF
 ########################################################################
 
 function run_update_states {
-    # $1        $2
-    # wrkdir    iseconds
+    # $1        $2      $3
+    # wrkdir    icycle  iseconds
     local wrkdir=$1
-    local iseconds=$2
+    local icycle=$2
+    local iseconds=$3
 
     #
     # GLOBAL: ENS_SIZE, rundir, update_in_place
@@ -1965,7 +1966,8 @@ function run_update_states {
 
         fn="../${filter_infile_array[$jindex]}"
         fnbase=$(basename $fn)
-        srcfn=${fnbase/.prior./.${damode}.}
+        [[ $icycle -eq 0 ]] && initstr="init" || initstr="$damode"
+        srcfn=${fnbase/.prior./.${initstr}.}
         if [[ "$srcfn" =~ ^${domname}_[0-9]{2}.init.nc$ ]]; then     # insert time to init.nc
             srcfn="${srcfn//.nc}.${currtime_fil}.nc"
         fi
@@ -2832,7 +2834,7 @@ function dacycle_driver() {
         #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " update_states " ]]; then
             if [[ $verb -eq 1 ]]; then echo "  Run update_mpas_state at $eventtime"; fi
-            run_update_states $dawrkdir $isec
+            run_update_states $dawrkdir $icyc $isec
         fi
 
         #------------------------------------------------------
