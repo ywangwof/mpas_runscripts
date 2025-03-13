@@ -184,10 +184,40 @@ fi
 
 if [[ -f ${config_file} ]]; then
     fcstlength=$(grep '^ *fcst_length_seconds=' "${config_file}" | cut -d'=' -f2 | cut -d' ' -f1 | tr -d '(')
+    level_file=$(grep '^ *vertLevel_file='      "${config_file}" | cut -d'=' -f2 | cut -d' ' -f1 | tr -d '"')
 else
     echo " "
     echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not exist."
     usage 1
+fi
+
+#-----------------------------------------------------------------------
+#
+# Handle the logging mechanism, after we get these variables:
+#        ${run_dir},${eventdate}, ${affix}, ${task} etc.
+#
+#-----------------------------------------------------------------------
+#% LOG
+
+log_dir="${run_dir}/${eventdate}"
+if [[ ! -d ${log_dir} ]]; then
+    echo -e "${RED}ERROR${NC}: ${PURPLE}${log_dir}${NC} not exists."
+    exit 1
+fi
+
+log_file="${log_dir}/log${affix}.${task}"
+
+if [[ -z $show ]]; then                 # Actually run the task
+    if [[ ! -t 1 ]]; then                       # at, batch or cron job
+        exec 1>> "${log_file}" 2>&1
+    elif [[ ${noscript} == false ]]; then       # interactive
+        #exec > >(tee -ia ${log_file} 2>&1
+        ## execute self with the noscript special arg so that the second execution DOES NOT start script again.
+        script -aefq "${log_file}" -c "$0 noscript ${saved_args}"
+        exit $?
+    else                                        # interactive
+        echo -e "\n${DARK}Logging to file: ${CYAN}${log_file}${NC} ....\n"
+    fi
 fi
 
 ########################################################################
@@ -221,7 +251,7 @@ post | plot | diag | verif | snd )
     donepost="${run_dir}/summary_files/${eventdate}${affix}/${endtime}/wofs_postswt_${endtime}_finished"
     doneplot="${run_dir}/image_files/flags/${eventdate}${affix}/${endtime}/wofs_plotpbl_${endtime}_finished"
     doneverif="${run_dir}/image_files/flags/${eventdate}${affix}/wofs_plotwwa_${endtime}_finished"
-    donesnd="${run_dir}/image_files/flags/${eventdate}${affix}/wofs_plotwwa_${endtime}_finished"
+    donesnd="${run_dir}/image_files/flags/${eventdate}${affix}/wofs_postsnd_${endtime}_finished"
 
     post_script_dir="${MPASdir}/frdd-wofs-post/wofs/scripts"
     post_config_orig="${MPASdir}/frdd-wofs-post/conf/WOFS_MPAS_config.yaml"
@@ -256,6 +286,17 @@ post | plot | diag | verif | snd )
             fcst_times+=" '${fcst_time}',"
         done
 
+        if [[ ! -f "${level_file}" ]]; then
+            level_file="/scratch/${level_file}"
+        fi
+        if [[ ! -f "${level_file}" ]]; then
+            echo -e "${RED}ERROR${NC}: Vertical level file - ${CYAN}${level_file}${NC} not exist."
+            exit 1
+        fi
+
+        num_levels=$(wc -l "${level_file}"| cut -d' ' -f1)
+        (( num_levels -= 1 ))
+
         # modify the configuration file
         sedfile=$(mktemp -t post.sed_XXXX)
         cat << EOF > "${sedfile}"
@@ -263,6 +304,7 @@ post | plot | diag | verif | snd )
 /^date_ext :/s/: .*/: '${affix}'/
 /^process_times :/s/: .*/: [${fcst_times%,} ]/
 /^nt :/s/: .*/: $nt/
+/^vert_levels :/s/: .*/: ${num_levels}/
 /^fcstpath: /s#: .*#: ${run_dir}/FCST/#
 /^sumpath: /s#: .*#: ${run_dir}/summary_files/#
 /^flagpath: /s#: .*#: ${run_dir}/image_files/flags/#
@@ -293,28 +335,7 @@ esac
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
 
-log_dir="${run_dir}/${eventdate}"
-if [[ ! -d ${log_dir} ]]; then
-    echo -e "${RED}ERROR${NC}: ${PURPLE}${log_dir}${NC} not exists."
-    exit 1
-fi
-
-log_file="${log_dir}/log${affix}.${task}"
-
-if [[ -z $show ]]; then                 # Actually run the task
-    if [[ ! -t 1 ]]; then                       # at, batch or cron job
-        exec 1>> "${log_file}" 2>&1
-    elif [[ ${noscript} == false ]]; then       # interactive
-        #exec > >(tee -ia ${log_file} 2>&1
-        ## execute self with the noscript special arg so that the second execution DOES NOT start script again.
-        script -aefq "${log_file}" -c "$0 noscript ${saved_args}"
-        exit $?
-    else                                        # interactive
-        echo -e "\n${DARK}Logging to file: ${CYAN}${log_file}${NC} ....\n"
-    fi
-fi
-
-echo -e "=== === === === ===\n"
+echo -e "=== AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA ===\n"
 echo -e "${PURPLE}$(date +'%Y%m%d %H:%M:%S (%Z)')${NC} - ${BROWN}$0 ${saved_args}${NC}"
 
 case $task in
