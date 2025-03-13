@@ -3,8 +3,6 @@
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
 
-desdir=${rootdir}/fix_files
-
 myhost=$(hostname)
 if [[ "${myhost}" == "ln"* ]]; then
     srcroot="/scratch/ywang/MPAS"
@@ -62,12 +60,13 @@ function usage {
     echo "              -v              Verbose mode"
     echo "              -r              For a run or for fix_files"
     echo "                              Default is for fix_files"
+    echo "              -x  xxx         An appendix to add to exec and fix_files"
     echo "              -s  DIR         Source directory"
     echo "              -m  Machine     Machine name to be run, [Jet or Vecna]"
     echo "              -cmd copy       Command for linking or copying [copy, link, clean] (default: link)"
     echo " "
     echo "   DEFAULTS:"
-    echo "              desdir     = $desdir"
+    echo "              desdir     = ${rootdir}/fix_files\${affix}"
     echo "              srcwps     = $srcwpsdir"
     echo "              srcwrf     = $srcwrfdir"
     echo "              srcmpassit = $srcmpassitdir"
@@ -138,6 +137,8 @@ doclean=false
 cmdnote=""
 runcmd="ln -sf"
 
+affix=""
+
 while [[ $# -gt 0 ]]
     do
     key="$1"
@@ -157,6 +158,10 @@ while [[ $# -gt 0 ]]
             realrun=true
             packages=(mpas)
             desdir="./"
+            ;;
+        -x )
+            affix="$2"
+            shift
             ;;
         -s )
             if [[ -d $2 ]]; then
@@ -205,6 +210,8 @@ while [[ $# -gt 0 ]]
     shift # past argument or value
 done
 
+desdir=${rootdir}/fix_files${affix}
+
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
 # Perform each task
@@ -212,7 +219,8 @@ done
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\
 #@ MAIN
 
-exedir="$(dirname "${desdir}")/exec"
+exedir="$(dirname "${desdir}")/exec${affix}"
+
 cd "$exedir" || exit 1
 #ln -sf ${tool_dir}/bin/gpmetis  .
 
@@ -295,7 +303,7 @@ for pkg in "${packages[@]}"; do
             echo "  -- ${cmdnote} DART programs to $(pwd) ...."
             run_cmd "${runcmd}" "$srcdart/models/mpas_atm/work" "${dartprograms[*]}"
 
-            cd "${rootdir}/fix_files" || exit 1
+            cd "${rootdir}/fix_files${affix}" || exit 1
             echo "  -- ${cmdnote} DART static to $(pwd) ...."
             run_cmd "${runcmd}" "$srcdart/assimilation_code/programs/gen_sampling_err_table/work" "sampling_error_correction_table.nc"
 
@@ -319,7 +327,7 @@ for pkg in "${packages[@]}"; do
                             cldaer_visir/sccldcoef_goes_16_abi.dat                        \
                             cldaer_ir/sccldcoef_goes_16_abi_ironly.dat                    )
 
-            cd "${rootdir}/fix_files/rtcoef_rttov13" || exit 1
+            cd "${rootdir}/fix_files${affix}/rtcoef_rttov13" || exit 1
             echo "  -- ${cmdnote} DART RTTOV13 coef files to $(pwd) ...."
             run_cmd "${runcmd}" "${coef_rootdir}" "${coef_files[*]}"
         fi
@@ -365,11 +373,9 @@ for pkg in "${packages[@]}"; do
 
             cd "${desdir}" || exit 1
 
-            run_cmd "${runcmd}" "${rootdir}/fix_files" "${thompsonfiles[*]}"
+            run_cmd "${runcmd}" "${rootdir}/fix_files${affix}" "${thompsonfiles[*]}"
         else
             cd "$desdir" || exit 1
-
-            #ln -sf /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/mesh_3km/x1.65536002.grid.nc .
 
             cd "$exedir" || exit 1
             echo ""
@@ -379,7 +385,7 @@ for pkg in "${packages[@]}"; do
 
             src_dir=$(dirname "$srcmodel")
             run_cmd "${runcmd}" "$src_dir/MPAS-Tools/mesh_tools/grid_rotate" grid_rotate
-            run_cmd "${runcmd}" "$src_dir/project_hexes/project_hexes"       project_hexes
+            run_cmd "${runcmd}" "$src_dir/project_hexes"       project_hexes
 
         fi
 

@@ -1006,10 +1006,8 @@ function run_filter {
     mp_state_variables['qg']='QTY_GRAUPEL_MIXING_RATIO'
     #mp_state_variables['nr']='QTY_RAIN_NUMBER_CONCENTR'
     #mp_state_variables['ni']='QTY_ICE_NUMBER_CONCENTRATION'
-    mp_variables_keys=('qc' 'qr' 'qi' 'qs' 'qg' )
     mp_state_bounds="'0.0','NULL','CLAMP'"
 
-    lbc_mp_nssl_variables=".false."
     if [[ ${mpscheme} == "mp_nssl2m" ]]; then
         mp_state_variables['qh']='QTY_HAIL_MIXING_RATIO'
         #mp_state_variables['volg']='QTY_GRAUPEL_VOLUME'
@@ -1018,10 +1016,12 @@ function run_filter {
         #mp_state_variables['ns']='QTY_SNOW_NUMBER_CONCENTR'
         #mp_state_variables['ng']='QTY_GRAUPEL_NUMBER_CONCENTR'
         #mp_state_variables['nh']='QTY_HAIL_NUMBER_CONCENTR'
-        #mp_variables_keys+=('qh' 'nc' 'ns' 'ng' 'nh' 'volg' 'volh')
-        mp_variables_keys+=('qh')
-        lbc_mp_nssl_variables=".true."
     fi
+
+    lbc_mp_variables="'lbc_qv', 'lbc_theta', 'lbc_rho', 'lbc_u', 'lbc_w'"
+    for var in "${!mp_state_variables[@]}"; do
+        lbc_mp_variables+=", 'lbc_$var'"
+    done
 
     cat << EOF > input.nml
 &perfect_model_obs_nml
@@ -1491,13 +1491,13 @@ function run_filter {
                            'qv',                    'QTY_VAPOR_MIXING_RATIO',
 EOF
 
-    for var in "${mp_variables_keys[@]}"; do
+    for var in "${!mp_state_variables[@]}"; do
         lenstr=$((22-${#var}))
         printf "%27s%s,%*s%s,\n" ' ' "'${var}'" $lenstr ' ' "'${mp_state_variables[$var]}'" >> input.nml
     done
 
     echo "    mpas_state_bounds    = 'qv','0.0','NULL','CLAMP',"     >> input.nml
-    for var in "${mp_variables_keys[@]}"; do
+    for var in "${!mp_state_variables[@]}"; do
         printf "%27s%s,%s,\n" ' ' "'${var}'" "${mp_state_bounds}"    >> input.nml
     done
     printf "%s\n" "/"                                                >> input.nml
@@ -1505,17 +1505,15 @@ EOF
     cat << EOF >> input.nml
 
 &update_mpas_states_nml
-    update_input_file_list  = 'filter_out.txt'
-    update_output_file_list = 'filter_in.txt'
-    print_data_ranges       = .true.
+    update_input_file_list     = 'filter_out.txt'
+    update_output_file_list    = 'filter_in.txt'
+    print_data_ranges          = .true.
 /
 
 &update_bc_nml
-    update_analysis_file_list           = 'filter_out.txt'
-    update_boundary_file_list           = 'boundary_inout.txt'
-    lbc_update_from_reconstructed_winds = .false.
-    lbc_update_winds_from_increments    = .false.
-    lbc_mp_nssl_variables               = ${lbc_mp_nssl_variables}
+    update_analysis_file_list  = 'filter_out.txt'
+    update_boundary_file_list  = 'boundary_inout.txt'
+    mpas_lbc_variables         = ${lbc_mp_variables}
     debug = 0
 /
 
@@ -1899,10 +1897,11 @@ EOF
 ########################################################################
 
 function run_update_states {
-    # $1        $2
-    # wrkdir    iseconds
+    # $1        $2      $3
+    # wrkdir    icycle  iseconds
     local wrkdir=$1
-    local iseconds=$2
+    local icycle=$2
+    local iseconds=$3
 
     #
     # GLOBAL: ENS_SIZE, rundir, update_in_place
@@ -1965,7 +1964,8 @@ function run_update_states {
 
         fn="../${filter_infile_array[$jindex]}"
         fnbase=$(basename $fn)
-        srcfn=${fnbase/.prior./.${damode}.}
+        [[ $icycle -eq 0 ]] && initstr="init" || initstr="$damode"
+        srcfn=${fnbase/.prior./.${initstr}.}
         if [[ "$srcfn" =~ ^${domname}_[0-9]{2}.init.nc$ ]]; then     # insert time to init.nc
             srcfn="${srcfn//.nc}.${currtime_fil}.nc"
         fi
@@ -2858,7 +2858,7 @@ function dacycle_driver() {
         #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " update_states " ]]; then
             if [[ $verb -eq 1 ]]; then echo "  Run update_mpas_state at $eventtime"; fi
-            run_update_states $dawrkdir $isec
+            run_update_states $dawrkdir $icyc $isec
         fi
 
         #------------------------------------------------------
@@ -2907,7 +2907,7 @@ function dacycle_driver() {
                 check_job_status "update_bc fcst_" $dawrkdir $ENS_SIZE run_update_bc.${mach} ${num_resubmit}
             fi
 
-            if [[ "${eventtime}" != "0300" ]]; then
+            if [[ "${eventtime}" != "${enddatetime:8:4}" ]]; then
                 if [[ $verb -eq 1 ]]; then echo "  Run advance model at $eventtime"; fi
 
                 mpas_jobscript="run_mpas.${mach}"

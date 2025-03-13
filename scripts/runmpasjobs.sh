@@ -20,46 +20,9 @@ host="$(hostname)"
 
 #-----------------------------------------------------------------------
 
-# Black        0;30     Dark Gray     1;30
-# Red          0;31     Light Red     1;31
-# Green        0;32     Light Green   1;32
-# Brown/Orange 0;33     Yellow        1;33
-# Blue         0;34     Light Blue    1;34
-# Purple       0;35     Light Purple  1;35
-# Cyan         0;36     Light Cyan    1;36
-# Light Gray   0;37     White         1;37
-# ---------- constant part!
+source "$script_dir/Common_Colors.sh"
 
-# shellcheck disable=SC2034
-#if [ -t 1 ]; then
-    NC='\033[0m'            # No Color
-    BLACK='\033[0;30m';     DARK='\033[1;30m'
-    RED='\033[0;31m';       LIGHT_RED='\033[1;31m'
-    GREEN='\033[0;32m';     LIGHT_GREEN='\033[1;32m'
-    BROWN='\033[0;33m';     YELLOW='\033[1;33m'
-    BLUE='\033[0;34m';      LIGHT_BLUE='\033[1;34m'
-    PURPLE='\033[0;35m';    LIGHT_PURPLE='\033[1;35m'
-    CYAN='\033[0;36m';      LIGHT_CYAN='\033[1;36m'
-    LIGHT='\033[0;37m';     WHITE='\033[1;37m'
-
-    DIR_CLR='\033[0;97;44m'; DIRa_CLR='\033[0;95;44m';
-#else
-#    NC=''
-#    BLACK='';     DARK=''
-#    RED='';       LIGHT_RED=''
-#    GREEN='';     LIGHT_GREEN=''
-#    BROWN='';     YELLOW=''
-#    BLUE='';      LIGHT_BLUE=''
-#    PURPLE='';    LIGHT_PURPLE=''
-#    CYAN='';      LIGHT_CYAN=''
-#    LIGHT='';     WHITE=''
-#fi
-#    vvvv vvvv -- EXAMPLES -- vvvv vvvv
-# echo -e "I ${RED}love${NC} Stack Overflow"
-# printf "I ${RED}love${NC} Stack Overflow\n"
-#
-
-#-----------------------------------------------------------------------
+########################################################################
 
 function usage {
     echo    " "
@@ -221,10 +184,40 @@ fi
 
 if [[ -f ${config_file} ]]; then
     fcstlength=$(grep '^ *fcst_length_seconds=' "${config_file}" | cut -d'=' -f2 | cut -d' ' -f1 | tr -d '(')
+    level_file=$(grep '^ *vertLevel_file='      "${config_file}" | cut -d'=' -f2 | cut -d' ' -f1 | tr -d '"')
 else
     echo " "
     echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not exist."
     usage 1
+fi
+
+#-----------------------------------------------------------------------
+#
+# Handle the logging mechanism, after we get these variables:
+#        ${run_dir},${eventdate}, ${affix}, ${task} etc.
+#
+#-----------------------------------------------------------------------
+#% LOG
+
+log_dir="${run_dir}/${eventdate}"
+if [[ ! -d ${log_dir} ]]; then
+    echo -e "${RED}ERROR${NC}: ${PURPLE}${log_dir}${NC} not exists."
+    exit 1
+fi
+
+log_file="${log_dir}/log${affix}.${task}"
+
+if [[ -z $show ]]; then                 # Actually run the task
+    if [[ ! -t 1 ]]; then                       # at, batch or cron job
+        exec 1>> "${log_file}" 2>&1
+    elif [[ ${noscript} == false ]]; then       # interactive
+        #exec > >(tee -ia ${log_file} 2>&1
+        ## execute self with the noscript special arg so that the second execution DOES NOT start script again.
+        script -aefq "${log_file}" -c "$0 noscript ${saved_args}"
+        exit $?
+    else                                        # interactive
+        echo -e "\n${DARK}Logging to file: ${CYAN}${log_file}${NC} ....\n"
+    fi
 fi
 
 ########################################################################
@@ -258,7 +251,7 @@ post | plot | diag | verif | snd )
     donepost="${run_dir}/summary_files/${eventdate}${affix}/${endtime}/wofs_postswt_${endtime}_finished"
     doneplot="${run_dir}/image_files/flags/${eventdate}${affix}/${endtime}/wofs_plotpbl_${endtime}_finished"
     doneverif="${run_dir}/image_files/flags/${eventdate}${affix}/wofs_plotwwa_${endtime}_finished"
-    donesnd="${run_dir}/image_files/flags/${eventdate}${affix}/wofs_plotwwa_${endtime}_finished"
+    donesnd="${run_dir}/image_files/flags/${eventdate}${affix}/wofs_postsnd_${endtime}_finished"
 
     post_script_dir="${MPASdir}/frdd-wofs-post/wofs/scripts"
     post_config_orig="${MPASdir}/frdd-wofs-post/conf/WOFS_MPAS_config.yaml"
@@ -293,6 +286,17 @@ post | plot | diag | verif | snd )
             fcst_times+=" '${fcst_time}',"
         done
 
+        if [[ ! -f "${level_file}" ]]; then
+            level_file="/scratch/${level_file}"
+        fi
+        if [[ ! -f "${level_file}" ]]; then
+            echo -e "${RED}ERROR${NC}: Vertical level file - ${CYAN}${level_file}${NC} not exist."
+            exit 1
+        fi
+
+        num_levels=$(wc -l "${level_file}"| cut -d' ' -f1)
+        (( num_levels -= 1 ))
+
         # modify the configuration file
         sedfile=$(mktemp -t post.sed_XXXX)
         cat << EOF > "${sedfile}"
@@ -300,6 +304,7 @@ post | plot | diag | verif | snd )
 /^date_ext :/s/: .*/: '${affix}'/
 /^process_times :/s/: .*/: [${fcst_times%,} ]/
 /^nt :/s/: .*/: $nt/
+/^vert_levels :/s/: .*/: ${num_levels}/
 /^fcstpath: /s#: .*#: ${run_dir}/FCST/#
 /^sumpath: /s#: .*#: ${run_dir}/summary_files/#
 /^flagpath: /s#: .*#: ${run_dir}/image_files/flags/#
@@ -330,28 +335,7 @@ esac
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
 
-log_dir="${run_dir}/${eventdate}"
-if [[ ! -d ${log_dir} ]]; then
-    echo -e "${RED}ERROR${NC}: ${PURPLE}${log_dir}${NC} not exists."
-    exit 1
-fi
-
-log_file="${log_dir}/log${affix}.${task}"
-
-if [[ -z $show ]]; then                 # Actually run the task
-    if [[ ! -t 1 ]]; then                       # at, batch or cron job
-        exec 1>> "${log_file}" 2>&1
-    elif [[ ${noscript} == false ]]; then       # interactive
-        #exec > >(tee -ia ${log_file} 2>&1
-        ## execute self with the noscript special arg so that the second execution DOES NOT start script again.
-        script -aefq "${log_file}" -c "$0 noscript ${saved_args}"
-        exit $?
-    else                                        # interactive
-        echo -e "\n${DARK}Logging to file: ${CYAN}${log_file}${NC} ....\n"
-    fi
-fi
-
-echo -e "=== === === === ===\n"
+echo -e "=== AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA ===\n"
 echo -e "${PURPLE}$(date +'%Y%m%d %H:%M:%S (%Z)')${NC} - ${BROWN}$0 ${saved_args}${NC}"
 
 case $task in
