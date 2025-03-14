@@ -79,39 +79,40 @@ eventdateDF=$(date -u +%Y%m%d)
 #-----------------------------------------------------------------------
 
 function usage {
-    echo " "
-    echo "    USAGE: $0 [options] DATETIME [WORKDIR] [JOBS]"
-    echo " "
-    echo "    PURPOSE: Set up a MPAS-WOFS grid based on the central lat/lon."
-    echo " "
-    echo "    DATETIME - Case date and time in YYYYmmddHHMM, Default: ${eventdateDF}"
-    echo "    WORKDIR  - Run Directory"
-    echo "    JOBS     - One or more jobs from [geogrid,ungrib_hrrr,rotate,meshplot_{py,ncl},static,createWOFS,projectHexes,clean]"
-    echo "               or any one from [check,checkbg,checkobs,setup]."
-    echo "               setup    - just write set up configuration file"
-    echo "               checkbg  - Check the availability of the HRRRE datasets"
-    echo "               checkobs - Check the availability of observations"
-    echo "               Default  - All jobs in sequence order: [geogrid,ungrib_hrrr,projectHexes,meshplot_py,static]."
-    echo " "
-    echo "    OPTIONS:"
-    echo "              -h              Display this message"
-    echo "              -n              Show command to be run and generate job scripts only"
-    echo "              -v              Verbose mode"
-    echo "              -k  [0,1,2]     Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
-    echo "                              Default is 0 for ungrib, mpassit, upp and 1 for others"
-    echo "              -m  Machine     Machine name to run on, [Jet, Derecho, Vecna]."
-    echo "              --template/--fix/--exec  DIR"
-    echo "                              Directory for runtime files, job templates/fixed static files/executable programs respectively."
-    echo "              -a  wof         Account name for job submission."
-    echo "              -M  init        DA cycles mode, either init or restart. default: init"
-    echo "              -c  lat,lon     Domain central lat/lon, for example, 43.33296,-84.24593. Program \"geogrid\" requires them."
-    echo "              -d  domname     Domain name, default: wofs_mpas"
-    echo "              -x  affix       Affix attached to the run directory \"dacycles\" or \"fcst\". Default: Null"
-    echo "              -l  L60.txt     Vertical level file"
-    echo "              -o  filename    Ouput file name of the configuration file for this case"
-    echo "                              Default: \${WORKDIR}/config.\${eventdate}\${affix}"
-    echo " "
-    echo "   DEFAULTS:"
+    echo -e " "
+    echo -e "    USAGE: $0 [options] DATETIME [WORKDIR] [JOBS]"
+    echo -e " "
+    echo -e "    PURPOSE: Set up a MPAS-WOFS grid based on the central lat/lon."
+    echo -e " "
+    echo -e "    DATETIME - Case date and time in YYYYmmddHHMM, Default: ${eventdateDF}"
+    echo -e "    WORKDIR  - Run Directory"
+    echo -e "    JOBS     - One or more jobs from [geogrid,ungrib_hrrr,rotate,meshplot_{py,ncl},static,createWOFS,projectHexes,clean]"
+    echo -e "               or any one from [check,checkbg,checkobs,setup]."
+    echo -e "               setup    - just write set up configuration file"
+    echo -e "               checkbg  - Check the availability of the HRRRE datasets"
+    echo -e "               checkobs - Check the availability of observations"
+    echo -e "               Default  - All jobs in sequence order: [geogrid,ungrib_hrrr,projectHexes,meshplot_py,static]."
+    echo -e " "
+    echo -e "    OPTIONS:"
+    echo -e "              -h              Display this message"
+    echo -e "              -n              Show command to be run and generate job scripts only"
+    echo -e "              -v              Verbose mode"
+    echo -e "              -k  [0,1,2]     Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
+    echo -e "                              Default is 0 for ungrib, mpassit, upp and 1 for others"
+    echo -e "              -m  Machine     Machine name to run on, [Jet, Derecho, Vecna]."
+    echo -e "              --template/--fix/--exec  DIR"
+    echo -e "                              Directory for runtime files, job templates/fixed static files/executable programs respectively."
+    echo -e "              -a  wof         Account name for job submission."
+    echo -e "              -M  init        DA cycles mode, either init or restart. default: init"
+    echo -e "              -F  init        FCST launch mode, either init or restart. default same as ${BROWN}\${damode}${NC}"
+    echo -e "              -c  lat,lon     Domain central lat/lon, for example, 43.33296,-84.24593. Program \"geogrid\" requires them."
+    echo -e "              -d  domname     Domain name, default: wofs_mpas"
+    echo -e "              -x  affix       Affix attached to the run directory \"dacycles\" or \"fcst\". Default: Null"
+    echo -e "              -l  L60.txt     Vertical level file"
+    echo -e "              -o  filename    Ouput file name of the configuration file for this case"
+    echo -e "                              Default: \${WORKDIR}/config.\${eventdate}\${affix}"
+    echo -e " "
+    echo -e "   DEFAULTS:"
     echo    "              eventdate             = ${eventdateDF}"
     echo    "              WORKDIR               = ${mpasworkdir}/run_dirs"
     echo -e "  ${DARK}(*auto)${NC}     ROOTDIR/SCPDIR        = $rootdir${BROWN}/scripts${NC}"
@@ -210,6 +211,15 @@ function parse_args {
             fi
             shift
             ;;
+        -F)
+            if [[ ${2,,} == "init" || ${2,,} == "restart" ]]; then
+                args["fcstmode"]="${2,,}"
+            else
+                echo -e "${RED}ERROR${NC}: unknow argument. Expect: ${YELLOW}init${NC} or ${YELLOW}restart${NC}. Got: ${PURPLE}${2,,}${NC}"
+                usage 1
+            fi
+            shift
+            ;;
         -d)
             args["domname"]=$2
             shift
@@ -287,6 +297,7 @@ function parse_args {
 # Extract WRF domain attributes
 #
 function ncattget {
+    # shellcheck disable=SC2154
     if which ${nckspath} 2> /dev/null ; then
         ${nckspath} -x -M "$1" | grep -E "(corner_lats|corner_lons|CEN_LAT|CEN_LON|TRUELAT[12]|STAND_LON|MOAD_CEN_LAT|DX|DY|[ij]_parent)"
     else
@@ -714,6 +725,7 @@ function run_static {
     fi
 
     if [[ ! -f $domname.graph.info.part.${npestatic} ]]; then
+        # shellcheck disable=SC2154
         split_graph "${gpmetis}" "${domname}.graph.info" "${npestatic}" "$wrkdir" "$dorun" "$verb"
     fi
 
@@ -826,6 +838,7 @@ EOF
     #
     # Create job script and submit it
     #
+    # shellcheck disable=SC2154
     jobscript="run_static.${mach}"
 
     declare -A jobParms=(
@@ -1082,6 +1095,7 @@ s/DATESTRING/${starttime_str:0:10}/
 EOF
 
     sed -f $sedfile $TEMPDIR/$jobscript > $jobscript
+    # shellcheck disable=SC2154
     $nclpath $jobscript
 
     if [[ -f $domname.png ]]; then
@@ -1241,6 +1255,8 @@ function write_config {
         fi
     fi
 
+    # $machine is exported from setup_machine
+    # shellcheck disable=SC2154
     default_site_settings "${machine}"
 
     #-------------------------------------------------------------------
@@ -1261,7 +1277,7 @@ function write_config {
 #
 # [COMMON] variables
 #
-#   damode:     DA cycles mode, either "restart" or "init"
+#   damode:     DA cycles mode, either "restart" or "init", will be used in both run_dacycles.sh & run_fcst.sh
 #
 #   mpscheme:   Microphysics scheme, valid values are ('mp_nssl2m', 'mp_thompson')
 #   sfclayer_schemes:   suite,sf_monin_obukhov_rev,sf_monin_obukhov,sf_mynn,off
@@ -1393,6 +1409,7 @@ function write_config {
 
     job_exclusive_str=""
 [fcst]
+    fcstmode="${fcstmode}"
     ENS_SIZE=18
     time_step=20
     fcst_launch_intvl=3600
@@ -1701,7 +1718,9 @@ parse_args "$@"
 [[ -v args["overwrite"] ]] && overwrite=${args["overwrite"]} || overwrite=0
 [[ -v args["dorun"] ]]     && dorun=${args["dorun"]}         || dorun=true
 
-[[ -v args["damode"] ]]     && damode="${args['damode']}"     || damode="init"
+[[ -v args["damode"] ]]    && damode="${args['damode']}"     || damode="init"
+[[ -v args["fcstmode"] ]]  && fcstmode="${args['fcstmode']}" || fcstmode="${damode}"
+
 [[ -v args["domname"] ]]    && domname="${args['domname']}"   || domname="wofs_mpas"
 [[ -v args["affix"] ]]      && affix="${args['affix']}"       || affix=""
 
@@ -1729,6 +1748,7 @@ setup_machine "${args['machine']}" "$rootdir" true true
 
 [[ $dorun == false ]]    && runcmd="echo $runcmd"
 
+# shellcheck disable=SC2154
 [[ -v args["WORKDIR"] ]] && WORKDIR=${args["WORKDIR"]} || WORKDIR="${workdirDF}"
 [[ -v args["TEMPDIR"] ]] && TEMPDIR=${args["TEMPDIR"]} || TEMPDIR="${rootdir}/templates"
 [[ -v args["FIXDIR"] ]]  && FIXDIR=${args["FIXDIR"]}   || FIXDIR="${rootdir}/fix_files"

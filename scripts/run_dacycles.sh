@@ -101,7 +101,7 @@ eventtimeDF="1500"
 
 function usage {
     echo " "
-    echo "    USAGE: $0 [options] DATETIME [WORKDIR] [JOBS]"
+    echo "    USAGE: $0 [options] [DATETIME] [WORKDIR] [CONFIG] [JOBS]"
     echo " "
     echo "    PURPOSE: Run MPAS-WOFS DA cycles."
     echo " "
@@ -109,6 +109,8 @@ function usage {
     echo "               YYYYmmdd:     run all cycles from $eventtimeDF to 0300 UTC. Or use options \"-s\" & \"-e\" to specify cycles."
     echo "               YYYYmmddHHMM: run this DA cycle only."
     echo "    WORKDIR  - Run Directory"
+    echo "    CONFIG   - MPAS-WoFS runtime configuration file with full path."
+    echo "               WORKDIR & DATETIME will be extracted from the CONFIG name unless they are given explicitly."
     echo "    JOBS     - One or more jobs from [filter,update_states,update_bc,mpas,obs_diag,obs_final2nc,clean]"
     echo "               Default all jobs in [filter,update_states,update_bc,mpas] for a DA cyle"
     echo " "

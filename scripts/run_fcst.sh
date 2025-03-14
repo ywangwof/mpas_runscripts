@@ -112,7 +112,7 @@ eventdateDF=$(date -u +%Y%m%d)
 
 function usage {
     echo " "
-    echo "    USAGE: $0 [options] DATETIME [WORKDIR] [JOBS]"
+    echo "    USAGE: $0 [options] DATETIME [WORKDIR] [CONFIG] [JOBS]"
     echo " "
     echo "    PURPOSE: Run MPAS free forecast based on analysis from the WoFS workflow."
     echo " "
@@ -120,6 +120,8 @@ function usage {
     echo "               YYYYmmdd:     run all cycles from $eventtime to 0300. Or use options \"-s\" & \"-e\" to specify cycles."
     echo "               YYYYmmddHHMM: run this forecast cycle only."
     echo "    WORKDIR  - Run Directory"
+    echo "    CONFIG   - MPAS-WoFS runtime configuration file with full path."
+    echo "               WORKDIR & DATETIME will be extracted from the CONFIG name unless they are given explicitly."
     echo "    JOBS     - One or more jobs from [mpas,mpassit,upp,clean]"
     echo "               Default all jobs in sequence."
     echo " "
@@ -396,7 +398,7 @@ function run_mpas {
         #
         do_restart="false"
         do_dacyle="false"
-        if [[ ${damode} == "restart" ]]; then
+        if [[ ${fcstmode} == "restart" ]]; then
             do_restart="true"
             do_dacyle="true"
         fi
@@ -1618,12 +1620,12 @@ readconf ${config_file} COMMON MPAS_OPTIONS fcst || exit $?
 #
 # Check configurations reading in
 #
-if [[ "${damode}" == "restart" ]]; then
+if [[ "${fcstmode}" == "restart" ]]; then
     diag_start=${OUTINVL}
-elif [[ "${damode}" == "init" ]]; then
+elif [[ "${fcstmode}" == "init" ]]; then
     diag_start=0
 else
-    echo -e "${RED}ERROR${NC}: damode=${damode} is not supported."
+    echo -e "${RED}ERROR${NC}: fcstmode=${fcstmode} is not supported."
     usage 1
 fi
 
