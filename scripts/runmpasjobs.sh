@@ -26,30 +26,35 @@ source "$script_dir/Common_Colors.sh"
 
 function usage {
     echo    " "
-    echo    "    USAGE: $0 [options] [DATETIME] [WORKDIR] [TASK]"
+    echo    "    USAGE: $0 [options] [DATETIME] [WORKDIR] [CONFIG] [TASK]"
     echo    " "
     echo    "    PURPOSE: Run MPAS-WOFS tasks interactively or using Linux at/cron facility."
-    echo    "             It will always log the outputs to a file."
+    echo -e "             It will log the outputs to a file as ${LIGHT_BLUE}\${WORKDIR}${NC}/${DIR_CLR}\${EVENTDATE}${NC}/log${DIRa_CLR}\${affix}${NC}.${YELLOW}\${task}${NC} automatically."
     echo    " "
     echo    "    DATETIME - Case date and time in YYYYmmdd/YYYYmmddHHMM."
-    echo    "               YYYYmmdd:     run the task for this event date."
+    echo    "               YYYYmmdd:     run the task(s) at this event date."
     echo    "               YYYYmmddHHMM: run task DA/FCST for one cycle only."
-    echo -e "    WORKDIR  - Top level ${LIGHT_BLUE}run_dir${NC} for all tasks"
-    echo -e "               Normally, it has ${DIR_CLR}YYYYmmdd/dacycles${DIRa_CLR}{x}${NC}; ${DIR_CLR}YYYYmmdd/fcst${DIRa_CLR}{x}${NC}; "
-    echo -e "               ${DIR_CLR}FCST/YYYYmmdd${DIRa_CLR}{x}${NC}; ${DIR_CLR}summary_files/YYYYmmdd${DIRa_CLR}{x}${NC}; ${DIR_CLR}image_files/YYYYmmdd${DIRa_CLR}{x}${NC} etc."
-    echo -e "    TASK     - One of [${YELLOW}dacycles${NC},${YELLOW}fcst${NC},${YELLOW}post${NC},${YELLOW}plot${NC},${YELLOW}diag${NC},${YELLOW}verif${NC}]"
+    echo -e "    WORKDIR  - Top level ${LIGHT_BLUE}run_dir${NC} for all tasks. Generally, it should contain these folders:"
+    echo -e "                   ${DIR_CLR}\${EVENTDATE}${NC}/{${WHITE}dacycles${NC},${WHITE}fcst${NC}}${DIRa_CLR}\${affix}${NC}"
+    echo -e "                   {${WHITE}FCST${NC},${WHITE}summary_files${NC},${WHITE}image_files${NC}}/${DIR_CLR}\${EVENTDATE}${DIRa_CLR}\${affix}${NC}"
+    echo    ""
+    echo    "    CONFIG   - MPAS-WoFS runtime configuration file with full path."
+    echo    "               WORKDIR & DATETIME will be extracted from the CONFIG name unless they are given explicitly."
+    echo -e "    TASK     - One of [${YELLOW}dacycles${NC},${YELLOW}fcst${NC},${YELLOW}post${NC},${YELLOW}plot${NC},${YELLOW}diag${NC},${YELLOW}verif${NC},${YELLOW}snd${NC},${BROWN}atpost${NC}]"
     echo    " "
     echo    "    OPTIONS:"
     echo    "              -h                  Display this message"
     echo    "              -n                  Show command to be run, but not run it"
     echo    "              -nn                 Show command to be run (one level deeper), but not run it"
     echo    "              -v                  Verbose mode"
-    echo    "              -e                  Last time in HHMM format"
-    echo    "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
+    echo    "              -e  HHMM            Last time in HHMM format"
+    echo    "              -f  conf_file       Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
+    echo -e "              -t  launchtime      Date and time to launch the first task for task ${BROWN}atpost${NC}, as ${LIGHT_BLUE}HH:MM${NC} or ${LIGHT_BLUE}HH:MM mmddyy${NC}"
+    echo -e "              -p  machine         Post-processing machine, default: ${PURPLE}wof-epyc8${NC}."
     echo    " "
     echo    "   DEFAULTS:"
-    echo    "              eventdate  = $eventdateDF"
-    echo    "              WORKDIR    = ${mpasworkdir}/run_dir"
+    echo -e "              EVENTDATE  = ${DIR_CLR}${eventdateDF:0:8}$NC"
+    echo -e "              WORKDIR    = ${LIGHT_BLUE}${mpasworkdir}/run_dir${NC}"
     echo    "              rootdir    = $rootdir"
     echo    "              script_dir = $script_dir"
     echo    "              post_dir   = $post_dir"
@@ -73,37 +78,51 @@ function parse_args {
         key="$1"
 
         case $key in
-            -h)
+            -h )
                 usage 0
                 ;;
-            -n)
+            -n )
                 args["show"]="echo"
                 ;;
-            -nn)
+            -nn )
                 args["taskopt"]="-n"
                 ;;
-            -v)
+            -v )
                 args["verb"]=true
                 ;;
-            -f)
+            -f )
                 args["config_file"]="$2"
                 shift
                 ;;
-            -e)
+            -e )
                 args["endtime"]="$2"
                 shift
                 ;;
-            -*)
+            -t )
+                if [[ $2 =~ ^[0-9:]+$ ]]; then
+                    args["launchtime"]+="${2}"
+                else
+                    echo ""
+                    echo -e "${RED}ERROR${NC}: unknown argument, get ${YELLOW}$2${NC}."
+                    usage 3
+                fi
+                shift
+                ;;
+            -p )
+                args["post_machine"]="$2"
+                shift
+                ;;
+            -* )
                 echo -e "${RED}ERROR${NC}: Unknown option: ${YELLOW}$key${NC}"
                 usage 2
                 ;;
-            dacycles | fcst | post | plot | diag | verif | snd )
+            dacycles | fcst | post | plot | diag | verif | snd | atpost )
                 args["task"]=$key
                 ;;
             noscript )
                 args["noscript"]=true
                 ;;
-            *)
+            * )
                 if [[ $key =~ ^[0-9]{12}$ ]]; then
                     eventhour=${key:8:2}
                     if ((10#$eventhour < 12)); then
@@ -146,6 +165,10 @@ parse_args "$@"
 [[ -v args["task"] ]]     && task=${args["task"]}         || task=""
 
 [[ -v args["noscript"] ]] && noscript=${args["noscript"]} || noscript=false
+
+[[ -v args["launchtime"] ]]   && launchtime=${args["launchtime"]}     || launchtime="18:00"
+[[ -v args["post_machine"] ]] && post_machine=${args["post_machine"]} || post_machine="wof-epyc8"
+
 
 if [[ -v args["eventdate"] ]]; then
     eventdate=${args["eventdate"]}
@@ -225,8 +248,8 @@ fi
 # Load Python environment as needed
 case $task in
 post | plot | diag | verif | snd )
-    if [[ ! "$host" =~ ^wof-epyc.*$ ]]; then
-        echo -e "${RED}ERROR${NC}: Please run ${BROWN}$task${NC} on wof-epyc8 only".
+    if [[ ! "${host}" == ${post_machine}* ]]; then
+        echo -e "${RED}ERROR${NC}: Please run ${BROWN}$task${NC} on ${post_machine} only".
         exit 1
     fi
 
@@ -328,6 +351,28 @@ EOF
         verif_script="${post_script_dir}/wofs_plot_verification_MPAS.py"
         sed -i "/plot_modes_qpe =/s/\[.*\]/${qpe_mode_string}/" "${verif_script}"
     fi
+    ;;
+
+atpost )
+    myname=$(basename "$0")
+    atjobstr=$(cat <<EOF
+if [[ $verb == true || "$show" == "echo" ]]; then
+    echo "at ${launchtime}        <<< \"${myname} ${config_file} -e ${endtime} post\""
+    echo "at ${launchtime}+1hours <<< \"${myname} ${config_file} -e ${endtime} diag\""
+    echo "at ${launchtime}+2hours <<< \"${myname} ${config_file} -e ${endtime} snd\""
+    echo "at ${launchtime}+3hours <<< \"${myname} ${config_file} -e ${endtime} verif\""
+    echo "at ${launchtime}+4hours <<< \"${myname} ${config_file} -e ${endtime} plot\""
+fi
+
+if [[ -z "$show" ]]; then
+    at ${launchtime}        <<< "${myname} ${config_file} -e ${endtime} post"
+    at ${launchtime}+1hours <<< "${myname} ${config_file} -e ${endtime} diag"
+    at ${launchtime}+2hours <<< "${myname} ${config_file} -e ${endtime} snd"
+    at ${launchtime}+3hours <<< "${myname} ${config_file} -e ${endtime} verif"
+    at ${launchtime}+4hours <<< "${myname} ${config_file} -e ${endtime} plot"
+fi
+EOF
+)
     ;;
 esac
 
@@ -440,6 +485,18 @@ diag )
     cmds=("${script_dir}/plot_allobs.sh" -e "${endtime}" "${config_file}")
     if [[ -n "${taskopt}" ]]; then cmds+=("${taskopt}");  fi
     ;;
+
+#8. atpost
+atpost )
+    #echo "$host, $post_machine"
+    if [[ "${host}" == ${post_machine}* ]]; then
+        cd "${script_dir}" || exit $?
+        ${show} eval "${atjobstr}"
+    else
+        ${show} ssh ${post_machine} -t "cd \"/scratch/${script_dir}\"; ${atjobstr}"
+    fi
+    exit 0
+   ;;
 * )
     echo -e "${RED}ERROR${NC}: Unknown task - ${PURPLE}$task${NC}\n"
     exit 3
