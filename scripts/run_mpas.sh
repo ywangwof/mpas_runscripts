@@ -797,7 +797,7 @@ function run_ungrib_rrfsna {
         for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
             hstr=$(printf "%03d" $h)
             if [[ $download_aws -eq 1 ]]; then
-                rrfsfile="rrfs.t${currtime}z.natlev.f${hstr}.grib2"
+                rrfsfile="rrfs.t${currtime}z.natlev.3km.f${hstr}.na.grib2"
                 basefn=$(basename $rrfsfile)
                 basefn="HRRR_$basefn"
 
@@ -822,7 +822,7 @@ function run_ungrib_rrfsna {
                     done
                 fi
             else
-                rrfsfile=$rrfs_grib_dir/rrfs.t${currtime}z.natlev.f${hstr}.grib2
+                rrfsfile=$rrfs_grib_dir/rrfs.t${currtime}z.natlev.3km.f${hstr}.na.grib2
                 basefn=$(basename $rrfsfile)
                 basefn="HRRR_$basefn"
                 while [[ ! -f $rrfsfile && ! -f $basefn && $dorun == true ]]; do
@@ -1409,7 +1409,7 @@ function run_init {
     config_nsoilcat      = 16
 /
 &data_sources
-    config_geog_data_path = '/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/'
+    config_geog_data_path = '/lfs5/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/'
     config_met_prefix = '${EXTHEAD}'
     config_sfc_prefix = 'SST'
     config_fg_interval = $((EXTINVL*3600))
@@ -2562,7 +2562,7 @@ if [[ $machine == "Jet" ]]; then
         job_exclusive_str="#SBATCH --exclusive\n#SBATCH -q rth\n#SBATCH --reservation=rrfsens"
     else
         #ncores_ics=5; ncores_fcst=6; ncores_post=6
-        partition="ujet,tjet,xjet,vjet,kjet"; claim_cpu="--cpus-per-task=2"
+        partition="xjet,vjet,kjet"; claim_cpu="--cpus-per-task=2"
                                               claim_cpu_ics="--cpus-per-task=2"
         partition_static="${partition}"     ; static_cpu="--cpus-per-task=12"
         partition_upp="kjet,xjet,vjet"
@@ -2579,7 +2579,7 @@ if [[ $machine == "Jet" ]]; then
     job_runexe_str="srun"
 
     modulename="build_jet_Rocky8_intel_smiol"
-    WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
+    WPSGEOG_PATH="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
 
     source /etc/profile.d/modules.sh
     module purge
@@ -2587,7 +2587,7 @@ if [[ $machine == "Jet" ]]; then
     module load $modulename
     module load gnu/13.2.0 wgrib2/3.1.1_wmo
     wgrib2path="/apps/wgrib2/3.1.1/gnu_13.2.0/wmo/bin/wgrib2"
-    gpmetis="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/bin/gpmetis"
+    gpmetis="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS/bin/gpmetis"
 
 elif [[ $machine == "Cheyenne" ]]; then
 
@@ -2715,7 +2715,7 @@ declare -A jobargs=([static]=$WORKDIR/$domname                                 \
                     [geogrid]=$WORKDIR/${domname/*_/geo_}                      \
                     [ungrib_hrrr]="/public/data/grids/hrrr/conus/wrfnat/grib2" \
                     [ungrib_rrfs]="https://noaa-rrfs-pds.s3.amazonaws.com"     \
-                    [ungrib_rrfsna]="/lfs4/NAGAPE/wof/grib_files/RRFS-A"       \
+                    [ungrib_rrfsna]="/lfs5/NAGAPE/wof/grib_files/RRFS-A"       \
                     [ungrib_rrfsp]="https://noaa-rrfs-pds.s3.amazonaws.com"    \
                     [ungrib_gfs]="/public/data/grids/gfs/0p25deg/grib2"           \
                     [init]="ungrib/done.ungrib_ics $WORKDIR/$domname/done.static" \
