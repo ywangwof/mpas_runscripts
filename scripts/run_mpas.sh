@@ -861,8 +861,8 @@ s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
 s#MODULE#${modulename}#g
 s#MACHINE#${machine}#g
-s#GRIBFILE#$rrfs_grib_dir/rrfs.t${currtime}z.natlev.f0#
-s#TARGETFILE#HRRR_rrfs.t${currtime}z.natlev.f0#
+s#GRIBFILE#$rrfs_grib_dir/rrfs.t${currtime}z.natlev.3km.f0#
+s#TARGETFILE#HRRR_rrfs.t${currtime}z.natlev.3km.f0#
 s#VERBOSE#$verb#g
 s/ACCTSTR/${job_account_str}/
 s^EXCLSTR^${job_exclusive_str}^

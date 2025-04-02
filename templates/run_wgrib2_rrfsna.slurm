@@ -129,8 +129,8 @@ verb=VERBOSE
 fhr=${SLURM_ARRAY_TASK_ID}
 hstr=$(printf "%02d" $fhr)
 
-rrfsfile="GRIBFILE$hstr.grib2"
-basefn="TARGETFILE$hstr.grib2"
+rrfsfile="GRIBFILE$hstr.na.grib2"
+basefn="TARGETFILE$hstr.na.grib2"
 
 #
 # Trim out un-wanted records
@@ -196,6 +196,7 @@ eval $grib2cmdstr >& /dev/null
 
 #
 # convert to Earth-relative winds
+# NOT needed since MPAS can handle the rotation itself.
 #
 #griddefn=$(grid_defn tmp_${basefn})
 #echo "grid defn = \"$griddefn\" "
