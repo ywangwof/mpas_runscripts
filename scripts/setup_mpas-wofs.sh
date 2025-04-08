@@ -315,7 +315,7 @@ function run_geogrid {
     cd "$wrkdir" || return
 
     if [[ -f done.geogrid ]]; then
-        mecho0 "Found file ${CYAN}done.geogrid${NC}, skipping ${WHITE}run_geogrid${NC} ...."
+        mecho0 "Found file ${CYAN}done.geogrid${NC}, skipping ${WHITE}${FUNCNAME[0]}${NC} ...."
         return
     fi
 
@@ -436,7 +436,7 @@ function run_createWOFS {
     cd $wrkdir || return
 
     if [[ -f done.create ]]; then
-        mecho0 "Found file ${CYAN}done.create${NC}, skipping ${WHITE}run_createWOFS${NC} ...."
+        mecho0 "Found file ${CYAN}done.create${NC}, skipping ${WHITE}${FUNCNAME[0]}${NC} ...."
         return
     elif [[ -f running.create || -f queue.create ]]; then
         return                   # skip
@@ -577,7 +577,7 @@ function run_projectHexes {
     cd $wrkdir || return
 
     if [[ -f done.project ]]; then
-        mecho0 "Found file ${CYAN}done.project${NC}, skipping ${WHITE}run_projectHexes${NC} ...."
+        mecho0 "Found file ${CYAN}done.project${NC}, skipping ${WHITE}${FUNCNAME[0]}${NC} ...."
         return
     elif [[ -f running.project || -f queue.project ]]; then
         return                   # skip
@@ -718,7 +718,7 @@ function run_static {
     cd $wrkdir || return
 
     if [[ -f done.static ]]; then
-        mecho0 "Found file ${CYAN}done.static${NC}, skipping ${WHITE}run_static${NC} ...."
+        mecho0 "Found file ${CYAN}done.static${NC}, skipping ${WHITE}${FUNCNAME[0]}${NC} ...."
         return
     elif [[ -f running.static || -f queue.static ]]; then
         return                   # skip
@@ -884,7 +884,7 @@ function run_rotate {
     cd $wrkdir || return
 
     if [[ -f done.rotate ]]; then
-        mecho0 "Found file ${CYAN}done.rotate${NC}, skipping ${WHITE}run_rotate${NC} ...."
+        mecho0 "Found file ${CYAN}done.rotate${NC}, skipping ${WHITE}${FUNCNAME[0]}${NC} ...."
         return
     elif [[ -f running.rotate || -f queue.rotate ]]; then
         return                   # skip
@@ -981,7 +981,7 @@ function run_ungrib_hrrr {
     cd $wrkdir || return
 
     if [[ -f done.ungrib ]]; then
-        mecho0 "Found file ${CYAN}done.ungrib${NC}, skipping ${WHITE}$0${NC} ...."
+        mecho0 "Found file ${CYAN}done.ungrib${NC}, skipping ${WHITE}${FUNCNAME[0]}${NC} ...."
         return                   # skip
     elif [[ -f running.ungrib || -f queue.ungrib ]]; then
         return                   # skip
@@ -1141,7 +1141,7 @@ function run_meshplot_py {
     cd $wrkdir  || return
 
     if [[ -f "${domname}.${eventdate}.radars.sh" ]]; then
-        mecho0 "Found file ${CYAN}${domname}.${eventdate}.radars.sh${NC}, skipping ${WHITE}run_run_meshplot_py${NC} ...."
+        mecho0 "Found file ${CYAN}${domname}.${eventdate}.radars.sh${NC}, skipping ${WHITE}${FUNCNAME[0]}${NC} ...."
         return
     fi
 
@@ -1330,6 +1330,8 @@ function write_config {
 #    coef_3rd_order=1.0     # 3rd order advection
 #    coef_3rd_order=0.25    # nearly 4th order advection
 #
+#    h_scalar_eddy_visc4   is a new parameter added at NSSL
+#
 [MPAS_OPTIONS]
     coef_3rd_order=1.0
     smagorinsky_coef=0.25
@@ -1338,6 +1340,7 @@ function write_config {
     h_theta_eddy_visc4=0.25
     h_scalar_eddy_visc4=0.25
     smdiv=0.1
+    physics_suite='convection_permitting'
 
 [init]
     ICSIOTYPE="pnetcdf,cdf5"
@@ -1370,7 +1373,6 @@ function write_config {
 
 [dacycles]
     ENS_SIZE=36
-    time_step=15
     intvl_sec=900
     ADAPTIVE_INF=true
     update_in_place=false               # update MPAS states in-place or
@@ -1395,6 +1397,8 @@ function write_config {
 
     OBS_DIR="${OBS_DIR}"
 
+    time_step=15
+
     partition_fcst="${partition_dafcst}";
     partition_filter="${partition_filter}"
     npefcst="${npedafcst}";   ncores_fcst="${ncores_dafcst}";   nnodes_fcst="${nnodes_dafcst}"
@@ -1411,13 +1415,14 @@ function write_config {
 [fcst]
     fcstmode="${fcstmode}"
     ENS_SIZE=18
-    time_step=20
     fcst_launch_intvl=3600
     fcst_length_seconds=(21600 10800)   # 6 hours at :00 and 3 hours at :30
     OUTINVL=300
     OUTIOTYPE="netcdf4"
 
     outpsfc=false                       # An extra streams for PSFC output"
+
+    time_step=20
 
     partition_fcst="${partition_fcst}"
     partition_post="${partition_post}"

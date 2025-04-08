@@ -275,10 +275,15 @@ function check_job_status {
             #   4. error, A program error? resubmitting will not help
 
             while [[ ! -e $memdonefile && ! -e $donefile ]]; do
+                # shellcheck disable=SC2012
                 if compgen -G "$mywrkdir/${jobname}_${mem}_*.log" > /dev/null; then
                     # Handle occasionally machine errors on Vecna
-                    # shellcheck disable=SC2012
                     lastestfile=$(ls -t $mywrkdir/${jobname}_${mem}_*.log | head -1)
+                elif compgen -G "$mywrkdir/*_${mem}_${jobname}_*.log" > /dev/null; then
+                    lastestfile=$(ls -t $mywrkdir/*_${mem}_${jobname}_*.log | head -1)
+                fi
+
+                if [[ -f ${lastestfile} ]]; then
                     #if grep -q "srun: Job step aborted:" ${lastestfile}; then
                     if grep -q "slurmstepd: error:" ${lastestfile}; then
                         # abort: Slurm error, resubmission may help

@@ -3,7 +3,7 @@
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
 #SBATCH -t 00:30:00
-#SBATCH --output=WRKDIR/noise_pert_%a_%j.log
+#SBATCH --output=WRKDIR/fcst_%a_noise_pert_%j.log
 ACCTSTR
 EXCLSTR
 

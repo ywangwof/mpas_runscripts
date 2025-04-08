@@ -3,7 +3,7 @@
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
 #SBATCH -t CLAIMTIME
-#SBATCH --output=WRKDIR/fcst_%a_%j.log
+#SBATCH --output=WRKDIR/fcst_%a_mpas_%j.log
 ACCTSTR
 EXCLSTR
 

@@ -307,7 +307,7 @@ for pkg in "${packages[@]}"; do
             echo "  -- ${cmdnote} DART static to $(pwd) ...."
             run_cmd "${runcmd}" "$srcdart/assimilation_code/programs/gen_sampling_err_table/work" "sampling_error_correction_table.nc"
 
-            coef_rootdir="/scratch/thomas.jones/software/nvidia/rttov13/rtcoef_rttov13"
+            coef_rootdir="/home/thomas.jones/software/nvidia/rttov13/rtcoef_rttov13"
 
             coef_files=(    rttov9pred54L/rtcoef_goes_16_abi.dat                          \
                             rttov13pred54L/rtcoef_goes_16_abi_7gas.dat                    \
@@ -356,7 +356,7 @@ for pkg in "${packages[@]}"; do
 
         staticfiles=(CAM_ABS_DATA.DBL  CAM_AEROPT_DATA.DBL GENPARM.TBL       LANDUSE.TBL    \
                      OZONE_DAT.TBL     OZONE_LAT.TBL       OZONE_PLEV.TBL    RRTMG_LW_DATA  \
-                     RRTMG_LW_DATA.DBL RRTMG_SW_DATA       RRTMG_SW_DATA.DBL )
+                     RRTMG_LW_DATA.DBL RRTMG_SW_DATA       RRTMG_SW_DATA.DBL CCN_ACTIVATE_DATA )
 
         echo ""
         echo "  -- ${cmdnote} runtime static files to ${desdir} ...."

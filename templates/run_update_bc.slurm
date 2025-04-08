@@ -3,7 +3,7 @@
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
 #SBATCH -t 00:10:00
-#SBATCH --output=WRKDIR/update_bc_%a_%j.log
+#SBATCH --output=WRKDIR/fcst_%a_update_bc_%j.log
 ACCTSTR
 EXCLSTR
 

@@ -29,6 +29,7 @@ function usage {
     echo    "    USAGE: $0 [options] [DATETIME] [WORKDIR] [CONFIG] [TASK]"
     echo    " "
     echo    "    PURPOSE: Run MPAS-WOFS tasks interactively or using Linux at/cron facility."
+    # shellcheck disable=SC2154
     echo -e "             It will log the outputs to a file as ${LIGHT_BLUE}\${WORKDIR}${NC}/${DIR_CLR}\${EVENTDATE}${NC}/log${DIRa_CLR}\${affix}${NC}.${YELLOW}\${task}${NC} automatically."
     echo    " "
     echo    "    DATETIME - Case date and time in YYYYmmdd/YYYYmmddHHMM."
@@ -99,7 +100,7 @@ function parse_args {
                 shift
                 ;;
             -t )
-                if [[ $2 =~ ^[0-9:]+$ ]]; then
+                if [[ $2 =~ ^[0-9:]+$ || "$2" == "now" ]]; then
                     args["launchtime"]+="${2}"
                 else
                     echo ""
@@ -354,9 +355,13 @@ EOF
     ;;
 
 atpost )
-    myname=$(basename "$0")
+    myname="$(realpath $0)"
+    if [[ "${host}" != ${post_machine}* ]]; then
+        myname="/scratch${myname}"
+    fi
+
     atjobstr=$(cat <<EOF
-if [[ $verb == true || "$show" == "echo" ]]; then
+if [[ $verb == true ]]; then
     echo "at ${launchtime}        <<< \"${myname} ${config_file} -e ${endtime} post\""
     echo "at ${launchtime}+1hours <<< \"${myname} ${config_file} -e ${endtime} diag\""
     echo "at ${launchtime}+2hours <<< \"${myname} ${config_file} -e ${endtime} snd\""
@@ -490,10 +495,10 @@ diag )
 atpost )
     #echo "$host, $post_machine"
     if [[ "${host}" == ${post_machine}* ]]; then
-        cd "${script_dir}" || exit $?
+        #cd "${script_dir}" || exit $?
         ${show} eval "${atjobstr}"
     else
-        ${show} ssh ${post_machine} -t "cd \"/scratch/${script_dir}\"; ${atjobstr}"
+        ${show} ssh ${post_machine} -t "${atjobstr}"
     fi
     exit 0
    ;;

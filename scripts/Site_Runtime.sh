@@ -172,10 +172,10 @@ function setup_machine {
             runcmd_str="srun -n 1"
 
             WPSGEOG_PATH="/scratch/wofs_mpas/WPS_GEOG/"   # Should keep last /
-            wgrib2path="/scratch/yunheng.wang/tools/gnu/bin/wgrib2"
+            wgrib2path="/home/yunheng.wang/tools/gnu/bin/wgrib2"
             nckspath="/home/yunheng.wang/tools/micromamba/envs/wofs_an/bin/ncks"
-            gpmetis="/scratch/yunheng.wang/tools/bin/gpmetis"
-            export LD_LIBRARY_PATH=/scratch/yunheng.wang/tools/lib
+            gpmetis="/home/yunheng.wang/tools/bin/gpmetis"
+            export LD_LIBRARY_PATH="/home/yunheng.wang/tools/lib"
             nclpath="/scratch/software/miniconda3/bin/ncl"
 
             OBS_DIR="/scratch/wofs_mpas/OBS_SEQ"
@@ -308,7 +308,7 @@ function default_site_settings {
     * )
         # Vecna at NSSL
 
-        mpas_wofs_python="/scratch/yunheng.wang/MPAS/wofs_new_noise"
+        mpas_wofs_python="/home/yunheng.wang/MPAS/wofs_new_noise"
 
         # ICs
         npeics=24;   ncores_ics=96

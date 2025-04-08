@@ -1090,13 +1090,13 @@ function run_filter {
    inf_initial_from_restart    = $(join_by ',' "${inf_initial_restart[@]}"),
    inf_sd_initial_from_restart = $(join_by ',' "${inf_initial_restart[@]}"),
    inf_deterministic           = .true.,                  .true.,
-   inf_initial                 = 1.0,                     1.0
-   inf_sd_initial              = 0.6,                     0.0
-   inf_damping                 = 0.9,                     1.0
-   inf_lower_bound             = 1.0,                     1.0
-   inf_upper_bound             = 1000.0,               1000000.0
-   inf_sd_lower_bound          = 0.6,                     0.0
-   inf_sd_max_change           = 1.05,                    1.05,
+   inf_initial                 =    1.0,                     1.0,
+   inf_sd_initial              =    0.6,                     0.0,
+   inf_damping                 =    0.9,                     1.0,
+   inf_lower_bound             =    1.0,                     1.0,
+   inf_upper_bound             = 1000.0,               1000000.0,
+   inf_sd_lower_bound          =    0.4,                     0.0,
+   inf_sd_max_change           =    1.05,                    1.05,
   /
 
 &quality_control_nml
@@ -2434,16 +2434,20 @@ function run_mpas {
     #fcsttime_fil=$(date -u -d @${fcst_sec} +%Y-%m-%d_%H.%M.%S)
 
     #
+    # Default runtime parameters for MPAS model
+    #
+    [[ ! -v coef_3rd_order ]]      && coef_3rd_order=1.0
+    [[ ! -v smagorinsky_coe ]]     && smagorinsky_coef=0.25
+    [[ ! -v visc4_2dsmag ]]        && visc4_2dsmag=0.125
+    [[ ! -v h_mom_eddy_visc4 ]]    && h_mom_eddy_visc4=0.0
+    [[ ! -v h_theta_eddy_visc4 ]]  && h_theta_eddy_visc4=0.25
+    [[ ! -v h_scalar_eddy_visc4 ]] && h_scalar_eddy_visc4=0.25
+    [[ ! -v smdiv ]]               && smdiv=0.1
+    [[ ! -v physics_suite ]]       && physics_suite='convection_permitting'
+
+    #
     # Preparation for each member
     #
-    if [[ -z ${coef_3rd_order} ]];      then coef_3rd_order=1.0;       fi
-    if [[ -z ${smagorinsky_coef} ]];    then smagorinsky_coef=0.25;    fi
-    if [[ -z ${visc4_2dsmag} ]];        then visc4_2dsmag=0.125;       fi
-    if [[ -z ${h_mom_eddy_visc4} ]];    then h_mom_eddy_visc4=0.0;     fi
-    if [[ -z ${h_theta_eddy_visc4} ]];  then h_theta_eddy_visc4=0.25;  fi
-    if [[ -z ${h_scalar_eddy_visc4} ]]; then h_scalar_eddy_visc4=0.25; fi
-    if [[ -z ${smdiv} ]];               then smdiv=0.1;                fi
-
     jobarrays=()
     for iens in $(seq 1 $ENS_SIZE); do
         memstr=$(printf "%02d" $iens)
@@ -2516,8 +2520,8 @@ function run_mpas {
         done
 
         if [[ "${mpscheme}" == "mp_tempo" ]]; then
-            thompson_tables=( MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL MP_TEMPO_QRacrQG_DATA.DBL   MP_TEMPO_QRacrQS_DATA.DBL   \
-                              MP_TEMPO_freezeH2O_DATA.DBL         MP_TEMPO_QIautQS_DATA.DBL   CCN_ACTIVATE.BIN )
+            thompson_tables=( MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL MP_TEMPO_QRacrQS_DATA.DBL   \
+                              MP_TEMPO_freezeH2O_DATA.DBL         MP_TEMPO_QIautQS_DATA.DBL   CCN_ACTIVATE_DATA )
 
             for fn in "${thompson_tables[@]}"; do
                 ln -sf ${FIXDIR}/$fn .
@@ -2607,29 +2611,22 @@ function run_mpas {
     config_lsm_scheme                = '${MPASLSM}'
     num_soil_layers                  = ${MPASNFLS}
     config_microp_re                 = true
-    config_physics_suite             = 'convection_permitting'
+    config_physics_suite             = '${physics_suite}'
     config_convection_scheme         = 'off'
-    config_pbl_scheme                = '${pblscheme}'
     config_sfclayer_scheme           = '${sfcscheme}'
 
     config_frac_seaice         = true
-    config_gwdo_scheme         = 'off'
+    config_gwdo_scheme         = 'bl_ugwp_gwdo'
+    config_gvf_update          = false
 EOF
         if [[ ${sfcscheme} == "sf_mynn" ]]; then
             cat << EOF >> namelist.atmosphere
-    config_radt_cld_scheme     = 'cld_fraction_mynn'
-    config_mynn_edmf_tke       = 0
-    config_mynn_edmf           = 1
-    config_mynn_mixqt          = 0
-    config_mynn_tkeadvect      = .false.
-    config_mynn_cloudpdf       = 0
-    config_mynn_closure        = 2.6
-    config_mynn_mixscalars     = 1
-    config_mynn_edmf_output    = 0
-    config_mynn_mixlength      = 1
-    config_mynn_mixclouds      = 1
-    config_mynn_tkebudget      = 0
-    config_mynn_edmf_mom       = 1
+    config_pbl_scheme          = 'bl_mynnedmf'
+EOF
+        else
+            cat << EOF >> namelist.atmosphere
+    config_pbl_scheme          = '${pblscheme}'
+    config_radt_cld_scheme     = 'off'
 EOF
         fi
 
@@ -2643,6 +2640,13 @@ EOF
     icefallfac                       = 1.5
     snowfallfac                      = 1.25
     iusewetsnow                      = 0
+/
+EOF
+        elif [[ ${mpscheme} == "mp_tempo" ]]; then
+            cat << EOF >> namelist.atmosphere
+    config_microp_scheme             = '${mpscheme}'
+    config_tempo_hailaware           = .true.
+    config_tempo_aerosolaware        = .true.
 /
 EOF
         else
