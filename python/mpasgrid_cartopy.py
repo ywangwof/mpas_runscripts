@@ -596,7 +596,7 @@ if __name__ == "__main__":
 
     parser.add_argument('-s','--station',     help='Station name to center the WOFS grid on',          type=str,   default=None              )
     #parser.add_argument('-w','--width',       help='Size of WOFS domain in km',                        type=float, default=_default_WOFS_size)
-    parser.add_argument('-nudge',             help='Nudge the box X/Y km from station point: DX DY',   type=int,   default=(0,0), nargs = 2  )
+    parser.add_argument('--nudge',            help='Nudge the box X/Y km from station point: DX DY',   type=int,   default=(0,0), nargs = 2  )
     parser.add_argument('-f','--station_file',help='Station file name to read station locations',      type=str,   default=_station_file     )
     parser.add_argument('-g','--radar_file',  help='Radar file name for locations',                    type=str,   default=_radar_file       )
 
@@ -605,8 +605,8 @@ if __name__ == "__main__":
 
     parser.add_argument('-p','--plot',        help="Boolean flag to interactively display the plot",               default=False, action="store_true")
     parser.add_argument('-m','--map',         help='Base map projection, latlon, stereo or lambert',     type=str, default='lambert')
-    parser.add_argument('-range',             help='Map range in degrees [lat1,lat2,lon1,lon2] or hrrr', type=str, default=None)
-    parser.add_argument('-outgrid',           help='Plot an output grid, "True", "False" or a filename. When "True", retrieve grid from command line.',type=str, default="False")
+    parser.add_argument('--range',            help='Map range in degrees [lat1,lat2,lon1,lon2] or hrrr', type=str, default=None)
+    parser.add_argument('--outgrid',          help='Plot an output grid, "True", "False" or a filename. When "True", retrieve grid from command line.',type=str, default="False")
 
     args = parser.parse_args()
 

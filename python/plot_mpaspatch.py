@@ -11,7 +11,7 @@
 #
 #-----------------------------------------------------------------------
 #
-# By Yunheng Wang (NOAA/NSSL, 2022.10.10)
+# By Yunheng Wang (OU CIWRO and NOAA/NSSL, 2022.10.10)
 #
 #-----------------------------------------------------------------------
 
@@ -90,17 +90,6 @@ def dumpobj(obj, level=0, maxlevel=10):
             if level >= maxlevel:
                 return
             dumpobj(val, level=level+1,maxlevel=maxlevel)
-
-########################################################################
-
-def fnormalize(fmin,fmax):
-    min_e = int(math.floor(math.log10(abs(fmin)))) if fmin != 0 else 0
-    max_e = int(math.floor(math.log10(abs(fmax)))) if fmax != 0 else 0
-    fexp = min(min_e, max_e)-2
-    min_m = fmin/10**fexp
-    max_m = fmax/10**fexp
-
-    return min_m, max_m, fexp
 
 ########################################################################
 
@@ -236,113 +225,6 @@ def load_mpas_patches(pickle_fname):
 
 ########################################################################
 
-def get_var_contours(varname,var2d,cargs):
-    '''set contour specifications'''
-    #
-    # set color map to be used
-    #
-
-    # Colormaps can be choosen using MatPlotLib's colormaps collection. A
-    # reference of the colormaps can be found below.:
-    #
-    # - https://matplotlib.org/examples/color/colormaps_reference.html
-    #
-    # We can also alter the styles of the plots we produce if we desire:
-    #
-    # - https://matplotlib.org/gallery/style_sheets/style_sheets_reference.html
-    #
-    #
-
-    # Use reflectivity color map and range
-    if varname.startswith('refl'):
-        mycolors = copy.deepcopy(ctables.colortables['NWSReflectivity'])
-        mycolors.insert(0,(1,1,1))
-        #print("len mycolors = ",len(mycolors))
-        color_map = mcolors.ListedColormap(mycolors)
-    elif varname.startswith('rain') or varname.startswith('prec_'):
-        #clevs = [0, 1, 2.5, 5, 7.5, 10, 15, 20, 30, 40,
-        #         50, 70, 100, 150, 200, 250, 300, 400, 500, 600, 750]
-        # In future MetPy
-        # norm, cmap = ctables.registry.get_with_boundaries('precipitation', clevs)
-        cmap_data = [(1.0, 1.0, 1.0),
-                     (0.3137255012989044, 0.8156862854957581, 0.8156862854957581),
-                     (0.0, 1.0, 1.0),
-                     (0.0, 0.8784313797950745, 0.501960813999176),
-                     (0.0, 0.7529411911964417, 0.0),
-                     (0.501960813999176, 0.8784313797950745, 0.0),
-                     (1.0, 1.0, 0.0),
-                     (1.0, 0.6274510025978088, 0.0),
-                     (1.0, 0.0, 0.0),
-                     (1.0, 0.125490203499794, 0.501960813999176),
-                     (0.9411764740943909, 0.250980406999588, 1.0),
-                     (0.501960813999176, 0.125490203499794, 1.0),
-                     (0.250980406999588, 0.250980406999588, 1.0),
-                     (0.125490203499794, 0.125490203499794, 0.501960813999176),
-                     (0.125490203499794, 0.125490203499794, 0.125490203499794),
-                     (0.501960813999176, 0.501960813999176, 0.501960813999176),
-                     (0.8784313797950745, 0.8784313797950745, 0.8784313797950745),
-                     (0.9333333373069763, 0.8313725590705872, 0.7372549176216125),
-                     (0.8549019694328308, 0.6509804129600525, 0.47058823704719543),
-                     (0.6274510025978088, 0.42352941632270813, 0.23529411852359772),
-                     (0.4000000059604645, 0.20000000298023224, 0.0)]
-
-        color_map = mcolors.ListedColormap(cmap_data, 'precipitation')
-    else:
-        color_map = cm.gist_ncar
-
-    #
-    # set contour levels
-    #
-    cntlevels = cargs.cntlevel
-    if cntlevels is not None:
-        if len(cntlevels) > 3:
-            cmin = cntlevels[0]
-            cmax = cntlevels[-1]
-            normc = mcolors.BoundaryNorm(cntlevels, len(cntlevels))
-            ticks_list = cntlevels[0::2]
-        else:
-            cmin,cmax,cinc = cntlevels
-            normc = mcolors.Normalize(cmin,cmax)
-            ticks_list = [lvl for lvl in np.arange(cmin,cmax+cinc,2*cinc)]
-    else:
-        ticks_list = None
-        cmin = var2d.min()
-        cmax = var2d.max()
-        if varname.startswith('refl') and cargs.diffstr == "":    # Use reflectivity color map and range
-            cmin = 0.0
-            cmax = 80.0
-            cinc = 5.0
-            cntlevels = list(np.arange(cmin,cmax,5.0))
-            normc = mcolors.Normalize(cmin,cmax)
-            #ticks_list = [lvl for lvl in np.arange(cmin,cmax+cinc,2*cinc)]
-        elif varname.startswith('rain') or varname.startswith('prec_'):
-            #cntlevels = [0.0,0.01,0.10,0.25,0.50,0.75,1.00,1.25,1.50,1.75,2.00,2.50,3,4,5,7,10,15,20]  # inch
-            cntlevels = [0, 1, 2.5, 5, 7.5, 10, 15, 20, 30, 40, 50, 70, 100, 150, 200, 250, 300, 400, 500, 600, 750]  # mm
-            normc = mcolors.BoundaryNorm(cntlevels, len(cntlevels))
-            ticks_list = cntlevels
-            cmin = cntlevels[0]
-            cmax = cntlevels[-1]
-        else:
-            cmin, cmax, cexp = fnormalize(cmin,cmax)
-            minc = np.floor(cmin)
-            maxc = np.ceil(cmax)
-
-            for n in range(16,7,-1):
-                if (maxc-minc)%n == 0:
-                    break
-            if n == 8: n = 16
-            minc = minc*10**cexp
-            maxc = maxc*10**cexp
-            cntlevels = list(np.linspace(minc,maxc,n+1))
-            maxc = minc + 16* (maxc-minc)/n
-            normc = mcolors.Normalize(minc, maxc)
-            cmin = minc
-            cmax = maxc
-
-    return color_map, normc, cmin, cmax, ticks_list
-
-########################################################################
-
 def setup_hrrr_projection():
     '''Lambert conformal map projection for the HRRR domain'''
 
@@ -402,9 +284,10 @@ def parse_args():
     parser.add_argument('-p','--patchfile', help='Name of the MPAS patch file that contains cell patches',type=str, default=None)
     parser.add_argument('-k','--vertLevels',help='Vertical levels to be plotted [l1,l2,l3,...]',  type=str, default=None)
     parser.add_argument('-c','--cntLevels', help='Contour levels [cmin,cmax,cinc]',               type=str, default=None)
-    parser.add_argument('-o','--outfile',   help='Name of output image or output directory',      type=str, default=None)
-    parser.add_argument('-range',           help='Map range in degrees [lat1,lat2,lon1,lon2]',    type=str, default=None)
     parser.add_argument('-m','--map',       help='Base map projection, latlon, stereo or lambert',type=str, default='latlon')
+    parser.add_argument('-o','--outfile',   help='Name of output image or output directory',      type=str, default=None)
+    parser.add_argument('--head',           help='Output image head name',                        type=str, default=None)
+    parser.add_argument('--range',          help='Map range in degrees [lat1,lat2,lon1,lon2]',    type=str, default=None)
 
     args = parser.parse_args()
 
@@ -506,6 +389,7 @@ def parse_args():
     out_args['defaultoutfile']  = defaultoutfile
     out_args['outdir']          = outdir
     out_args['outfile']         = outfile
+    out_args['outhead']         = args.head
 
     #
     # decode contour specifications
@@ -524,60 +408,68 @@ def parse_args():
 
 ########################################################################
 
-def retreive_variable_data(args,ndim, ncells, varobj):
-    if varobj.dimensions[1]=="nEdges":
-        if args.gridfile is not None:
-            with Dataset(args.gridfile, 'r') as grid:
-                cellsOnEdges = grid.variables['cellsOnEdge'][:]
-        else:
-            print("ERROR: gridfile is required because the varialbe is defined on nEdges.")
-            sys.exit(1)
-
-        origdata= varobj[:]
-        varshape = list(varobj.shape)
-        nedges = varshape[1]
-        varshape[1] = ncells
-
-        vardata = np.zeros(varshape)
-        edgecounts= np.zeros((ncells))
-
-        for n in range(0,nedges):
-            i = cellsOnEdges[n,0]-1
-            j = cellsOnEdges[n,1]-1
-            edgecounts[i] += 1
-            edgecounts[j] += 1
-
-        edgecounts = 1.0/edgecounts
-
-        for n in range(0,nedges):
-            i = cellsOnEdges[n,0]-1
-            j = cellsOnEdges[n,1]-1
-            vardata[:,i,:] += origdata[:,n,:]*edgecounts[i]
-            vardata[:,j,:] += origdata[:,n,:]*edgecounts[j]
-
-        ncfile = Dataset('Edge_interp.nc',mode='w',format='NETCDF4_CLASSIC')
-        edge_dim = ncfile.createDimension('nEdges', nedges)
-        cell_dim = ncfile.createDimension('nCells', ncells)
-        vert_dim = ncfile.createDimension('nVerts', varshape[2])
-        time_dim = ncfile.createDimension('time', None) # unlimited axis (can be appended to).
-        var_edgecounts = ncfile.createVariable('edgesCounts',np.float64,('nCells')) # note: unlimited dimension is leftmost
-        var_origdata = ncfile.createVariable('orig_data',np.float64,('time', 'nEdges','nVerts')) # note: unlimited dimension is leftmost
-        var_newdata = ncfile.createVariable('new_data',np.float64,('time', 'nCells','nVerts')) # note: unlimited dimension is leftmost
-        ncfile.title='Interpolate variable on Edges to Cells'
-
-        var_edgecounts[:] = edgecounts
-        var_origdata[:]   = origdata
-        var_newdata[:]    = vardata
-
-        ncfile.close()
-    else:
-        vardata   = varobj[:]
-
-    return vardata
-
-########################################################################
-
 def load_variables(cargs):
+
+    ##------------------------------------------------------------------
+
+    def retreive_variable_data(args, ncells, varobj, dump=False):
+        """
+        if the variable is defined on nCells, return the dataset directly
+        Otherwise, interpolate it from nEdges to nCells, and write out the interpolated
+        intermediate file if desired.
+        """
+        if varobj.dimensions[1]=="nEdges":
+            if args.gridfile is not None:
+                with Dataset(args.gridfile, 'r') as grid:
+                    cellsOnEdges = grid.variables['cellsOnEdge'][:]
+            else:
+                print("ERROR: gridfile is required because the varialbe is defined on nEdges.")
+                sys.exit(1)
+
+            origdata= varobj[:]
+            varshape = list(varobj.shape)
+            nedges = varshape[1]
+            varshape[1] = ncells
+
+            vardata = np.zeros(varshape)
+            edgecounts= np.zeros((ncells))
+
+            for n in range(0,nedges):
+                i = cellsOnEdges[n,0]-1
+                j = cellsOnEdges[n,1]-1
+                edgecounts[i] += 1
+                edgecounts[j] += 1
+
+            edgecounts = 1.0/edgecounts
+
+            for n in range(0,nedges):
+                i = cellsOnEdges[n,0]-1
+                j = cellsOnEdges[n,1]-1
+                vardata[:,i,:] += origdata[:,n,:]*edgecounts[i]
+                vardata[:,j,:] += origdata[:,n,:]*edgecounts[j]
+
+            if dump:
+                ncfile = Dataset(f'{varobj.name}_edge_interp.nc',mode='w',format='NETCDF4_CLASSIC')
+                edge_dim = ncfile.createDimension('nEdges', nedges)
+                cell_dim = ncfile.createDimension('nCells', ncells)
+                vert_dim = ncfile.createDimension('nVerts', varshape[2])
+                time_dim = ncfile.createDimension('time', None) # unlimited axis (can be appended to).
+                var_edgecounts = ncfile.createVariable('edgesCounts',np.float64,('nCells')) # note: unlimited dimension is leftmost
+                var_origdata = ncfile.createVariable('orig_data',np.float64,('time', 'nEdges','nVerts')) # note: unlimited dimension is leftmost
+                var_newdata = ncfile.createVariable('new_data',np.float64,('time', 'nCells','nVerts')) # note: unlimited dimension is leftmost
+                ncfile.title='Interpolate variable on Edges to Cells'
+
+                var_edgecounts[:] = edgecounts
+                var_origdata[:]   = origdata
+                var_newdata[:]    = vardata
+
+                ncfile.close()
+        else:
+            vardata   = varobj[:]
+
+        return vardata
+
+    ##------------------------------------------------------------------
 
     fcstfile=cargs.fcstfiles[0]
 
@@ -606,7 +498,14 @@ def load_variables(cargs):
                     vndim   = var.ndim
                     vshapes = var.shape
 
-                    varstr = f"{var.name:24s}: {vndim}D {var.long_name} ({var.units})"
+                    #print(f"Processing {var.name} ...")
+                    if hasattr(var, 'long_name'):
+                        varstr = f"{var.name:24s}: {vndim}D {var.long_name} ({var.units})"
+                    elif hasattr(var, 'descrition'):
+                        varstr = f"{var.name:24s}: {vndim}D {var.descrition} ({var.units})"
+                    else:
+                        varstr = f"{var.name:24s}: {vndim}D ({var.units})"
+
                     if vndim == 2 and vshapes[0] == 1 and vshapes[1] == nCells:
                         var2dlist.append(varstr)
                     elif vndim == 3 and vshapes[0] == 1 and vshapes[1] == nCells and (vshapes[2] == nlevels or vshapes[2] == nslevels):
@@ -644,12 +543,12 @@ def load_variables(cargs):
             variable = mesh.variables[cargs.varnames[0]]
             varunits = variable.getncattr('units')
             varndim  = variable.ndim
-            vardata = retreive_variable_data(cargs,varndim,nCells,variable)
+            vardata = retreive_variable_data(cargs,nCells,variable)
             varshapes = vardata.shape
             validtimestring = mesh.variables['xtime'][0].tobytes().decode('utf-8')
 
             if cargs.operator is not None:
-                vardata1 = retreive_variable_data(cargs,varndim, nCells, mesh.variables[cargs.varnames[1]])
+                vardata1 = retreive_variable_data(cargs, nCells, mesh.variables[cargs.varnames[1]])
                 vardata = eval(f"x {cargs.operator} y",{"x":vardata,"y":vardata1})
                 varname = f"{cargs.varnames[0]}{cargs.operator}{cargs.varnames[1]}"
             else:
@@ -657,7 +556,7 @@ def load_variables(cargs):
 
         if cargs.caldiff:
             with Dataset(cargs.fcstfiles[1], 'r') as mesh:
-                vardata1 = retreive_variable_data(cargs,varndim, nCells, mesh.variables[varname])
+                vardata1 = retreive_variable_data(cargs, nCells, mesh.variables[varname])
                 vardata = vardata - vardata1
     else:
         print("ERROR: need a MPAS history/diag file.")
@@ -682,13 +581,19 @@ def variable_validation(cargs, varobj):
 
     fcstfile = cargs.fcstfiles[0]
 
-    fnamelist = os.path.basename(fcstfile).split('.')[2:-1]
-    if len(fnamelist) > 0:
-        fcstfname = '.'.join(fnamelist)
-        fcsttime  = ':'.join(fnamelist).replace('_',' ')
+    fcstfname,ext = os.path.splitext(os.path.basename(fcstfile))
+    re_datetime = re.compile(r"\d{4}-\d{2}-\d{2}_\d{2}\.\d{2}\.\d{2}")
+    matchedtime  = re_datetime.search(fcstfname)
+    if matchedtime:
+        fcsttime  = matchedtime.group(0)
     else:
-        fcstfname = 'init'
-    fcsttime  = varobj.vartime.strip().replace(':','.')
+        fnamelist = fcstfname.split('.')[2:-1]
+        if len(fnamelist) > 0:
+            fcsttime  = ':'.join(fnamelist).replace('_',' ')
+        else:
+            fcstfname = 'init'
+        fcsttime  = varobj.vartime.strip().replace(':','.')
+
     #print(f"validtimestring={fcsttime}, {varobj.vartime}")
 
     need_levels = False
@@ -752,7 +657,198 @@ def variable_validation(cargs, varobj):
 
 ########################################################################
 
-def make_plot(cargs,varobj,attrobj,var2d,pcollection,oattribs):
+def get_plot_attributes(cargs,l, varobj,attribs):
+    """
+    Retreive plotting 2D data and attributes for a vertical level - l
+    """
+
+    ##------------------------------------------------------------------
+
+    def get_var_contours(varname,var2d,cargs):
+        '''set contour specifications'''
+        ####------------------------------------------------------------
+
+        def fnormalize(fmin,fmax):
+            min_e = int(math.floor(math.log10(abs(fmin)))) if fmin != 0 else 0
+            max_e = int(math.floor(math.log10(abs(fmax)))) if fmax != 0 else 0
+            fexp = min(min_e, max_e)-2
+            min_m = fmin/10**fexp
+            max_m = fmax/10**fexp
+
+            return min_m, max_m, fexp
+        ####------------------------------------------------------------
+
+        #
+        # set color map to be used
+        #
+
+        # Colormaps can be choosen using MatPlotLib's colormaps collection. A
+        # reference of the colormaps can be found below.:
+        #
+        # - https://matplotlib.org/examples/color/colormaps_reference.html
+        #
+        # We can also alter the styles of the plots we produce if we desire:
+        #
+        # - https://matplotlib.org/gallery/style_sheets/style_sheets_reference.html
+        #
+        #
+
+        # Use reflectivity color map and range
+        if varname.startswith('refl'):
+            mycolors = copy.deepcopy(ctables.colortables['NWSReflectivity'])
+            mycolors.insert(0,(1,1,1))
+            #print("len mycolors = ",len(mycolors))
+            color_map = mcolors.ListedColormap(mycolors)
+        elif varname.startswith('rain') or varname.startswith('prec_'):
+            #clevs = [0, 1, 2.5, 5, 7.5, 10, 15, 20, 30, 40,
+            #         50, 70, 100, 150, 200, 250, 300, 400, 500, 600, 750]
+            # In future MetPy
+            # norm, cmap = ctables.registry.get_with_boundaries('precipitation', clevs)
+            cmap_data = [(1.0, 1.0, 1.0),
+                         (0.3137255012989044, 0.8156862854957581, 0.8156862854957581),
+                         (0.0, 1.0, 1.0),
+                         (0.0, 0.8784313797950745, 0.501960813999176),
+                         (0.0, 0.7529411911964417, 0.0),
+                         (0.501960813999176, 0.8784313797950745, 0.0),
+                         (1.0, 1.0, 0.0),
+                         (1.0, 0.6274510025978088, 0.0),
+                         (1.0, 0.0, 0.0),
+                         (1.0, 0.125490203499794, 0.501960813999176),
+                         (0.9411764740943909, 0.250980406999588, 1.0),
+                         (0.501960813999176, 0.125490203499794, 1.0),
+                         (0.250980406999588, 0.250980406999588, 1.0),
+                         (0.125490203499794, 0.125490203499794, 0.501960813999176),
+                         (0.125490203499794, 0.125490203499794, 0.125490203499794),
+                         (0.501960813999176, 0.501960813999176, 0.501960813999176),
+                         (0.8784313797950745, 0.8784313797950745, 0.8784313797950745),
+                         (0.9333333373069763, 0.8313725590705872, 0.7372549176216125),
+                         (0.8549019694328308, 0.6509804129600525, 0.47058823704719543),
+                         (0.6274510025978088, 0.42352941632270813, 0.23529411852359772),
+                         (0.4000000059604645, 0.20000000298023224, 0.0)]
+
+            color_map = mcolors.ListedColormap(cmap_data, 'precipitation')
+        else:
+            color_map = cm.gist_ncar
+
+        #
+        # set contour levels
+        #
+        cntlevels = cargs.cntlevel
+        if cntlevels is not None:
+            if len(cntlevels) > 3:
+                cmin = cntlevels[0]
+                cmax = cntlevels[-1]
+                normc = mcolors.BoundaryNorm(cntlevels, len(cntlevels))
+                ticks_list = cntlevels[0::2]
+            else:
+                cmin,cmax,cinc = cntlevels
+                normc = mcolors.Normalize(cmin,cmax)
+                ticks_list = [lvl for lvl in np.arange(cmin,cmax+cinc,2*cinc)]
+        else:
+            ticks_list = None
+            cmin = var2d.min()
+            cmax = var2d.max()
+            if varname.startswith('refl') and cargs.diffstr == "":    # Use reflectivity color map and range
+                cmin = 0.0
+                cmax = 80.0
+                cinc = 5.0
+                cntlevels = list(np.arange(cmin,cmax,5.0))
+                normc = mcolors.Normalize(cmin,cmax)
+                #ticks_list = [lvl for lvl in np.arange(cmin,cmax+cinc,2*cinc)]
+            elif varname.startswith('rain') or varname.startswith('prec_'):
+                #cntlevels = [0.0,0.01,0.10,0.25,0.50,0.75,1.00,1.25,1.50,1.75,2.00,2.50,3,4,5,7,10,15,20]  # inch
+                cntlevels = [0, 1, 2.5, 5, 7.5, 10, 15, 20, 30, 40, 50, 70, 100, 150, 200, 250, 300, 400, 500, 600, 750]  # mm
+                normc = mcolors.BoundaryNorm(cntlevels, len(cntlevels))
+                ticks_list = cntlevels
+                cmin = cntlevels[0]
+                cmax = cntlevels[-1]
+            else:
+                cmin, cmax, cexp = fnormalize(cmin,cmax)
+                minc = np.floor(cmin)
+                maxc = np.ceil(cmax)
+
+                for n in range(16,7,-1):
+                    if (maxc-minc)%n == 0:
+                        break
+                if n == 8: n = 16
+                minc = minc*10**cexp
+                maxc = maxc*10**cexp
+                cntlevels = list(np.linspace(minc,maxc,n+1))
+                maxc = minc + 16* (maxc-minc)/n
+                normc = mcolors.Normalize(minc, maxc)
+                cmin = minc
+                cmax = maxc
+
+        return color_map, normc, cmin, cmax, ticks_list
+    ##------------------------------------------------------------------
+
+    t = 0
+    if varobj.varndim == 3:
+        if l == "max":
+            varplt = np.max(varobj.vardata,axis=2)[t,:]
+            outlvl = f"_{l}"
+            outtlt = f"colum maximum {varobj.varname}{cargs.diffstr} valid at {attributes.fcsttime}"
+        else:
+            varplt = varobj.vardata[t,:,l]
+            outlvl = f"_K{l:02d}"
+            outtlt = f"{varobj.varname}{cargs.diffstr} valid at {attributes.fcsttime} on level {l:02d}"
+    elif varobj.varndim == 230:
+        varplt = varobj.vardata[:,l]
+        outlvl = f"_K{l:02d}"
+        outtlt = f"{varobj.varname}{cargs.diffstr} on level {l:02d}"
+    elif varobj.varndim == 2:
+        varplt = varobj.vardata[t,:]
+        outlvl = ""
+        outtlt = f"{varobj.varname}{cargs.diffstr} valid at {attributes.fcsttime}"
+    elif varobj.varndim == 1:
+        varplt = varobj.vardata[:]
+        outlvl = ""
+        outtlt = f"{varobj.varname}{cargs.diffstr} ({varobj.varunits})"
+    else:
+        print(f"Variable {varobj.varname} is in wrong shape: {varobj.varshapes}.")
+        sys.exit(0)
+
+    outtlt+=f" MIN: {varplt.min():#.4g} MAX: {varplt.max():#.4g}"
+
+    color_map, normc,cmin, cmax, ticks_list = get_var_contours(varobj.varname,varplt,cargs)
+
+    #
+    # Get output file name
+    #
+    if cargs.defaultoutfile:
+        if cargs.outhead is None:
+            outhead = f"{varobj.varname}{cargs.diffstr}.{attributes.fcstfname}"
+        else:
+            outhead = f"{cargs.outhead}{cargs.diffstr}.{attributes.fcsttime}"
+
+        outpng = f"{outhead}{outlvl}.png"
+    else:
+        root,ext=os.path.splitext(cargs.outfile)
+        if ext != ".png":
+            outpng = f"{cargs.outfile}{outlvl}.png"
+        else:
+            outpng = cargs.outfile
+
+    #
+    # Collect all plot attributes into one dictionary
+    #
+    plt_attribs = { 'out_title'  : outtlt,
+                    'out_level'  : outlvl,
+                    'color_map'  : color_map,
+                    'plot_norm'  : normc,
+                    'cntr_cmin'  : cmin,
+                    'cntr_cmax'  : cmax,
+                    'ticks_list' : ticks_list,
+                    'plt_data2d' : varplt,
+                    'cbar_label' : f'{varobj.varname} ({varobj.varunits})',
+                    'outfilename': os.path.join(cargs.outdir,outpng)
+                  }
+
+    return make_namespace(plt_attribs)
+
+########################################################################
+
+def make_plot(cargs,pcollection,plt_attrs):
 
     #style = 'ggplot'
 
@@ -778,12 +874,12 @@ def make_plot(cargs,varobj,attrobj,var2d,pcollection,oattribs):
         ax = plt.axes(projection=proj_hrrr)
         ax.set_extent(cargs.ranges,crs=carr)
 
-    pcollection.set_array(var2d)
+    pcollection.set_array(plt_attrs.plt_data2d)
     #patch_collection.set_edgecolors('w')       # No Edge Colors
     pcollection.set_antialiaseds(False)    # Blends things a little
-    pcollection.set_cmap(oattribs['color_map'])        # Select our color_map
-    pcollection.set_norm(oattribs['plot_norm'])            # Select our normalization
-    pcollection.set_clim(oattribs['cntr_cmin'],oattribs['cntr_cmax'])
+    pcollection.set_cmap(plt_attrs.color_map)        # Select our color_map
+    pcollection.set_norm(plt_attrs.plot_norm)            # Select our normalization
+    pcollection.set_clim(plt_attrs.cntr_cmin,plt_attrs.cntr_cmax)
 
     # Now apply the patch_collection to our axis
     ax.add_collection(pcollection)
@@ -796,8 +892,8 @@ def make_plot(cargs,varobj,attrobj,var2d,pcollection,oattribs):
     # https://matplotlib.org/api/colorbar_api.html
     #
     cax = figure.add_axes([ax.get_position().x1+0.01,ax.get_position().y0,0.02,ax.get_position().height])
-    cbar = plt.colorbar(pcollection, cax=cax,ticks=oattribs['ticks_list'])
-    cbar.set_label(f'{varobj.varname} ({varobj.varunits})')
+    cbar = plt.colorbar(pcollection, cax=cax,ticks=plt_attrs.ticks_list)
+    cbar.set_label(plt_attrs.cbar_label)
 
     ax.coastlines(resolution='50m')
     #ax.stock_img()
@@ -817,25 +913,12 @@ def make_plot(cargs,varobj,attrobj,var2d,pcollection,oattribs):
         gl.bottom_labels = True
         #gl.ylabel_style = {'rotation': 45}
 
-
     # Create the title as you see fit
-    ax.set_title(oattribs['out_title'])
+    ax.set_title(plt_attrs.out_title)
     #plt.style.use(style) # Set the style that we choose above
 
-    #
-    if cargs.defaultoutfile:
-        outpng = f"{varobj.varname}{cargs.diffstr}.{attrobj.fcstfname}{oattribs['out_level']}.png"
-    else:
-        root,ext=os.path.splitext(cargs.outfile)
-        if ext != ".png":
-            outpng = f"{cargs.outfile}{oattribs['out_level']}.png"
-        else:
-            outpng = cargs.outfile
-
-
-    figname = os.path.join(cargs.outdir,outpng)
-    print(f"Saving figure to {figname} ...")
-    figure.savefig(figname, format='png', dpi=200)
+    print(f"Saving figure to {plt_attrs.outfilename} ...")
+    figure.savefig(plt_attrs.outfilename, format='png', dpi=200)
     plt.close(figure)
 
     #plt.show()
@@ -848,9 +931,9 @@ def make_plot(cargs,varobj,attrobj,var2d,pcollection,oattribs):
 
 if __name__ == "__main__":
 
-    args = parse_args()
+    args       = parse_args()
 
-    variable = load_variables(args)
+    variable   = load_variables(args)
 
     attributes = variable_validation(args,variable)
 
@@ -874,16 +957,15 @@ if __name__ == "__main__":
     #
     #-----------------------------------------------------------------------
 
-    carr= ccrs.PlateCarree()
+    carr = ccrs.PlateCarree()
 
+    proj_hrrr = None
     if args.basmap == "lambert":
         proj_hrrr = setup_hrrr_projection().proj
-    else:
-        proj_hrrr = None
 
     #-----------------------------------------------------------------------
     #
-    # Plot field
+    # Plot the field one level by one level
     #
     #-----------------------------------------------------------------------
 
@@ -898,53 +980,21 @@ if __name__ == "__main__":
     # Doing things this way is slower, as we will have to not only loop through
     # nCells, but also nEdges of all nCells.
     #
-    #patch_collection = get_mpas_patches(gridfile, picklefile)
-    #patch_collection = load_mpas_patches(picklefile)
 
-    t = 0
     for l in attributes.levels:
 
-        if variable.varndim == 3:
-            if l == "max":
-                varplt = np.max(variable.vardata,axis=2)[t,:]
-                outlvl = f"_{l}"
-                outtlt = f"colum maximum {variable.varname}{args.diffstr} valid at {attributes.fcsttime}"
-            else:
-                varplt = variable.vardata[t,:,l]
-                outlvl = f"_K{l:02d}"
-                outtlt = f"{variable.varname}{args.diffstr} valid at {attributes.fcsttime} on level {l:02d}"
-        elif variable.varndim == 230:
-            varplt = variable.vardata[:,l]
-            outlvl = f"_K{l:02d}"
-            outtlt = f"{variable.varname}{args.diffstr} on level {l:02d}"
-        elif variable.varndim == 2:
-            varplt = variable.vardata[t,:]
-            outlvl = ""
-            outtlt = f"{variable.varname}{args.diffstr} valid at {attributes.fcsttime}"
-        elif variable.varndim == 1:
-            varplt = variable.vardata[:]
-            outlvl = ""
-            outtlt = f"{variable.varname}{args.diffstr} ({variable.varunits})"
-        else:
-            print(f"Variable {variable.varname} is in wrong shape: {variable.varshapes}.")
-            sys.exit(0)
-
-        outtlt+=f" MIN: {varplt.min():#.4g} MAX: {varplt.max():#.4g}"
-
-        color_map, normc,cmin, cmax, ticks_list = get_var_contours(variable.varname,varplt,args)
-
-        plt_attribs = { 'out_title':  outtlt,
-                        'out_level':  outlvl,
-                        'color_map':  color_map,
-                        'plot_norm':  normc,
-                        'cntr_cmin':  cmin,
-                        'cntr_cmax':  cmax,
-                        'ticks_list': ticks_list
-                      }
+        plt_attribs = get_plot_attributes(args, l, variable,attributes)
 
         patch_collection,range_pkle = load_mpas_patches(picklefile)
         if args.ranges is None:
             args.ranges = range_pkle
 
-        make_plot(args,variable,attributes,varplt,patch_collection,plt_attribs)
+        #
+        # Make the plot
+        #
+        make_plot(args,patch_collection,plt_attribs)
+
+        #
+        # Finally, do some clean works
+        #
         patch_collection.remove()

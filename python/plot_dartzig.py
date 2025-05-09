@@ -111,6 +111,10 @@ def parse_args():
                              'Default: 2.\n ',
                         type=int,   default=2)
 
+    parser.add_argument('-u','--variance',
+                        help='Filter observations by variance (default: False).',
+                        action="store_true",    default=False)
+
     parser.add_argument('-o','--outfile',
                         help='Specify the name of output image or an output directory (default: ./).',
                         type=str,   default=None)
@@ -167,6 +171,9 @@ def parse_args():
     else:
         print(f"ERROR: Can only handle one observation type at at time. Got \"{obstypes}\"")
         sys.exit(0)
+
+    if args.variance is not None:
+        parsed_args['variance'] = args.variance
 
     parsed_args['threshold'] = args.threshold
 
@@ -227,6 +234,7 @@ def obsObj_init(numfile,timelist):
                 'bias_post':   [],
                 'ratio':       [],
                 'obs_std':     [],
+                'obs_numbers': [],
                 'qc_numbers':  {},
                 'type_label':  None,
                 'unit_label':  None,
@@ -243,6 +251,7 @@ def obsObj_init(numfile,timelist):
         var_objtmp['bias_post'].append(0)
         var_objtmp['ratio'].append(0)
         var_objtmp['obs_std'].append(0)
+        var_objtmp['obs_numbers'].append(0)
 
     return var_objtmp
 
@@ -330,7 +339,7 @@ def load_variables(cargs,wargs, filelist):
             #         qc:long_name = "QC values" ;
             #         qc:explanation = "see QCMetaData" ;
 
-            if cargs.verbose: print(f"Reading file: {obsfile} .....")
+            if cargs.verbose: print(f"\ntime = {timestr}, Reading file: {obsfile} .....")
 
             with Dataset(obsfile, 'r') as fh:
                 varobs  = fh.variables['observations'][:,:]   # (ObsIndex, copy)
@@ -392,6 +401,7 @@ def load_variables(cargs,wargs, filelist):
             obstypes = np.unique(obstypes).astype(int)
             #print(f"obstypes={obstypes}")
 
+        numvar=0
         for otype in obstypes:
 
             if otype not in np.unique(varobstypes):    # This obs type not in this file
@@ -405,6 +415,8 @@ def load_variables(cargs,wargs, filelist):
             else:
                 numfile = num1hr-1
                 time_Labels = times_1hour
+
+            print(f"\n          {numvar:2d}: Processing {type_Labels[otype]} ....")
 
             #
             # Select by observation type and skip unused observation types
@@ -487,6 +499,28 @@ def load_variables(cargs,wargs, filelist):
                 obs_index = newindex.copy()
 
                 if cargs.verbose: print(f"              Obs length after dartqc == {wargs.dartqc} selection: {len(obs_index)}")
+            #
+            # Select by variance
+            #
+            if wargs.variance and len(obs_index) > 0:
+                variance = varobs[obs_index,ivariance]
+                min_var = variance.min()
+                max_var = variance.max()
+                if "DEWPOINT" in var_obj['type_label']):
+                    var_threshold = 4.0*min_var
+                else:
+                    var_threshold = min_var
+
+                if cargs.verbose: print(f"              index variance: {ivariance}, min value = {min_var}, max values = {max_var}, threshold = {var_threshold}")
+
+                newindex=[]
+                for index in obs_index:
+                    mvariance = varobs[index,ivariance]
+                    if mvariance <= var_threshold:
+                        newindex.append(index)
+                obs_index = newindex.copy()
+
+                if cargs.verbose: print(f"              Obs length after selecting minimum variance {min_var}/{var_threshold}: {len(obs_index)}")
 
             #
             # Now, fill the derived arrays
@@ -500,10 +534,11 @@ def load_variables(cargs,wargs, filelist):
                 sprd_pst = varobs[obs_index,4]
                 variance = varobs[obs_index,ivariance]
 
-                if cargs.verbose: print(f"              index variance: {ivariance}, value: {variance[0:3]}")
+                #if cargs.verbose: print(f"              index variance: {ivariance}, value: {variance[0:3]}")
 
-                variance = np.min(variance)   # use minimum to exclude the boundary effects
+                variance = np.mean(variance)   # use minimum to exclude the boundary effects
 
+                var_obj['obs_numbers'].append( nobs_type )
                 # rms error
                 n1 = prio.count()
                 rms_prior = np.sqrt(np.sum((prio-obs)**2)/n1)
@@ -537,7 +572,6 @@ def load_variables(cargs,wargs, filelist):
                 var_obj['bias_post'].append(  np.sum(obs-post)/n2 )
 
                 # consistency ratio (modified to account for non-constant obs error)
-                #var_obj['ratio'].append( (variance[0] + (np.sum(sprd_pri*sprd_pri)/n3))/(np.sum((obs-prio)**2)/n1) )
                 var_obj['ratio'].append(  (np.sum( variance+(sprd_pri*sprd_pri) )/ n3 ) /(np.sum((obs-prio)**2)/n1) )
 
                 #var_obj['obs_std'].append( np.sqrt(variance[0]) )
@@ -557,9 +591,12 @@ def load_variables(cargs,wargs, filelist):
                 var_obj['bias_post'].append(  0 )
                 var_obj['ratio'].append( 0 )
                 var_obj['obs_std'].append( 0 )
+                var_obj['obs_numbers'].append( 0 )
 
-            print(f"time = {timestr}, number of obs = {nobs_type} for {var_obj['type_label']}")
+            print(f"              Processed {nobs_type} observations.")
             var_obj['times'].append( timestr )
+            numvar+=1
+
 
     #print(f"qc_numbers: {var_obj['qc_numbers']}")
 
@@ -889,6 +926,9 @@ def plot_qcnumbers(cargs,wargs,wobj):
         ygt0=y[y>0]
         ax.scatter(xgt0,ygt0,marker=mks[j],color='k')
 
+    #print(f"Ploting {wobj.type_label} - {wobj.times} -> {wobj.obs_numbers}")
+    ax.plot(wobj.times,wobj.obs_numbers,color='k',label="observations within domain")
+
     ax.set_title(f'Numbers of {wobj.type_label} for {wargs.eventdate} ')
     ax.set_xticks(wobj.times)
     ax.set_xticklabels(wobj.times, rotation = 50)
@@ -897,7 +937,8 @@ def plot_qcnumbers(cargs,wargs,wobj):
         ax.xaxis.set_major_locator(IndexLocator(4,0))
     ax.set_ylabel("Number of Observations")
     ax.set_xlabel("Data Assimilation Cycles")
-    ax.legend(loc="upper left")
+    #ax.legend(loc="upper left")
+    ax.legend()
     ax.xaxis.grid(True)
 
     if wargs.defaultoutfile:
@@ -942,6 +983,7 @@ def plot_ratio(cargs,wargs,wobj):
         y.extend([y1])
         i += 1
 
+    #print(f"wobj.type_label: x={wobj.times}, y={y}")
     ax.plot(x,y,color='r')
     ax.set_title(f'Consistency Ratio of {wobj.type_label} for {wargs.eventdate} ')
     ax.set_xticks(x)

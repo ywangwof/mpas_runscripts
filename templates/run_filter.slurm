@@ -11,8 +11,7 @@ EXCLSTR
 #set -eux
 
 time1=$(date '+%s')
-echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
-echo " "
+printf "Job Started: %(%a %b %d %H:%M:%S %Z %Y)T. Job Id: %s\n\n" $time1 $SLURM_JOBID
 
 if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
     source /etc/profile.d/modules.sh
@@ -65,12 +64,6 @@ fi
 
 time2=$(date '+%s')
 
-let diff=time2-time1
-let hour=diff/3600
-let diff=diff%3600
-let min=diff/60
-let sec=diff%60
+diff=$((time2-time1))
 
-echo -n "Job   Ended: $(date). "
-printf 'Job run time:  %02d:%02d:%02d' $hour $min $sec
-echo " "
+printf "\nJob   Ended: %(%a %b %d %H:%M:%S %Z %Y)T. Job run time: %s.\n" $time2 $(date -d@$diff -u +%H:%M:%S)

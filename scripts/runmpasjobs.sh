@@ -131,6 +131,8 @@ function parse_args {
                     else
                         args["eventdate"]=${key:0:8}
                     fi
+                    args["starttime"]=${key:8:4}
+                    args["endtime"]=${key:8:4}
                 elif [[ $key =~ ^[0-9]{8}$ ]]; then
                     args["eventdate"]=${key}
                 elif [[ -d $key ]]; then
@@ -182,7 +184,8 @@ else
     fi
 fi
 
-[[ -v args["endtime"] ]] && endtime=${args["endtime"]} || endtime="0300"
+[[ -v args["endtime"] ]]   && endtime=${args["endtime"]}     || endtime="0300"
+[[ -v args["starttime"] ]] && starttime=${args["starttime"]} || starttime="1700"
 [[ -v args["run_dir"] ]] && run_dir=${args["run_dir"]} || run_dir="${mpasworkdir}/run_dirs"
 
 if [[ -v args["config_file"] ]]; then
@@ -208,7 +211,8 @@ fi
 
 if [[ -f ${config_file} ]]; then
     fcstlength=$(grep '^ *fcst_length_seconds=' "${config_file}" | cut -d'=' -f2 | cut -d' ' -f1 | tr -d '(')
-    level_file=$(grep '^ *vertLevel_file='      "${config_file}" | cut -d'=' -f2 | cut -d' ' -f1 | tr -d '"')
+    fcstoutinvl=$(grep '^ *OUTINVL=' "${config_file}" | cut -d'=' -f2)
+    level_file=$(grep '^ *vertLevel_file='      "${config_file}" | cut -d'=' -f2 | tr -d '"')
 else
     echo " "
     echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not exist."
@@ -235,7 +239,7 @@ if [[ -z $show ]]; then                 # Actually run the task
     if [[ ! -t 1 ]]; then                       # at, batch or cron job
         exec 1>> "${log_file}" 2>&1
     elif [[ ${noscript} == false ]]; then       # interactive
-        #exec > >(tee -ia ${log_file} 2>&1
+        #exec > >(tee -ia ${log_file}) 2>&1
         ## execute self with the noscript special arg so that the second execution DOES NOT start script again.
         script -aefq "${log_file}" -c "$0 noscript ${saved_args}"
         exit $?
@@ -280,13 +284,13 @@ post | plot | diag | verif | snd )
     post_script_dir="${MPASdir}/frdd-wofs-post/wofs/scripts"
     post_config_orig="${MPASdir}/frdd-wofs-post/conf/WOFS_MPAS_config.yaml"
 
+    dt=$(( fcstoutinvl/60 ))
+    nt=$(( fcstlength/fcstoutinvl ))
     case ${fcstlength} in
     21600 )
-        nt=72
         qpe_mode_string="['qpe_15m', 'qpe_1hr', 'qpe_3hr', 'qpe_6hr']"
         ;;
     10800 )
-        nt=36
         qpe_mode_string="['qpe_15m', 'qpe_1hr', 'qpe_3hr']"
         ;;
     * )
@@ -301,9 +305,8 @@ post | plot | diag | verif | snd )
     if [[ ! -f "${post_config}" ]]; then
         ((10#$endtime < 1200)) && oneday="1 day" || oneday=""
 
-        fbeg_s=$(date -u -d "${eventdate} 1700" +%s)
+        fbeg_s=$(date -u -d "${eventdate} ${starttime}" +%s)
         fbeg_e=$(date -u -d "${eventdate} ${endtime} ${oneday}" +%s)
-
         fcst_times=""
         for ((ftime=fbeg_s;ftime<=fbeg_e;ftime+=3600)); do
             fcst_time=$(date -u -d @$ftime +%H%M)
@@ -328,6 +331,8 @@ post | plot | diag | verif | snd )
 /^date_ext :/s/: .*/: '${affix}'/
 /^process_times :/s/: .*/: [${fcst_times%,} ]/
 /^nt :/s/: .*/: $nt/
+/^dt :/s/: .*/: $dt/
+/^fcstinterval :/s/: .*/: $dt/
 /^vert_levels :/s/: .*/: ${num_levels}/
 /^fcstpath: /s#: .*#: ${run_dir}/FCST/#
 /^sumpath: /s#: .*#: ${run_dir}/summary_files/#
@@ -409,7 +414,7 @@ post )
 
         #damode=$(grep '^ *damode=' "${config_file}" | cut -d'=' -f2 | tr -d '"')
         #if [[ ${damode} == "restart" ]]; then
-            fcstbegs="5"
+            fcstbegs="$dt"
         #else
         #    fcstbegs="0"
         #fi
@@ -421,7 +426,7 @@ post )
         fi
         if [[ ! -e ${run_dir}/FCST/${eventdate}${affix}/fcst_${enddate}${endtime}_start ]]; then
             # To make sure the correct FCST files are used, "-c"
-            cmds=("${script_dir}/lnmpasfcst.sh" -c -b "$fcstbegs" -e "${endtime}" "${config_file}" )
+            cmds=("${script_dir}/lnmpasfcst.sh" -c -b "$fcstbegs" -s "${starttime}" -e "${endtime}" "${config_file}" )
             cmds+=("${eventdate}")
             ${show} "${cmds[@]}"
         fi

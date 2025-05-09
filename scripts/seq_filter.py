@@ -148,6 +148,7 @@ def load_obs_seq(filename,cloud_types,verbose):
 
                 elif line.startswith("OBS "):
                     iobs = int(line.split()[1])      # number of this obs
+                    if verbose: print(f"\nOBS {iobs}")
                     obs = decode_one_obs(fh,iobs,ncopy,nqc,cloud_types,verbose)
                     obs_list.append(obs)
     else:
@@ -172,13 +173,94 @@ def load_obs_seq(filename,cloud_types,verbose):
 
 def decode_one_obs(fhandle,iobs,ncopy,nqc,cloud_types,verbose):
 
-    nobslines = 8+ncopy+nqc
+    #-------------------------------------------------------------------
 
-    inqc = ncopy+nqc
-    iloc = inqc + 3
-    itype = iloc + 2
-    itime = itype + 1
-    ivar = itime + 1
+    def get_next_line(fh,n):
+        aline = fh.readline()
+        bline = aline.strip()
+        n = n+1
+        return n,bline
+
+    #-------------------------------------------------------------------
+
+    def decode_clouds(aline,fh,n):
+        clouds  = []
+
+        # GOES observation contains two extra line for cloud base and cloud top heights
+        cloud_base,cloud_top = [decimal.Decimal(x) for x in aline.split()]
+
+        n,aline = get_next_line(fh,n)
+        cloud_index = decimal.Decimal(aline)
+
+        clouds  = (cloud_base, cloud_top, cloud_index)
+        return n,clouds
+
+    #-------------------------------------------------------------------
+
+    def decode_viri(fn,n):
+        # visir                ***** Have already been read **
+        #    17.08586741569378         40.85687083986613        -888888.0000000000
+        #    41.82816763132313
+        #            4           16           44            8
+        #   -888888.0000000000
+        #          132
+
+        visirs=[]
+
+        j = 0
+        while j < 5:
+            n, aline = get_next_line(fn,n)
+            #print(i,j,aline)
+            if j in (0,1,3):
+                visirs.extend([decimal.Decimal(x) for x in aline.split()])
+            elif j in (2,4):
+                visirs.extend([int(x) for x in aline.split()])
+            j += 1
+
+        return n,visirs
+
+    #-------------------------------------------------------------------
+
+    def decode_platform(fh,n):
+        # platform               ***** Have already been read **
+        # loc3d
+        #      4.691600344915530        0.7648521419036000         414.0000000000000      3
+        # dir3d
+        #   0.911886823796660      -0.410349070708500       8.721281713050000E-003
+        #    21.7099990000000
+        #            1
+        #print(i,nobslines,itime,sline)
+
+        mplatform = {}
+
+        j = 0
+        while j < 6:
+            n, aline = get_next_line(fh,n)
+            #print(i,j,aline)
+            if j == 1:          # loc3d
+                plon,plat,palt,pvert = [decimal.Decimal(x) for x in aline.split()]
+            elif j == 3:        # dir3d
+                x1,x2,x3 = [decimal.Decimal(x) for x in aline.split()]
+            elif j == 4:
+                y1 = decimal.Decimal(aline)
+            elif j == 5:
+                jlink = int(aline)
+            j += 1
+
+        mplatform = { 'loc3d'  : [plon,plat,palt,int(pvert)],
+                      'dir3d'  : [x1,x2,x3],
+                      'nyquist':  y1,
+                      'key'    :  jlink
+                    }
+
+        return n,mplatform
+
+    #@------------------------------------------------------------------
+
+    inqc      = ncopy+nqc+1
+    iloc      = inqc  + 3
+    itype     = iloc  + 2
+    itime     = itype + 1
 
     values = []
     qcs    = []
@@ -190,103 +272,57 @@ def decode_one_obs(fhandle,iobs,ncopy,nqc,cloud_types,verbose):
 
     i = 0
     while True:
-        line = fhandle.readline()
-        sline = line.strip()
+        ivariance = itime + 1
 
-        if i < ncopy:                 # get obs value
+        i,sline = get_next_line(fhandle,i)
+
+        if verbose: print(f"{i:3d} /{ivariance:3d} - {sline}")
+
+        if sline == "platform":
+            i,platform = decode_platform(fhandle,i)
+            #if verbose: print(f"     platform: {platform}")
+            itime += 7
+        elif sline == "visir":
+            i,visir_values = decode_viri(fhandle,i)
+            #if verbose: print(f"     visir: {visir_values}")
+            itime += 6        # skip 6 more lines
+        elif i <= ncopy:                 # get obs value
             values.append(decimal.Decimal(sline))
-
-        elif i < inqc:                # get qc flag
+            #if verbose and i == ncopy: print(f"    values: {values}")
+        elif i < inqc:                 # get qc flag
             qc = decimal.Decimal(sline)
-            #qcs.append(math.floor(qc))
             qcs.append(qc)
-        elif i == inqc:
-            #print(i,inqc,sline)
+            #if verbose and i == inqc-1: print(f"    qc flag: {qcs}")
+        elif i == inqc:                # get links
             links = [int(l) for l in sline.split()]
+            #if verbose: print(f"    links: {links}")
         elif i == iloc:               # get loc3d
             lon,lat,alt,vert = sline.split()
+            #if verbose: print(f"    location: lon={lon},lat={lat},alt={alt},vert={vert}")
         elif i == itype:              # get kind
-            #print(i,itype,sline)
             otype = int(sline)
-            #print(f"otype={otype}")
+            #if verbose: print(f"     kind: {otype}")
+
             if otype in cloud_types:     # or (otype >= 80 and otype <= 87):
-                line = fhandle.readline()
-                sline = line.strip()
-                #print(f"sline={sline}")
-                cloud_base,cloud_top = [decimal.Decimal(x) for x in sline.split()]
-
-                line = fhandle.readline()
-                sline = line.strip()
-                cloud_index = decimal.Decimal(sline)
-
-                cloud_values  = (cloud_base, cloud_top, cloud_index)
-
-                # GOES observation contains an extra line for cloud base and cloud top heights
-                itime = itype + 3             # and an integer line (?)
-                ivar  = itime + 1
-                nobslines = 10+ncopy+nqc
-                i = i+2
-
-        elif sline == "platform":
-            itime = itype + 8
-            ivar  = itime + 1
-            nobslines = 15+ncopy+nqc
-            #print(i,nobslines,itime,sline)
-            platform = {}
-            j = 0
-            while j < 6:
-                line = fhandle.readline()
-                sline = line.strip()
-                #print(i,j,sline)
-                if j == 1:          # loc3d
-                    plon,plat,palt,pvert = [decimal.Decimal(x) for x in sline.split()]
-                elif j == 3:        # dir3d
-                    x1,x2,x3 = [decimal.Decimal(x) for x in sline.split()]
-                elif j == 4:
-                    y1 = decimal.Decimal(sline)
-                elif j == 5:
-                    jlink = int(sline)
-                j += 1
-
-            platform = { 'loc3d'  : [decimal.Decimal(plon),decimal.Decimal(plat),decimal.Decimal(palt),int(pvert)],
-                         'dir3d'  : [x1,x2,x3],
-                         'nyquist':  y1,
-                         'key'    :  jlink
-                        }
-            i += j
-        elif sline == "visir":
-            itime = itype + 6        # skip 6 more lines
-            ivar  = itime + 1
-            nobslines += 5
-
-# visir
-#    17.08586741569378         40.85687083986613        -888888.0000000000
-#    41.82816763132313
-#            4           16           44            8
-#   -888888.0000000000
-#          132
-
-            j = 0
-            while j < 4:
-                line = fhandle.readline()
-                sline = line.strip()
-                #print(i,j,sline)
-                if j in (0,2):
-                    visir_values.extend([decimal.Decimal(x) for x in sline.split()])
-                elif j in (1,3):
-                    visir_values.extend([int(x) for x in sline.split()])
-                j += 1
-            i += j
-
+                i,sline = get_next_line(fhandle,i)
+                i,cloud_values = decode_clouds(sline,fhandle,i)
+                #if verbose: print(f"     clouds: {cloud_values}")
+                # GOES observation contains two extra lines for cloud base and cloud top heights, and an index
+                itime     += 2             # and an integer line (?)
         elif i == itime:             # get seconds, days
-            if verbose: print(f"time: {i}/{nobslines},{itime} - {sline}")
-            secs,days = sline.split()
-        elif i == ivar:              # get error variance
-            #print(f"var: {i}/{nobslines},{ivar} - {sline}")
-            var=decimal.Decimal(line)
+            numb1,numb2 = sline.split()
+            try:
+                secs=int(numb1); days=int(numb2)
+                #if verbose: print(f"     time: secs = {secs}, days = {days}")
+            except:
+                i,cloud_values = decode_clouds(sline,fhandle,i)
+                #if verbose: print(f"     clouds: {cloud_values}")
+                itime += 2
 
-        i += 1
-        if i >= nobslines: break
+        elif i == ivariance:              # get error variance
+            var=decimal.Decimal(sline)
+            #if verbose: print(f"      var: {var}")
+            break
 
     # 1970 01 01 00:00:00 is 134774 days 00 seconds
     # one day is 86400 seconds
@@ -310,8 +346,8 @@ def decode_one_obs(fhandle,iobs,ncopy,nqc,cloud_types,verbose):
                             'level'      : decimal.Decimal(alt),
                             'level_type' : int(vert)
                             },
-              'time'      : { 'days'        : int(days),
-                              'seconds'     : int(secs),
+              'time'      : { 'days'        : days,
+                              'seconds'     : secs,
                               'decimalDays' : decimal.Decimal(days)+decimal.Decimal(secs)/86400    # in decimal days
                             },
               'links'     : links,
@@ -484,7 +520,7 @@ def print_obs(obs_in,rargs):
             # print(f"Available attributes: {vars(it)}")
             # 'values', 'qcs', {'lon', 'lat', 'level', 'level_type'}, 'links', 'kind', 'platform', {'days', 'seconds', 'time'}, 'variance', 'mask', 'visir', 'clouds'
             if it.kind in rargs.t_types:
-                print(f"iobs = {it.iobs:6d}, ", end="")
+                print(f"iobs = {it.iobs:6d}, kind = {it.kind}, ", end="")
                 for varname in rargs.t_vars:
                     value = getattr(it,varname)
                     if isinstance(value,list):
@@ -617,20 +653,28 @@ def process_obs(obs_in, obs_out, cargs,rargs):
     #        it.location.level_type = 3
     #        print(f"iobs = {it.iobs}: which_vert changed from -1 to 3")
 
-    if hasattr(rargs, "s_type"):
+    if hasattr(rargs, "set_dicts"):
+        set_kinds = [set_dict["type"] for set_dict in rargs.set_dicts]
+
         for it in obs_records:
-            if it.kind == rargs.s_type:
-                if rargs.s_varn == "variance":
-                    orgvalue = it.variance
-                    it.variance = rargs.s_value
-                    print(f"iobs = {it.iobs}: variance changed from {orgvalue} to {rargs.s_value}")
-                else:
-                    if len(it.values) > 1:
-                        print(f"ERROR: expect one values for record {it.iobs}, but found {len(it.values)}.")
-                        sys.exit(1)
-                    orgvalue = it.values[0]
-                    it.values[0] = rargs.s_value
-                    print(f"iobs = {it.iobs}: value changed from {orgvalue} to {rargs.s_value}")
+            if it.kind in set_kinds:
+                inds = [i for i, val in enumerate(set_kinds) if val == it.kind]
+                for i in inds:
+                    s_varn  = rargs.set_dicts[i]["name"]
+                    s_value = rargs.set_dicts[i]["value"]
+                    if s_varn == "variance":
+                        orgvalue = it.variance
+                        it.variance = decimal.Decimal(s_value.strip('%'))/100*orgvalue if '%' in s_value else decimal.Decimal(s_value)
+
+                        print(f"iobs = {it.iobs}: kink = {it.kind}, variance changed from {orgvalue} to {it.variance}")
+                    else:
+                        if len(it.values) > 1:
+                            print(f"ERROR: expect one values for record {it.iobs}, but found {len(it.values)}.")
+                            sys.exit(1)
+                        orgvalue = it.values[0]
+                        it.values[0] = decimal.Decimal(s_value.strip('%'))/100*orgvalue if '%' in s_value else decimal.Decimal(s_value)
+
+                        print(f"iobs = {it.iobs}: kink = {it.kind}, value changed from {orgvalue} to {it.values}")
 
     return obs_records
 
@@ -652,7 +696,7 @@ def parse_args():
     parser.add_argument('-o','--outdir' , help='Name of the output file or an output directory',    default='./',        type=str)
     parser.add_argument('-x','--xtypes' , help='Type Numbers of observation to be removed',         default=None,        type=str)
     parser.add_argument('-c','--ctypes' , help='Type Numbers of observation that contains cloud lines',
-                                                                                                    default="124,125,126,229", type=str)
+                                                                                                    default=None, type=str)
     parser.add_argument('-t','--type'   , help='''Type Numbers of observation to be kept, for examples, 44 or 44,42''',
                                                                                                     default=None,        type=str)
     parser.add_argument('-s','--set'   ,
@@ -695,9 +739,9 @@ def parse_args():
     # Types with cloud bottone/top records
     #
     typerange = re.compile("(\d+)-(\d+)")
+    rargs['ctypes'] = []
     ctypes=[]
     if args.ctypes is not None:
-        rargs['ctypes'] = []
         ctypes = [x for x in args.ctypes.split(',')]
         for typestr in ctypes:
             typematch = typerange.match(typestr)
@@ -718,10 +762,17 @@ def parse_args():
     # Set type value
     #
     if args.set is not None:
-        type_value_arr = [x for x in args.set.split(',')]
-        rargs['s_type']  = int(type_value_arr[0])
-        rargs['s_varn']  = type_value_arr[1]
-        rargs['s_value'] = decimal.Decimal(type_value_arr[2])
+        set_dicts = []
+        type_str=[x for x in args.set.split(';') if x]
+        for tstr in type_str:
+            set_dict = {}
+            type_value_arr = [x for x in tstr.split(',')]
+            set_dict['type'] = int(type_value_arr[0])
+            set_dict['name'] = type_value_arr[1]
+            set_dict['value'] = type_value_arr[2]
+            set_dicts.append(set_dict)
+
+        rargs['set_dicts'] = set_dicts
     #
     # Range filter
     #

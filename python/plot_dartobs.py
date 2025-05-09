@@ -401,7 +401,7 @@ def parse_args():
 
     parser.add_argument('-t', '--ctypes',
                         help='Specify observation type numbers that contain cloud lines. \nUsed only for decoding ASCII sequence files.\n ',
-                        default="124,125,126,229", type=str)
+                        default=None, type=str)
 
     parser.add_argument('--scatter',
                         help='Generate a scatter plot [mean, spread] of assimilated observations.',
@@ -511,6 +511,8 @@ def parse_args():
     #
     # Types with cloud bottone/top records
     #
+    parsed_args['ctypes'] = []
+
     typerange = re.compile("(\d+)-(\d+)")
     ctypes=[]
     if args.ctypes is not None:
@@ -818,6 +820,7 @@ def load_obs_seq(filename,cloud_types,verbose):
                 elif line.startswith("OBS"):
                     #obs_gen = islice(fh, nobslines)
                     iobs = int(line.split()[1])      # number of this obs
+                    if verbose: print(f"\nOBS {iobs}")
                     obs = decode_obs_seq_OBS(fh,iobs,ncopy,nqc,cloud_types,verbose)
                     vardat.append(obs.value)
                     varloc.append((obs.lon,obs.lat,obs.level))
@@ -903,56 +906,68 @@ def load_obs_seq(filename,cloud_types,verbose):
 
 def decode_obs_seq_OBS(fhandle,iobs,ncopy,nqc,cloud_types,verbose):
 
-    nobslines = 8+ncopy+nqc
+    #-------------------------------------------------------------------
 
-    inqc = ncopy+nqc
-    iloc = inqc + 3
-    itype = iloc + 2
+    def get_next_line(fh,n):
+        aline = fh.readline()
+        bline = aline.strip()
+        n = n+1
+        return n,bline
+
+    #-------------------------------------------------------------------
+
+    inqc  = ncopy+nqc+1
+    iloc  = inqc  + 3
+    itype = iloc  + 2
     itime = itype + 1
-    ivar = itime + 1
 
     values = []
     qcs    = []
 
     i = 0
     while True:
-        line = fhandle.readline()
-        sline = line.strip()
+        ivariance = itime + 1
+
+        i,sline = get_next_line(fhandle,i)
+
+        if verbose: print(f"{i:3d} /{ivariance:3d} - {sline}")
 
         if sline == "platform":
-            itime = itype + 8
-            ivar  = itime + 1
-            nobslines += 7
-            #print(i,nobslines,itime,sline)
+            itime += 7
         elif sline == "visir":
-            itime = itype + 6
-            ivar  = itime + 1
-            nobslines += 5
+            itime += 6
 
-        if i < ncopy:
+        elif i <= ncopy:
             values.append(float(sline))
-
+            if verbose and i == ncopy: print(f"    values: {values}")
         elif i < inqc:
             qc = float(sline)
             qcs.append(math.floor(qc))
+            if verbose and i == inqc-1: print(f"    qc flag: {qcs}")
         elif i == iloc:
             lon,lat,alt,vert = sline.split()
-
+            if verbose: print(f"    location: lon = {lon}, lat = {lat}, alt = {alt}, vert = {vert}")
         elif i == itype:
             otype = int(sline)
-            if otype in cloud_types:     # or (otype >= 80 and otype <= 87):  # GOES observation contains an extra line for cloud base and cloud top heights
-              itime = itype + 3                # and an integer line (?)
-              ivar  = itime + 1
-              nobslines = 10+ncopy+nqc
+            if verbose: print(f"     kind: {otype}")
+
+            if otype in cloud_types:     # or (otype >= 80 and otype <= 87):
+              # GOES observation contains two extra lines for cloud base and cloud top heights
+              itime += 2
 
         elif i == itime:
-            #print(f"time: {i}/{nobslines},{itime} - {sline}")
-            secs,days = sline.split()
-        elif i == ivar:
-            var=float(line)
+            #print(f"     time: {i}/{ivariance},{itime} - {sline}")
+            numb1,numb2 = sline.split()
+            try:
+                secs=int(numb1); days=int(numb2)
+                if verbose: print(f"     time: secs = {secs}, days = {days}")
+            except:                  # GOES observation contains two extra lines for cloud base and cloud top heights
+                itime += 2
 
-        i+=1
-        if i >= nobslines: break
+        elif i == ivariance:
+            var=float(sline)
+            if verbose: print(f"      var: {var}")
+            break
 
     # 1970 01 01 00:00:00 is 134774 days 00 seconds
     # one day is 86400 seconds
@@ -965,8 +980,8 @@ def decode_obs_seq_OBS(fhandle,iobs,ncopy,nqc,cloud_types,verbose):
               'level': float(alt),
               'level_type': int(vert),
               'type':  otype,
-              'days':  int(days),
-              'secs':  int(secs),
+              'days':  days,
+              'secs':  secs,
               'time':  float(days)+float(secs)/86400,
               'variance': var
               }

@@ -1157,14 +1157,14 @@ function run_meshplot_py {
     #                        Radar file name for locations
     #  -e EVENT, --event EVENT
     #                        Event date string
-    #  -name NAME            Name of the WoF grid
+    #  --title NAME          Name of the WoF grid
     #  -o OUTFILE, --outfile OUTFILE
     #                        Name of output image or output directory
-    #  -latlon               Base map latlon or lambert
-    #  -outgrid OUTGRID      Plot an output grid, "True", "False" or a filename.
+    #  -m latlon             Base map latlon or lambert
+    #  --outgrid OUTGRID     Plot an output grid, "True", "False" or a filename.
     #                        When "True", retrieve grid from command line.
     #
-    jobcmdstr="$jobscript -o $wrkdir --title ${domname}.${eventdate} -outgrid ${output_grid} -g ${FIXDIR}/nexrad_stations.txt -m stereo ${conditions[1]}"
+    jobcmdstr="$jobscript -o $wrkdir --title ${domname}.${eventdate} --outgrid ${output_grid} -g ${FIXDIR}/nexrad_stations.txt -m stereo ${conditions[1]}"
     mecho0 "Running ${BROWN}$jobcmdstr${NC}"
     python $jobcmdstr
 

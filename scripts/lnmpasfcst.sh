@@ -184,6 +184,9 @@ fi
 
 if [[ -f ${config_file} ]]; then
     fcstlength=$(grep '^ *fcst_length_seconds=' "${config_file}" | cut -d'=' -f2 | cut -d' ' -f1 | tr -d '(')
+    fcstintvl=$(grep '^ *OUTINVL='              "${config_file}" | cut -d'=' -f2)
+    readarray -t members < <(grep '^ *ENS_SIZE=' "${config_file}" | cut -d'=' -f2)
+    fcstmems=${members[-1]}
 else
     echo " "
     echo "ERROR: Config file - ${config_file} not exist."
