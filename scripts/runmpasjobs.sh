@@ -213,6 +213,8 @@ if [[ -f ${config_file} ]]; then
     fcstlength=$(grep '^ *fcst_length_seconds=' "${config_file}" | cut -d'=' -f2 | cut -d' ' -f1 | tr -d '(')
     fcstoutinvl=$(grep '^ *OUTINVL=' "${config_file}" | cut -d'=' -f2)
     level_file=$(grep '^ *vertLevel_file='      "${config_file}" | cut -d'=' -f2 | tr -d '"')
+    domain_name=$(grep '^ *domname='      "${config_file}" | cut -d'=' -f2 | tr -d '"')
+    wof_domain_name=${domain_name/wofs_/geo_}
 else
     echo " "
     echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not exist."
@@ -330,6 +332,7 @@ post | plot | diag | verif | snd )
 /^rundate :/s/: .*/: '${eventdate}'/
 /^date_ext :/s/: .*/: '${affix}'/
 /^process_times :/s/: .*/: [${fcst_times%,} ]/
+/^domain_name :/s/: .*/: '${wof_domain_name}'/
 /^nt :/s/: .*/: $nt/
 /^dt :/s/: .*/: $dt/
 /^fcstinterval :/s/: .*/: $dt/

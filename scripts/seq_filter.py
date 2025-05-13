@@ -666,7 +666,7 @@ def process_obs(obs_in, obs_out, cargs,rargs):
                         orgvalue = it.variance
                         it.variance = decimal.Decimal(s_value.strip('%'))/100*orgvalue if '%' in s_value else decimal.Decimal(s_value)
 
-                        print(f"iobs = {it.iobs}: kink = {it.kind}, variance changed from {orgvalue} to {it.variance}")
+                        print(f"iobs = {it.iobs}: kind = {it.kind}, variance changed from {orgvalue} to {it.variance}")
                     else:
                         if len(it.values) > 1:
                             print(f"ERROR: expect one values for record {it.iobs}, but found {len(it.values)}.")
@@ -674,7 +674,7 @@ def process_obs(obs_in, obs_out, cargs,rargs):
                         orgvalue = it.values[0]
                         it.values[0] = decimal.Decimal(s_value.strip('%'))/100*orgvalue if '%' in s_value else decimal.Decimal(s_value)
 
-                        print(f"iobs = {it.iobs}: kink = {it.kind}, value changed from {orgvalue} to {it.values}")
+                        print(f"iobs = {it.iobs}: kind = {it.kind}, value changed from {orgvalue} to {it.values}")
 
     return obs_records
 

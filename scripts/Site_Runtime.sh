@@ -178,7 +178,7 @@ function setup_machine {
             export LD_LIBRARY_PATH="/home/yunheng.wang/tools/lib"
             nclpath="/scratch/software/miniconda3/bin/ncl"
 
-            OBS_DIR="/scratch/wofs_mpas/OBS_SEQ"
+            OBS_DIR="/scratch/wofs_mpas/OBS_SEQ.reduced"
 
             hrrr_dir="/scratch2/wofuser/MODEL_DATA/HRRRE"
         fi

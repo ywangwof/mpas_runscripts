@@ -12,7 +12,8 @@ seq_tool="${root_dir}/scripts/seq_filter.py"
 eventdate="${1-20240507}"
 nextdate=$(date -d "${eventdate} 1 day" +%Y%m%d)
 
-src_dir="/scratch/wofs_mpas/OBS_SEQ"
+#src_dir="/scratch/wofs_mpas/OBS_SEQ"
+src_dir="/scratch2/ywang/MPAS/intel/run_dirs/OBS_SEQ"
 des_dir="/scratch/wofs_mpas/OBS_SEQ.reduced"
 
 dir1s=(Bufr  Mesonet )
@@ -40,7 +41,8 @@ declare -A var_str
 #          71 MARINE_SFC_DEWPOINT
 
 declare -A variances1
-variances1=([14]=1.0 [18]=1.0 [42]=1.44 [52]=1.44 [66]=60% [50]=2.25 [51]=2.25)
+#variances1=([14]=1.0 [18]=1.0 [42]=1.44 [52]=1.44 [66]=60% [50]=2.25 [51]=2.25)
+variances1=([14]=1.0 [18]=1.0 [42]=1.44 [44]=1.44 [50]=2.25 [51]=2.25 [52]=1.44 [66]=60%)
 var_str["Bufr"]=""
 for t in "${!variances1[@]}"; do
     var_str["Bufr"]+="$t,variance,${variances1[$t]};"
@@ -84,7 +86,7 @@ done
 #% MAIN
 source ~/.pythonrc
 
-log_file="${des_dir}/reduce.log"
+log_file="${des_dir}/reduce_${eventdate}.log"
 exec > >(tee -ia ${log_file}) 2>&1
 
 echo -e "src_dir=${CYAN}${src_dir}${NC}"
@@ -136,9 +138,10 @@ for fdir in "${src_dir}"/*; do
         :
     else
         echo "Creating $des_dir/$dir "
-        [[ ! -d $des_dir/$dir ]] && mkdir -p $des_dir/$dir
-        cd $des_dir/$dir || exit $?
-        ln -sf ${src_dir}/$dir/*.{"${eventdate}","${nextdate}"}* .
+        [[ ! -d $des_dir/$dir ]] && mkdir -p "$des_dir/$dir"
+        cd "$des_dir/${dir}" || exit $?
+        #ln -sf ${src_dir}/$dir/*.{"${eventdate}","${nextdate}"}* .
+        cp "${src_dir}/${dir}"/*.{"${eventdate}","${nextdate}"}* .
     fi
 done
 

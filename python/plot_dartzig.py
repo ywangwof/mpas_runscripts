@@ -506,7 +506,7 @@ def load_variables(cargs,wargs, filelist):
                 variance = varobs[obs_index,ivariance]
                 min_var = variance.min()
                 max_var = variance.max()
-                if "DEWPOINT" in var_obj['type_label']):
+                if "DEWPOINT" in var_obj['type_label']:
                     var_threshold = 4.0*min_var
                 else:
                     var_threshold = min_var

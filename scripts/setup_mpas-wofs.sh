@@ -1288,6 +1288,8 @@ function write_config {
 #
 #   vertLevel_file:  File name for the vertical coordonates, works with "make_ics.sh" & "make_lbc.sh" only
 #
+#   sfclayer_schemes=('sf_monin_obukhov_rev' 'sf_monin_obukhov' 'sf_mynn')
+#   pbl_schemes=('bl_ysu' 'bl_myj' 'bl_mynn')
 
 [COMMON]
     nensics=36
@@ -1301,8 +1303,8 @@ function write_config {
     MPASNFLS=9
 
     mpscheme='mp_nssl2m'
-    sfclayer_schemes=('sf_monin_obukhov_rev' 'sf_monin_obukhov' 'sf_mynn')
-    pbl_schemes=('bl_ysu' 'bl_myj' 'bl_mynn')
+    sfclayer_schemes=('sf_mynn' 'sf_mynn' 'sf_mynn')
+    pbl_schemes=('bl_mynn' 'bl_mynn' 'bl_mynn')
 
     vertLevel_file="${fixed_level}"
 

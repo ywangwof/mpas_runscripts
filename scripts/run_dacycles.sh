@@ -4,7 +4,7 @@
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
 
-mpasworkdir="/scratch/wofs_mpas"     # platform dependent, it is set in Site_Runtime.sh
+mpasworkdir="/scratch/wofs_mpas"     # platform dependent, it will be reset in Site_Runtime.sh
 
 eventdateDF=$(date -u +%Y%m%d)
 eventtimeDF="1500"
@@ -96,7 +96,7 @@ eventtimeDF="1500"
 #        task again manually. By default it works for both tasks (filter and mpas),
 #        if a task name is given, it will clean that task only.
 #     3. "-a" option will clean the whole work directory for the corresponding task.
-
+#
 #-----------------------------------------------------------------------
 
 function usage {
@@ -624,14 +624,16 @@ function run_obsmerge {
 
             cp ${dbz_file} ./obs_seq.old
 
-            sed "/obsdistbdy/s/=.*/= 15000/;/obs_boundary/s/=.*/= 5000/" ${input_base} > input.nml
+            #sed "/obsdistbdy/s/=.*/= 15000/;/obs_boundary/s/=.*/= 5000/" ${input_base} > input.nml
+            sed "/obsdistbdy/s/=.*/= 0/;/obs_boundary/s/=.*/= 0/" ${input_base} > input.nml
 
             if [[ $verb -eq 1 ]]; then
                 mecho0 "    Run command ${BROWN}${obspreprocess}${NC} with parameters: ${BLUE}${g_date} ${g_sec}${NC}"
             fi
-            { echo "Run command ${obspreprocess} as:";
-              echo "echo  \"${g_date} ${g_sec}\" | ${obspreprocess}";
-              echo "";
+            { echo -e "Run command ${obspreprocess} as:\n----\n";
+              echo "cp ${dbz_file} ./obs_seq.old"
+              echo "echo  \"${g_date} ${g_sec}\" | ${obspreprocess} >> ${srunout}_REF";
+              echo -e "----\n";
             }                                                      >& ${srunout}_REF
 
             ${runcmd_str} echo "$g_date $g_sec" | ${obspreprocess} >> ${srunout}_REF 2>&1
@@ -1261,7 +1263,7 @@ function run_filter {
                                            848842.3,
                                            848842.3,
                                            2122090.9,
-                                           2083333.2,
+                                           3183098.9,
                                            2122090.9,
                                            1587301.0,
                                            1587301.0,
@@ -1819,7 +1821,7 @@ EOF
     file_name_input          = 'obs_seq.old'
     file_name_output         = 'obs_seq.new'
     include_sig_data         = .false.
-    superob_aircraft         = .false.
+    superob_aircraft         = .true.
     superob_sat_winds        = .false.
     sfc_elevation_check      = .false.
     overwrite_ncep_sfc_qc    = .false.

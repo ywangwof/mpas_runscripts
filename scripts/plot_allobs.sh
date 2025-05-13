@@ -12,6 +12,9 @@ eventdateDF=$(date -u +%Y%m%d)
 
 host="$(hostname)"
 
+outdir1="obs_diag.new"
+outdir2="1600"
+
 #-----------------------------------------------------------------------
 
 source "$script_dir/Common_Colors.sh"
@@ -239,10 +242,10 @@ declare -rA obstypes=(["value"]="1" ["variance"]="78")
 #    exit 1
 #fi
 
-if [[ ! -d ${run_dir}/${eventdate}/${dadir}/obs_diag ]]; then
-    mkdir -p "${run_dir}/${eventdate}/${dadir}/obs_diag"
+if [[ ! -d ${run_dir}/${eventdate}/${dadir}/${outdir1} ]]; then
+    mkdir -p "${run_dir}/${eventdate}/${dadir}/${outdir1}"
 fi
-cd "${run_dir}/${eventdate}/${dadir}/obs_diag" || exit
+cd "${run_dir}/${eventdate}/${dadir}/${outdir1}" || exit
 
 starthour=${starttime:0:2}
 if [[ $((10#$starthour)) -lt 12 ]]; then
@@ -295,14 +298,14 @@ for ((s=start_s;s<=end_s;s+=900)); do
 done
 
 if [[ ! -e done.zigzag ]]; then
-    ${show} "${rootdir}/python/plot_dartzig.py" "${eventdate}" -e "${endtime}" -d "${run_dir}/${eventdate}/${dadir}" -r 300 2>/dev/null
+    ${show} "${rootdir}/python/plot_dartzig.py" "${eventdate}" -e "${endtime}" -d "${run_dir}/${eventdate}/${dadir}" -r 300 -u -v 2>/dev/null
 
     imagedir="${run_dir}/image_files"
 
     if [[ -z ${show} ]]; then
-        cd "${run_dir}/${eventdate}/${dadir}/obs_diag" || exit 1
+        cd "${run_dir}/${eventdate}/${dadir}/${outdir1}" || exit 1
 
-        image_destdir="${imagedir}/${eventdate}${affix}/1500"
+        image_destdir="${imagedir}/${eventdate}${affix}/${outdir2}"
         if [[ ! -d ${image_destdir} ]]; then
             mkdir -p "${image_destdir}"
         fi
@@ -319,7 +322,9 @@ if [[ ! -e done.zigzag ]]; then
         done
 
         if [[ ${estatus} -eq 0 ]]; then
-            cp "${MPASdir}/frdd-wofs-post/json/wofs_run_metadata_obsdiag.json" "${image_destdir}/wofs_run_metadata.json"
+            #cp "${MPASdir}/frdd-wofs-post/json/wofs_run_metadata_obsdiag.json" "${image_destdir}/wofs_run_metadata.json"
+            "${script_dir}/process_da_json.py" "${MPASdir}/frdd-wofs-post/json/wofs_run_metadata_obsdiag.json" \
+                                            "${image_destdir}/wofs_run_metadata.json"
             ${show} touch "done.zigzag"
         fi
     fi
