@@ -1298,6 +1298,7 @@ function write_config {
 
     domname="${domname}"
     damode="${damode}"
+    intvl_sec=900
 
     MPASLSM='sf_ruc'
     MPASNFLS=9
@@ -1375,7 +1376,6 @@ function write_config {
 
 [dacycles]
     ENS_SIZE=36
-    intvl_sec=900
     ADAPTIVE_INF=true
     update_in_place=false               # update MPAS states in-place or
                                         # making a copy of the restart files

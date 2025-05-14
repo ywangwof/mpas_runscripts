@@ -279,6 +279,7 @@ for taskname in "${tasknames[@]}"; do
             ((notasks++))
 
             $show rm -rf "${eventdate}${affix}"
+            $show rm -rf "WOFS_MPAS_config_${eventdate}${affix}.yaml"
         fi
 
         #-------------------------------------------------------------------

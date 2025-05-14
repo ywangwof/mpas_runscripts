@@ -435,9 +435,9 @@ function run_mpas {
             mecho0 "Member: $iens lbc file ${mpastime_str}: ${lbc_dafile}";
         fi
 
-        for ((i=EXTINVL;i<=fcst_seconds;i+=EXTINVL)); do
-            isec=$(( iseconds+i ))           # MPAS expects time string
-            jsec=$(( iseconds/3600*3600+i )) # External GRIB file provided around to whole hour
+        for ((i=icycle_lbcgap;i<=fcst_seconds;i+=icycle_lbcgap)); do
+            isec=$(( iseconds+i ))                # MPAS expects time string
+            jsec=${isec}             # $(( iseconds-iseconds%3600+i ))  # External GRIB file provided around to whole hour
             lbctime_str=$(date -u -d @$jsec +%Y-%m-%d_%H.%M.%S)
             mpastime_str=$(date -u -d @$isec +%Y-%m-%d_%H.%M.%S)
             lbc_file="${casedir}/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str}.nc"
@@ -1283,7 +1283,11 @@ function fcst_driver() {
 
         eventMM=$(date -u -d @$ilaunch +%M)
         fcstindex=1
-        if [[ "${eventMM}" == "00" ]]; then fcstindex=0; fi
+        icycle_lbcgap=${fcst_launch_intvl}
+        if [[ "${eventMM}" == "00" ]]; then
+            fcstindex=0;
+            icycle_lbcgap=3600
+        fi
         fcst_seconds=${fcst_length_seconds[$fcstindex]}
 
         fcstwrkdir=$wrkdir/${eventtime}
@@ -1297,7 +1301,7 @@ function fcst_driver() {
         fi
 
         echo ""
-        echo -e "- FCST Cycle at ${eventtime} - ${CYAN}$(date +'%Y-%m-%d %H:%M:%S (%Z)')${NC}"
+        echo -e "- FCST Cycle at ${WHITE}${eventtime}${NC} - ${CYAN}$(date +'%Y-%m-%d %H:%M:%S (%Z)')${NC}"
         time1=$(date +%s)
 
         if [[ " ${jobs[*]} " =~ " mpas " ]]; then
@@ -1627,6 +1631,8 @@ if [[  -v args["config_file"] ]]; then
     if [[ ${config_file} =~ config\.([0-9]{8})(.*) ]]; then
         [[ -v args["eventdate"] ]] || eventdate="${BASH_REMATCH[1]}"
         daffix="${BASH_REMATCH[2]}"
+    elif [[ ${config_file} =~ config\.(.*)$ ]]; then
+        daffix="_${BASH_REMATCH[1]}"
     else
         echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not the right format config.YYYYmmdd[_*]."
         exit 1
@@ -1708,9 +1714,9 @@ echo    " "
 
 jobname="${eventdate:4:4}"
 
-EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
-OUTINVL_STR=$(printf "00:%02d:00" $((OUTINVL/60)) )
-RSTINVL_STR="10:00:00"         # turn off restart file output
+EXTINVL_STR=$(date -d@${EXTINVL} -u +%H:%M:%S)
+OUTINVL_STR=$(date -d@${OUTINVL} -u +%H:%M:%S)
+RSTINVL_STR="12:00:00"                      # turn off restart file output
 
 #
 # Start the forecast driver

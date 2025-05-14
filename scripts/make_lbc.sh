@@ -57,7 +57,7 @@ function usage {
     echo " "
     echo "    DATETIME - Case date and time in YYYYMMDD, Default: today"
     echo "    WORKDIR  - Run Directory"
-    echo "    JOBS     - One or more jobs from [ungrib,lbc,clean]"
+    echo "    JOBS     - One or more jobs from [ungrib,lbc,clean,time_intrp]"
     echo "               Default: all jobs in the proper order."
     echo " "
     echo "    OPTIONS:"
@@ -73,6 +73,7 @@ function usage {
     echo "                  HHMM            Start time"
     echo "              -e  YYYYmmddHHMM    End date & time for the LBC preparation"
     echo "                  HHMM            End time"
+    echo "              -t  HHMM            Stop time for time interpolation"
     echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
     echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
     echo " "
@@ -174,11 +175,20 @@ function parse_args {
                 fi
                 shift
                 ;;
+            -t )
+                if [[ $2 =~ ^[0-9]{4}$ ]]; then
+                    args["stoptime"]=$2
+                else
+                    echo -e "${RED}ERROR${NC}: Stop time should be in ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
+                    usage 1
+                fi
+                shift
+                ;;
             -*)
                 echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
                 usage 2
                 ;;
-            ungrib* | lbc* | clean* )
+            ungrib* | lbc* | clean* | time_intrp )
                 args["jobs"]="${key//,/ }"
                 ;;
             *)
@@ -382,7 +392,7 @@ function run_lbc {
 &nhyd_model
     config_init_case = 9
     config_start_time = '${starttime_str}'
-    config_stop_time = '${stoptime_str}'
+    config_stop_time = '${endtime_str}'
     config_theta_adv_order = 3
     config_coef_3rd_order = 0.25
 /
@@ -504,6 +514,114 @@ EOF
 
 ########################################################################
 
+function run_time_intrp {
+    conditions=()
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+        /*)
+            conditions+=("$1")
+            ;;
+        *)
+            conditions+=("$rundir/$1")
+            ;;
+        esac
+        shift
+    done
+
+    if [[ $dorun == true ]]; then
+        for cond in "${conditions[@]}"; do
+            mecho0 "Checking: ${CYAN}$cond${NC} ...."
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    mecho0 "Waiting for file: ${CYAN}$cond${NC}"
+                fi
+
+                # shellcheck disable=SC2154
+                check_job_status "${domname}" "$rundir/lbc" "$nenslbc"
+                sleep 10
+            done
+        done
+    fi
+
+    wrkdir=$rundir/lbc
+    cd "${wrkdir}" || exit $?
+
+    #@@@
+
+    #source ${rootdir}/modules/env.python
+
+    starttime_s=$(date -u -d "${eventdate}        ${eventtime}"        +%s)
+    stoptime_s=$(date  -u -d "${stopdatetime:0:8} ${stopdatetime:8:4}" +%s)
+
+    #[[ $verb -eq 1 ]] && mecho0 "Running time intrpolation ...."
+
+    #for((i=starttime_s;i<=stoptime_s;i+=intvl_sec)); do
+    #    min=$(date -u -d @$i +%M)
+    #    j=$((10#$min*60))
+    #    if [[ ${min} != "00" ]]; then
+    #        i1=$((i-j))
+    #        i2=$((i+3600-j))
+    #        time_str=$(date  -u -d @$i  +%Y-%m-%d_%H.%M.%S)
+    #        time_str1=$(date -u -d @$i1 +%Y-%m-%d_%H.%M.%S)
+    #        time_str2=$(date -u -d @$i2 +%Y-%m-%d_%H.%M.%S)
+    #        for mem in $(seq 1 $nenslbc); do
+    #            printf -v mem_str "%02d" $mem
+    #            lbc_filename="${domname}_${mem_str}.lbc.${time_str}.nc"
+    #            lbc_file1="${domname}_${mem_str}.lbc.${time_str1}.nc"
+    #            lbc_file2="${domname}_${mem_str}.lbc.${time_str2}.nc"
+    #            if [[ ! -f ${lbc_filename} ]]; then
+    #                if [[ $verb -eq 1 ]]; then
+    #                    mecho0 "Interpolating lbc file: ${lbc_filename} file from"
+    #                    mecho0 "                        ${lbc_file1} and"
+    #                    mecho0 "                        ${lbc_file2}"
+    #                fi
+    #                ( ${scpdir}/intrp_time.py -t ${time_str} ${lbc_file1} ${lbc_file2} ${lbc_filename} ) &
+    #            fi
+    #        done
+    #        wait
+    #    fi
+    #done
+
+    jobarrays=()
+    for mem in $(seq 1 $nenslbc); do
+        jobarrays+=("$mem")
+    done
+    #
+    # Create job script and submit it
+    #
+    if [[ ${#jobarrays[@]} -gt 0 ]]; then
+        jobscript="run_intrp_${domname}.${mach}"
+        jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
+
+        declare -A jobParms=(
+            [PARTION]="${partition_lbc}"
+            [NOPART]="$npelbc"
+            [CPUSPEC]="${claim_cpu_lbc}"
+            [JOBNAME]="intrp_${jobname}"
+            [PREFIX]="${domname}"
+            [STARTSECS]="${starttime_s}"
+            [STOPSECS]="${stoptime_s}"
+            [INTVL_SECS]=${intvl_sec}
+        )
+        # shellcheck disable=SC2154
+        if [[ "${mach}" == "pbs" ]]; then
+            jobParms[NNODES]="${nnodes_ics}"
+            # shellcheck disable=SC2034
+            jobParms[NCORES]="${ncores_lbc}"
+        fi
+
+        # shellcheck disable=SC2154
+        submit_a_job "$wrkdir" "${domname}" "jobParms" "$TEMPDIR/run_lbc_intrp_array.${mach}" "$jobscript" "${jobarraystr}"
+    fi
+
+    if [[ $dorun == true && $jobwait -eq 1 ]]; then
+        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
+        check_job_status "${domname}" $wrkdir $nenslbc $jobscript 2
+    fi
+}
+
+########################################################################
+
 function run_clean {
 
     for dirname in "$@"; do
@@ -564,6 +682,8 @@ parse_args "$@"
 
 [[ -v args["jobs"] ]] && read -r -a jobs <<< "${args['jobs']}" || jobs=(ungrib lbc clean)
 
+[[ " ${jobs[*]} " =~ [[:space:]]time_intrp[[:space:]] ]] && usepython=true || usepython=false
+
 #-----------------------------------------------------------------------
 #
 # Set up working environment
@@ -572,7 +692,8 @@ parse_args "$@"
 
 source "${scpdir}/Site_Runtime.sh" || exit $?
 
-setup_machine "${args['machine']}" "$rootdir" false false
+
+setup_machine "${args['machine']}" "$rootdir" ${usepython} false
 
 [[ $dorun == false ]] && runcmd="echo $runcmd"
 
@@ -638,8 +759,19 @@ elif [[ -v args["endtime"] ]]; then
         enddatetime=$(date -u -d "${eventdate} $endtime" +%Y%m%d%H%M)
     fi
 else
-    eventend="0900"
-    enddatetime=$(date -u -d "${eventdate} ${eventend} 1 day" +%Y%m%d%H%M)
+    enddatetime=$(date -u -d "${eventdate} 0900 1 day" +%Y%m%d%H%M)
+fi
+
+if [[ -v args["stoptime"] ]]; then
+    stoptime="${args['stoptime']}"
+    stophour=${stoptime:0:2}
+    if ((10#$stophour < 12)); then
+        stopdatetime=$(date -u -d "${eventdate} ${stoptime} 1 day" +%Y%m%d%H%M)
+    else
+        stopdatetime=$(date -u -d "${eventdate} ${stoptime}" +%Y%m%d%H%M)
+    fi
+else
+    stopdatetime=$(date -u -d "${eventdate} 0300 1 day" +%Y%m%d%H%M)
 fi
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -667,7 +799,7 @@ echo    " "
 jobname="${eventdate:4:4}"
 
 starttime_str=$(date -u -d "${eventdate}       ${eventtime}"       +%Y-%m-%d_%H:%M:%S)
-stoptime_str=$(date  -u -d "${enddatetime:0:8} ${enddatetime:8:4}" +%Y-%m-%d_%H:%M:%S)
+endtime_str=$(date   -u -d "${enddatetime:0:8} ${enddatetime:8:4}" +%Y-%m-%d_%H:%M:%S)
 
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 
@@ -679,6 +811,7 @@ declare -A jobargs=([ungrib]="${hrrr_dir} ${hrrr_time}"                 \
                     [lbc]="lbc/ungrib/done.ungrib init/done.${domname}" \
                     [clean]="ungrib lbc"                                \
                     [cleanungrib]=""                                    \
+                    [time_intrp]="lbc/done.${domname}"                  \
                    )
 
 for job in "${jobs[@]}"; do

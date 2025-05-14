@@ -200,6 +200,8 @@ if [[ -v args["config_file"] ]]; then
     if [[ ${config_file} =~ config\.([0-9]{8})(.*) ]]; then
         [[ -v args["eventdate"] ]] || eventdate="${BASH_REMATCH[1]}"
         affix="${BASH_REMATCH[2]}"
+    elif [[ ${config_file} =~ config\.(.*)$ ]]; then
+        affix="_${BASH_REMATCH[1]}"
     else
         echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not the right format config.YYYYmmdd[_*]."
         exit 1
@@ -370,19 +372,19 @@ atpost )
 
     atjobstr=$(cat <<EOF
 if [[ $verb == true ]]; then
-    echo "at ${launchtime}        <<< \"${myname} ${config_file} -e ${endtime} post\""
-    echo "at ${launchtime}+1hours <<< \"${myname} ${config_file} -e ${endtime} diag\""
-    echo "at ${launchtime}+2hours <<< \"${myname} ${config_file} -e ${endtime} snd\""
-    echo "at ${launchtime}+3hours <<< \"${myname} ${config_file} -e ${endtime} verif\""
-    echo "at ${launchtime}+4hours <<< \"${myname} ${config_file} -e ${endtime} plot\""
+    echo "at ${launchtime}        <<< \"${myname} ${config_file} ${eventdate} -e ${endtime} post\""
+    echo "at ${launchtime}+1hours <<< \"${myname} ${config_file} ${eventdate} -e ${endtime} diag\""
+    echo "at ${launchtime}+2hours <<< \"${myname} ${config_file} ${eventdate} -e ${endtime} snd\""
+    echo "at ${launchtime}+3hours <<< \"${myname} ${config_file} ${eventdate} -e ${endtime} verif\""
+    echo "at ${launchtime}+4hours <<< \"${myname} ${config_file} ${eventdate} -e ${endtime} plot\""
 fi
 
 if [[ -z "$show" ]]; then
-    at ${launchtime}        <<< "${myname} ${config_file} -e ${endtime} post"
-    at ${launchtime}+1hours <<< "${myname} ${config_file} -e ${endtime} diag"
-    at ${launchtime}+2hours <<< "${myname} ${config_file} -e ${endtime} snd"
-    at ${launchtime}+3hours <<< "${myname} ${config_file} -e ${endtime} verif"
-    at ${launchtime}+4hours <<< "${myname} ${config_file} -e ${endtime} plot"
+    at ${launchtime}        <<< "${myname} ${config_file} ${eventdate} -e ${endtime} post"
+    at ${launchtime}+1hours <<< "${myname} ${config_file} ${eventdate} -e ${endtime} diag"
+    at ${launchtime}+2hours <<< "${myname} ${config_file} ${eventdate} -e ${endtime} snd"
+    at ${launchtime}+3hours <<< "${myname} ${config_file} ${eventdate} -e ${endtime} verif"
+    at ${launchtime}+4hours <<< "${myname} ${config_file} ${eventdate} -e ${endtime} plot"
 fi
 EOF
 )
@@ -400,13 +402,13 @@ case $task in
 #1. dacycles
 dacycles )
     cd "${script_dir}" || exit 1
-    cmds=("${script_dir}/run_dacycles.sh" -e "${endtime}" "${config_file}" -r)
+    cmds=("${script_dir}/run_dacycles.sh" -e "${endtime}" "${config_file}" "${eventdate}" -r)
     if [[ -n "${taskopt}" ]]; then cmds+=("${taskopt}"); fi
     ;;
 #2. fcst
 fcst )
     cd "${script_dir}" || exit 1
-    cmds=("${script_dir}/run_fcst.sh" -e "${endtime}" "${config_file}" -r -w)
+    cmds=("${script_dir}/run_fcst.sh" -e "${endtime}" "${config_file}" "${eventdate}" -r -w)
     if [[ -n "${taskopt}" ]]; then cmds+=("${taskopt}"); fi
     ;;
 
@@ -429,7 +431,7 @@ post )
         fi
         if [[ ! -e ${run_dir}/FCST/${eventdate}${affix}/fcst_${enddate}${endtime}_start ]]; then
             # To make sure the correct FCST files are used, "-c"
-            cmds=("${script_dir}/lnmpasfcst.sh" -c -b "$fcstbegs" -s "${starttime}" -e "${endtime}" "${config_file}" )
+            cmds=("${script_dir}/lnmpasfcst.sh" -c -b "$fcstbegs" -s "${starttime}" -e "${endtime}" "${config_file}" "${eventdate}")
             cmds+=("${eventdate}")
             ${show} "${cmds[@]}"
         fi
@@ -438,7 +440,7 @@ post )
         cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${post_config}")
     else
         echo -e "${DARK}File ${CYAN}$donepost${NC} exist"
-        echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${config_file} post${NC} before reprocessing."
+        echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${config_file} ${eventdate} post${NC} before reprocessing."
         exit 1
     fi
     ;;
@@ -495,7 +497,7 @@ snd )
 #7. diag
 diag )
     cd "${script_dir}" || exit 1
-    cmds=("${script_dir}/plot_allobs.sh" -e "${endtime}" "${config_file}")
+    cmds=("${script_dir}/plot_allobs.sh" -e "${endtime}" "${config_file}" "${eventdate}")
     if [[ -n "${taskopt}" ]]; then cmds+=("${taskopt}");  fi
     ;;
 

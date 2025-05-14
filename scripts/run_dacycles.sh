@@ -324,7 +324,7 @@ function run_obsmerge {
 
     input_base="${wrkdir}/input.nml"
 
-    mecho0 "OBS Preprocessing for analysis time: ${WHITE}${anlys_time}${NC}, days: ${g_date}, seconds: ${g_sec}"
+    mecho0 "OBS Preprocessing for analysis time: ${anlys_time}, days: ${g_date}, seconds: ${g_sec}"
     mecho0 "OBS_DIR=${LIGHT_BLUE}${OBS_DIR}${NC}"
 
     obsflists=()
@@ -2100,7 +2100,11 @@ function run_update_bc {
     # Prepare update_bc by copying/linking the background files
     #------------------------------------------------------
 
-    jobarrays=(); lbcfiles_org=(); lbcfiles_mem=(); lbcfiles_next=()
+    lbcfiles_org1=(); lbcfiles_org2=()
+    lbcfiles_mem1=(); lbcfiles_mem2=()
+    lbcfiles_mems=(); lbcfiles_next=()
+
+    jobarrays=()
     for iens in $(seq 1 $ENS_SIZE); do
         #(( jindex=iens-1 ))
 
@@ -2126,22 +2130,17 @@ function run_update_bc {
         # lbc files
         #
         jens=$(( (iens-1)%nenslbc+1 ))
-        mlbcstr=$(printf "%02d" $jens)           # get LBC member string
+        mlbcstr=$(printf "%02d" $jens)                # get LBC member string
 
-        isec_nlbc1=$(( iseconds/3600*3600 ))
-        isec_nlbc2=${isec_nlbc1}
-        isec_elbc=$(( iseconds+intvl_sec ))
-        while [[ $isec_elbc -gt $isec_nlbc2 ]]; do
-            (( isec_nlbc2+=EXTINVL ))
-        done
+        # isec_nlbc1, isec_nlbc2, isec_elbc and icycle_lbcgap are set in the caller
+
         # External GRIB file provided file times
         lbctime_str1=$(date -u -d @${isec_nlbc1} +%Y-%m-%d_%H.%M.%S)
         lbctime_str2=$(date -u -d @${isec_nlbc2} +%Y-%m-%d_%H.%M.%S)
 
         # MPAS expected boundary file times
-        mpastime_str1=$(date -u -d @${iseconds}  +%Y-%m-%d_%H.%M.%S)
-        mpastime_str2=${lbctime_str2}
-        icycle_lbcgap=$(( isec_nlbc2-iseconds ))
+        mpastime_str1=$(date -u -d @${iseconds}   +%Y-%m-%d_%H.%M.%S)
+        mpastime_str2=$(date -u -d @${isec_elbc}  +%Y-%m-%d_%H.%M.%S)
         if [[ $verb -eq 1 ]]; then
             mecho0 "Member: $iens use lbc files from $rundir/lbc:"
             mecho0 "        ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc  ${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc";
@@ -2157,6 +2156,10 @@ function run_update_bc {
         lbc_file1="${lbcdir}/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc"
         lbc_file2="${lbcdir}/${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc"
         lbc_filem="./${domname}_${memstr}.lbc.${mpastime_str1}.nc"
+        lbc_filen="./${domname}_${memstr}.lbc.${mpastime_str2}.nc"
+
+        org_file1="${lbcdir}/${domname}_${mlbcstr}.lbc.${mpastime_str1}.nc"
+        org_file2="${lbcdir}/${domname}_${mlbcstr}.lbc.${mpastime_str2}.nc"
 
         # Should copy the initial boundary file as a starting point.
         # it is moved to the job script for parallelization to save time.
@@ -2165,11 +2168,14 @@ function run_update_bc {
         echo "${input_file_array[0]}" >> ${update_input_file}
         sed -i "/update_analysis_file_list/s/=.*/= '${update_input_file}'/" input.nml
 
-        lbcfiles_org+=("${lbc_file1}")
-        lbcfiles_next+=("${lbc_file2}")
-        lbcfiles_mem+=("${lbc_filem}")
+        lbcfiles_org1+=("${lbc_file1}")
+        lbcfiles_org2+=("${lbc_file2}")
 
-        ln -sf "${lbc_file2}" "${domname}_${memstr}.lbc.${mpastime_str2}.nc"
+        lbcfiles_mem1+=("${org_file1}")
+        lbcfiles_mem2+=("${org_file2}")
+
+        lbcfiles_mems+=("${lbc_filem}")
+        lbcfiles_next+=("${lbc_filen}")
 
         jobarrays+=("$iens")
     done
@@ -2190,9 +2196,12 @@ function run_update_bc {
         [EXEDIR]="${EXEDIR}/dart"
         [CPCMD]="${cpcmd}"
         [MPSCHEME]="${mpscheme}"
-        [LBCFILEORGSTR]="${lbcfiles_org[*]}"
-        [LBCFILEMEMSTR]="${lbcfiles_mem[*]}"
+        [LBCFILEORGSTR1]="${lbcfiles_org1[*]}"
+        [LBCFILEORGSTR2]="${lbcfiles_org2[*]}"
+        [LBCFILEMEMSSTR]="${lbcfiles_mems[*]}"
         [LBCFILENEXTSTR]="${lbcfiles_next[*]}"
+        [LBCFILEMEMS1]="${lbcfiles_mem1[*]}"
+        [LBCFILEMEMS2]="${lbcfiles_mem2[*]}"
         [UPDATEBC]="${run_updatebc}"
     )
     if [[ "${mach}" == "pbs" ]]; then
@@ -2667,10 +2676,8 @@ EOF
 /
 EOF
 
-        (( icycle_extinvl_hr=icycle_lbcgap/3600 ))
-        (( icycle_extinvl_min=(icycle_lbcgap-3600*icycle_extinvl_hr)/60 ))
-        icycle_extinvl_str=$(printf "%02d:%02d:00" ${icycle_extinvl_hr} ${icycle_extinvl_min})
-        #echo "icycle_extinvl_str=${icycle_extinvl_str},$icycle_extinvl_hr,$icycle_extinvl_min"
+        icycle_extinvl_str=$(date -d@${icycle_lbcgap} -u +%H:%M:%S)
+        #echo "icycle_extinvl_str=${icycle_extinvl_str}"
 
         cat << EOF > streams.atmosphere
 <streams>
@@ -2828,10 +2835,23 @@ function dacycle_driver() {
         cd $dawrkdir || return
 
         echo ""
-        echo -e "- Cycle $icyc at ${timestr_curr} - ${CYAN}$(date +'%Y-%m-%d %H:%M:%S (%Z)')${NC}"
+        echo -e "- Cycle $icyc at ${WHITE}${timestr_curr}${NC} - ${CYAN}$(date +'%Y-%m-%d %H:%M:%S (%Z)')${NC}"
         time1=$(date +%s)
 
         no_observation=false
+
+        #------------------------------------------------------
+        # Lateral boundary times for this cycle
+        #------------------------------------------------------
+
+        isec_nlbc1=$(( isec - isec%3600 ))            # get whole hour in seconds
+        isec_nlbc2=$(( isec_nlbc1 + EXTINVL ))        # next whole hour
+        isec_elbc=$(( isec + intvl_sec ))
+        while [[ $isec_elbc -gt $isec_nlbc2 ]]; do
+            (( isec_nlbc2+=EXTINVL ))
+        done
+        isec_elbc=${isec_nlbc2}                      # use variant lbc interval or not
+        icycle_lbcgap=$((isec_elbc-isec))
 
         #------------------------------------------------------
         # 0. Check forecast status of the early cycle or inital boundary status
@@ -3551,6 +3571,8 @@ if [[ -v args["config_file"] ]]; then
     if [[ ${config_file} =~ config\.([0-9]{8})(.*) ]]; then
         [[ -v args["eventdate"] ]] || eventdate="${BASH_REMATCH[1]}"
         daffix="${BASH_REMATCH[2]}"
+    elif [[ ${config_file} =~ config\.(.*)$ ]]; then
+        daffix="_${BASH_REMATCH[1]}"
     else
         echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not the right format config.YYYYmmdd[_*]."
         exit 1

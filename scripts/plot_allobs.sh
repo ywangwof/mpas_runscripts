@@ -168,6 +168,8 @@ if [[ -v args["config_file"] ]]; then
     if [[ ${config_file} =~ config\.([0-9]{8})(.*) ]]; then
         [[ -v args["eventdate"] ]] || eventdate="${BASH_REMATCH[1]}"
         affix="${BASH_REMATCH[2]}"
+    elif [[ ${config_file} =~ config\.(.*)$ ]]; then
+        affix="_${BASH_REMATCH[1]}"
     else
         echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not the right format config.YYYYmmdd[_*]."
         exit 1
