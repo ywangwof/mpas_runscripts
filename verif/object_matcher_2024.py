@@ -47,6 +47,8 @@ parser.add_option("-a", dest="thresh1", type="float", default='47.4',
                   help="Initial WoFS threshold for object ID")
 parser.add_option("-b", dest="thresh2", type="float", default='52.6',
                   help="second threshold for WoFS object ID (obj max must exceed this)")
+parser.add_option("-X", dest="appendix", type="string", default='None',
+                  help="time appendix string, default: None")
 
 (options, args) = parser.parse_args()
 
@@ -64,7 +66,10 @@ else:
     out_netcdf = options.out_netcdf
 
     mrms_dir = os.path.join(mrms_dir, case_date)
-    wofs_dir = os.path.join(wofs_dir, case_date)
+    if options.appendix is None or options.appendix == "None":
+        wofs_dir = os.path.join(wofs_dir, case_date)
+    else:
+        wofs_dir = os.path.join(wofs_dir, f"{case_date}_{options.appendix}")
 
 ####################################### Object ID and Matching Thresholds: ######################################################
 
@@ -98,7 +103,7 @@ edge = 7  # number of gridboxes to trim from domain boundaries
 verif_hours = ['1900', '2000', '2100', '2200', '2300',
                '0000', '0100', '0200', '0300']  # initialization times to process
 
-domain = case_date[-2:]  # should be "d1" or "d2" for multiple domains
+domain = "d01" # case_date[-2:]  # should be "d1" or "d2" for multiple domains
 
 ####################################### MRMS Object ID and Tracking: ######################################################
 
@@ -261,6 +266,8 @@ for temp_dir in wofs_init_dirs_temp:
         wofs_init_dirs.append(temp_dir)
 
 wofs_init_dirs.sort()
+#print(f"wofs_dir={wofs_dir},{wofs_init_dirs}")
+#sys.exit(0)
 
 # get list of MRMS object times for comparison to WoFS objects:
 # need the 1-line for loop because dictionaries are stupid
@@ -282,7 +289,8 @@ for d, init_dir in enumerate(wofs_init_dirs):
 # build list of all "ENS" summary files:
     wofs_files = []
     for f in wofs_files_temp:
-        if f[-28:-25] == 'ALL' and f[0:3] != '.az' :
+        if f.startswith('.'): continue
+        if f[-28:-25] == 'ALL' and f.endswith('.nc'):
             wofs_files.append(f)
     wofs_files.sort()
     for f, temp_file in enumerate(wofs_files):

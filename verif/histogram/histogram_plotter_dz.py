@@ -50,12 +50,14 @@ from multiprocessing import Pool
 #    out_dir = options.out_dir
 #    prefix = options.prefix
 
-in_dir = '/scratch/ywang/MPAS/intel/run_dirs/VERIF/wofs_hist/'
-in_dir2 = '/scratch/ywang/MPAS/intel/run_dirs/VERIF/mpas_hist/'
-in_dir3 = '/scratch/ywang/MPAS/intel/run_dirs/VERIF/mrms_hist/'
+in_dir = '/scratch/wofs_mpas/run_dirs/VERIF/wofs_hist/'
+in_dir2 = '/scratch/wofs_mpas/run_dirs/VERIF/mpas_hist/'
+in_dir3 = '/scratch/wofs_mpas/run_dirs/VERIF/mrms_hist/'
 
-out_dir = '/scratch/ywang/MPAS/intel/run_dirs/VERIF/'
+out_dir = '/scratch/wofs_mpas/run_dirs/VERIF/'
 prefix = 'dz_climo_2024'
+
+labels = [ "cb-WoFS", "mpas-WoFS", "MRMS"]
 
 ############################ User Defined Variables: #################################
 
@@ -73,7 +75,6 @@ var_hist3 = np.arange(len(var_bins)-1) * 0.
 deep = sns.color_palette('deep')
 
 colors = [ deep[0],       deep[1], deep[7]]
-labels = [ "cb-WoFS", "mpas-WoFS", "MRMS"]
 
 #np.histogram(dummy, var_bins)
 #var_smooth = np.histogram(dummy, var_bins)
@@ -340,7 +341,8 @@ temp_path = out_dir + prefix + '_comp_dz_cdf_righttail.png'
 plt.savefig(temp_path, format="png", dpi=300)
 plt.close(fig1)
 
-dz_thresh = [37., 40., 42., 43., 45., 47., 48.]
+#dz_thresh = [37., 40., 42., 43., 45., 47., 48.]
+dz_thresh = [30., 35., 40., 45., 50., 55.]
 
 print(f"  {labels[2]} Percentile  {labels[0]} {labels[1]}")
 print( " ----- ---------- -------- ---------")

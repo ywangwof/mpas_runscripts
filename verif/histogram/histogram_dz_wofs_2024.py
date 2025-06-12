@@ -2,7 +2,7 @@ import re
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-import os
+import os, sys
 import statistics
 import datetime
 import netCDF4
@@ -44,54 +44,46 @@ else:
 
 edge = 7
 
-#varname = 'dz_cress'
-#varname = 'refl_cress'
-varname = 'refl_consv'  #2023
-#varname = 'dz_consv'  #2019 - 2022
+varname = 'comp_dz'
 
 #var_bins = np.arange(0., 81., 1.)
 var_bins = np.arange(-0.1, 80.1, 0.2)
 
-dummy = np.arange(1) * 0. #used to initialize histograms of 0's 
-var_hist = np.histogram(dummy, var_bins) 
+dummy = np.arange(1) * 0. #used to initialize histograms of 0's
+var_hist = np.histogram(dummy, var_bins)
 
 ############################ Process WRFOUT: #################################
 
-temp_files = os.listdir(in_dir)
-mrms_files = []
+temp_summary_files = os.listdir(in_dir)
+summary_files = []
 
-for f, temp_file in enumerate(temp_files):
-   if (temp_file[-20:-17] == 'RAD'): 
-       if ((int(temp_file[-7:-5]) >= 19) or (int(temp_file[-7:-5]) <= 8) or (temp_file[-7:-3] == '0900')): 
-         mrms_files.append(temp_file)
+for f, summary_file in enumerate(temp_summary_files):
+    if summary_file.startswith('.'): continue
+    if summary_file[-28:-25] == 'ALL' and summary_file.endswith('.nc'):
+        summary_files.append(summary_file)
 
-mrms_files.sort()
+for f, summary_file in enumerate(summary_files):
+    infile = os.path.join(in_dir, summary_file)
 
-for f, temp_file in enumerate(mrms_files):
-   if (temp_file == 'wofs_MRMS_RAD_20200522_2205.nc'): #hard coded catch for bad file in 2020
-      continue
-  
-   infile = os.path.join(in_dir, temp_file)
+    if (f == 0):
+        outname = summary_file[-21:-8] + '_' + 'd01' + '_' + varname + '.nc' #2023
+#      outname = summary_file[-21:-8] + '_' + varname + '.nc' #pre 2023
+        outfile = os.path.join(out_dir, outname)
+        print('asdf', outfile)
 
-#   print(f, infile)
-   if (f == 0): 
-      outname = temp_file[-16:-8] + '_' + in_dir[-2:] + '_' + varname + '.nc' #2023
-#      outname = temp_file[-16:-8] + '_' + varname + '.nc'   #pre 2023
-      outfile = os.path.join(out_dir, outname)
-      print('asdf', outfile)
+    #print(f"Reading file: {infile}")
+    temp_lat, temp_lon, temp_var = load_wofs(infile, varname, edge)
 
-#   print(f, infile) 
-   temp_lat, temp_lon, temp_var = load_mrms_new(infile, varname, edge)
+    for n in range(0, temp_var.shape[0]):
+        temp_var_member = temp_var[n,:,:].ravel()
 
-   temp_var_ravel = temp_var[:,:].ravel()
-#   print(len(temp_var_ravel), np.max(temp_var_ravel))
-   temp_hist = np.histogram(temp_var_ravel, var_bins) 
+        temp_hist = np.histogram(temp_var_member, var_bins)
 
-   var_hist[0][:] = var_hist[0][:] + temp_hist[0][:] 
+        var_hist[0][:] = var_hist[0][:] + temp_hist[0][:]
 
 ################################# Write to rot_qc file: ###################################################
 
-print(var_hist[0][0:10]) 
+#print(var_hist[0][0:10])
 
 try:
    fout = netCDF4.Dataset(outfile, "w")
@@ -100,7 +92,7 @@ except:
 
 fout.createDimension('NB', len(var_hist[1]))
 fout.createDimension('NX', len(var_hist[0]))
-   
+
 fout.createVariable('bins', 'f4', ('NB',))
 fout.createVariable('var_hist', 'f4', ('NX',))
 

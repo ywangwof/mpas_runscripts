@@ -112,13 +112,24 @@ usebdy = 1    # 1 for yes, 0 for no, currently not used
 
 #################################### Set variable specific values:  #####################################################
 
+#
+#  MRMS Percentile  cb-WoFS mpas-WoFS
+# ----- ---------- -------- ---------
+# 30.00      80.83    34.40    33.20
+# 35.00      88.89    39.80    39.80
+# 40.00      94.78    45.80    46.20
+# 45.00      97.66    52.00    51.40
+# 50.00      99.27    57.80    56.20
+# 55.00      99.88    63.20    60.80
+
 if (var == 'compdz'):
    mrms_var = 'refl_consv'
    fcst_var = 'comp_dz'
    mrms_prct = [90.,95.,99.]
    fcst_prct = [90.,95.,99.]
    mrms_thds = [30.,35.,40.,45.,50.,55.]
-   fcst_thds = [30.,35.,40.,45.,50.,55.]
+   #fcst_thds = [30.,35.,40.,45.,50.,55.]
+   fcst_thds = [34.40, 39.80, 45.80, 52.00, 57.80, 63.20]
    #mrms_thds = [26.2,33.6,45.]
    #fcst_thds = [30.8,39.0,51.9]
 elif (var == 'uh0to2'):
@@ -253,7 +264,7 @@ for ts in range(st_sec,en_sec+1,300):
    obs_year = num_year
    obs_mon = num_mon
    obs_day = num_day
-   
+
    if obs_hr >= 24:
      obs_hr = obs_hr - 24
      obs_day = obs_day + 1
@@ -276,8 +287,8 @@ for ts in range(st_sec,en_sec+1,300):
       mrms[cnt,:,:] = np.zeros((ny,nx))
       fcst[cnt,:,:,:] = np.zeros((ne,ny,nx))
       print(cnt)
-#      sys.exit(1)                                                                                                                                         
-#   mrms[cnt,:,:] = fin.variables[mrms_var][:]  
+#      sys.exit(1)
+#   mrms[cnt,:,:] = fin.variables[mrms_var][:]
    mrms_time[cnt] = ts
 
    if np.amax(mrms[cnt,:,:]) == 0.:
@@ -349,7 +360,7 @@ for ii in range(0,nnw):
 
       # Full domain
       if usesub == 0:
-          
+
          for ts in range(0,nt):
             if usepct == 1:
                fcst_thld[ts,jj] = np.percentile(fcst[ts,:,:,:],fcst_prct[jj])
@@ -370,7 +381,7 @@ for ii in range(0,nnw):
             if ii == 0 and jj == 0:
                fcst_max[ts] = np.amax(fcst[ts,:,:,:])
                mrms_max[ts] = np.amax(mrms[ts,:,:])
-            
+
             # Compute FSS for each member
             for em in range(0,ne):
                if ii == 0:
@@ -384,7 +395,7 @@ for ii in range(0,nnw):
 
       # Subdomain
       if usesub == 1:
-      
+
          for ts in range(0,nt):
             if usepct == 1:
                fcst_thld[ts,jj] = np.percentile(fcst[ts,:,ys:yn,xw:xe],fcst_prct[jj])
@@ -398,7 +409,7 @@ for ii in range(0,nnw):
                pf[ts,jj] = 1.*np.count_nonzero(fcst[ts,:,ys:yn,xw:xe] >= fcst_thld[ts,jj])/np.count_nonzero(fcst[ts,:,ys:yn,xw:xe] >= 0.0)
                fssu[ts,jj] = 0.5 + po[ts,jj]/2.
                aefss[ts,jj] = (2.*po[ts,jj]*pf[ts,jj])/(np.power(po[ts,jj],2)+np.power(pf[ts,jj],2))
-      
+
             if ((np.amax(fcst[ts,:,ys:yn,xw:xe]) >= fcst_thld[ts,jj]) or (np.amax(mrms[ts,ys:yn,xw:xe])  >= mrms_thld[ts,jj])):
                efss[ts,ii,jj], efbs[ts,ii,jj], efbsr[ts,ii,jj] = fourier_efss(fcst[ts,:,ys:yn,xw:xe], mrms[ts,ys:yn,xw:xe], fcst_thld[ts,jj], mrms_thld[ts,jj], ne, neighsize[ii])
 

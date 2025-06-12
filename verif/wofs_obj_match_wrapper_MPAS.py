@@ -47,6 +47,8 @@ def parse_args():
                                             help="Initial WoFS threshold for object ID")
     parser.add_argument("-b","--thresh2",   type=float, default='52.6',
                                             help="second threshold for WoFS object ID (obj max must exceed this)")
+    parser.add_argument("-X","--appendix",  type=str, default=None,
+                                            help="time appendix string, default: None")
 
     args = parser.parse_args()
 
@@ -64,7 +66,7 @@ out_netcdf = 'True'
 
 ############################ Find WRFOUT files to process: #################################
 
-case_ids = ['20240506', '20240507', '20240508','20240516', '20240520', '20240521']
+case_ids = ['20240506', '20240507', '20240508','20240516', '20240521']
 
 mrms_dir = '/work/rt_obs/MRMS/RAD_AZS_MSH/2024/'
 
@@ -75,7 +77,7 @@ out_dir  = cargs.outdir
 
 for c, case in enumerate(case_ids):
 
-    cmd = f'python object_matcher_2024.py -w {wofs_dir} -m {mrms_dir} -c {case} -o {out_dir} -t {old_mrms} -n {out_netcdf} -a {cargs.thresh1} -b {cargs.thresh2}'
+    cmd = f'python object_matcher_2024.py -w {wofs_dir} -m {mrms_dir} -c {case} -o {out_dir} -t {old_mrms} -n {out_netcdf} -a {cargs.thresh1} -b {cargs.thresh2} -X {cargs.appendix}'
     pool.apply_async(run_script, (cmd,))
 
 #time.sleep(2)

@@ -33,14 +33,14 @@ pool = Pool(processes=(18))              # set up a queue to run
 
 ############################ Find WRFOUT files to process: #################################
 
-case_ids = ['20240506', '20240507', '20240508', '20240516', '20240520', '20240521']
-times    = ['1700', '1800', '1900', '2000', '2100', '2200', '2300', '0000', '0100', '0200', '0300']
+case_ids = ['20240506', '20240507', '20240508', '20240516', '20240521']
+times    = ['1900', '2000', '2100', '2200', '2300', '0000', '0100', '0200', '0300']
 
 var = 'compdz'
 
 mrms_base = '/work/rt_obs/MRMS/RAD_AZS_MSH/2024'
-wofs_base = '/scratch/derek.stratman/wofs_verif/SummaryFiles/2024'
-out_dir   = '/scratch/ywang/MPAS/intel/run_dirs/VERIF/FSS/cb-wofs'
+wofs_base = '/scratch2/derek.stratman/wofs_verif/SummaryFiles/2024'
+out_dir   = '/scratch/wofs_mpas/run_dirs/VERIF/FSS/cb-wofs'
 
 for c, case in enumerate(case_ids):
     for t, time in enumerate(times):

@@ -15,8 +15,8 @@ date
 # 47.00      98.41    53.80    52.20
 # 48.00      98.73    55.00    53.40
 
-script_dir=/scratch/ywang/MPAS/intel/mpas_scripts/verif
-work_dir=/scratch/ywang/MPAS/intel/run_dirs/VERIF
+script_dir=/scratch/home/yunheng.wang/MPAS/intel/mpas_scripts.develop/verif
+work_dir=/scratch/wofs_mpas/run_dirs/VERIF
 
 cd ${script_dir} || exit 0
 
@@ -24,7 +24,7 @@ cd ${script_dir} || exit 0
 
 echo "Run cb-WoFS object generation ..."
 
-wofs_obj_match_wrapper_MPAS.py /scratch/derek.stratman/wofs_verif/SummaryFiles/2024 -o ${work_dir}/cb-wofs -a 45.40 -b 51.40
+python wofs_obj_match_wrapper_MPAS.py /scratch2/derek.stratman/wofs_verif/SummaryFiles/2024 -o ${work_dir}/cb-wofs -a 45.80 -b 52.00
 
 #echo "Run cb-WoFS verification plotting ..."
 #wofs_obj_verif_plotter_MPAS.py /scratch/ywang/MPAS/intel/run_dirs/VERIF/cb-wofs -o /scratch/ywang/MPAS/intel/run_dirs/VERIF/cb-wofs -p cb-wofs
@@ -33,7 +33,7 @@ wofs_obj_match_wrapper_MPAS.py /scratch/derek.stratman/wofs_verif/SummaryFiles/2
 
 echo "Run MPAS-WoFS object generation ..."
 
-wofs_obj_match_wrapper_MPAS.py /scratch/ywang/MPAS/intel/run_dirs/summary_files -o ${work_dir}/mpas-wofs -a 44.60 -b 50.20
+python wofs_obj_match_wrapper_MPAS.py /scratch/wofs_mpas/run_dirs/summary_files -o ${work_dir}/mpas-wofs -a 46.20 -b 51.40 -X "V822Reduced"
 
 #echo "Run MPAS-WoFS verification plotting ..."
 #wofs_obj_verif_plotter_MPAS.py /scratch/ywang/MPAS/intel/run_dirs/VERIF/mpas-wofs -o /scratch/ywang/MPAS/intel/run_dirs/VERIF/mpas-wofs -p mpas-wofs

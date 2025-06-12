@@ -34,17 +34,17 @@ pool = Pool(processes=(24))              # set up a queue to run
 
 ### Find ENS Summary files ###
 
-case_ids = ['20240506', '20240507', '20240508','20240516', '20240520', '20240521']
+case_ids = ['20240506', '20240507', '20240508','20240516', '20240521']
 
-mrms_ids = ['20240506', '20240507', '20240508','20240516', '20240520', '20240521']
+mrms_ids = ['20240506', '20240507', '20240508','20240516', '20240521']
 
 init_times = ['1900', '2000', '2100', '2200', '2300', '0000', '0100', '0200', '0300']
 
-wofs_base = '/scratch/derek.stratman/wofs_verif/SummaryFiles/2024/'
-out_dir = '/scratch/ywang/MPAS/intel/run_dirs/VERIF/wofs_hist/'
+wofs_base = '/scratch/wofs_mpas/run_dirs/summary_files/'
+out_dir = '/scratch/wofs_mpas/run_dirs/VERIF/mpas_hist/'
 
 for c, case in enumerate(mrms_ids):
-   temp_dir = os.path.join(wofs_base, case)
+   temp_dir = os.path.join(wofs_base, f"{case}_V822Reduced")
    case_times = os.listdir(temp_dir)
    times = []
    for t, time_dir in enumerate(case_times):

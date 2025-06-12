@@ -33,21 +33,21 @@ pool = Pool(processes=(18))              # set up a queue to run
 
 ############################ Find WRFOUT files to process: #################################
 
-case_ids = ['20240506', '20240507', '20240508', '20240516', '20240520', '20240521']
+case_ids = ['20240506', '20240507', '20240508', '20240516', '20240521']
 
-times = ['1700', '1800', '1900', '2000', '2100', '2200', '2300', '0000', '0100', '0200', '0300']
+times = ['1900', '2000', '2100', '2200', '2300', '0000', '0100', '0200', '0300']
 
 var = 'compdz'
 
 mrms_base = '/work/rt_obs/MRMS/RAD_AZS_MSH/2024'
-wofs_base = '/scratch/ywang/MPAS/intel/run_dirs/summary_files'
-out_dir   = '/scratch/ywang/MPAS/intel/run_dirs/VERIF/FSS/mpas-wofs'
+wofs_base = '/scratch/wofs_mpas/run_dirs/summary_files'
+out_dir   = '/scratch/wofs_mpas/run_dirs/VERIF/FSS/mpas-wofs'
 
 for c, case in enumerate(case_ids):
     for t, time in enumerate(times):
         temp_case = case + '/'
         mrmsdir = os.path.join(mrms_base,case)
-        indir   = os.path.join(wofs_base,case,time)
+        indir   = os.path.join(wofs_base,f"{case}_V822Reduced",time)
         outdir  = os.path.join(out_dir,case,time)
 
         if os.path.exists(indir):
