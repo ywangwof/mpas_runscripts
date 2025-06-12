@@ -402,6 +402,7 @@ function run_lbc {
     config_nfglevels     = ${EXTNFGL}
     config_nfgsoillevels = ${EXTNFLS}
     config_nsoilcat      = 16
+    config_nvegopt       = 2
 /
 &data_sources
     config_geog_data_path = '${WPSGEOG_PATH}'

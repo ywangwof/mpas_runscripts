@@ -334,6 +334,7 @@ function run_init4invariant {
     config_nfglevels     = ${EXTNFGL}
     config_nfgsoillevels = ${EXTNFLS}
     config_nsoilcat      = 16
+    config_nvegopt       = 2
 /
 &data_sources
     config_geog_data_path = '${WPSGEOG_PATH}'
@@ -507,6 +508,7 @@ function run_init {
     config_nfglevels     = ${EXTNFGL}
     config_nfgsoillevels = ${EXTNFLS}
     config_nsoilcat      = 16
+    config_nvegopt       = 2
 /
 &data_sources
     config_geog_data_path = '${WPSGEOG_PATH}'

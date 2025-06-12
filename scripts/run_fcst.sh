@@ -565,6 +565,7 @@ EOF
         if [[ ${sfcscheme} == "sf_mynn" ]]; then
             cat << EOF >> namelist.atmosphere
     config_pbl_scheme                = 'bl_mynnedmf'
+    config_radt_cld_scheme           = 'cld_fraction_mynn'
 EOF
         else
             cat << EOF >> namelist.atmosphere

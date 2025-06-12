@@ -82,7 +82,7 @@ function usage {
     echo -e " "
     echo -e "    USAGE: $0 [options] DATETIME [WORKDIR] [JOBS]"
     echo -e " "
-    echo -e "    PURPOSE: Set up a MPAS-WOFS grid based on the central lat/lon."
+    echo -e "    PURPOSE: Set up a MPAS-WOFS grid based on the central latitude/longitude."
     echo -e " "
     echo -e "    DATETIME - Case date and time in YYYYmmddHHMM, Default: ${eventdateDF}"
     echo -e "    WORKDIR  - Run Directory"
@@ -94,23 +94,23 @@ function usage {
     echo -e "               Default  - All jobs in sequence order: [geogrid,ungrib_hrrr,projectHexes,meshplot_py,static]."
     echo -e " "
     echo -e "    OPTIONS:"
-    echo -e "              -h              Display this message"
-    echo -e "              -n              Show command to be run and generate job scripts only"
-    echo -e "              -v              Verbose mode"
-    echo -e "              -k  [0,1,2]     Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
-    echo -e "                              Default is 0 for ungrib, mpassit, upp and 1 for others"
-    echo -e "              -m  Machine     Machine name to run on, [Jet, Derecho, Vecna]."
-    echo -e "              --template/--fix/--exec  DIR"
-    echo -e "                              Directory for runtime files, job templates/fixed static files/executable programs respectively."
-    echo -e "              -a  wof         Account name for job submission."
-    echo -e "              -M  init        DA cycles mode, either init or restart. default: init"
-    echo -e "              -F  init        FCST launch mode, either init or restart. default same as ${BROWN}\${damode}${NC}"
-    echo -e "              -c  lat,lon     Domain central lat/lon, for example, 43.33296,-84.24593. Program \"geogrid\" requires them."
-    echo -e "              -d  domname     Domain name, default: wofs_mpas"
-    echo -e "              -x  affix       Affix attached to the run directory \"dacycles\" or \"fcst\". Default: Null"
-    echo -e "              -l  L60.txt     Vertical level file"
-    echo -e "              -o  filename    Ouput file name of the configuration file for this case"
-    echo -e "                              Default: \${WORKDIR}/config.\${eventdate}\${affix}"
+    echo -e "              -h                         Display this message"
+    echo -e "              -n                         Show command to be run and generate job scripts only"
+    echo -e "              -v                         Verbose mode"
+    echo -e "              -k             [0,1,2]     Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
+    echo -e "                                         Default is 0 for ungrib, mpassit, upp and 1 for others"
+    echo -e "              -m             Machine     Machine name to run on, [Jet, Derecho, Vecna]."
+    echo -e "              --template|--fix|--exec=DIR"
+    echo -e "                                         Directories for runtime files, job templates/fixed static files/executable programs respectively."
+    echo -e "              -a             wof         Account name for job submission."
+    echo -e "              -M             init        DA cycles mode, either init or restart. default: init"
+    echo -e "              -F             init        FCST launch mode, either init or restart. default same as ${BROWN}\${damode}${NC}"
+    echo -e "              -c | --center= lat,lon     Domain central lat/lon, for example, 43.33296,-84.24593. Program \"geogrid\" requires them."
+    echo -e "              -d             domname     Domain name, default: wofs_mpas"
+    echo -e "              -x             affix       Affix attached to the run directory \"dacycles\" or \"fcst\". Default: Null"
+    echo -e "              -l             L60.txt     Vertical level file"
+    echo -e "              -o             filename    Ouput file name of the configuration file for this case"
+    echo -e "                                         Default: \${WORKDIR}/config.\${eventdate}\${affix}"
     echo -e " "
     echo -e "   DEFAULTS:"
     echo    "              eventdate             = ${eventdateDF}"
@@ -137,7 +137,13 @@ function parse_args {
     # Parse command line arguments
     #-------------------------------------------------------------------
 
-     while [[ $# -gt 0 ]]; do
+    local argname keyname keydir
+
+    # keys are the command line argument name
+    # values are the args associated array keys, RETURN to the caller
+    declare -A argsnames=([template]=TEMPDIR [fix]=FIXDIR [exec]=EXEDIR)
+
+    while [[ $# -gt 0 ]]; do
         key="$1"
 
         case $key in
@@ -159,106 +165,98 @@ function parse_args {
                     usage 1
                 fi
                 ;;
-            --template)
-                if [[ -d $2 ]]; then
-                    args["TEMPDIR"]=$2
+            --template* | --fix* | --exec* )
+                if [[ "${key}" =~ ^--(template|fix|exec)(=(.*))?$ ]]; then
+                    keyname="${BASH_REMATCH[1]}"
+                    if [[ -n ${BASH_REMATCH[3]} ]]; then
+                        keydir="${BASH_REMATCH[3]}"
+                    else
+                        keydir="$2"
+                        shift
+                    fi
+                fi
+
+                argname="${argsnames[$keyname]}"
+                if [[ -d "${keydir}" ]]; then
+                    args[${argname}]="${keydir}"
                 else
-                    echo -e "${RED}ERROR${NC}: Template directory ${BLUE}$2${NC} does not exist."
+                    echo -e "${RED}ERROR${NC}: ${keyname^} directory ${BLUE}${keydir}${NC} does not exist."
                     usage 1
                 fi
-                shift
                 ;;
-            --fix)
-                if [[ -d $2 ]]; then
-                    args["FIXDIR"]=$2
-                else
-                    echo -e "${RED}ERROR${NC}: Fixed file directory ${BLUE}$2${NC} does not exist."
-                    usage 1
-                fi
-                shift
-                ;;
-            --exec)
-                if [[ -d $2 ]]; then
-                    args["EXEDIR"]=$2
-                else
-                    echo -e "${RED}ERROR${NC}: Program directory ${BLUE}$2${NC} does not exist."
-                    usage 1
-                fi
-                shift
-                ;;
-            -m)
-                if [[ ${2^^} == "JET" ]]; then
-                    args["machine"]=Jet
-                elif [[ ${2^^} == "VECNA" ]]; then
-                    args["machine"]=Vecna
-                elif [[ ${2^^} == "HERCULES" ]]; then
-                    args["machine"]=Hercules
-                elif [[ ${2^^} == "CHEYENNE" || ${2^^} == "DERECHO" ]]; then
-                    args["machine"]=Cheyenne
-                else
+            -m )
+                case ${2^^} in
+                JET | VECNA | HERCULES | CHEYENNE )
+                    machname="${2,,}"
+                    args["machine"]="${machname^}"
+                    ;;
+                DERECHO )
+                    args["machine"]="Cheyenne"
+                    ;;
+                * )
                     echo -e "${RED}ERROR${NC}: Unsupported machine name, got ${PURPLE}$2${NC}."
                     usage 1
-                fi
+                    ;;
+                esac
                 shift
                 ;;
 
-        -M)
-            if [[ ${2,,} == "init" || ${2,,} == "restart" ]]; then
-                args["damode"]="${2,,}"
-            else
-                echo -e "${RED}ERROR${NC}: unknow argument. Expect: ${YELLOW}init${NC} or ${YELLOW}restart${NC}. Got: ${PURPLE}${2,,}${NC}"
-                usage 1
-            fi
-            shift
-            ;;
-        -F)
-            if [[ ${2,,} == "init" || ${2,,} == "restart" ]]; then
-                args["fcstmode"]="${2,,}"
-            else
-                echo -e "${RED}ERROR${NC}: unknow argument. Expect: ${YELLOW}init${NC} or ${YELLOW}restart${NC}. Got: ${PURPLE}${2,,}${NC}"
-                usage 1
-            fi
-            shift
-            ;;
-        -d)
-            args["domname"]=$2
-            shift
-            ;;
-        -x)
-            args["affix"]="$2"
-            shift
-            ;;
-        -l)
-            fixed_level="$2"
-            if [[ ! -e ${fixed_level} ]]; then
-                echo -e "${RED}ERROR${NC}: ${BLUE}${fixed_level}${NC} not exist."
-                usage 1
-            fi
-            args["level_file"]=${fixed_level}
-            shift
-            ;;
-        -c)
-            if [[ $2 =~ ^[0-9.]+,[0-9.-]+$ ]]; then
-                #latlons=(${2//,/ })
-                #mapfile -t latlons <<< "${2//,/ }"
-                IFS="," read -r -a latlons <<< "$2"
+            -M)
+                if [[ ${2,,} == "init" || ${2,,} == "restart" ]]; then
+                    args["damode"]="${2,,}"
+                else
+                    echo -e "${RED}ERROR${NC}: unknow argument. Expect: ${YELLOW}init${NC} or ${YELLOW}restart${NC}. Got: ${PURPLE}${2,,}${NC}"
+                    usage 1
+                fi
+                shift
+                ;;
+            -F)
+                if [[ ${2,,} == "init" || ${2,,} == "restart" ]]; then
+                    args["fcstmode"]="${2,,}"
+                else
+                    echo -e "${RED}ERROR${NC}: unknow argument. Expect: ${YELLOW}init${NC} or ${YELLOW}restart${NC}. Got: ${PURPLE}${2,,}${NC}"
+                    usage 1
+                fi
+                shift
+                ;;
+            -d)
+                args["domname"]=$2
+                shift
+                ;;
+            -x)
+                args["affix"]="$2"
+                shift
+                ;;
+            -l)
+                fixed_level="$2"
+                if [[ ! -e ${fixed_level} ]]; then
+                    echo -e "${RED}ERROR${NC}: ${BLUE}${fixed_level}${NC} not exist."
+                    usage 1
+                fi
+                args["level_file"]=${fixed_level}
+                shift
+                ;;
+            -c | --center* )
+                if [[ "${key}" =~ ^--center=([0-9.]+,[0-9.-]+)$ ]]; then
+                    IFS="," read -r -a latlons <<< "${BASH_REMATCH[1]}"
+                elif [[ $2 =~ ^[0-9.]+,[0-9.-]+$ ]]; then
+                    IFS="," read -r -a latlons <<< "$2"
+                    shift
+                else
+                    echo -e "${RED}ERROR${NC}: Domain center is required as ${BLUE}-c lat,lon${NC}, get: ${PURPLE}$2${NC}."
+                    usage 1
+                fi
                 args["cen_lat"]=${latlons[0]}
                 args["cen_lon"]=${latlons[1]}
-            else
-                echo -e "${RED}ERROR${NC}: Domain center is required as ${BLUE}-c lat,lon${NC}, get: ${PURPLE}$2${NC}."
-                usage 1
-            fi
-            shift
-            ;;
-        -a)
-            args["hpcaccount"]=$2
-            shift
-            ;;
-        -o)
-            args["caseconfig"]=$2
-            shift
-            ;;
-
+                ;;
+            -a)
+                args["hpcaccount"]=$2
+                shift
+                ;;
+            -o)
+                args["caseconfig"]=$2
+                shift
+                ;;
             -*)
                 echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
                 usage 2
@@ -290,6 +288,11 @@ function parse_args {
         esac
         shift # past argument or value
     done
+
+    #for key in "${!args[@]}"; do
+    #    echo "args[${key}]=${args[$key]}"
+    #done
+    #exit 0
 }
 
 ########################################################################
@@ -324,7 +327,7 @@ function run_geogrid {
         exit 0
     fi
 
-    local nx ny dx dy trulats geoname sedfile
+    local nx ny dx dy trulats geoname
     nx="301"
     ny="301"
     dx="3000.0"
@@ -755,7 +758,7 @@ function run_static {
     config_nfglevels     = 1
     config_nfgsoillevels = 1
     config_nsoilcat      = 16
-
+    config_nvegopt       = 2
 /
 &data_sources
     config_geog_data_path = '${WPSGEOG_PATH}'
@@ -1566,8 +1569,10 @@ function check_obs_files {
     #
     # Check the PrepBufr files availability
     #
+    echo ""
     eval "$(sed -n "/BUFR_DIR=/p" ${rootdir}/observations/prepbufr_wofs.sh)"
-    mapfile -t my_array < <( ${rootdir}/observations/prepbufr_wofs.sh check ${eventdate} )
+    #echo ${rootdir}/observations/prepbufr_wofs.sh -f "config.${eventdate}${affix}" check ${eventdate}
+    mapfile -t my_array < <( ${rootdir}/observations/prepbufr_wofs.sh -f "config.${eventdate}${affix}" check ${eventdate} )
     #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/prepbufr_wofs.sh check ${eventdate} && printf '\0')
     read -r -a obsfiles <<< "${my_array[-1]}"
     echo -e "${DARK}observations/prepbufr_wofs.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} PrepBufr files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${BUFR_DIR}${NC}."
@@ -1648,7 +1653,7 @@ function check_obs_files {
     # Check the radar files availability
     #
     eval "$(sed -n "/srcdir=/p" ${rootdir}/observations/link_radar.sh)"
-    mapfile -t my_array < <( ${rootdir}/observations/link_radar.sh check ${eventdate} )
+    mapfile -t my_array < <( ${rootdir}/observations/link_radar.sh -d /d1/DART check ${eventdate} )
     #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/link_radar.sh check ${eventdate} && printf '\0')
     read -r -a obsfiles <<< "${my_array[-3]}"
     echo -e "${DARK}observations/link_radar.sh${NC}: Found ${GREEN}${my_array[-4]}${NC} Reflectivity files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${srcdir}${NC}."
