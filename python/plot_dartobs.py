@@ -779,7 +779,7 @@ def load_obs_seq(filename,cloud_types,verbose):
 
     validtypevals = []
 
-    type_re = re.compile('\d+ [A-Z_]+')
+    type_re = re.compile('\d+ +[A-Z_]+')
     type_labels = {}
     var_labels  = {}
     qc_labels   = {}
@@ -801,6 +801,7 @@ def load_obs_seq(filename,cloud_types,verbose):
                     type_labels[type] = f"{label:32s}"
                     if type not in validtypevals:
                         validtypevals.append(type)
+                    #print(f"type={type}, label={label}")
 
                 elif line.startswith('num_copies:'):
                     ncopy,nqc = line.split()[1:4:2]
@@ -816,6 +817,7 @@ def load_obs_seq(filename,cloud_types,verbose):
                     label_gen = islice(fh, nqc)
                     for i,label in enumerate(label_gen):
                         qc_labels[str(i)] = label.strip()
+                    #print (ncopy,var_labels, nqc,qc_labels)
 
                 elif line.startswith("OBS"):
                     #obs_gen = islice(fh, nobslines)
@@ -826,6 +828,7 @@ def load_obs_seq(filename,cloud_types,verbose):
                     varloc.append((obs.lon,obs.lat,obs.level))
                     vartim.append(obs.time)
                     vartyp.append(obs.type)
+                    #print(f"\nOBS {iobs} qc={obs.qc}")
                     varqc_.append(obs.qc)
                     varver.append(obs.level_type)
 
@@ -1060,7 +1063,7 @@ def print_meta(varobj):
         print(f"    {key:>3}: {varobj.validtypes[key]}\t {validtypeqccount[key]}")
     print("")
 
-    if len(varobj.validqc) == 1:
+    if len(varobj.validqcval) == 1:
         print(f"Valid QC values: {sorted(varobj.validqcval, key=int)}")
     else:
         print(f"Valid QC values: {sorted(varobj.validqcval, key=int)} and meanings")

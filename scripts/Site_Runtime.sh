@@ -180,7 +180,8 @@ function setup_machine {
 
             OBS_DIR="/scratch/wofs_mpas/OBS_SEQ.reduced"
 
-            hrrr_dir="/scratch2/wofuser/MODEL_DATA/HRRRE"
+            #hrrr_dir="/scratch2/wofuser/MODEL_DATA/HRRRE"
+            hrrr_dir="/scratch/home/wofuser/MODEL_DATA/HRRRE"
         fi
         ;;
     esac

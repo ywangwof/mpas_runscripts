@@ -932,7 +932,8 @@ if __name__ == "__main__":
             attach_radar_rings(grid_out,radars,ax)
 
             commonprefix = os.path.commonprefix([script_path,envfilename])
-            short_envfilename = envfilename[len(commonprefix):]
+            i = len(commonprefix) if len(commonprefix) > 10 else 0
+            short_envfilename = envfilename[i:]
 
             write_envfile(envfilename,radars,grid_out)
             print(f"    Wrote out environment file for radars: {color_text(short_envfilename,'cyan')}")
@@ -944,7 +945,8 @@ if __name__ == "__main__":
     #-------------------------------------------------------------------
 
     commonprefix  =  os.path.commonprefix([script_path,figname])
-    short_figname = figname[len(commonprefix):]
+    i = len(commonprefix) if len(commonprefix) > 10 else 0
+    short_figname = figname[i:]
     print(f"    Saving figure to {color_text(short_figname,'magenta')} ...")
     figure.savefig(figname, format='png')
 

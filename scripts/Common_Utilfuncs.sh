@@ -33,8 +33,10 @@ source $mydir/Common_Colors.sh
 ########################################################################
 
 function mecho {
+    local i=$(($1-1))
     funstr=$(printf "%-18.17s" "${FUNCNAME[$1]}")
-    echo $2 "${DARK}${funstr}${NC}: ${*:3}"
+    linestr=$(printf "(%5s)" "${BASH_LINENO[$i]}")
+    echo $2 "${DARK}${funstr} ${linestr}${NC} : ${*:3}"
 }
 
 function mecho0 { mecho 2 -e "${*}"; }
@@ -233,7 +235,7 @@ function check_job_status {
     local numtry "done" memdir runjobs mem memstr
     local memdonefile memerrorfile donefile
 
-    cd $mywrkdir  || return
+    cd $mywrkdir || { mecho1 "Working directory ${CYAN}${mywrkdir}${NC} not exist.";  exit $?; }
 
     if [[ -e $mywrkdir/done.${jobname} ]]; then    # do nothing
         done=$donenum

@@ -86,7 +86,7 @@ function parse_args {
                 echo "Unknown option: $key"
                 usage 2
                 ;;
-            dacycles* | fcst* | post* | mpas | mpasm )
+            dacycles* | fcst | post | mpas | mpasm )
                 args["tasknames"]="${key//,/ }"
                 ;;
             * )
@@ -204,19 +204,25 @@ for taskname in "${tasknames[@]}"; do
     case $taskname in
     #1. mpas
     mpas )
+        [[ ! -v args["run_dir"] ]] && run_dir="$(pwd)"
+        [[ ! -v domname ]]         && domname="*"
+
         if [[ $verb == true ]]; then
             echo "Remove MPAS run-time files in ${run_dir} ..."
         fi
 
         cd "${run_dir}" || exit 1
         ${show} rm -rf log.{atmosphere,init_atmosphere}.*.{err,out} namelist.output core*
-        ${show} rm -rf ./"${domname}"_??.{diag,history}.*.nc  # *.restart.*
+        ${show} rm -rf ./${domname}_??.{diag,history}.*.nc  # *.restart.*
         ${show} rm -rf error.* done.fcst_?? dart_log.{nml,out}
-        ${show} rm -rf restart_timestamp ./"${domname}"_??.restart.*.nc
+        ${show} rm -rf restart_timestamp ./${domname}_??.restart.*.nc
         echo ""
         ;;
+
     #2. mpasm
     mpasm )
+        [[ ! -v args["run_dir"] ]] && run_dir="$(pwd)"
+
         if [[ $verb == true ]]; then
             echo "Remove all MPAS ensemble run-time files in ${run_dir} ..."
         fi
