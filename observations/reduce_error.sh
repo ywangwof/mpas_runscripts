@@ -12,8 +12,8 @@ seq_tool="${root_dir}/scripts/seq_filter.py"
 eventdate="${1-20240507}"
 nextdate=$(date -d "${eventdate} 1 day" +%Y%m%d)
 
-#src_dir="/scratch/wofs_mpas/OBS_SEQ"
-src_dir="/scratch2/ywang/MPAS/intel/run_dirs/OBS_SEQ"
+src_dir="/scratch/wofs_mpas/OBS_SEQ"
+#src_dir="/scratch2/ywang/MPAS/intel/run_dirs/OBS_SEQ"
 des_dir="/scratch/wofs_mpas/OBS_SEQ.reduced"
 
 dir1s=(Bufr  Mesonet )
@@ -104,9 +104,12 @@ echo ""
 for dir in "${dir1s[@]}"; do
     [[ ! -d $des_dir/$dir ]] && mkdir -p $des_dir/$dir
     #cd $des_dir/$dir || exit $?
-    if compgen -G "${src_dir}/$dir"/*.{"${eventdate}","${nextdate}"}* > /dev/null; then
-        for fn in "${src_dir}/$dir"/*.{"${eventdate}","${nextdate}"}*; do
+    if compgen -G "${src_dir}/$dir"/obs_seq_*.{"${eventdate}","${nextdate}"}* > /dev/null; then
+        for fn in "${src_dir}/$dir"/obs_seq_*.{"${eventdate}","${nextdate}"}*; do
             filename=$(basename $fn)
+            if [[ "$filename" = *.missed ]]; then
+                continue
+            fi
             ${seq_tool} -k -N -s "${var_str[$dir]}" $fn -o $des_dir/$dir/$filename
         done
     fi
@@ -122,7 +125,7 @@ echo ""
 for dir in "${dir2s[@]}"; do
     [[ ! -d $des_dir/$dir/${eventdate} ]] && mkdir -p $des_dir/$dir/${eventdate}
     #cd $des_dir/$dir || exit $?
-    for fn in "${src_dir}/$dir/${eventdate}"/*; do
+    for fn in "${src_dir}/$dir/${eventdate}"/obs_seq*_{"${eventdate}","${nextdate}"}_????.out; do
         filename=$(basename $fn)
         ${seq_tool} -k -N -s "${var_str[$dir]}" $fn -o $des_dir/$dir/${eventdate}/$filename
     done

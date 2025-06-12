@@ -46,10 +46,10 @@
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
-mpasdir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
+mpasdir="/scratch/wofs_mpas"
 
 BUFR_DIR=/work/rt_obs/SBUFR
-DART_DIR=/scratch/yunheng.wang/MPAS/intel/frdd-DART
+DART_DIR=/home/yunheng.wang/MPAS/intel/frdd-DART
 
 DART_exec_dir=${DART_DIR}/observations/obs_converters/NCEP/prep_bufr/exe
 NML_TEMPLATE=${scpdir}/input.nml.bufrobs.template
@@ -150,7 +150,7 @@ while [[ $# -gt 0 ]]; do
             elif [[ -f ${run_dir}/$2 ]]; then
                 conf_file=${run_dir}/$2
             else
-                echo "ERROR: Runtime configruation file not found, get [$2]."
+                echo "ERROR: Runtime configruation file not found in ${run_dir}, get [$2]."
                 usage 2
             fi
             shift

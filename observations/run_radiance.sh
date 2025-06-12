@@ -2,7 +2,7 @@
 
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
-mpasdir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
+mpasdir="/scratch/wofs_mpas"
 
 srcdir=/work2/wof/realtime/OBSGEN/CLOUD_OBS
 
@@ -32,6 +32,8 @@ function usage {
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
     echo "              -s  start_time      Run task from start_time, default $starthour"
+    echo "              -d  sub_dir         Subdirectory name after the event date. For example \"/d1\""
+    echo "              -o                  Data separated at 00 UTC."
     echo " "
     echo " "
     echo "                                     -- By Y. Wang (2024.04.26)"
@@ -56,6 +58,10 @@ if ((10#$eventhour < 12 )); then
     eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
     nextday=true
 fi
+
+#subdir="/d1"
+subdir=""
+dirsp=false
 
 #-----------------------------------------------------------------------
 #
@@ -88,6 +94,18 @@ while [[ $# -gt 0 ]]; do
                 usage 3
             fi
             shift
+            ;;
+        -d )
+            if [[ $2 =~ \/.* ]]; then
+                subdir="$2"
+            else
+                echo "ERROR: Subdir must starts with '/', get [$2]."
+                usage 2
+            fi
+            shift
+            ;;
+        -o )
+            dirsp=true
             ;;
         -*)
             echo "Unknown option: $key"
@@ -191,9 +209,10 @@ case $cmd in
         m=0
         for ((i=beg_sec;i<=end_sec;i+=900)); do
             datestr=$(date -d @$i +%Y%m%d)
+            [[ $dirsp == true ]] && dirdate="${datestr}" || dirdate="${eventdate}"
             timestr=$(date -d @$i +%H%M)
             filename="${timestr}-goes.nc"
-            if [[ -e ${srcdir}/${datestr}/d1/$filename ]]; then
+            if [[ -e ${srcdir}/${dirdate}${subdir}/$filename ]]; then
                 goesfiles+=("${filename}")
                 ((m++))
             else
@@ -202,18 +221,18 @@ case $cmd in
         done
 
         if [[ -t 1 ]]; then
-            echo -e "\n${LIGHT_BLUE}${srcdir}/${eventdate}/d1${NC}:"
-            n=0; datadate=${eventdate}; next1=true
+            echo -e "\n${LIGHT_BLUE}${srcdir}/${eventdate}${subdir}${NC}:"
+            n=0; dirdate=${eventdate}; next1=true
             for filename in "${goesfiles[@]}"; do
                 if (( n%4 == 0)); then echo ""; fi
-                if [[ "${filename:0:4}" -lt 1200 && "$next1" == true ]]; then
+                if [[ "${filename:0:4}" -lt 1200 && "$next1" == true && $dirsp == true ]]; then
                     echo ""
-                    echo -e "\n${LIGHT_BLUE}${srcdir}/${nextdate}/d1${NC}:"
+                    echo -e "\n${LIGHT_BLUE}${srcdir}/${nextdate}${subdir}${NC}:"
                     echo ""
-                    datadate=${nextdate}
+                    dirdate=${nextdate}
                     next1=false
                 fi
-                if [[ -e ${srcdir}/${datadate}/d1/$filename ]]; then
+                if [[ -e ${srcdir}/${dirdate}${subdir}/$filename ]]; then
                     echo -ne "    ${GREEN}$filename${NC}"
                 else
                     echo -ne "    ${PURPLE}$filename${NC}"
@@ -248,10 +267,10 @@ case $cmd in
             #            -o /scratch/ywang/MPAS/mpas_scripts/run_dirs/OBS_SEQ/Radiance \
             #            -c $channel                                                   \
             #            -d ${1-20220527}
-            python abiobs2dart_tb.py -i "${srcdir}/${eventdate}/d1"       \
+            python abiobs2dart_tb.py -i "${srcdir}/${eventdate}${subdir}"       \
                         -o "${destdir}" -c $channel -d "${eventdate}"
-            if [[ $nextday == true ]]; then
-                python abiobs2dart_tb.py -i "${srcdir}/${nextdate}/d1"   \
+            if [[ $nextday == true && $dirsp == true ]]; then
+                python abiobs2dart_tb.py -i "${srcdir}/${nextdate}${subdir}"   \
                         -o "${destdir}" -c $channel -d "${nextdate}"
             fi
         done

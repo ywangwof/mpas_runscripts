@@ -14,10 +14,10 @@
 
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
-mpasdir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
+mpasdir="/scratch/wofs_mpas"
 
 MESO_DIR=/work/rt_obs/Mesonet
-DART_DIR=/scratch/yunheng.wang/MPAS/intel/frdd-DART
+DART_DIR=/home/yunheng.wang/MPAS/intel/frdd-DART
 
 TEMPLATE_FILE=${scpdir}/input.nml.mesonet
 MESOINFO_FILE=${scpdir}/geoinfo.csv

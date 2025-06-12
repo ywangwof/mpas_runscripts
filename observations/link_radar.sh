@@ -2,7 +2,7 @@
 
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
-mpasdir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
+mpasdir="/scratch/wofs_mpas"
 
 srcdir="/work2/wof/realtime/OBSGEN/CLOUD_OBS"
 
@@ -37,7 +37,8 @@ function usage {
     echo "              -v                  Verbose mode"
     echo "              -s  start_time      Run task from start_time, default $starthour"
     echo "              -f  conf_file       Runtime configuration file, make it the last argument (after WORKDIR)."
-    echo "              -d  sub_dir         Subdirectory name after the event date."
+    echo "              -d  sub_dir         Subdirectory name after the event date. For example \"/d1/DART\""
+    echo "              -o                  Data separated at 00 UTC."
     echo " "
     echo "                                     -- By Y. Wang (2024.04.26)"
     echo " "
@@ -71,6 +72,7 @@ timeend=${eventdateDF}
 
 #subdir="/d1/DART"
 subdir=""
+dirsp=false
 
 #-----------------------------------------------------------------------
 #
@@ -123,6 +125,9 @@ while [[ $# -gt 0 ]]; do
                 usage 2
             fi
             shift
+            ;;
+        -o )
+            dirsp=true
             ;;
         -*)
             echo "Unknown option: $key"
@@ -230,8 +235,10 @@ case $cmd in
         reffiles=();n=0; missedfiles=()
         for((i=timebeg_s;i<=timeend_s;i+=900)); do
             timestr=$(date -d @$i +%Y%m%d%H%M)
+            [[ $dirsp == true ]] && dirdate="${timestr:0:8}" || dirdate="${eventdate}"
             if [[ "$cmd" == "check" ]]; then
-                wrkdir="${srcdir}/${timestr:0:8}${subdir}"
+                wrkdir="${srcdir}/${dirdate}${subdir}"
+                #echo "timestr=$timestr, checking ${wrkdir}"
             else
                 wrkdir="${destdir}/REF/${eventdate}"
             fi
@@ -285,8 +292,9 @@ case $cmd in
         n=0; missedfiles=()
         for((i=timebeg_s;i<=timeend_s;i+=900)); do
             timestr=$(date -d @$i +%Y%m%d%H%M)
+            [[ $dirsp == true ]] && dirdate="${timestr:0:8}" || dirdate="${eventdate}"
             if [[ "$cmd" == "check" ]]; then
-                wrkdir="${srcdir}/${timestr:0:8}${subdir}"
+                wrkdir="${srcdir}/${dirdate}${subdir}"
             else
                 wrkdir="${destdir}/VEL/${eventdate}"
             fi
@@ -313,7 +321,7 @@ case $cmd in
         done
         if [[ -t 1 ]]; then
             if [[ "$cmd" == "check" ]]; then
-                wrkdir="${srcdir}/{${eventdate},${nextdate}}${subdir}"
+                [[ $dirsp == true ]] && wrkdir="${srcdir}/{${eventdate},${nextdate}}${subdir}" || wrkdir="${srcdir}/${eventdate}${subdir}"
             else
                 wrkdir="${destdir}/VEL/${eventdate}"
             fi
@@ -374,10 +382,11 @@ case $cmd in
 
     for((i=timebeg_s;i<=timeend_s;i+=900)); do
         timestr=$(date -d @$i +%Y%m%d%H%M)
+        [[ $dirsp == true ]] && dirdate="${timestr:0:8}" || dirdate="${eventdate}"
         file_name="obs_seq_RF_${timestr:0:8}_${timestr:8:4}.out"
-        [[ $verb == true ]] && echo "Linking ${srcdir}/${timestr:0:8}${subdir}/${file_name} to $(pwd) ...."
-        if [[ ! -e ${file_name} && -e "${srcdir}/${timestr:0:8}${subdir}/${file_name}" ]]; then
-            $show ln -sf "${srcdir}/${timestr:0:8}${subdir}/${file_name}" .
+        [[ $verb == true ]] && echo "Linking ${srcdir}/${dirdate}${subdir}/${file_name} to $(pwd) ...."
+        if [[ ! -e ${file_name} && -e "${srcdir}/${dirdate}${subdir}/${file_name}" ]]; then
+            $show ln -sf "${srcdir}/${dirdate}${subdir}/${file_name}" .
         fi
     done
 
@@ -393,14 +402,15 @@ case $cmd in
 
     for((i=timebeg_s;i<=timeend_s;i+=900)); do
         timestr=$(date -d @$i +%Y%m%d%H%M)
+        [[ $dirsp == true ]] && dirdate="${timestr:0:8}" || dirdate="${eventdate}"
 
         file_name="obs_seq_????_VR_${timestr:0:8}_${timestr:8:4}.out"
-        numsrc=$(find "${srcdir}/${timestr:0:8}${subdir}" -name "${file_name}" | wc -l)
+        numsrc=$(find "${srcdir}/${dirdate}${subdir}" -name "${file_name}" | wc -l)
         numdes=$(find .                                   -name "${file_name}" | wc -l)
-        [[ $verb == true ]] && echo "Linking ${srcdir}/${timestr:0:8}${subdir}/${file_name} to $(pwd) ...."
+        [[ $verb == true ]] && echo "Linking ${srcdir}/${dirdate}${subdir}/${file_name} to $(pwd) ...."
         if [[ $numdes -lt $numsrc ]]; then
             # shellcheck disable=SC2086
-            $show ln -sf "${srcdir}/${timestr:0:8}${subdir}"/${file_name} .
+            $show ln -sf "${srcdir}/${dirdate}${subdir}"/${file_name} .
         fi
     done
     ;;

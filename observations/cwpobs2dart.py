@@ -88,8 +88,11 @@ for ff, file in enumerate(infiles):
 
         cwpin.close()
 
-        sdate = year+month+day+hour+minute
-        mdate = indate+file[0:4]
+        #sdate = year+month+day  #+hour+minute
+        sdate = datetime.datetime.strptime(year+month+day,'%Y%m%d')
+        if int(hour) >= 23 and int(minute) > 45:
+            sdate += datetime.timedelta(days=1)
+        mdate = sdate.strftime('%Y%m%d')+file[0:4]
 
         numobs=int(numobs[0])
         t_time=t_time[0]
@@ -253,5 +256,5 @@ for ff, file in enumerate(infiles):
             fi.close()
 
             print(f"\n write_DART_ascii:  Created ascii DART file: {dartfile}, N = {nobs} written" )
-        #else:
-        #    print(f"dartfile={dartfile} exists")
+        else:
+            print(f"dartfile={dartfile} exists")

@@ -2,7 +2,7 @@
 
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
-mpasdir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT"
+mpasdir="/scratch/wofs_mpas"
 
 srcdir="/work2/wof/realtime/OBSGEN/CLOUD_OBS"
 #hard_srcdir="/scratch/yunheng.wang/MPAS/MPAS_PROJECT/OBS_SEQ.3km/CWP.nc"
@@ -34,6 +34,8 @@ function usage {
     echo "              -v                  Verbose mode"
     echo "              -s  start_time      Run task from start_time, default $starthour"
     echo "              -f  conf_file       Runtime configuration file, make it the last argument (after WORKDIR)."
+    echo "              -d  sub_dir         Subdirectory name after the event date. For example \"/d1\""
+    echo "              -o                  Data separated at 00 UTC."
     echo " "
     echo " "
     echo "                                     -- By Y. Wang (2024.04.26)"
@@ -60,6 +62,10 @@ if [[ $((10#$eventhour)) -lt 12 ]]; then
 fi
 
 conf_file=""
+
+#subdir="/d1"
+subdir=""
+dirsp=false
 
 #-----------------------------------------------------------------------
 #
@@ -103,6 +109,18 @@ while [[ $# -gt 0 ]]; do
                 usage 2
             fi
             shift
+            ;;
+        -d )
+            if [[ $2 =~ \/.* ]]; then
+                subdir="$2"
+            else
+                echo "ERROR: Subdir must starts with '/', get [$2]."
+                usage 2
+            fi
+            shift
+            ;;
+        -o )
+            dirsp=true
             ;;
         -*)
             echo "Unknown option: $key"
@@ -210,9 +228,10 @@ case $cmd in
         m=0
         for ((i=beg_sec;i<=end_sec;i+=900)); do
             datestr=$(date -d @$i +%Y%m%d)
+            [[ $dirsp == true ]] && dirdate="${datestr}" || dirdate="${eventdate}"
             timestr=$(date -d @$i +%H%M)
             filename="${timestr}-cwpobs.nc"
-            if [[ -e ${srcdir}/${datestr}/d1/$filename ]]; then
+            if [[ -e ${srcdir}/${dirdate}${subdir}/$filename ]]; then
                 cwpfiles+=("${filename}")
                 ((m++))
             else
@@ -220,18 +239,18 @@ case $cmd in
             fi
         done
         if [[ -t 1 ]]; then
-            echo -e "\n${LIGHT_BLUE}${srcdir}/${eventdate}/d1${NC}:"
-            n=0; datadate=${eventdate}; next1=true
+            echo -e "\n${LIGHT_BLUE}${srcdir}/${eventdate}${subdir}${NC}:"
+            n=0; dirdate=${eventdate}; next1=true
             for filename in "${cwpfiles[@]}"; do
                 if (( n%4 == 0)); then echo ""; fi
-                if [[ "${filename:0:4}" -lt 1200 && "$next1" == true ]]; then
+                if [[ "${filename:0:4}" -lt 1200 && "$next1" == true && $dirsp == true ]]; then
                     echo ""
-                    echo -e "\n${LIGHT_BLUE}${srcdir}/${nextdate}/d1${NC}:"
+                    echo -e "\n${LIGHT_BLUE}${srcdir}/${nextdate}${subdir}${NC}:"
                     echo ""
-                    datadate=${nextdate}
+                    dirdate=${nextdate}
                     next1=false
                 fi
-                if [[ -e ${srcdir}/${datadate}/d1/$filename ]]; then
+                if [[ -e ${srcdir}/${dirdate}${subdir}/$filename ]]; then
                     echo -ne "    ${GREEN}$filename${NC}"
                 else
                     echo -ne "    ${PURPLE}$filename${NC}  "
@@ -262,9 +281,9 @@ case $cmd in
 
         cd "${scpdir}" || exit 0
 
-        python cwpobs2dart.py -i "${srcdir}/${eventdate}/d1" -o "${destdir}" -d "${eventdate}"
-        if [[ $nextday == true ]]; then
-            python cwpobs2dart.py -i "${srcdir}/${nextdate}/d1" -o "${destdir}" -d "${nextdate}"
+        python cwpobs2dart.py -i "${srcdir}/${eventdate}${subdir}" -o "${destdir}" -d "${eventdate}"
+        if [[ $nextday == true && $dirsp == true ]]; then
+            python cwpobs2dart.py -i "${srcdir}/${nextdate}${subdir}" -o "${destdir}" -d "${nextdate}"
         fi
         #python cwpobs2dart.py -i "${hard_srcdir}" -o "${destdir}" -d "${eventdate}"
         #if [[ $nextday == true ]]; then
