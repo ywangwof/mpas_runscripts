@@ -49,12 +49,13 @@ def parse_args():
 
     parser.add_argument('obj_base1',        help='Directory for cb-WoFS object files')
     parser.add_argument('obj_base2',        help='Directory for mpas-WoFS object files')
+    parser.add_argument('obj_base3',        help='Directory for mpas-WoFS object files', default = None)
 
     parser.add_argument('-v','--verbose',   help='Verbose output',                action="store_true", default=False)
     parser.add_argument('-o','--outdir' ,   help='Image file output directory',              type=str, default='./')
     parser.add_argument('-p','--prefix' ,   help='Image file name prefix',                   type=str, default='wofs_mpas_2024_40_45')
 
-    parser.add_argument('-m','--images' ,   help='Plot images, [time,age,area,ratio,interest,centroid,bound]', type=str, default='all')
+    parser.add_argument('-m','--images' ,   help='Plot images, [time,age,area,ratio,interest,centroid,bound,performance]', type=str, default='all')
 
     args = parser.parse_args()
 
@@ -517,7 +518,7 @@ def read_objs(obj_dir,ne,lead_times,age_bins,area_bins,
 
     #Contingency table stats by lead time:
 
-    if obj_time:
+    if obj_time or obj_perf:
         #cb-WoFS:
 
         pod_lead_time = np.zeros((ne, len(lead_times)))
@@ -1463,6 +1464,141 @@ def plot_object_displacement(objs,colors,lines,labels):
     print(f"Saving {area_ratio_outname} ....")
     plt.savefig(area_ratio_outname, format='png', dpi=150)
 
+########################################################################
+
+def plot_object_performance(objs,colors,labels):
+    #    x_ticks = [0, 12, 24, 36, 48, 60, 72]
+    #   x_labels = ['0', '60', '120', '180', '240', '300', '360']
+
+    pods = []
+    fars = []
+    times = [0,  36,  72]
+
+    for obj in objs:
+        pod=np.mean(obj.pod_lead_time, axis=0)
+        pods.append(pod)
+        far=np.mean(obj.far_lead_time, axis=0)
+        fars.append(far)
+
+    # ----------------------
+    # https://www.ncl.ucar.edu/Document/Graphics/ColorTables/BlGrYeOrReVi200.shtml
+    # ncolors=200
+    # 2, 41, 91, 151, 201
+    colors_dec = [ (0, 0, 255), (8, 175, 21), (255, 234,   0), (255,  41,   0), (87,   0, 136)]
+
+    colors_hex = [ "#%02x%02x%02x"%el for el in colors_dec]
+
+    legendonly = False
+
+    purple5 = (188/255., 184/255., 210/255.)
+    gray5   = (180/255., 180/255., 180/255.)
+
+    grid = np.arange(0.0,1.005,0.005)
+
+    sr_grid, pod_grid = np.meshgrid(grid,grid)
+
+    sr_grid[sr_grid == 0]   = 0.0001    # To avoid dividing by zero
+    pod_grid[pod_grid == 0] = 0.0001
+
+    bias_grid = pod_grid / sr_grid
+    csi_grid = 1. / (1. / sr_grid + 1. / pod_grid - 1)
+
+    csi_levels = np.arange(0.1,1.1,0.1)
+    csi_colors = [purple5] * 10
+
+    bias_levels = [0.25, 0.5, 1., 1.5, 2., 3., 5.]
+    bias_colors = [gray5] * 7
+
+    fig1 = plt.figure(figsize=(4.,4.))
+    ax1 = fig1.add_axes([0.13, 0.1, 0.83, 0.8])
+
+    plt.xlim(0.,1.)
+    plt.ylim(0.,1.)
+
+    if not legendonly:
+        plt.title("MPAS-WoFS Performance", fontsize=8)
+
+        ax1.spines["top"].set_alpha(0.7)
+        ax1.spines["bottom"].set_alpha(0.7)
+        ax1.spines["left"].set_alpha(0.7)
+        ax1.spines["right"].set_alpha(0.7)
+
+        ax1.spines["top"].set_linewidth(0.5)
+        ax1.spines["bottom"].set_linewidth(0.5)
+        ax1.spines["left"].set_linewidth(0.5)
+        ax1.spines["right"].set_linewidth(0.5)
+
+        x_ticks = np.arange(0.,1.1,0.1)
+        y_ticks = np.arange(0.,1.1,0.1)
+
+        x_labels = ['0.0', '0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9', '1.0']
+        y_labels = ['0.0', '0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9', '1.0']
+
+
+        plt.xticks(x_ticks, x_labels, fontsize=6, alpha=0.7)
+        plt.yticks(y_ticks, y_labels, fontsize=6, alpha=0.7)
+
+        plt.tick_params(axis="both", which="both", bottom=True, top=False, labelbottom=True, left=True, right=False, labelleft=True)
+
+        ax1.set_xlabel('Success Ratio (1 - FAR)', fontsize=8, alpha=0.7)
+        ax1.set_ylabel('Probability of Detection', fontsize=8, alpha=0.7)
+
+        csi_con  = plt.contour(sr_grid, pod_grid, csi_grid,  levels=csi_levels,  colors=csi_colors,  linewidths=0.30, alpha=0.35)
+        bias_con = plt.contour(sr_grid, pod_grid, bias_grid, levels=bias_levels, colors=bias_colors, linewidths=0.30, alpha=0.25)
+        plt.clabel(bias_con, fmt='%1.1f', fontsize=6, manual=[(.2, 0.95), (.3, .95), (.47, .95), (.57, .95), (.8, .8), (.8, .42), (.8, .2)])
+        plt.clabel(csi_con,  fmt='%1.1f', fontsize=6, manual=[(.92, 0.1), (.92, .2), (.92, 0.3), (.92, .4), (.92, 0.5), (.92, .6),
+                                                  (.92, 0.7), (.95, .85), (.95, 0.95)])
+
+    for c,label in enumerate(labels):
+        color = colors[c]
+
+        sr = 1 - fars[c]
+        for t in times:
+           no    = f"{t*5//60:1d}"     # forecast hour
+           if legendonly:
+               ax1.scatter(0.04,  0.98-c*0.05,       s=120,  color=color,   lw=0.0,     alpha=.75)
+               ax1.text(   0.04,  0.98-c*0.05-0.001, no,     color="white", fontsize=8, alpha=1.0, va='center', ha='center')
+               ax1.text(   0.09,  0.97-c*0.05,label,  color='black',   fontsize=8, alpha=1.0)    # legend
+           else:
+               ax1.scatter(sr[t], pods[c][t], s=40,            color=color,   alpha=.65, lw=0.0,)
+               ax1.text(   sr[t], pods[c][t], no,  fontsize=3, color="white", alpha=1.0, va='center', ha='center')
+
+        # Members
+
+        #sr = 1 - objs[c].far_lead_time
+        #print(f"sr shape = {sr.shape}, len={len(sr)}")
+        #for t in times:
+        #    no    = f"{t*5//60:1d}"     # forecast hour
+
+        #    for n in range(len(sr)):
+        #        ax1.scatter(sr[n,t], objs[c].pod_lead_time[n,t], s=30,            color=color,  alpha=.35, lw=0.0,)
+        #        ax1.text(   sr[n,t], objs[c].pod_lead_time[n,t], no,  fontsize=3, color="gray", alpha=.80, va='center', ha='center')
+
+    if legendonly:
+        ax1.text(0.04,  0.02, '* case number within circles',fontsize=8, color='black', alpha=0.5)   # legend
+        plt.grid(False)
+        plt.axis('off')
+
+    if legendonly is not None:
+        for c,label in enumerate(labels):
+            color=colors[c]
+            ax1.scatter(0.04,  0.98-c*0.03,        s=40,  color=color,   lw=0.0,     alpha=.75)
+            ax1.text(   0.06,  0.97-c*0.03, label, color='black',   fontsize=4, alpha=1.0)    # legend
+
+        #c=len(labels)+2
+        #for key,label in enumerate(labels):
+        #    offset = 3*0.02
+        #    ax1.text(   0.04,  0.98-c*0.02, f"{key}:", color="black", fontsize=4, alpha=1.0, ha='center')
+        #    ax1.text(   0.06,  0.98-c*0.02, key,       color='black', fontsize=4, alpha=1.0)    # legend
+        #    c += 1
+
+        ax1.text(0.04,  0.02, '* forecast hour within circles',fontsize=4, color='black', alpha=0.5)   # legend
+
+    pngfile = os.path.join(out_dir, (out_prefix + '_performance.png'))
+    print(f"Saving {pngfile} ....")
+    plt.savefig(pngfile, format='png', dpi=300)
+    plt.close()
+
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
 # Main function defined to return correct sys.exit() calls
@@ -1485,6 +1621,7 @@ if __name__ == "__main__":
     obj_interest = False
     obj_centroid = False
     obj_bound = False
+    obj_perf  = False
 
     #time,age,area,interest,centroid
     if "time" in cargs.images:
@@ -1501,6 +1638,8 @@ if __name__ == "__main__":
         obj_centroid = True
     if "bound" in cargs.images:
         obj_bound = True
+    if "performance" in cargs.images:
+        obj_perf = True
 
     if cargs.images == "all":
         obj_time       = True
@@ -1558,6 +1697,11 @@ if __name__ == "__main__":
     mpas_obj = read_objs(obj_dir2,ne,lead_times,age_bins,area_bins,
                          obj_time,obj_age,obj_area, obj_area_ratio,obj_interest,obj_centroid,obj_bound)
 
+    if cargs.obj_base3 is not None:
+        print(f"\nReading mpas-WoFS objects from {obj_dir2}:")
+        mpas3_obj = read_objs(cargs.obj_base3,ne,lead_times,age_bins,area_bins,
+                         obj_time,obj_age,obj_area, obj_area_ratio,obj_interest,obj_centroid,obj_bound)
+
     ####################### plot time series of contingency table stats
 
     obj_names = ['cb-WoFS','mpas-WoFS']
@@ -1595,3 +1739,8 @@ if __name__ == "__main__":
     if obj_bound:
         plot_object_displacement([wofs_obj,mpas_obj],colors,lines,obj_names)
 
+
+    if obj_perf:
+        obj_names = ['cb-WoFS','mpas-WoFS','mpas_2024']
+        colors = ['g','b','r']
+        plot_object_performance([wofs_obj,mpas_obj,mpas3_obj],colors,obj_names)

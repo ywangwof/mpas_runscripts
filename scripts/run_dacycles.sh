@@ -455,7 +455,8 @@ function run_obsmerge {
     if [[ ${use_CWP} == true ]]; then
         CWP_DIR=${OBS_DIR}/CWP
 
-        cwp_file="${CWP_DIR}/obs_seq_cwp.G16_V04.${anlys_date}${anlys_time}"
+        cwp_file=$(compgen -G "${CWP_DIR}/obs_seq_cwp.G1[69]_V04.${anlys_date}${anlys_time}")
+        [[ -z $cwp_file ]] && cwp_file="${CWP_DIR}/obs_seq_cwp.G16_V04.${anlys_date}${anlys_time}"
 
         if [[ $rt_run == true ]]; then
             if [[ ! -e ${cwp_file} ]]; then
@@ -515,7 +516,7 @@ function run_obsmerge {
 
         RAD_DIR=${OBS_DIR}/Radiance
 
-        rad_files="obs_seq_abi.G16_C??.${anlys_date}${anlys_time}"
+        rad_files="obs_seq_abi.G1[69]_C??.${anlys_date}${anlys_time}"
 
         if [[ $rt_run == true ]]; then
 
@@ -535,7 +536,7 @@ function run_obsmerge {
         fi
 
         i=0
-        for abifile in "${RAD_DIR}"/obs_seq_abi.G16_C??."${anlys_date}${anlys_time}"; do
+        for abifile in "${RAD_DIR}"/obs_seq_abi.G1[69]_C??."${anlys_date}${anlys_time}"; do
             if [[ -e ${abifile} ]]; then
                 i=$((i+1))
 
@@ -551,7 +552,7 @@ function run_obsmerge {
                 fi
 
                 a=$(basename $abifile)
-                chan=${a##obs_seq_abi.G16_C}
+                chan=${a##obs_seq_abi.G1[69]_C}
                 chan=${chan%%."${anlys_date}${anlys_time}"}
                 if [[ " ${channels[*]} " == *" $chan "* ]]; then
                     echo -e "    ${PURPLE}$k-$i${NC}: Using Radiance data in ${LIGHT_BLUE}${abifile##"${OBS_DIR}"/}${NC}"
@@ -624,8 +625,8 @@ function run_obsmerge {
 
             cp ${dbz_file} ./obs_seq.old
 
-            #sed "/obsdistbdy/s/=.*/= 15000/;/obs_boundary/s/=.*/= 5000/" ${input_base} > input.nml
-            sed "/obsdistbdy/s/=.*/= 0/;/obs_boundary/s/=.*/= 0/" ${input_base} > input.nml
+            sed "/obsdistbdy/s/=.*/= 15000/;/obs_boundary/s/=.*/= 5000/" ${input_base} > input.nml
+            #sed "/obsdistbdy/s/=.*/= 0/;/obs_boundary/s/=.*/= 0/" ${input_base} > input.nml
 
             if [[ $verb -eq 1 ]]; then
                 mecho0 "    Run command ${BROWN}${obspreprocess}${NC} with parameters: ${BLUE}${g_date} ${g_sec}${NC}"
@@ -3469,7 +3470,7 @@ function run_clean {
                 filter )
                     if [[ -e done.filter ]]; then
                         ${show} rm -f error.filter dart_log.{nml,out} obs_seq_to_netcdf.log filter_*.log obs_diag.log
-                        ${show} rm -f preassim_*.nc output_*.nc
+                        ${show} rm -f preassim_*.nc #output_*.nc
                         ${show} find OBSDIR -type f -not -name "obs_seq.${timestr_curr}" -exec rm -f {} \;
                         ${show} rm -f noise_mask_*.log noise_pert_*.log mpas_XYZ.pkl wofs_mpas_grid_kdtree.pkl refl_*.{txt,pkl}
                         if [[ "$coption" == "-c" ]]; then

@@ -1653,7 +1653,7 @@ function check_obs_files {
     # Check the radar files availability
     #
     eval "$(sed -n "/srcdir=/p" ${rootdir}/observations/link_radar.sh)"
-    mapfile -t my_array < <( ${rootdir}/observations/link_radar.sh -d /d1/DART check ${eventdate} )
+    mapfile -t my_array < <( ${rootdir}/observations/link_radar.sh -d /${domname##*_}/DART check ${eventdate} )
     #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/link_radar.sh check ${eventdate} && printf '\0')
     read -r -a obsfiles <<< "${my_array[-3]}"
     echo -e "${DARK}observations/link_radar.sh${NC}: Found ${GREEN}${my_array[-4]}${NC} Reflectivity files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${srcdir}${NC}."

@@ -284,6 +284,7 @@ for((i=timebeg_s;i<=timeend_s;i+=3600)); do
 
     if [[ ! -e ${WORK_dir}/${seq_filename} ]]; then
 
+        mkdir -p "${WORK_dir}/work"
         cd "${WORK_dir}/work" || exit 0
 
         # clear any old intermediate (text) files
