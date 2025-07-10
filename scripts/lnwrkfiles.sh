@@ -27,15 +27,14 @@ elif [[ "${myhost}" == "cheyenne"* || ${myhost} == "derecho"* ]]; then
     srcwrfdir=${srcroot}/WRFV4.0
     srcdartdir=${srcroot}/DART
 else
-    srcroot="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS"
-    tool_dir="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS"
-
+    srcroot="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS"
+    tool_dir="/home/Yunheng.Wang/local" 
     srcmpassitdir=${srcroot}/MPASSIT
     srcuppdir=${srcroot}/UPP_KATE_kjet
-    srcmodeldir=${srcroot}/MPAS-Model.smiol2
+    srcmodeldir=${srcroot}/MPAS-Model.gsl
     srcwpsdir=${srcroot}/WPS_SRC
     srcwrfdir=${srcroot}/WRFV4.0
-    srcdartdir=${srcroot}/DART
+    srcdartdir=${srcroot}/frdd-DART
     srcmpasregion=${srcroot}/MPAS-Limited-Area
 fi
 
@@ -127,7 +126,7 @@ function run_cmd {
 #-----------------------------------------------------------------------
 #% ARGS
 
-packages=(mpas MPASSIT UPP WRF DART)
+packages=(mpas MPASSIT WRF DART)
 
 verb=0
 realrun=false
@@ -222,7 +221,7 @@ desdir=${rootdir}/fix_files${affix}
 exedir="$(dirname "${desdir}")/exec${affix}"
 
 cd "$exedir" || exit 1
-#ln -sf ${tool_dir}/bin/gpmetis  .
+ln -sf ${tool_dir}/bin/gpmetis  .
 
 for pkg in "${packages[@]}"; do
     case ${pkg^^} in
@@ -384,7 +383,7 @@ for pkg in "${packages[@]}"; do
             run_cmd "${runcmd}" "$srcmodel" "init_atmosphere_model atmosphere_model"
 
             src_dir=$(dirname "$srcmodel")
-            run_cmd "${runcmd}" "$src_dir/MPAS-Tools/mesh_tools/grid_rotate" grid_rotate
+            #run_cmd "${runcmd}" "$src_dir/MPAS-Tools/mesh_tools/grid_rotate" grid_rotate
             run_cmd "${runcmd}" "$src_dir/project_hexes"       project_hexes
 
         fi

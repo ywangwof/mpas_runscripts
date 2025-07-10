@@ -50,30 +50,30 @@ function setup_machine {
         module load ${modulename}
         #module load wgrib2/2.0.8
 
-        workdirDF="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS/MPAS_PROJECT/run_dirs"
+        workdirDF="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS/run_dirs"
 
         if [[ ${initialize} == true ]]; then
-            partition_wps="ujet,tjet,xjet,vjet,kjet"
-            partition_static="ujet,tjet,xjet,vjet,kjet"  ; claim_cpu_static="--cpus-per-task=12"
+            partition_wps="xjet,kjet"
+            partition_static="xjet,kjet"  ; claim_cpu_static="--cpus-per-task=12"
             partition_create="bigmem"                    ; claim_cpu_create="--mem-per-cpu=128G"
 
             npestatic=24
 
             mach="slurm"
             job_exclusive_str="#SBATCH --exclusive"
-            job_account_str="#SBATCH -A ${hpcaccount-wof}"
+            job_account_str="#SBATCH -A ${hpcaccount-hpc-wof1}"
             job_runmpexe_str="srun"
             job_runexe_str="srun"
             runcmd_str=""
 
-            WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
+            WPSGEOG_PATH="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
             wgrib2path="/apps/wgrib2/2.0.8/intel/18.0.5.274/bin/wgrib2"
             nckspath="/apps/nco/4.9.3/gnu/9.2.0/bin/ncks"
-            gpmetis="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/bin/gpmetis"
+            gpmetis="/home/Yunheng.Wang/local/bin/gpmetis"
 
-            OBS_DIR="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/OBSGEN"
+            OBS_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS/run_dirs/OBS_SEQ.Reduced"
 
-            hrrr_dir="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MODEL_DATA/HRRRE"
+            hrrr_dir="/lfs5/NAGAPE/hpc-wof1/ywang/HRRRE"
         fi
         ;;
     Hercules )
@@ -147,12 +147,6 @@ function setup_machine {
         source /usr/share/Modules/init/bash
         source ${root_dir}/modules/${modulename} > /dev/null || exit $?
 
-        # Load Python Enviroment if necessary
-        if [[ ${use_python} == true ]]; then
-            echo -e "Enabling Python micromamba environment - ${YELLOW}wofs_an${NC} ...."
-            source ${root_dir}/modules/env.python  || exit $?
-        fi
-
         workdirDF="/scratch/wofs_mpas/run_dirs"
 
         if [[ ${initialize} == true ]]; then
@@ -186,6 +180,12 @@ function setup_machine {
         ;;
     esac
 
+    # Load Python Enviroment if necessary
+    if [[ ${use_python} == true ]]; then
+        echo -e "Enabling Python micromamba environment - ${YELLOW}wofs_an${NC} ...."
+        source ${root_dir}/modules/env.python  || exit $?
+    fi
+
     export machine modulename runcmd workdirDF
     if [[ ${initialize} == true ]]; then
         # Will be used by 'setup_mpas-wofs.sh' for static processing.
@@ -211,21 +211,23 @@ function default_site_settings {
 
     case $machine in
     "Jet" )
+        mpas_wofs_python="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS/wofs_new_noise"
+
         # ICs
         npeics=24; ncores_ics=2
-        partition_ics="ujet,tjet,xjet,vjet,kjet"
+        partition_ics="xjet,kjet"
         claim_cpu_ics="--cpus-per-task=2"
         claim_cpu_ungrib="--cpus-per-task=12 --mem-per-cpu=10G"
 
         # LBCs
         npelbc=24;  ncores_lbc=2
-        partition_lbc="ujet,tjet,xjet,vjet,kjet"
+        partition_lbc="xjet,kjet"
         claim_cpu_lbc="--cpus-per-task=2"
 
         # DA cycles
         ncores_dafcst=6;  ncores_filter=6
-        partition_dafcst="ujet,tjet,xjet,vjet,kjet"; claim_cpu_dafcst="--cpus-per-task=2"
-        partition_filter="ujet,tjet,xjet,vjet,kjet"; claim_cpu_filter="--cpus-per-task=2"
+        partition_dafcst="xjet,kjet"; claim_cpu_dafcst="--cpus-per-task=2"
+        partition_filter="xjet,kjet"; claim_cpu_filter="--cpus-per-task=2"
                                                      claim_cpu_update="--cpus-per-task=1 --mem-per-cpu=8G"
         npedafcst=48        #; nnodes_fcst=$(( npefcst/ncores_fcst ))
         npefilter=1536      #; nnodes_filter=$(( npefilter/ncores_filter ))
@@ -234,8 +236,8 @@ function default_site_settings {
 
         # FCST cycles
         ncores_fcst=6;  ncores_post=6
-        partition_fcst="ujet,tjet,xjet,vjet,kjet";   claim_cpu_fcst="--cpus-per-task=2"
-        partition_post="ujet,tjet,xjet,vjet,kjet";   claim_cpu_post="--cpus-per-task=12"
+        partition_fcst="xjet,kjet";   claim_cpu_fcst="--cpus-per-task=2"
+        partition_post="xjet,kjet";   claim_cpu_post="--cpus-per-task=12"
 
         npefcst=48     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
         npepost=48     ; nnodes_post=$(( npepost/ncores_post ))

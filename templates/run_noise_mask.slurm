@@ -11,39 +11,34 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-if [[ "MACHINE" == "Vecna" ]]; then
-    # >>> mamba initialize >>>
-    # !! Contents within this block are managed by 'mamba init' !!
-    export MAMBA_EXE='/home/yunheng.wang/tools/micromamba/bin/micromamba';
-    export MAMBA_ROOT_PREFIX='/home/yunheng.wang/tools/micromamba';
-    __mamba_setup="$("$MAMBA_EXE" shell hook --shell zsh --root-prefix "$MAMBA_ROOT_PREFIX" 2> /dev/null)"
-    if [ $? -eq 0 ]; then
-        eval "$__mamba_setup"
-    else
-        alias micromamba="$MAMBA_EXE"  # Fallback on help from mamba activate
-    fi
-    unset __mamba_setup
-    # <<< mamba initialize <<<
-    micromamba activate wofs_an
-
+if [[ "MACHINE" == "Jet" ]]; then
+    python_root="/lfs5/NAGAPE/hpc-wof1/ywang/tools/micromamba"
+    micenv="wofs_an"
+elif [[ "MACHINE" == "Vecna" ]]; then
+    python_root="/home/yunheng.wang/tools/micromamba"
+    micenv="wofs_an"
 elif [[ "MACHINE" == wof-epyc* ]]; then
-    # >>> mamba initialize >>>
-    # !! Contents within this block are managed by 'mamba init' !!
-    export MAMBA_EXE='/home/yunheng.wang/y/micromamba';
-    export MAMBA_ROOT_PREFIX='/home/yunheng.wang/y';
-    __mamba_setup="$("$MAMBA_EXE" shell hook --shell zsh --root-prefix "$MAMBA_ROOT_PREFIX" 2> /dev/null)"
-    if [ $? -eq 0 ]; then
-        eval "$__mamba_setup"
-    else
-        alias micromamba="$MAMBA_EXE"  # Fallback on help from mamba activate
-    fi
-    unset __mamba_setup
-    # <<< mamba initialize <<<
-    micromamba activate /home/brian.matilla/micromamba/envs/wofs-func
+    python_root="/home/yunheng.wang/y"
+    micenv="/home/brian.matilla/micromamba/envs/wofs-func"
 else
     echo "Please set python environment for MACHINE"
     exit 1
 fi
+
+# >>> mamba initialize >>>
+# !! Contents within this block are managed by 'mamba init' !!
+export MAMBA_EXE="${python_root}/bin/micromamba";
+export MAMBA_ROOT_PREFIX="${python_root}";
+
+__mamba_setup="$("$MAMBA_EXE" shell hook --shell zsh --root-prefix "$MAMBA_ROOT_PREFIX" 2> /dev/null)"
+if [ $? -eq 0 ]; then
+    eval "$__mamba_setup"
+else
+    alias micromamba="$MAMBA_EXE"  # Fallback on help from mamba activate
+fi
+unset __mamba_setup
+# <<< mamba initialize <<<
+micromamba activate "${micenv}"
 
 # Retrieve command line parameters
 ncseq_file="SEQFILE"

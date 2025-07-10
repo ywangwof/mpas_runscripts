@@ -1753,7 +1753,7 @@ parse_args "$@"
 [[ -v args["domname"] ]]    && domname="${args['domname']}"   || domname="wofs_mpas"
 [[ -v args["affix"] ]]      && affix="${args['affix']}"       || affix=""
 
-[[ -v args["hpcaccount"] ]]   && hpcaccount="${args['hpcaccount']}" || hpcaccount=""
+[[ -v args["hpcaccount"] ]]   && hpcaccount="${args['hpcaccount']}"
 [[ -v args["cen_lat"] ]]      && cen_lat="${args['cen_lat']}"       || cen_lat=""
 [[ -v args["cen_lon"] ]]      && cen_lon="${args['cen_lon']}"       || cen_lon=""
 
@@ -1857,7 +1857,7 @@ if [[ " ${jobs[*]} " =~ [[:space:]]check(bg|obs)*[[:space:]]  ]]; then
     exit 0
 fi
 
-if $dorun && [ " ${jobs[*]} " != " clean " ] && ! check_hrrr_subdir; then
+if $dorun && [[ " ${jobs[*]} " != " clean " && " ${jobs[*]} " != " setup " ]] && ! check_hrrr_subdir; then
     exit $?
 fi
 
