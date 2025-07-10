@@ -22,37 +22,37 @@ source "$script_dir/Common_Colors.sh"
 ########################################################################
 
 function usage {
-    echo " "
-    echo "    USAGE: $0 [options] DATETIME [WORKDIR]"
-    echo " "
-    echo "    PURPOSE: Plot data assimilation diagnostics."
-    echo " "
-    echo "    DATETIME - Case date and time in YYYYmmdd."
-    echo "               YYYYmmdd:     run the plot for this event date."
-    echo " "
+    echo    " "
+    echo    "    USAGE: $0 [options] DATETIME [WORKDIR]"
+    echo    " "
+    echo    "    PURPOSE: Plot data assimilation diagnostics."
+    echo    " "
+    echo    "    DATETIME - Case date and time in YYYYmmdd."
+    echo    "               YYYYmmdd:     run the plot for this event date."
+    echo    " "
     echo -e "    WORKDIR  - Top level ${LIGHT_BLUE}run_dir${NC} for all tasks"
     echo -e "               Normally, it will contain ${DIR_CLR}YYYYmmdd/dacycles${DIRa_CLR}{x}${NC} & ${DIR_CLR}image_files${NC}."
-    echo " "
-    echo "    OPTIONS:"
-    echo "              -h                  Display this message"
-    echo "              -n                  Show command to be run and generate job scripts only"
-    echo "              -v                  Verbose mode"
-    echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
-    echo "              -m machine          Default: wof-epyc"
-    echo "              -obs value          Plot observation value or variance. Default: none"
-    echo "                                  This option can repeat multiple times for plot several variables"
-    echo "              -s starttime        in HHMM. Default: 1500"
-    echo "              -e endtime          in HHMM. Default: 0300"
-    echo " "
-    echo "   DEFAULTS:"
-    echo "              eventdate  = $eventdateDF"
-    echo "              WORKDIR    = $mpasworkdir/run_dirs"
-    echo "              rootdir    = $rootdir"
-    echo "              script_dir = $script_dir"
-    echo " "
-    echo "                                     -- By Y. Wang (2024.04.17)"
-    echo " "
-    exit "$1"
+    echo    " "
+    echo    "    OPTIONS:"
+    echo    "              -h                  Display this message"
+    echo    "              -n                  Show command to be run and generate job scripts only"
+    echo    "              -v                  Verbose mode"
+    echo    "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
+    echo    "              -m machine          Default: wof-epyc"
+    echo    "              -obs value          Plot observation value or variance. Default: none"
+    echo    "                                  This option can repeat multiple times for plot several variables"
+    echo    "              -s starttime        as HHMM or YYYYmmddHHMM. Default: 1500"
+    echo    "              -e endtime          as HHMM or YYYYmmddHHMM. Default: 0300"
+    echo    " "
+    echo    "   DEFAULTS:"
+    echo    "              eventdate  = $eventdateDF"
+    echo    "              WORKDIR    = $mpasworkdir/run_dirs"
+    echo    "              rootdir    = $rootdir"
+    echo    "              script_dir = $script_dir"
+    echo    " "
+    echo    "                                     -- By Y. Wang (2024.04.17)"
+    echo    " "
+    exit    "$1"
 }
 
 ########################################################################
@@ -96,7 +96,7 @@ function parse_args {
                 shift
                 ;;
             -s )
-                if [[ $2 =~ ^[0-9]{4}$ ]]; then
+                if [[ $2 =~ ^[0-9]{4}$ || $2 =~ ^[0-9]{12}$ ]]; then
                     args["starttime"]="${2}"
                 else
                     echo "ERROR: Start time should be in HHMM, got \"$2\"."
@@ -105,7 +105,7 @@ function parse_args {
                 shift
                 ;;
             -e )
-                if [[ $2 =~ ^[0-9]{4}$ ]]; then
+                if [[ $2 =~ ^[0-9]{4}$ || $2 =~ ^[0-9]{12}$ ]]; then
                     args["endtime"]=$2
                 else
                     echo "ERROR: End time should be in HHMM, got \"$2\"."
@@ -234,6 +234,34 @@ fi
 
 declare -rA obstypes=(["value"]="1" ["variance"]="78")
 
+#-----------------------------------------------------------------------
+# Set Event End Date and Time
+#-----------------------------------------------------------------------
+
+startday=""
+if [[ ${#starttime} -eq 12 ]]; then
+    startdatetime=${starttime}
+else
+    starthour=${starttime:0:2}
+    (( 10#$starthour < 15 )) && startday="1 day"
+    startdatetime="${eventdate}${starttime}"
+fi
+
+endday=""
+if [[ ${#endtime} -eq 12 ]]; then
+    enddatetime=${endtime}
+else
+    endhour=${endtime:0:2}
+    (( 10#$endhour < 15 )) && endday="1 day"
+    enddatetime="${eventdate}${endtime}"
+fi
+
+start_s=$(date -u -d "${startdatetime:0:8} ${startdatetime:8:4} $startday" +%s)
+end_s=$(date   -u -d "${enddatetime:0:8}   ${enddatetime:8:4}   $endday"   +%s)
+
+startdatetime=$(date -u -d @$start_s +%Y%m%d%H%M)
+enddatetime=$(date   -u -d @$end_s +%Y%m%d%H%M)
+
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
 
@@ -248,23 +276,6 @@ if [[ ! -d ${run_dir}/${eventdate}/${dadir}/${outdir1} ]]; then
     mkdir -p "${run_dir}/${eventdate}/${dadir}/${outdir1}"
 fi
 cd "${run_dir}/${eventdate}/${dadir}/${outdir1}" || exit
-
-starthour=${starttime:0:2}
-if [[ $((10#$starthour)) -lt 12 ]]; then
-    startdatetime=$(date -u -d "$eventdate $starttime 1 day" "+%Y%m%d %H%M")
-else
-    startdatetime=$(date -u -d "$eventdate $starttime" "+%Y%m%d %H%M")
-fi
-
-endhour=${endtime:0:2}
-if [[ $((10#$endhour)) -lt 12 ]]; then
-    enddatetime=$(date -u -d "$eventdate $endtime 1 day" "+%Y%m%d %H%M")
-else
-    enddatetime=$(date -u -d "$eventdate $endtime" "+%Y%m%d %H%M")
-fi
-
-start_s=$(date -u -d "${startdatetime}" +%s)
-end_s=$(date -u -d "${enddatetime}" +%s)
 
 grid_file="${run_dir}/${eventdate}/wofs_mpas/wofs_mpas.grid.nc"
 
@@ -300,7 +311,7 @@ for ((s=start_s;s<=end_s;s+=900)); do
 done
 
 if [[ ! -e done.zigzag ]]; then
-    ${show} "${rootdir}/python/plot_dartzig.py" "${eventdate}" -e "${endtime}" -d "${run_dir}/${eventdate}/${dadir}" -r 300 -u -v 2>/dev/null
+    ${show} "${rootdir}/python/plot_dartzig.py" "${eventdate}" -s "${startdatetime}" -e "${enddatetime}" -d "${run_dir}/${eventdate}/${dadir}" -r 300 -u -v 2>/dev/null
 
     imagedir="${run_dir}/image_files"
 

@@ -10,7 +10,7 @@
 #	 V 1.1:  Added night-time features to DART forward operator.
 ##############
 
-import sys, time
+import sys, time, re
 import os
 import datetime
 from netCDF4 import Dataset
@@ -47,21 +47,38 @@ indate = options.indate
 ### FIND GSI .nc FILES
 infiles = []
 temp_files = os.listdir(cwpdir)
+filere1=re.compile(indate+r"([0-9]{4})_GOES19_CWP_OBS.nc")
+filere2=re.compile(r"([0-9]{4})-cwpobs.nc$")
 for f, file in enumerate(temp_files):
 
     #### YW...change to expected file name convention here to find files
     # 2115-cwpobs.nc
-    if (file[5:14] == "cwpobs.nc"):
+    #if (file[5:14] == "cwpobs.nc"):
+    #    infiles.append(file)
+    rematch1 = re.match(filere1, file)
+    rematch2 = re.match(filere2, file)
+    if rematch1 or rematch2:
         infiles.append(file)
 
 infiles.sort()
-print(infiles)
 
 for ff, file in enumerate(infiles):
     cwpfile = os.path.join(cwpdir,file)
     print(cwpfile)
 
     #fdate = file[0:12]
+    rematch1 = re.match(filere1, file)
+    rematch2 = re.match(filere2, file)
+
+    if rematch1:
+        rematch = rematch1
+    elif rematch2:
+        rematch = rematch2
+    else:
+        sys.exit(0)
+    timestr = rematch.group(1)
+    #print(timestr)
+    #continue
 
     if wait_for_file_age(cwpfile,120):
         ### READ IN CWP OBSERVATIONS FROM FILE
@@ -92,7 +109,7 @@ for ff, file in enumerate(infiles):
         sdate = datetime.datetime.strptime(year+month+day,'%Y%m%d')
         if int(hour) >= 23 and int(minute) > 45:
             sdate += datetime.timedelta(days=1)
-        mdate = sdate.strftime('%Y%m%d')+file[0:4]
+        mdate = sdate.strftime('%Y%m%d')+timestr
 
         numobs=int(numobs[0])
         t_time=t_time[0]

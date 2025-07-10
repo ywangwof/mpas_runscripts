@@ -75,7 +75,6 @@ function usage {
     echo " "
     echo "    DATETIME - Empty: Current UTC date and time"
     echo "               YYYYmmdd:       run this task for this event date."
-    echo "               YYYYmmddHHMM:   run the task from event date $starthour Z up to YYYYmmddHHMM."
     echo " "
     echo "    COMMAND  - one of [ls, check, fix]"
     echo "               check    Check observation availability in $BUFR_DIR"
@@ -86,7 +85,8 @@ function usage {
     echo "              -h                  Display this message"
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
-    echo "              -s  start_time      Run task from start_time, default $starthour"
+    echo "              -s  start_time      Run task from start_time as HHMM or YYYYmmddHHMM, default $starthour"
+    echo "              -e  end_time        Run task up to end_time as HHMM or YYYYmmddHHMM, default: $endhour"
     echo "              -f  conf_file       Runtime configuration file, make it the last argument (after WORKDIR)."
     echo " "
     echo " "
@@ -98,19 +98,19 @@ function usage {
 ########################################################################
 
 #show=""
-#verb=false
+verb=false
 eventdate=${eventdateDF:0:8}
 eventhour=${eventdateDF:8:2}
 cmd=""
 conf_file=""
 
-if [[ $((10#$eventhour)) -lt 12 ]]; then
+if [[ $((10#$eventhour)) -le 12 ]]; then
     eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
 fi
 nextdate=$(date -d "$eventdate 1 day" +%Y%m%d)
 
 start_time=$starthour
-timeend=${eventdateDF}
+end_time=${eventdateDF}
 
 #-----------------------------------------------------------------------
 #
@@ -131,15 +131,25 @@ while [[ $# -gt 0 ]]; do
         #-n)
         #    show="echo"
         #    ;;
-        #-v)
-        #    verb=true
-        #    ;;
+        -v)
+            verb=true
+            ;;
         -s)
-            if [[ $2 =~ ^[0-9]{4}$ ]]; then
+            if [[ $2 =~ ^[0-9]{12}$ || $2 =~ ^[0-9]{4}$ ]]; then
                 start_time="$2"
             else
                 echo ""
-                echo "ERROR: expecting HHMM, get [$key]."
+                echo "ERROR: expecting HHMM or YYYYmmddHHMM, get [$key]."
+                usage 3
+            fi
+            shift
+            ;;
+        -e)
+            if [[ $2 =~ ^[0-9]{4}$ || $2 =~ ^[0-9]{12}$ ]]; then
+                end_time="$2"
+            else
+                echo ""
+                echo "ERROR: expecting HHMM or YYYYmmddHHMM, get [$key]."
                 usage 3
             fi
             shift
@@ -165,17 +175,6 @@ while [[ $# -gt 0 ]]; do
         *)
             if [[ $key =~ ^[0-9]{8}$ ]]; then
                 eventdate=${key}
-                nextdate=$(date -d "$eventdate 1 day" +%Y%m%d)
-                timeend="${nextdate}${endhour}"
-            elif [[ $key =~ ^[0-9]{12}$ ]]; then
-                eventdate=${key:0:8}
-                eventhour=${key:8:2}
-                if [[ $((10#$eventhour)) -lt 12 ]]; then
-                    eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
-                fi
-                nextdate=$(date -d "$eventdate 1 day" +%Y%m%d)
-
-                timeend="${key}"
             elif [[ -d $key ]]; then
                 run_dir="$key"
             else
@@ -204,12 +203,24 @@ else
     fi
 fi
 
-echo -e "\nUse runtime Configruation file: ${CYAN}${conf_file}${NC}.\n"
+echo -e "\nUse runtime Configruation file: ${CYAN}${conf_file}${NC}. Event Date: ${PURPLE}${eventdate}${NC}. Start time: ${YELLOW}${start_time}${NC}.\n"
 
-if [[ $((10#$start_time)) -gt 1200 ]]; then
+nextdate=$(date -u -d "${eventdate} 1 day" +%Y%m%d)
+
+if [[ ${#start_time} -eq 12 ]]; then
+    timebeg="${start_time}"
+elif ((10#$start_time > starthour )); then
     timebeg="${eventdate}${start_time}"
 else
     timebeg="${nextdate}${start_time}"
+fi
+
+if [[ ${#end_time} -eq 12 ]]; then
+    timeend=${end_time}
+elif ((10#$end_time > starthour )); then
+    timeend="${eventdate}${end_time}"
+else
+    timeend="${nextdate}${end_time}"
 fi
 
 if [[ ! -t 1 && ! "$cmd" == "check" ]]; then # "jobs"
@@ -226,6 +237,8 @@ fi
 echo "=== $(date +%Y%m%d_%H:%M:%S) - $0 ${saved_args} ==="
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+[[ $verb == true ]] && echo "Time: ${timebeg} to ${timeend} ...."
 
 timebeg_s=$(date -d "${timebeg:0:8} ${timebeg:8:4}" +%s)
 timeend_s=$(date -d "${timeend:0:8} ${timeend:8:4}" +%s)
@@ -251,6 +264,10 @@ for((i=timebeg_s;i<=timeend_s;i+=3600)); do
     # gzipped, you can leave it and this program will unzip it
     BUFR_filename="rap.${inyear}${inmonth}${inday}${inhour}.prepbufr.tm00"
     BUFR_in=${BUFR_dir}/${BUFR_filename}
+
+    if [[ $verb == true ]]; then
+        echo "Checking file ${BUFR_in} ...."
+    fi
 
     if [[ "$cmd" =~ "check" ]]; then
         if [[ -e ${BUFR_in} ]]; then

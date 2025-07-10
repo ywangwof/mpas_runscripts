@@ -18,6 +18,10 @@ script_dir=${rootdir}/scripts
 
 host="$(hostname)"
 
+default_endtime="0300"
+default_datime="1500"
+default_fcsttime="1700"
+
 #-----------------------------------------------------------------------
 
 source "$script_dir/Common_Colors.sh"
@@ -32,9 +36,8 @@ function usage {
     # shellcheck disable=SC2154
     echo -e "             It will log the outputs to a file as ${LIGHT_BLUE}\${WORKDIR}${NC}/${DIR_CLR}\${EVENTDATE}${NC}/log${DIRa_CLR}\${affix}${NC}.${YELLOW}\${task}${NC} automatically."
     echo    " "
-    echo    "    DATETIME - Case date and time in YYYYmmdd/YYYYmmddHHMM."
-    echo    "               YYYYmmdd:     run the task(s) at this event date."
-    echo    "               YYYYmmddHHMM: run task DA/FCST for one cycle only."
+    echo    "    DATETIME - Event date as YYYYmmdd."
+    echo    " "
     echo -e "    WORKDIR  - Top level ${LIGHT_BLUE}run_dir${NC} for all tasks. Generally, it should contain these folders:"
     echo -e "                   ${DIR_CLR}\${EVENTDATE}${NC}/{${WHITE}dacycles${NC},${WHITE}fcst${NC}}${DIRa_CLR}\${affix}${NC}"
     echo -e "                   {${WHITE}FCST${NC},${WHITE}summary_files${NC},${WHITE}image_files${NC}}/${DIR_CLR}\${EVENTDATE}${DIRa_CLR}\${affix}${NC}"
@@ -48,7 +51,8 @@ function usage {
     echo    "              -n                  Show command to be run, but not run it"
     echo    "              -nn                 Show command to be run (one level deeper), but not run it"
     echo    "              -v                  Verbose mode"
-    echo    "              -e  HHMM            Last time in HHMM format"
+    echo    "              -s  HHMM            Start time in HHMM format or YYYYmmddHHMM."
+    echo    "              -e  HHMM            Last time in HHMM format or YYYYmmddHHMM."
     echo    "              -f  conf_file       Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
     echo -e "              -t  launchtime      Date and time to launch the first task for task ${BROWN}atpost${NC}, as ${LIGHT_BLUE}HH:MM${NC} or ${LIGHT_BLUE}HH:MM mmddyy${NC}"
     echo -e "              -p  machine         Post-processing machine, default: ${PURPLE}wof-epyc8${NC}."
@@ -95,6 +99,10 @@ function parse_args {
                 args["config_file"]="$2"
                 shift
                 ;;
+            -s )
+                args["starttime"]="$2"
+                shift
+                ;;
             -e )
                 args["endtime"]="$2"
                 shift
@@ -124,19 +132,10 @@ function parse_args {
                 args["noscript"]=true
                 ;;
             * )
-                if [[ $key =~ ^[0-9]{12}$ ]]; then
-                    eventhour=${key:8:2}
-                    if ((10#$eventhour < 12)); then
-                        args["eventdate"]=$(date -u -d "${key:0:8} 1 day ago" +%Y%m%d)
-                    else
-                        args["eventdate"]=${key:0:8}
-                    fi
-                    args["starttime"]=${key:8:4}
-                    args["endtime"]=${key:8:4}
-                elif [[ $key =~ ^[0-9]{8}$ ]]; then
-                    args["eventdate"]=${key}
+                if [[ $key =~ ^[0-9]{8}$ ]]; then
+                    args["eventdate"]="${key}"
                 elif [[ -d $key ]]; then
-                    args["run_dir"]=$key
+                    args["run_dir"]="${key}"
                 elif [[ -f $key ]]; then
                     args["config_file"]="${key}"
                 else
@@ -184,9 +183,9 @@ else
     fi
 fi
 
-[[ -v args["endtime"] ]]   && endtime=${args["endtime"]}     || endtime="0300"
-[[ -v args["starttime"] ]] && starttime=${args["starttime"]} || starttime="1700"
-[[ -v args["run_dir"] ]] && run_dir=${args["run_dir"]} || run_dir="${mpasworkdir}/run_dirs"
+[[ -v args["endtime"] ]]   && endtime=${args["endtime"]}     || endtime="${default_endtime}"
+[[ -v args["starttime"] ]] && starttime=${args["starttime"]}
+[[ -v args["run_dir"] ]]   && run_dir=${args["run_dir"]}     || run_dir="${mpasworkdir}/run_dirs"
 
 if [[ -v args["config_file"] ]]; then
     config_file="${args['config_file']}"
@@ -216,11 +215,39 @@ if [[ -f ${config_file} ]]; then
     fcstoutinvl=$(grep '^ *OUTINVL=' "${config_file}" | cut -d'=' -f2)
     level_file=$(grep '^ *vertLevel_file='      "${config_file}" | cut -d'=' -f2 | tr -d '"')
     domain_name=$(grep '^ *domname='      "${config_file}" | cut -d'=' -f2 | tr -d '"')
-    wof_domain_name=${domain_name/wofs_/geo_}
+    wof_domain_name="geo_${domain_name##*_}"
 else
     echo " "
     echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not exist."
     usage 1
+fi
+
+if [[ -z ${starttime} ]]; then
+    if [[ "${task}" == "dacycles" ]]; then
+        starttime="${default_datime}"
+    else
+        starttime="${default_fcsttime}"
+    fi
+fi
+
+#-----------------------------------------------------------------------
+# Set Event End Date and Time
+#-----------------------------------------------------------------------
+
+nextdate=$(date -u -d "${eventdate} 1 day" +%Y%m%d)
+
+if [[ ${#starttime} -eq 12 ]]; then
+    startdatetime=${starttime}
+    starttime=${starttime:8:4}
+else
+    (( 10#$starttime < default_datime )) && startdatetime="${nextdate}${starttime}" || startdatetime="${eventdate}${starttime}"
+fi
+
+if [[ ${#endtime} -eq 12 ]]; then
+    enddatetime=${endtime}
+    endtime=${endtime:8:4}
+else
+    (( 10#$endtime < default_datime )) && enddatetime="${nextdate}${endtime}" || enddatetime="${eventdate}${endtime}"
 fi
 
 #-----------------------------------------------------------------------
@@ -307,10 +334,9 @@ post | plot | diag | verif | snd )
     #rm -f "${post_config}"
 
     if [[ ! -f "${post_config}" ]]; then
-        ((10#$endtime < 1200)) && oneday="1 day" || oneday=""
+        fbeg_s=$(date -u -d "${startdatetime:0:8} ${startdatetime:8:4}" +%s)
+        fbeg_e=$(date -u -d "${enddatetime:0:8}   ${enddatetime:8:4}"   +%s)
 
-        fbeg_s=$(date -u -d "${eventdate} ${starttime}" +%s)
-        fbeg_e=$(date -u -d "${eventdate} ${endtime} ${oneday}" +%s)
         fcst_times=""
         for ((ftime=fbeg_s;ftime<=fbeg_e;ftime+=3600)); do
             fcst_time=$(date -u -d @$ftime +%H%M)
@@ -370,21 +396,25 @@ atpost )
         myname="/scratch${myname}"
     fi
 
+    cmds=("${myname}" "${config_file}" "${eventdate}")
+    [[ "${starttime}" != "${default_datime}"  ]] && cmds+=(-s "${startdatetime}")
+    [[ "${endtime}"   != "${default_endtime}" ]] && cmds+=(-e "${enddatetime}")
+
     atjobstr=$(cat <<EOF
 if [[ $verb == true ]]; then
-    echo "at ${launchtime}        <<< \"${myname} ${config_file} ${eventdate} -e ${endtime} post\""
-    echo "at ${launchtime}+1hours <<< \"${myname} ${config_file} ${eventdate} -e ${endtime} diag\""
-    echo "at ${launchtime}+2hours <<< \"${myname} ${config_file} ${eventdate} -e ${endtime} snd\""
-    echo "at ${launchtime}+3hours <<< \"${myname} ${config_file} ${eventdate} -e ${endtime} verif\""
-    echo "at ${launchtime}+4hours <<< \"${myname} ${config_file} ${eventdate} -e ${endtime} plot\""
+    echo "at ${launchtime}        <<< \"${cmds[*]} post\""
+    echo "at ${launchtime}+1hours <<< \"${cmds[*]} diag\""
+    echo "at ${launchtime}+2hours <<< \"${cmds[*]} snd\""
+    echo "at ${launchtime}+3hours <<< \"${cmds[*]} verif\""
+    echo "at ${launchtime}+4hours <<< \"${cmds[*]} plot\""
 fi
 
 if [[ -z "$show" ]]; then
-    at ${launchtime}        <<< "${myname} ${config_file} ${eventdate} -e ${endtime} post"
-    at ${launchtime}+1hours <<< "${myname} ${config_file} ${eventdate} -e ${endtime} diag"
-    at ${launchtime}+2hours <<< "${myname} ${config_file} ${eventdate} -e ${endtime} snd"
-    at ${launchtime}+3hours <<< "${myname} ${config_file} ${eventdate} -e ${endtime} verif"
-    at ${launchtime}+4hours <<< "${myname} ${config_file} ${eventdate} -e ${endtime} plot"
+    at ${launchtime}        <<< "${cmds[*]} post"
+    at ${launchtime}+1hours <<< "${cmds[*]} diag"
+    at ${launchtime}+2hours <<< "${cmds[*]} snd"
+    at ${launchtime}+3hours <<< "${cmds[*]} verif"
+    at ${launchtime}+4hours <<< "${cmds[*]} plot"
 fi
 EOF
 )
@@ -402,14 +432,20 @@ case $task in
 #1. dacycles
 dacycles )
     cd "${script_dir}" || exit 1
-    cmds=("${script_dir}/run_dacycles.sh" -e "${endtime}" "${config_file}" "${eventdate}" -r)
-    if [[ -n "${taskopt}" ]]; then cmds+=("${taskopt}"); fi
+    cmds=("${script_dir}/run_dacycles.sh" "${config_file}" "${eventdate}")
+    [[ "${starttime}" != "${default_datime}"  ]] && cmds+=(-s "${startdatetime}")
+    [[ "${endtime}"   != "${default_endtime}" ]] && cmds+=(-e "${enddatetime}")
+    [[ -n "${taskopt}" ]] && cmds+=("${taskopt}")
+    cmds+=("-r")
     ;;
 #2. fcst
 fcst )
     cd "${script_dir}" || exit 1
-    cmds=("${script_dir}/run_fcst.sh" -e "${endtime}" "${config_file}" "${eventdate}" -r -w)
-    if [[ -n "${taskopt}" ]]; then cmds+=("${taskopt}"); fi
+    cmds=("${script_dir}/run_fcst.sh" "${config_file}" "${eventdate}")
+    [[ "${starttime}" != "${default_fcsttime}" ]] && cmds+=(-s "${startdatetime}")
+    [[ "${endtime}"   != "${default_endtime}"  ]] && cmds+=(-e "${enddatetime}")
+    [[ -n "${taskopt}" ]] && cmds+=("${taskopt}")
+    cmds+=("-r" "-w")
     ;;
 
 #3. post
@@ -424,14 +460,9 @@ post )
         #    fcstbegs="0"
         #fi
 
-        if ((10#$endtime < 1200)); then
-            enddate=$(date -u -d "$eventdate 1 day" +%Y%m%d)
-        else
-            enddate=${eventdate}
-        fi
-        if [[ ! -e ${run_dir}/FCST/${eventdate}${affix}/fcst_${enddate}${endtime}_start ]]; then
+        if [[ ! -e ${run_dir}/FCST/${eventdate}${affix}/fcst_${enddatetime}_start ]]; then
             # To make sure the correct FCST files are used, "-c"
-            cmds=("${script_dir}/lnmpasfcst.sh" -c -b "$fcstbegs" -s "${starttime}" -e "${endtime}" "${config_file}" "${eventdate}")
+            cmds=("${script_dir}/lnmpasfcst.sh" -c -b "$fcstbegs" -s "${startdatetime}" -e "${enddatetime}" "${config_file}" "${eventdate}")
             cmds+=("${eventdate}")
             ${show} "${cmds[@]}"
         fi
@@ -497,7 +528,7 @@ snd )
 #7. diag
 diag )
     cd "${script_dir}" || exit 1
-    cmds=("${script_dir}/plot_allobs.sh" -e "${endtime}" "${config_file}" "${eventdate}")
+    cmds=("${script_dir}/plot_allobs.sh" -s "${starttime}" -e "${endtime}" "${config_file}" "${eventdate}")
     if [[ -n "${taskopt}" ]]; then cmds+=("${taskopt}");  fi
     ;;
 

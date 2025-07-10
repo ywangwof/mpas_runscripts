@@ -93,6 +93,9 @@ def parse_args():
                         help='File name (obs_seq.final) to list its content',
                         type=str,   default=None)
 
+    parser.add_argument('-s','--starttime',   help='Start time string as HHMM.\n ',
+                        type=str,   default="1500")
+
     parser.add_argument('-e','--endtime',   help='End time string as HHMM.\n ',
                         type=str,   default="0300")
 
@@ -104,7 +107,7 @@ def parse_args():
     parser.add_argument('-t','--threshold', help='Filter reflectivity by threshold (>= threshold)',
                         type=float, default=None)
 
-    parser.add_argument('-s','--spreadtype',
+    parser.add_argument('-y','--spreadtype',
                         help='1: ensemble standard deviation, \n'
                              '2: ensemble standard deviation + ob error ("total spread")\n'
                              #3: ensemble standard deviation + ob error (use average value)'''
@@ -1111,13 +1114,27 @@ if __name__ == "__main__":
         #filelist2.sort()
         #filelist = filelist1+filelist2
 
-        starttime = "1500"
+        starttime = cargs.starttime
         endtime   = cargs.endtime
 
-        dt1 = datetime.strptime(f"{wargs.eventdate} {starttime}",'%Y%m%d %H%M')
-        dt2 = datetime.strptime(f"{wargs.eventdate} {endtime}",  '%Y%m%d %H%M')
-        if endtime < "1200":
-            dt2 +=  timedelta(days=1)
+        delta1day_s = 0
+        if len(starttime) == 12:
+            startdatetime=starttime
+        elif len(starttime) == 4:
+            startdatetime = f"{wargs.eventdate}{starttime}"
+            if starttime < "1500":
+                delta1day_s =  timedelta(days=1)
+
+        delta1day_e = 0
+        if len(endtime) == 12:
+            enddatetime=endtime
+        elif len(endtime) == 4:
+            enddatetime = f"{wargs.eventdate}{endtime}"
+            if endtime < "1500":
+                delta1day_e =  timedelta(days=1)
+
+        dt1 = datetime.strptime(startdatetime,'%Y%m%d%H%M') + delta1day_s
+        dt2 = datetime.strptime(enddatetime,  '%Y%m%d%H%M') + delta1day_e
 
         filelist  = []
         print(f"Reading obs_seq files from {dadir} ...")

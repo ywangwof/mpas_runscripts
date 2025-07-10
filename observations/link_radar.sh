@@ -25,7 +25,6 @@ function usage {
     echo " "
     echo "    DATETIME - Empty: Current UTC date and time"
     echo "               YYYYmmdd:       run this task for this event date."
-    echo "               YYYYmmddHHMM:   run the task from event date $starthour Z up to YYYYmmddHHMM."
     echo "    COMMAND  - one of [ls, check, fix]"
     echo "               check    List the observations in the $srcdir"
     echo "               ls       List the observations in the $destdir"
@@ -36,6 +35,7 @@ function usage {
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
     echo "              -s  start_time      Run task from start_time, default $starthour"
+    echo "              -e  end_time        Run task up to end_time as HHMM or YYYYmmddHHMM, default: $endhour"
     echo "              -f  conf_file       Runtime configuration file, make it the last argument (after WORKDIR)."
     echo "              -d  sub_dir         Subdirectory name after the event date. For example \"/d1/DART\""
     echo "              -o                  Data separated at 00 UTC."
@@ -68,7 +68,7 @@ nextdate=$(date -d "$eventdate 1 day" +%Y%m%d)
 default_date=true
 
 start_time=$starthour
-timeend=${eventdateDF}
+end_time=${eventdateDF}
 
 #subdir="/d1/DART"
 subdir=""
@@ -97,11 +97,21 @@ while [[ $# -gt 0 ]]; do
             verb=true
             ;;
         -s)
-            if [[ $2 =~ ^[0-9]{4}$ ]]; then
+            if [[ $2 =~ ^[0-9]{12}$ || $2 =~ ^[0-9]{4}$ ]]; then
                 start_time="$2"
             else
                 echo ""
                 echo "ERROR: expecting HHMM, get [$key]."
+                usage 3
+            fi
+            shift
+            ;;
+        -e)
+            if [[ $2 =~ ^[0-9]{4}$ || $2 =~ ^[0-9]{12}$ ]]; then
+                end_time="$2"
+            else
+                echo ""
+                echo "ERROR: expecting HHMM or YYYYmmddHHMM, get [$key]."
                 usage 3
             fi
             shift
@@ -138,19 +148,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             if [[ $key =~ ^[0-9]{8}$ ]]; then
-                eventdate=${key}
-                nextdate=$(date -d "$eventdate 1 day" +%Y%m%d)
-                timeend="${nextdate}${endhour}"
-                default_date=false
-            elif [[ $key =~ ^[0-9]{12}$ ]]; then
-                eventdate=${key:0:8}
-                eventhour=${key:8:2}
-                if [[ $((10#$eventhour)) -lt 12 ]]; then
-                    eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
-                fi
-                nextdate=$(date -d "$eventdate 1 day" +%Y%m%d)
-                default_date=false
-                timeend="${key}"
+                eventdate="${key}"
             elif [[ -d $key ]]; then
                 run_dir="$key"
             elif [[ -f $key ]]; then
@@ -197,12 +195,24 @@ else
     fi
 fi
 
-echo -e "\nUse runtime Configruation file: ${CYAN}${conf_file}${NC}.\n"
+echo -e "\nUse runtime Configruation file: ${CYAN}${conf_file}${NC}. Event Date: ${PURPLE}${eventdate}${NC}. Start time: ${YELLOW}${start_time}${NC}.\n"
 
-if ((10#$start_time > 1200)); then
+nextdate=$(date -u -d "${eventdate} 1 day" +%Y%m%d)
+
+if [[ ${#start_time} -eq 12 ]]; then
+    timebeg="${start_time}"
+elif ((10#$start_time > starthour )); then
     timebeg="${eventdate}${start_time}"
 else
     timebeg="${nextdate}${start_time}"
+fi
+
+if [[ ${#end_time} -eq 12 ]]; then
+    timeend=${end_time}
+elif ((10#$end_time > starthour )); then
+    timeend="${eventdate}${end_time}"
+else
+    timeend="${nextdate}${end_time}"
 fi
 
 if [[ ! -t 1 && ! "$cmd" == "check" ]]; then # "jobs"

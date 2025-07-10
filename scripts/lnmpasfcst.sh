@@ -16,16 +16,16 @@ function usage {
     echo " "
     echo "    PURPOSE: Link the MPASSIT processed MPAS forecast files for WoFS post-processing."
     echo " "
-    echo "    DATETIME - Case date in YYYYmmdd."
+    echo "    DATETIME - Case date as YYYYmmdd."
     echo " "
     echo "    OPTIONS:"
     echo "              -h                  Display this message"
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
-    echo "              -src  fcst_root     FCST cycles directory. Default: ${fcst_root}"
+    echo "              -src  fcst_root     FCST cycles directory. Default: ${mpasworkdir}"
     echo "              -dest dest_root     WRF FCST directory name. Default: \${fcst_root}/FCST"
-    echo "              -s    starttime     in HHMM. Default: 1700"
-    echo "              -e    endtime       in HHMM. Default: 0300"
+    echo "              -s    starttime     in HHMM or YYYYmmddHHMM. Default: 1700"
+    echo "              -e    endtime       in HHMM or YYYYmmddHHMM. Default: 0300"
     echo "              -b    5             Forecast first available time in minutes. Default: 5 minutes"
     echo "              -c                  Overwritten existing files, otherwise, keep existing files"
     echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
@@ -99,7 +99,7 @@ function parse_args {
                 shift
                 ;;
             -s )
-                if [[ $2 =~ ^[0-9]{4}$ ]]; then
+                if [[ $2 =~ ^[0-9]{4}$ || $2 =~ ^[0-9]{12}$ ]]; then
                     args["starttime"]="${2}"
                 else
                     echo "ERROR: Start time should be in HHMM, got \"$2\"."
@@ -108,7 +108,7 @@ function parse_args {
                 shift
                 ;;
             -e )
-                if [[ $2 =~ ^[0-9]{4}$ ]]; then
+                if [[ $2 =~ ^[0-9]{4}$ || $2 =~ ^[0-9]{12}$ ]]; then
                     args["endtime"]=$2
                 else
                     echo "ERROR: End time should be in HHMM, got \"$2\"."
@@ -201,26 +201,33 @@ if [[ ! -d ${fcst_root}/${eventdate}/${fcstdir} ]]; then
     usage 1
 fi
 
-#
+#-----------------------------------------------------------------------
+# Set Event End Date and Time
+#-----------------------------------------------------------------------
+
+startday=""
+if [[ ${#starttime} -eq 12 ]]; then
+    startdatetime=${starttime}
+else
+    starthour=${starttime:0:2}
+    (( 10#$starthour < 15 )) && startday="1 day"
+    startdatetime="${eventdate}${starttime}"
+fi
+
+endday=""
+if [[ ${#endtime} -eq 12 ]]; then
+    enddatetime=${endtime}
+else
+    endhour=${endtime:0:2}
+    (( 10#$endhour < 15 )) && endday="1 day"
+    enddatetime="${eventdate}${endtime}"
+fi
+
+start_s=$(date -u -d "${startdatetime:0:8} ${startdatetime:8:4} $startday" +%s)
+end_s=$(date   -u -d "${enddatetime:0:8}   ${enddatetime:8:4}   $endday"   +%s)
+
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
-
-starthour=${starttime:0:2}
-if (( 10#$starthour < 12 )); then
-    startdatetime=$(date -u -d "$eventdate $starttime 1 day" "+%Y%m%d %H%M")
-else
-    startdatetime=$(date -u -d "$eventdate $starttime" "+%Y%m%d %H%M")
-fi
-
-endhour=${endtime:0:2}
-if (( 10#$endhour < 12 )); then
-    enddatetime=$(date -u -d "$eventdate $endtime 1 day" "+%Y%m%d %H%M")
-else
-    enddatetime=$(date -u -d "$eventdate $endtime" "+%Y%m%d %H%M")
-fi
-
-start_s=$(date -u -d "${startdatetime}" +%s)
-end_s=$(date -u -d "${enddatetime}" +%s)
 
 for ((s=start_s;s<=end_s;s+=3600)); do
     evtime=$(date -u -d @$s +%H%M)

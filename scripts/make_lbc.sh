@@ -55,7 +55,7 @@ function usage {
     echo " "
     echo "    PURPOSE: Make ensemble boundary files before the MPAS-WOFS DA cycles"
     echo " "
-    echo "    DATETIME - Case date and time in YYYYMMDD, Default: today"
+    echo "    DATETIME - Case date and time as YYYYmmdd, Default: today"
     echo "    WORKDIR  - Run Directory"
     echo "    JOBS     - One or more jobs from [ungrib,lbc,clean,time_intrp]"
     echo "               Default: all jobs in the proper order."
@@ -73,7 +73,7 @@ function usage {
     echo "                  HHMM            Start time"
     echo "              -e  YYYYmmddHHMM    End date & time for the LBC preparation"
     echo "                  HHMM            End time"
-    echo "              -t  HHMM            Stop time for time interpolation"
+    echo "              -t  HHMM            Stop time for time interpolation only"
     echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
     echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
     echo " "
@@ -149,14 +149,7 @@ function parse_args {
                 shift
                 ;;
             -s )
-                if [[ $2 =~ ^[0-9]{12}$ ]]; then
-                    args["eventdate"]=${2:0:8}
-                    args["eventtime"]=${2:8:4}
-                    eventhour=${2:8:2}
-                    if ((10#$eventhour < 12)); then
-                        args["eventdate"]=$(date -u -d "${2:0:8} 1 day ago" +%Y%m%d)
-                    fi
-                elif [[ $2 =~ ^[0-9]{4}$ ]]; then
+                if [[ $2 =~ ^[0-9]{4}$ || $2 =~ ^[0-9]{12}$ ]]; then
                     args["eventtime"]="${2}"
                 else
                     echo -e "${RED}ERROR${NC}: Start time should be in ${GREEN}YYYYmmddHHMM${NC} or ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
@@ -165,9 +158,7 @@ function parse_args {
                 shift
                 ;;
             -e )
-                if [[ $2 =~ ^[0-9]{12}$ ]]; then
-                    args["enddatetime"]=$2
-                elif [[ $2 =~ ^[0-9]{4}$ ]]; then
+                if [[ $2 =~ ^[0-9]{4}$ || $2 =~ ^[0-9]{12}$ ]]; then
                     args["endtime"]=$2
                 else
                     echo -e "${RED}ERROR${NC}: End time should be in ${GREEN}YYYYmmddHHMM${NC} or ${GREEN}HHMM${NC}, got ${PURPLE}$2${NC}."
@@ -192,23 +183,10 @@ function parse_args {
                 args["jobs"]="${key//,/ }"
                 ;;
             *)
-                if [[ $key =~ ^[0-9]{12}$ ]]; then
-                    args["eventdate"]=${key:0:8}
-                    args["eventtime"]=${key:8:4}
-                    args["enddatetime"]=${key}
-                    args["endtime"]=${key:8:4}
-                elif [[ $key =~ ^[0-9]{8}$ ]]; then
-                    args["eventdate"]=${key}
+                if [[ $key =~ ^[0-9]{8}$ ]]; then
+                    args["eventdate"]="${key}"
                 elif [[ -d $key ]]; then
-                    WORKDIR=$key
-                    lastdir=$(basename $WORKDIR)
-                    if [[ $lastdir =~ ^[0-9]{8}$ ]]; then
-                        args["WORKDIR"]=$(dirname ${WORKDIR})
-                        args["eventdate"]=${lastdir}
-                    else
-                        args["WORKDIR"]=$WORKDIR
-                    fi
-                    #echo $WORKDIR,$eventdate,$eventtime
+                    args["WORKDIR"]="${key}"
                 elif [[ -f $key ]]; then
                     args["config_file"]="${key}"
                 else
@@ -235,24 +213,33 @@ function run_ungrib {
         return 0                   # skip
     fi
 
+    if [[ ${#gribtime} -eq 12 ]]; then
+        hdate=${gribtime:0:8}
+        htime=${gribtime:8:4}
+    else
+        hdate=${eventdate}
+        htime=${gribtime}
+    fi
+
     jobarrays=()
     # shellcheck disable=SC2154
     for mem in $(seq 1 $nenslbc); do
         memstr=$(printf "%02d" $mem)
-        starthr=$(((eventtime-gribtime)/100))
 
-        starts=$(date -u -d "$eventdate $gribtime" +%s)
-        ends=$(date   -u -d "${enddatetime:0:8} ${enddatetime:8:4}" +%s)
-        endhr=$(( (ends-starts)/3600 ))
+        inits=$(date  -u -d "${hdate}             ${htime}"             +%s)
+        starts=$(date -u -d "${startdatetime:0:8} ${startdatetime:8:4}" +%s)
+        ends=$(date   -u -d "${enddatetime:0:8}   ${enddatetime:8:4}"   +%s)
+        starthr=$(( (starts-inits)/3600 ))
+        endhr=$(( (ends-inits)/3600 ))
 
-        gribstart_str=$(date -u -d "$eventdate $gribtime $starthr hours" +%Y-%m-%d_%H:%M:%S )
-        gribendtm_str=$(date -u -d "$eventdate $gribtime $endhr hours"   +%Y-%m-%d_%H:%M:%S )
+        gribstart_str=$(date -u -d "$hdate $htime $starthr hours" +%Y-%m-%d_%H:%M:%S )
+        gribendtm_str=$(date -u -d "$hdate $htime $endhr hours"   +%Y-%m-%d_%H:%M:%S )
 
         mecho0 "GRIB files from ${grib_dir}:"
         gribfiles=()
         for (( h=starthr;h<=endhr;h+=$((EXTINVL/3600)) )); do
             hstr=$(printf "%02d" $h)
-            gribfilename="$eventdate/${gribtime}/${hrrr_subdir}${memstr}/wrfnat_pert_hrrr_mem00${memstr}_${hstr}.grib2"
+            gribfilename="$hdate/${htime}/${hrrr_subdir}${memstr}/wrfnat_pert_hrrr_mem00${memstr}_${hstr}.grib2"
             gribfile="${grib_dir}/${gribfilename}"
 
             mecho0 "mem $memstr GRIB file $hstr: ${gribfilename}"
@@ -301,7 +288,7 @@ EOF
     cd $wrkdir || return
 
     if [[ ${#jobarrays[@]} -gt 0 ]]; then
-        jobscript="run_ungrib.pbs"
+        jobscript="run_ungrib.${mach}"
         # shellcheck disable=SC2154
         jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
@@ -707,6 +694,8 @@ setup_machine "${args['machine']}" "$rootdir" ${usepython} false
 #-----------------------------------------------------------------------
 [[ -v args["eventdate"] ]] && eventdate="${args['eventdate']}" || eventdate="$eventdateDF"
 [[ -v args["eventtime"] ]] && eventtime="${args['eventtime']}" || eventtime="1500"
+[[ -v args["endtime"] ]]   && endtime="${args['endtime']}"     || endtime="0900"
+[[ -v args["stoptime"] ]]  && stoptime="${args['stoptime']}"   || stoptime="0300"
 
 #-----------------------------------------------------------------------
 #
@@ -749,30 +738,29 @@ fi
 #
 #-----------------------------------------------------------------------
 
-if [[ -v args["enddatetime"] ]]; then
-    enddatetime="${args['enddatetime']}"
-elif [[ -v args["endtime"] ]]; then
-    endtime="${args['endtime']}"
-    endhour=${endtime:0:2}
-    if ((10#$endhour < 12)); then
-        enddatetime=$(date -u -d "${eventdate} ${endtime} 1 day" +%Y%m%d%H%M)
-    else
-        enddatetime=$(date -u -d "${eventdate} $endtime" +%Y%m%d%H%M)
-    fi
+if [[ ${#eventtime} -eq 12 ]]; then
+    startdatetime=${eventtime}
+    eventtime=${eventtime:8:4}
 else
-    enddatetime=$(date -u -d "${eventdate} 0900 1 day" +%Y%m%d%H%M)
+    startdatetime="${eventdate}${eventtime}"
 fi
 
-if [[ -v args["stoptime"] ]]; then
-    stoptime="${args['stoptime']}"
-    stophour=${stoptime:0:2}
-    if ((10#$stophour < 12)); then
-        stopdatetime=$(date -u -d "${eventdate} ${stoptime} 1 day" +%Y%m%d%H%M)
-    else
-        stopdatetime=$(date -u -d "${eventdate} ${stoptime}" +%Y%m%d%H%M)
-    fi
+if [[ ${#endtime} -eq 12 ]]; then
+    enddatetime=${endtime}
 else
-    stopdatetime=$(date -u -d "${eventdate} 0300 1 day" +%Y%m%d%H%M)
+    endhour=${endtime:0:2}
+    if ((10#$endhour <= 12)); then
+        enddatetime=$(date -u -d "${eventdate} ${endtime} 1 day" +%Y%m%d%H%M)
+    else
+        enddatetime=$(date -u -d "${eventdate} ${endtime}" +%Y%m%d%H%M)
+    fi
+fi
+
+stophour=${stoptime:0:2}
+if ((10#$stophour < 12)); then
+    stopdatetime=$(date -u -d "${eventdate} ${stoptime} 1 day" +%Y%m%d%H%M)
+else
+    stopdatetime=$(date -u -d "${eventdate} ${stoptime}" +%Y%m%d%H%M)
 fi
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -788,7 +776,7 @@ fi
 
 echo    ""
 echo -e "---- Jobs (${YELLOW}$$${NC}) started at $(date +'%m-%d %H:%M:%S (%Z)') on host ${LIGHT_RED}$(hostname)${NC} ----\n"
-echo -e "  Event  date: ${WHITE}$eventdate${NC} ${YELLOW}${eventtime}${NC} --> ${WHITE}${enddatetime:0:8}${NC} ${YELLOW}${enddatetime:8:4}${NC}"
+echo -e "  Event  date: ${WHITE}${startdatetime}${NC} --> ${WHITE}${enddatetime:0:8}${NC} ${YELLOW}${enddatetime:8:4}${NC}"
 echo -e "  ROOT    dir: ${rootdir}${BROWN}/scripts${NC}"
 echo -e "  TEMP    dir: ${PURPLE}${TEMPDIR}${NC}"
 echo -e "  FIXED   dir: ${DARK}${FIXDIR}${NC}"
@@ -799,8 +787,8 @@ echo    " "
 
 jobname="${eventdate:4:4}"
 
-starttime_str=$(date -u -d "${eventdate}       ${eventtime}"       +%Y-%m-%d_%H:%M:%S)
-endtime_str=$(date   -u -d "${enddatetime:0:8} ${enddatetime:8:4}" +%Y-%m-%d_%H:%M:%S)
+starttime_str=$(date -u -d "${startdatetime:0:8} ${startdatetime:8:4}" +%Y-%m-%d_%H:%M:%S)
+endtime_str=$(date   -u -d "${enddatetime:0:8}   ${enddatetime:8:4}"   +%Y-%m-%d_%H:%M:%S)
 
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 

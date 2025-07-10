@@ -9,7 +9,7 @@
 #	 To Do:  Add night-time features to DART forward operator.
 ##############
 
-import sys, time
+import sys, time, re
 import os
 import datetime
 from netCDF4 import Dataset
@@ -54,20 +54,39 @@ platform_id = 4
 ### FIND GSI .nc FILES
 infiles = []
 temp_files = os.listdir(abidir)
+filere1=re.compile(indate+r"([0-9]{4})_GOES19_TB_CLRSKY.nc")
+filere2=re.compile(r"([0-9]{4})-goes.nc$")
 for f, file in enumerate(temp_files):
-  # 2015-goes.nc
-  if (file[5:12] == "goes.nc"):
-    infiles.append(file)
+    # 2015-goes.nc
+    #if (file[5:12] == "goes.nc"):
+    #    infiles.append(file)
+
+    rematch1 = re.match(filere1, file)
+    rematch2 = re.match(filere2, file)
+    if rematch1 or rematch2:
+        infiles.append(file)
 
 infiles.sort()
-#print(infiles)
+print(infiles)
 chans=[7,8,9,10,11,12,13,14,15,16]
 
 for ff, file in enumerate(infiles):
     abifile = os.path.join(abidir,file)
-    print(abifile)
 
-    fdate = file[0:12]
+    #fdate = file[0:12]
+    rematch1 = re.match(filere1, file)
+    rematch2 = re.match(filere2, file)
+
+    if rematch1:
+        rematch = rematch1
+    elif rematch2:
+        rematch = rematch2
+    else:
+        sys.exit(0)
+    timestr = rematch.group(1)
+
+    print(f"{timestr}  --  {abifile}")
+    #continue
 
     if wait_for_file_age(abifile,120):
         ### READ IN ABI OBSERVATIONS FROM FILE
@@ -104,7 +123,7 @@ for ff, file in enumerate(infiles):
         sdate = datetime.datetime.strptime(year+month+day,'%Y%m%d')
         if int(hour) >= 23 and int(minute) > 50:
             sdate += datetime.timedelta(days=1)
-        mdate = sdate.strftime('%Y%m%d')+file[0:4]
+        mdate = sdate.strftime('%Y%m%d')+timestr
         #mdate = indate+file[0:4]
 
         numobs=int(numobs[0])

@@ -43,7 +43,6 @@ function usage {
     echo " "
     echo "    DATETIME - Empty: Current UTC date and time"
     echo "               YYYYmmdd:       run this task for this event date."
-    echo "               YYYYmmddHHMM:   run the task from event date $starthour Z up to YYYYmmddHHMM."
     echo " "
     echo "    COMMAND  - one of [ls, check, fix]"
     echo "               check    List the observations in the $MESO_DIR"
@@ -54,7 +53,8 @@ function usage {
     echo "              -h                  Display this message"
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
-    echo "              -s  start_time      Run task from start_time, default $starthour"
+    echo "              -s  start_time      Run task from start_time as YYYYmmdd or YYYYmmddHHMM, default $starthour"
+    echo "              -e  end_time        Run task up to end_time as YYYYmmdd or YYYYmmddHHMM, default $endhour"
     echo "              -f  conf_file       Runtime configuration file, make it the last argument (after WORKDIR)."
     echo " "
     echo " "
@@ -77,8 +77,8 @@ if [[ $((10#$eventhour)) -lt 12 ]]; then
 fi
 nextdate=$(date -d "$eventdate 1 day" +%Y%m%d)
 
-start_time=$starthour
-timeend=${eventdateDF}
+start_time="$starthour"
+end_time="${eventdateDF}"
 
 #-----------------------------------------------------------------------
 #
@@ -103,11 +103,21 @@ while [[ $# -gt 0 ]]; do
         #    verb=true
         #    ;;
         -s)
-            if [[ $2 =~ ^[0-9]{4}$ ]]; then
+            if [[ $2 =~ ^[0-9]{4}$ || $2 =~ ^[0-9]{12}$ ]]; then
                 start_time="$2"
             else
                 echo ""
-                echo "ERROR: expecting HHMM, get [$key]."
+                echo "ERROR: expecting HHMM or YYYYmmddHHMM, get [$key]."
+                usage 3
+            fi
+            shift
+            ;;
+        -e)
+            if [[ $2 =~ ^[0-9]{4}$ || $2 =~ ^[0-9]{12}$ ]]; then
+                end_time="$2"
+            else
+                echo ""
+                echo "ERROR: expecting HHMM or YYYYmmddHHMM, get [$key]."
                 usage 3
             fi
             shift
@@ -132,18 +142,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             if [[ $key =~ ^[0-9]{8}$ ]]; then
-                eventdate=${key}
-                nextdate=$(date -d "$eventdate 1 day" +%Y%m%d)
-                timeend="${nextdate}${endhour}"
-            elif [[ $key =~ ^[0-9]{12}$ ]]; then
-                eventdate=${key:0:8}
-                eventhour=${key:8:2}
-                if [[ $((10#$eventhour)) -lt 12 ]]; then
-                    eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
-                fi
-                nextdate=$(date -d "$eventdate 1 day" +%Y%m%d)
-
-                timeend="${key}"
+                eventdate="${key}"
             elif [[ -d $key ]]; then
                 run_dir="$key"
             else
@@ -161,7 +160,9 @@ if [[ ${conf_file} == "" ]]; then
 fi
 
 if [[ -e ${conf_file} ]]; then
-    eval "$(sed -n "/OBS_DIR=/p" ${conf_file})"
+    #eval "$(sed -n "/OBS_DIR=/p" ${conf_file})"
+    OBS_DIR=$(grep '^ *OBS_DIR=' "${conf_file}" | cut -d'=' -f2 | tr -d '"')
+    domname=$(grep '^ *domname=' "${conf_file}" | cut -d'=' -f2 | tr -d '"')
     WORK_dir=${OBS_DIR}/Mesonet
 else
     if [[ "$cmd" =~ "check" ]]; then
@@ -172,12 +173,20 @@ else
     fi
 fi
 
-echo -e "\nUse runtime Configruation file: ${CYAN}${conf_file}${NC}.\n"
+echo -e "\nUse runtime Configruation file: ${CYAN}${conf_file}${NC}. Event Date: ${PURPLE}${eventdate}${NC}. Start time: ${YELLOW}${start_time}${NC}.\n"
 
-if [[ $((10#$start_time)) -gt 1200 ]]; then
-    timebeg="${eventdate}${start_time}"
+nextdate=$(date -u -d "${eventdate} 1 day" +%Y%m%d)
+
+if [[ ${#start_time} -eq 12 ]]; then
+    timebeg="${start_time}"
 else
-    timebeg="${nextdate}${start_time}"
+    ((10#$start_time > starthour )) && timebeg="${eventdate}${start_time}" || timebeg="${nextdate}${start_time}"
+fi
+
+if [[ ${#end_time} -eq 12 ]]; then
+    timeend=${end_time}
+else
+    ((10#$end_time > starthour )) && timeend="${eventdate}${end_time}" || timeend="${nextdate}${end_time}"
 fi
 
 if [[ ! -t 1  && ! "$cmd" == "check" ]]; then # "jobs"
@@ -221,7 +230,7 @@ for((i=timebeg_s;i<=timeend_s;i+=900)); do
     hh=${timestr:8:2}
     anl_min=${timestr:10:2}
 
-    if [[ $hh -lt 15 ]]; then
+    if ((10#$eventhour < starthour )); then
         evtdate=$(date -d "$yyyy$mm$dd 1 day ago" +%Y%m%d)
         evty=${evtdate:0:4}
         evtm=${evtdate:4:2}
@@ -267,7 +276,7 @@ for((i=timebeg_s;i<=timeend_s;i+=900)); do
     if [[ ! -e ${WORK_dir}/${seq_filename} ]]; then
 
         #MPAS_INITFILE=${MPASWoFS_DIR}/${evty}${evtm}${evtd}/dacycles/${phh}${pmin}/wofs_mpas_01.restart.${mpas_timestr}.nc
-        MPAS_INITFILE=${run_dir}/${evty}${evtm}${evtd}/init/wofs_mpas.invariant.nc
+        MPAS_INITFILE=${run_dir}/${eventdate}/init/${domname}.invariant.nc
         if [[ ! -e ${MPAS_INITFILE} ]]; then
             echo "MPAS restart file: ${MPAS_INITFILE} not exist"
             exit 0

@@ -19,8 +19,8 @@ function usage {
     echo " "
     echo "    PURPOSE: Preprocessing Radiance data in $srcdir to $destdir."
     echo " "
-    echo "    DATETIME - Empty: Current UTC date and time"
-    echo "               YYYYmmdd:       run this task for this event date."
+    echo "    DATETIME - Empty:        Current UTC date and time"
+    echo "               YYYYmmdd:     run this task for this event date."
     echo " "
     echo "    COMMAND  - one of [ls, check, fix]"
     echo "               check    List the observations in the $srcdir"
@@ -31,9 +31,13 @@ function usage {
     echo "              -h                  Display this message"
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
-    echo "              -s  start_time      Run task from start_time, default $starthour"
+    echo "              -s  start_time      Run task from start_time as HHMM or YYYYmmddHHMM, default $starthour"
+    echo "              -e  end_time        Run task up to end_time as HHMM or YYYYmmddHHMM, default: $endhour"
     echo "              -d  sub_dir         Subdirectory name after the event date. For example \"/d1\""
+    echo "              -f  conf_file       Runtime configuration file, make it the last argument (after WORKDIR)."
     echo "              -o                  Data separated at 00 UTC."
+    echo "              --srcdir  ${srcdir} "
+    echo "                                  Absolute path for the netCDF formatted files."
     echo " "
     echo " "
     echo "                                     -- By Y. Wang (2024.04.26)"
@@ -52,8 +56,11 @@ cmd=""
 starthour=1500
 endhour=0300
 
-timeend=${eventdateDF}
+conf_file=""
 
+end_time=${eventdateDF}
+
+nextday=true
 if ((10#$eventhour < 12 )); then
     eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
     nextday=true
@@ -86,12 +93,33 @@ while [[ $# -gt 0 ]]; do
             verb=true
             ;;
         -s)
-            if [[ $2 =~ ^[0-9]{4}$ ]]; then
-                starthour="$2"
+            if [[ $2 =~ ^[0-9]{4}$ || $2 =~ ^[0-9]{12}$ ]]; then
+                start_time="$2"
             else
                 echo ""
-                echo "ERROR: expecting HHMM, get [$key]."
+                echo "ERROR: expecting HHMM or YYYYmmddHHMM, get [$key]."
                 usage 3
+            fi
+            shift
+            ;;
+        -e)
+            if [[ $2 =~ ^[0-9]{4}$ || $2 =~ ^[0-9]{12}$ ]]; then
+                end_time="$2"
+            else
+                echo ""
+                echo "ERROR: expecting HHMM or YYYYmmddHHMM, get [$key]."
+                usage 3
+            fi
+            shift
+            ;;
+        -f)
+            if [[ -f ${2} ]]; then
+                conf_file=$2
+            elif [[ -f ${run_dir}/$2 ]]; then
+                conf_file=${run_dir}/$2
+            else
+                echo "ERROR: Runtime configruation file not found, get [$2]."
+                usage 2
             fi
             shift
             ;;
@@ -107,6 +135,14 @@ while [[ $# -gt 0 ]]; do
         -o )
             dirsp=true
             ;;
+        --srcdir )
+            if [[ -d $2 ]]; then
+                src_dir="$2"
+            else
+                echo "ERROR: src_dir=$2 does not exist."
+                usage 2
+            fi
+            ;;
         -*)
             echo "Unknown option: $key"
             usage 2
@@ -117,17 +153,6 @@ while [[ $# -gt 0 ]]; do
         *)
             if [[ $key =~ ^[0-9]{8}$ ]]; then
                 eventdate=${key}
-                nextdate=$(date -d "$eventdate 1 day" +%Y%m%d)
-                timeend="${nextdate}${endhour}"
-                nextday=true
-            elif [[ $key =~ ^[0-9]{12}$ ]]; then
-                eventdate=${key:0:8}
-                eventhour=${key:8:2}
-                if [[ $((10#$eventhour)) -lt 12 ]]; then
-                    eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
-                    nextday=true
-                fi
-                timeend="${key}"
             elif [[ -d $key ]]; then
                 run_dir="$key"
             else
@@ -140,7 +165,10 @@ while [[ $# -gt 0 ]]; do
     shift # past argument or value
 done
 
-conf_file="${run_dir}/config.${eventdate}"
+if [[ -z ${conf_file} ]]; then
+    conf_file="${run_dir}/config.${eventdate}"
+fi
+
 if [[ -e ${conf_file} ]]; then
     eval "$(sed -n "/OBS_DIR=/p" ${conf_file})"
     destdir="${OBS_DIR}/Radiance"
@@ -153,7 +181,25 @@ else
     fi
 fi
 
+echo -e "\nUse runtime Configruation file: ${CYAN}${conf_file}${NC}. Event Date: ${PURPLE}${eventdate}${NC}. Start time: ${YELLOW}${start_time}${NC}.\n"
+
 nextdate=$(date -u -d "${eventdate} 1 day" +%Y%m%d)
+
+if [[ ${#start_time} -eq 12 ]]; then
+    timebeg="${start_time}"
+elif ((10#$start_time > starthour )); then
+    timebeg="${eventdate}${start_time}"
+else
+    timebeg="${nextdate}${start_time}"
+fi
+
+if [[ ${#end_time} -eq 12 ]]; then
+    timeend=${end_time}
+elif ((10#$end_time > starthour )); then
+    timeend="${eventdate}${end_time}"
+else
+    timeend="${nextdate}${end_time}"
+fi
 
 if [[ ! -t 1 && ! "$cmd" == "check" ]]; then # "jobs"
     log_dir="${run_dir}/${eventdate}"
@@ -173,13 +219,15 @@ echo "=== $(date +%Y%m%d_%H:%M:%S) - $0 ${saved_args} ==="
 case $cmd in
     ls | fix)
         echo -e "\n${LIGHT_BLUE}${destdir}${NC}:"
-        beg_sec=$(date -d "${eventdate} ${starthour}"     +%s)
+        beg_sec=$(date -d "${timebeg:0:8} ${timebeg:8:4}" +%s)
         end_sec=$(date -d "${timeend:0:8} ${timeend:8:4}" +%s)
         n=0; missedfiles=()
         for ((i=beg_sec;i<=end_sec;i+=900)); do
             datestr=$(date -d @$i +%Y%m%d%H%M)
             for chan in "C08" "C10"; do
-                filename="obs_seq_abi.G16_${chan}.${datestr}"
+                filename=$(compgen -G "${destdir}/obs_seq_abi.G1[69]_${chan}.${datestr}")
+                [[ -n $filename ]] && filename=$(basename $filename) || filename="obs_seq_abi.G16_${chan}.${datestr}"
+
                 if (( n%4 == 0)); then echo ""; fi
                 if [[ -e ${destdir}/$filename ]]; then
                     echo -ne "    ${GREEN}$filename${NC}"
@@ -203,7 +251,7 @@ case $cmd in
         ;;
 
     check )
-        beg_sec=$(date -d "${eventdate} ${starthour}"     +%s)
+        beg_sec=$(date -d "${timebeg:0:8} ${timebeg:8:4}" +%s)
         end_sec=$(date -d "${timeend:0:8} ${timeend:8:4}" +%s)
         goesfiles=()
         m=0
@@ -212,8 +260,12 @@ case $cmd in
             [[ $dirsp == true ]] && dirdate="${datestr}" || dirdate="${eventdate}"
             timestr=$(date -d @$i +%H%M)
             filename="${timestr}-goes.nc"
-            if [[ -e ${srcdir}/${dirdate}${subdir}/$filename ]]; then
+            [[ -n $src_dir ]] && mdir="$src_dir" || mdir="${srcdir}/${dirdate}${subdir}"
+            if [[ -e ${mdir}/$filename ]]; then
                 goesfiles+=("${filename}")
+                ((m++))
+            elif [[ -e ${mdir}/${datestr}${timestr}_GOES19_TB_CLRSKY.nc ]]; then
+                goesfiles+=("${datestr}${timestr}_GOES19_TB_CLRSKY.nc")
                 ((m++))
             else
                 goesfiles+=("${timestr}-missing")
@@ -221,18 +273,22 @@ case $cmd in
         done
 
         if [[ -t 1 ]]; then
-            echo -e "\n${LIGHT_BLUE}${srcdir}/${eventdate}${subdir}${NC}:"
+            [[ -n $src_dir ]] && mdir="$src_dir" || mdir="${srcdir}/${eventdate}${subdir}"
+            echo -e "\n${LIGHT_BLUE}${mdir}${NC}:"
             n=0; dirdate=${eventdate}; next1=true
             for filename in "${goesfiles[@]}"; do
                 if (( n%4 == 0)); then echo ""; fi
-                if [[ "${filename:0:4}" -lt 1200 && "$next1" == true && $dirsp == true ]]; then
+                filehr=$((10#${filename:0:4}))
+                if [[ "${filehr}" -le 1200 && "$next1" == true && $dirsp == true ]]; then
+                    [[ -n $src_dir ]] && mdir="$src_dir" || mdir="${srcdir}/${nextdate}${subdir}"
                     echo ""
-                    echo -e "\n${LIGHT_BLUE}${srcdir}/${nextdate}${subdir}${NC}:"
+                    echo -e "\n${LIGHT_BLUE}${mdir}${NC}:"
                     echo ""
                     dirdate=${nextdate}
                     next1=false
                 fi
-                if [[ -e ${srcdir}/${dirdate}${subdir}/$filename ]]; then
+                [[ -n $src_dir ]] && mdir="$src_dir" || mdir="${srcdir}/${dirdate}${subdir}"
+                if [[ -e ${mdir}/$filename ]]; then
                     echo -ne "    ${GREEN}$filename${NC}"
                 else
                     echo -ne "    ${PURPLE}$filename${NC}"
@@ -267,11 +323,11 @@ case $cmd in
             #            -o /scratch/ywang/MPAS/mpas_scripts/run_dirs/OBS_SEQ/Radiance \
             #            -c $channel                                                   \
             #            -d ${1-20220527}
-            python abiobs2dart_tb.py -i "${srcdir}/${eventdate}${subdir}"       \
-                        -o "${destdir}" -c $channel -d "${eventdate}"
+            [[ -n $src_dir ]] && mdir="$src_dir" || mdir="${srcdir}/${eventdate}${subdir}"
+            python abiobs2dart_tb.py -i "${mdir}" -o "${destdir}" -c $channel -d "${eventdate}"
             if [[ $nextday == true && $dirsp == true ]]; then
-                python abiobs2dart_tb.py -i "${srcdir}/${nextdate}${subdir}"   \
-                        -o "${destdir}" -c $channel -d "${nextdate}"
+                [[ -n $src_dir ]] && mdir="$src_dir" || mdir="${srcdir}/${nextdate}${subdir}"
+                python abiobs2dart_tb.py -i "${mdir}" -o "${destdir}" -c $channel -d "${nextdate}"
             fi
         done
         ;;

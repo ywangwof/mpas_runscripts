@@ -55,7 +55,8 @@ function usage {
     echo " "
     echo "    PURPOSE: Make initial ensemble files before the MPAS-WOFS DA cycles"
     echo " "
-    echo "    DATETIME - Case date and time in YYYYMMDD, Default for today"
+    echo "    DATETIME - Case date and time as YYYYmmdd, Default for today use default intialization time 1500."
+    echo "               Or use YYYYmmddHHMM as the intialization date and time."
     echo "    WORKDIR  - Run Directory"
     echo "    JOBS     - One or more jobs from [ungrib,init,clean,cleanungrib]"
     echo "               Default all jobs in sequence"
@@ -156,17 +157,9 @@ function parse_args {
                     args["eventdate"]=${key:0:8}
                     args["eventtime"]=${key:8:4}
                 elif [[ $key =~ ^[0-9]{8}$ ]]; then
-                    args["eventdate"]=${key}
+                    args["eventdate"]="${key}"
                 elif [[ -d $key ]]; then
-                    WORKDIR=$key
-                    lastdir=$(basename $WORKDIR)
-                    if [[ $lastdir =~ ^[0-9]{8}$ ]]; then
-                        args["WORKDIR"]=$(dirname ${WORKDIR})
-                        args["eventdate"]=${lastdir}
-                    else
-                        args["WORKDIR"]=$WORKDIR
-                    fi
-                    #echo $WORKDIR,$eventdate,$eventtime
+                    args["WORKDIR"]="${key}"
                 elif [[ -f $key ]]; then
                     args["config_file"]="${key}"
                 else
@@ -743,6 +736,7 @@ fi
 #
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
+
 rundir="$WORKDIR/${eventdate}"
 if [[ ! -d $rundir ]]; then
     mkdir -p $rundir
