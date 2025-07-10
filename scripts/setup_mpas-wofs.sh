@@ -111,6 +111,8 @@ function usage {
     echo -e "              -l             L60.txt     Vertical level file"
     echo -e "              -o             filename    Ouput file name of the configuration file for this case"
     echo -e "                                         Default: \${WORKDIR}/config.\${eventdate}\${affix}"
+    echo -e "              --init         1400        Initial time string for HRRRE"
+    echo -e "              --lbc          1200        Lateral boundary starting string for HRRRE"
     echo -e " "
     echo -e "   DEFAULTS:"
     echo    "              eventdate             = ${eventdateDF}"
@@ -255,6 +257,14 @@ function parse_args {
                 ;;
             -o)
                 args["caseconfig"]=$2
+                shift
+                ;;
+            --init )
+                args['init']=$2
+                shift
+                ;;
+            --lbc )
+                args['lbc']=$2
                 shift
                 ;;
             -*)
@@ -849,6 +859,7 @@ EOF
         [NOPART]="${npestatic}"
         [JOBNAME]="static_${jobname}"
         [CPUSPEC]="${claim_cpu_static}"
+        [DOMNAME]="${domname}"
     )
     submit_a_job "$wrkdir" "static" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
 }
@@ -1575,7 +1586,8 @@ function check_obs_files {
     mapfile -t my_array < <( ${rootdir}/observations/prepbufr_wofs.sh -f "config.${eventdate}${affix}" check ${eventdate} )
     #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/prepbufr_wofs.sh check ${eventdate} && printf '\0')
     read -r -a obsfiles <<< "${my_array[-1]}"
-    echo -e "${DARK}observations/prepbufr_wofs.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} PrepBufr files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${BUFR_DIR}${NC}."
+    echo -ne "${DARK}observations/prepbufr_wofs.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} PrepBufr files"
+    echo -e  " from ${LIGHT_BLUE}${MESO_DIR}${NC}/${BROWN}${eventdate:0:4}/${eventdate:4:2}/${eventdate:6:2}${NC} ...."
     n=0
     for fn in "${obsfiles[@]}"; do
         if (( n%4 == 0 )); then echo ""; fi
@@ -1595,7 +1607,8 @@ function check_obs_files {
     mapfile -t my_array < <( ${rootdir}/observations/okmeso_15min.sh check ${eventdate} )
     #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/okmeso_15min.sh check ${eventdate} && printf '\0')
     read -r -a obsfiles <<< "${my_array[-1]}"
-    echo -e "${DARK}observations/okmeso_15min.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} Mesonet files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${MESO_DIR}${NC}."
+    echo -ne "${DARK}observations/okmeso_15min.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} Mesonet files"
+    echo -e  " from ${LIGHT_BLUE}${MESO_DIR}${NC}/${BROWN}${eventdate:0:4}/${eventdate:4:2}/${eventdate:6:2}${NC} ...."
     n=0
     for fn in "${obsfiles[@]}"; do
         if (( n%3 == 0 )); then echo ""; fi
@@ -1612,11 +1625,12 @@ function check_obs_files {
     # Check the CWP files availability
     #
     eval "$(sed -n "/srcdir=/p" ${rootdir}/observations/run_cwpobs.sh)"
-    mapfile -t my_array < <( ${rootdir}/observations/run_cwpobs.sh check ${eventdate} )
+    mapfile -t my_array < <( ${rootdir}/observations/run_cwpobs.sh -d /${domname##*_} check ${eventdate} )
     #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/prepbufr_wofs.sh check ${eventdate} && printf '\0')
     read -r -a obsfiles <<< "${my_array[-1]}"
     # shellcheck disable=SC2154
-    echo -e "${DARK}observations/run_cwpobs.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} CWP files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${srcdir}${NC}."
+    echo -ne "${DARK}observations/run_cwpobs.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} CWP files"
+    echo -e " from ${LIGHT_BLUE}${srcdir}/${BROWN}${eventdate}${NC}/${domname##*_}${NC} ..."
     n=0
     for fn in "${obsfiles[@]}"; do
         if (( n%4 == 0 )); then echo ""; fi
@@ -1633,10 +1647,11 @@ function check_obs_files {
     # Check the GOES files availability
     #
     eval "$(sed -n "/srcdir=/p" ${rootdir}/observations/run_radiance.sh)"
-    mapfile -t my_array < <( ${rootdir}/observations/run_radiance.sh check ${eventdate} )
+    mapfile -t my_array < <( ${rootdir}/observations/run_radiance.sh -d /${domname##*_} check ${eventdate} )
     #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/run_radiance.sh check ${eventdate} && printf '\0')
     read -r -a obsfiles <<< "${my_array[-1]}"
-    echo -e "${DARK}observations/run_radiance.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} Radiance files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${srcdir}${NC}."
+    echo -ne "${DARK}observations/run_radiance.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} Radiance files"
+    echo -e " from ${LIGHT_BLUE}${srcdir}/${BROWN}${eventdate}${NC}/${domname##*_}${NC} ..."
     n=0
     for fn in "${obsfiles[@]}"; do
         if (( n%4 == 0 )); then echo ""; fi
@@ -1656,7 +1671,8 @@ function check_obs_files {
     mapfile -t my_array < <( ${rootdir}/observations/link_radar.sh -d /${domname##*_}/DART check ${eventdate} )
     #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/link_radar.sh check ${eventdate} && printf '\0')
     read -r -a obsfiles <<< "${my_array[-3]}"
-    echo -e "${DARK}observations/link_radar.sh${NC}: Found ${GREEN}${my_array[-4]}${NC} Reflectivity files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${srcdir}${NC}."
+    echo -ne "${DARK}observations/link_radar.sh${NC}: Found ${GREEN}${my_array[-4]}${NC} Reflectivity files "
+    echo -e " from ${LIGHT_BLUE}${srcdir}${NC}/${BROWN}${eventdate}${NC}/${domname##*_}/DART ...."
     n=0
     for fn in "${obsfiles[@]}"; do
         if (( n%4 == 0 )); then echo ""; fi
@@ -1676,7 +1692,8 @@ function check_obs_files {
     declare -A velfiles=()
     typeset2array "${my_array[-1]}" "velfiles"
 
-    echo -e "${DARK}observations/link_radar.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} Radial Velocity files on ${BROWN}${eventdate}${NC} from ${LIGHT_BLUE}${srcdir}${NC}."
+    echo -ne "${DARK}observations/link_radar.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} Radial Velocity files"
+    echo -e " from ${LIGHT_BLUE}${srcdir}${NC}/${BROWN}${eventdate}${NC}/${domname##*_}/DART ...."
     echo ""
 
     declare -a radnames
@@ -1776,6 +1793,9 @@ setup_machine "${args['machine']}" "$rootdir" true true
 [[ -v args["eventdate"] ]] && eventdate="${args['eventdate']}" || eventdate="$eventdateDF"
 [[ -v args["eventtime"] ]] && eventtime="${args['eventtime']}" || eventtime="1500"
 
+[[ -v args["init"] ]] && inittime="${args['init']}" || inittime="1400"
+[[ -v args["lbc"] ]]  && lbctime="${args['lbc']}"   || lbctime="1200"
+
 [[ -v args["caseconfig"] ]] && caseconfig="${args['caseconfig']}" || caseconfig="${WORKDIR}/config.${eventdate}${affix}"
 
 #
@@ -1812,8 +1832,8 @@ EXTINVL=10800
 EXTHEAD="HRRRE"
 #hrrrvtable="Vtable.raphrrr"
 hrrrvtable="Vtable.HRRRE.2018"
-hrrr_time_ics="1400"
-hrrr_time_lbc="1200"
+hrrr_time_ics="${inittime}"
+hrrr_time_lbc="${lbctime}"
 hrrr_sub_ics="postprd_mem00"         # + 2-digit member string
 hrrr_sub_lbc="postprd_mem00"         # + 2-digit member string
 

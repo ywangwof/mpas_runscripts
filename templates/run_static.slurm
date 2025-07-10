@@ -32,6 +32,9 @@ touch running.static
 RUNMPCMD -n NOPART EXEDIR/init_atmosphere_model
 
 if [[ $? -eq 0 ]]; then
+    source ROOTDIR/modules/env.python
+    mv DOMNAME.static.nc static_badLAI.nc
+    ncap2 -O -s 'lai12m = 0.1f*lai12m' static_badLAI.nc DOMNAME.static.nc
     touch done.static
 else
     touch error.static
