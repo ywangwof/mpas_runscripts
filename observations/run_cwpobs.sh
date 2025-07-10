@@ -51,18 +51,17 @@ function usage {
 #show=""
 #verb=false
 eventdate=${eventdateDF:0:8}
-eventhour=${eventdateDF:8:2}
+eventtime=${eventdateDF:8:4}
 cmd=""
 
 starthour=1500
 endhour=0300
 
-end_time=${eventdateDF}
+start_time="${starthour}"
+end_time="${endhour}"
 
-nextday=true
-if [[ $((10#$eventhour)) -lt 15 ]]; then
+if ((10#$eventtime < starthour)); then
     eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
-    nextday=true
 fi
 
 conf_file=""
@@ -189,14 +188,17 @@ nextdate=$(date -u -d "${eventdate} 1 day" +%Y%m%d)
 if [[ ${#start_time} -eq 12 ]]; then
     timebeg="${start_time}"
 else
-    ((10#$start_time > starthour )) && timebeg="${eventdate}${start_time}" || timebeg="${nextdate}${start_time}"
+    ((10#$start_time < starthour )) && timebeg="${nextdate}${start_time}" || timebeg="${eventdate}${start_time}"
 fi
 
 if [[ ${#end_time} -eq 12 ]]; then
     timeend=${end_time}
+    end_time="${timeend:8:4}"
 else
-    ((10#$end_time > starthour )) && timeend="${eventdate}${end_time}" || timeend="${nextdate}${end_time}"
+    ((10#$end_time < starthour )) && timeend="${nextdate}${end_time}" || timeend="${eventdate}${end_time}"
 fi
+
+((10#$end_time < starthour )) && nextday=true || nextday=false
 
 if [[ ! -t 1 && ! "$cmd" == "check" ]]; then # "jobs"
     log_dir="${run_dir}/${eventdate}"

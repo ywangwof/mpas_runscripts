@@ -242,8 +242,7 @@ startday=""
 if [[ ${#starttime} -eq 12 ]]; then
     startdatetime=${starttime}
 else
-    starthour=${starttime:0:2}
-    (( 10#$starthour < 15 )) && startday="1 day"
+    (( 10#$starttime < 1500 )) && startday="1 day"
     startdatetime="${eventdate}${starttime}"
 fi
 
@@ -251,8 +250,7 @@ endday=""
 if [[ ${#endtime} -eq 12 ]]; then
     enddatetime=${endtime}
 else
-    endhour=${endtime:0:2}
-    (( 10#$endhour < 15 )) && endday="1 day"
+    (( 10#$endtime < 1500 )) && endday="1 day"
     enddatetime="${eventdate}${endtime}"
 fi
 

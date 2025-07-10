@@ -748,16 +748,14 @@ fi
 if [[ ${#endtime} -eq 12 ]]; then
     enddatetime=${endtime}
 else
-    endhour=${endtime:0:2}
-    if ((10#$endhour <= 12)); then
+    if ((10#$endtime < 1500)); then
         enddatetime=$(date -u -d "${eventdate} ${endtime} 1 day" +%Y%m%d%H%M)
     else
         enddatetime=$(date -u -d "${eventdate} ${endtime}" +%Y%m%d%H%M)
     fi
 fi
 
-stophour=${stoptime:0:2}
-if ((10#$stophour < 12)); then
+if ((10#$stoptime < 1500)); then
     stopdatetime=$(date -u -d "${eventdate} ${stoptime} 1 day" +%Y%m%d%H%M)
 else
     stopdatetime=$(date -u -d "${eventdate} ${stoptime}" +%Y%m%d%H%M)

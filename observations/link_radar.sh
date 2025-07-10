@@ -57,18 +57,18 @@ function join_by {
 show=""
 #verb=false
 eventdate=${eventdateDF:0:8}
-eventhour=${eventdateDF:8:2}
+eventtime=${eventdateDF:8:4}
 cmd=""
 conf_file=""
 
-if ((10#$eventhour < 12)); then
+if ((10#$eventtime < starthour)); then
     eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
 fi
-nextdate=$(date -d "$eventdate 1 day" +%Y%m%d)
+
 default_date=true
 
-start_time=$starthour
-end_time=${eventdateDF}
+start_time="${starthour}"
+end_time="${endhour}"
 
 #subdir="/d1/DART"
 subdir=""
@@ -149,6 +149,7 @@ while [[ $# -gt 0 ]]; do
         *)
             if [[ $key =~ ^[0-9]{8}$ ]]; then
                 eventdate="${key}"
+                default_date=false
             elif [[ -d $key ]]; then
                 run_dir="$key"
             elif [[ -f $key ]]; then
@@ -175,8 +176,6 @@ else
     if [[ ${conf_file} =~ config\.([0-9]{8})(.*) ]]; then
         if [[ "${default_date}" == true ]]; then
             eventdate="${BASH_REMATCH[1]}"
-            nextdate=$(date -d "$eventdate 1 day" +%Y%m%d)
-            timeend=$(date -d "$eventdate ${endhour} 1 day" +%Y%m%d%H%M)
         fi
     else
         echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not the right format config.YYYYmmdd[_*]."
@@ -201,18 +200,14 @@ nextdate=$(date -u -d "${eventdate} 1 day" +%Y%m%d)
 
 if [[ ${#start_time} -eq 12 ]]; then
     timebeg="${start_time}"
-elif ((10#$start_time > starthour )); then
-    timebeg="${eventdate}${start_time}"
 else
-    timebeg="${nextdate}${start_time}"
+    ((10#$start_time < starthour )) && timebeg="${nextdate}${start_time}" || timebeg="${eventdate}${start_time}"
 fi
 
 if [[ ${#end_time} -eq 12 ]]; then
     timeend=${end_time}
-elif ((10#$end_time > starthour )); then
-    timeend="${eventdate}${end_time}"
 else
-    timeend="${nextdate}${end_time}"
+    ((10#$end_time < starthour )) && timeend="${nextdate}${end_time}" || timeend="${eventdate}${end_time}"
 fi
 
 if [[ ! -t 1 && ! "$cmd" == "check" ]]; then # "jobs"
