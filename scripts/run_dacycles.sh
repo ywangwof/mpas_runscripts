@@ -494,9 +494,7 @@ function run_obsmerge {
         if [[ $rt_run == true ]]; then
 
             numrad=$(find ${RAD_DIR}/ -name "${rad_files}" | wc -l)
-            if [[ $numrad -ne ${#channels[@]} ]]; then
-                echo "    Waiting for Radiance/${rad_files} ...."
-            fi
+            [[ $numrad -ne ${#channels[@]} ]] && echo "    Waiting for Radiance/${rad_files} ...."
             while [[ $numrad -ne ${#channels[@]} ]]; do
                 nummis=$(find ${RAD_DIR}/ -name "${rad_files}.missed" | wc -l)
                 if [[ $nummis -gt 0 ]]; then

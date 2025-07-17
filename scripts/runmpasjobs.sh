@@ -528,7 +528,9 @@ snd )
 #7. diag
 diag )
     cd "${script_dir}" || exit 1
-    cmds=("${script_dir}/plot_allobs.sh" -s "${starttime}" -e "${endtime}" "${config_file}" "${eventdate}")
+    cmds=("${script_dir}/plot_allobs.sh" "${config_file}" "${eventdate}")
+    [[ "${starttime}" != "${default_fcsttime}" ]] && cmds+=(-s "${startdatetime}")
+    [[ "${endtime}"   != "${default_endtime}"  ]] && cmds+=(-e "${enddatetime}")
     if [[ -n "${taskopt}" ]]; then cmds+=("${taskopt}");  fi
     ;;
 

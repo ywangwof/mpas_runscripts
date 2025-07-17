@@ -24,6 +24,10 @@
 # o num_pending_jobs_greater_than       # Check number of jobs in the queue before submit a new job to avoid job flooding
 # o mecho/mecho0/mecho1/mecho2    # Print text with function name prefix
 # o split_graph              # Split graph.info file for the corresponding MPI processes
+# o sortnumarray             # Sort a number array and get a string
+# o sortnumarrayuniq         # Sort a number array by removing duplicates and get a string
+# o nums2range               # Condense a number array into a string with comma separated number and dash denotes range
+# o expand_range             # Get a number array string from the condensed number string
 
 ########################################################################
 
@@ -348,11 +352,11 @@ function check_job_status {
     fi
 
     if [[ ${#errorjobarray[@]} -gt 0 ]]; then
-        outmessage="$outmessage; failed: ${#errorjobarray[@]} - [${LIGHT_RED}${errorjobarray[*]}${NC}]"
+        outmessage="$outmessage; failed: ${#errorjobarray[@]} - [${LIGHT_RED}$(nums2range "${errorjobarray[@]}")${NC}]"
     fi
 
     if [[ ${#abortjobarray[@]} -gt 0 ]]; then
-        outmessage="$outmessage; SLURM failed: ${#abortjobarray[@]} - [${RED}${abortjobarray[*]}${NC}]"
+        outmessage="$outmessage; SLURM failed: ${#abortjobarray[@]} - [${RED}$(nums2range "${abortjobarray[@]}")${NC}]"
     fi
 
     mecho1 "$outmessage"
@@ -895,3 +899,112 @@ function split_graph {
 
     cd "${wrkdir}" || exit $?
 }
+
+########################################################################
+
+function sortnumarray {
+    local IFS=$'\n'
+
+    local sorted_numbers
+    mapfile -t sorted_numbers < <(sort -n <<<"${*}")
+
+    echo "${sorted_numbers[@]}"
+}
+#-----------------------------------------------------------------------
+function sortnumarrayuniq {
+    local unique_array
+    readarray -t unique_array < <(printf "%s\n" "$@" | sort -n | uniq)
+    echo "${unique_array[@]}"
+}
+#-----------------------------------------------------------------------
+function nums2range {
+
+    # condense a sorted number list into a comma separted string with single numbers or ranges of numbers
+
+    local str
+    local num first last inrange
+    #echo $numbers, | sed "s/,/\n/g" | while read num; do
+    #i=0
+    for num in "$@"; do
+        #(( i++ ))
+        #echo "$i/$#: num = $num, first=$first, last=$last -> $str"
+        if [[ -z $first ]]; then
+            first=$num
+            last=$num
+            continue
+        fi
+
+        if [[ $num -ne $((last + 1)) ]]; then
+            [[ $first -eq $last ]] && str+="$first," || str+="$first-$last,"
+            first=$num; last=$num
+            inrange=false
+        else
+            inrange=true
+            ((last++))
+        fi
+
+    done
+    # Handle the last item
+    [[ $inrange == true ]] && str+="$first-$num" || str+="$first"
+
+    echo "${str%%,}"
+}
+#-----------------------------------------------------------------------
+function expand_range {
+
+    # To parse a string containing a list of numbers separated by commas, where ranges are indicated by a dash,
+    # and expand it into a full list of numbers.
+
+    local IFS=,         # Set Internal Field Separator to comma for splitting
+    local numbers_list=""
+
+    local start end
+    for part in $1; do
+        if [[ "$part" =~ ^[0-9]+-[0-9]+$ ]]; then
+            # Handle ranges (e.g., 1-5)
+            start=$(echo "$part" | cut -d'-' -f1)
+            end=$(echo "$part" | cut -d'-' -f2)
+            for ((i=start; i<=end; i++)); do
+                numbers_list+="$i "
+            done
+        elif [[ "$part" =~ ^[0-9]+$ ]]; then
+            # Handle single numbers (e.g., 10)
+            numbers_list+="$part "
+        fi
+    done
+    echo "$numbers_list"
+}
+
+## Example usage:
+#jobs1=(2 3 5 9 8 10 8 11 12 13 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36)
+#jobs2=(2 6 9 12 13 16 18)
+#jobs3=(3 7 10 11 14 15 17)
+#
+#numbers="18,19,62,161,162,163,165"
+#
+#read -ra sortlist <<<$(sortnumarray "${jobs1[@]}")
+#jobs1_str=$(nums2range "${sortlist[@]}")
+#expanded_str=$(expand_range "$jobs1_str")
+#
+#read -ra sortlistuniq <<<$(sortnumarrayuniq "${jobs1[@]}")
+#
+#echo "original list    : ${jobs1[*]}"
+#echo "sorted list      : ${sortlist[*]}, ${#sortlist[@]}"
+#echo "sorted list uniq : ${sortlistuniq[*]}, ${#sortlistuniq[@]}"
+#echo "range str        : $jobs1_str"
+#echo "expanded str     : $expanded_str"
+#
+##nums2range "${jobs2[@]}"
+##nums2range "${jobs3[@]}"
+#
+##input_string="1-3,5,8-10,12"
+##expanded_numbers=$(expand_range "$input_string")
+##echo "Expanded numbers: $expanded_numbers"
+##
+### To store them in an array:
+##IFS=" " read -r -a number_array <<< "$expanded_numbers"
+##echo "Array elements:"
+##for num in "${number_array[@]}"; do
+##    echo "$num"
+##done
+########################################################################

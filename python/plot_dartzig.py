@@ -915,22 +915,24 @@ def plot_qcnumbers(cargs,wargs,wobj):
 
     ax = figure.add_axes([0.1, 0.2, 0.8, 0.6])       # main axes
 
-    mks = ['o', 'D', '+', '*', 's', 'x', '^', '1']
+    mks = ['o', 'D', '*', '+', 's', 'x', '^', '1']
     cls = ['g', 'r', 'b', 'c', 'k', 'y', 'm', 'k']
 
     qc_vals = sorted(wobj.qc_numbers.keys(), key=int)
     #print(f"qc_vals = {qc_vals}")
 
     for j,qcval in enumerate(qc_vals):
+        #print(f"qc={qcval}: {wobj.qc_numbers[qcval]}")
         ax.plot(wobj.times,wobj.qc_numbers[qcval],color=cls[j],label=QCValMeta[qcval])
         x=np.array(wobj.times)
         y=np.array(wobj.qc_numbers[qcval])
         xgt0=x[y>0]
         ygt0=y[y>0]
-        ax.scatter(xgt0,ygt0,marker=mks[j],color='k')
+        ax.scatter(xgt0,ygt0,marker=mks[j],color=cls[j])
 
     #print(f"Ploting {wobj.type_label} - {wobj.times} -> {wobj.obs_numbers}")
     ax.plot(wobj.times,wobj.obs_numbers,color='k',label="observations within domain")
+    #print(f"all obs: {wobj.obs_numbers}")
 
     ax.set_title(f'Numbers of {wobj.type_label} for {wargs.eventdate} ')
     ax.set_xticks(wobj.times)
@@ -1117,7 +1119,7 @@ if __name__ == "__main__":
         starttime = cargs.starttime
         endtime   = cargs.endtime
 
-        delta1day_s = 0
+        delta1day_s = timedelta(seconds=0)
         if len(starttime) == 12:
             startdatetime=starttime
         elif len(starttime) == 4:
@@ -1125,7 +1127,7 @@ if __name__ == "__main__":
             if starttime < "1500":
                 delta1day_s =  timedelta(days=1)
 
-        delta1day_e = 0
+        delta1day_e = timedelta(seconds=0)
         if len(endtime) == 12:
             enddatetime=endtime
         elif len(endtime) == 4:

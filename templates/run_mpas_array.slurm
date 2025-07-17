@@ -37,9 +37,7 @@ touch running.fcst_$memstr
 rm -rf error.fcst_$memstr queue.fcst_$memstr
 
 # first recover namelist parameters for possibly an old run.
-sed -i -e "/config_pio_num_iotasks/s/[0-9]\+/NNNODE/;/config_pio_stride/s/[0-9]\+/NNCORE/" namelist.atmosphere
-
-sed -i "s/NNNODE/$nnode/;s/NNCORE/$ncores/;" namelist.atmosphere
+sed -i -e "/config_pio_num_iotasks/s/=.*/= $nnode/g;/config_pio_stride/s/=.*/= $ncores/" namelist.atmosphere
 
 RUNMPCMD -n NOPART EXEDIR/atmosphere_model
 
