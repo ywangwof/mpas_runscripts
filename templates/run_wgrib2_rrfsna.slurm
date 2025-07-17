@@ -1,4 +1,4 @@
-#!/bin/sh -l
+#!/bin/bash
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=1 --cpus-per-task=12
@@ -118,16 +118,16 @@ function grid_defn {
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-cd WRKDIR
-
-touch running.wgrib2_${hstr}
-rm -rf error.wgrib2_${hstr} queue.wgrib2
+cd WRKDIR || exit $?
 
 wgrib2path="wgrib2"
 verb=VERBOSE
 
 fhr=${SLURM_ARRAY_TASK_ID}
 hstr=$(printf "%02d" $fhr)
+
+touch running.wgrib2_${hstr}
+rm -rf error.wgrib2_${hstr} queue.wgrib2_${hstr}
 
 rrfsfile="GRIBFILE$hstr.na.grib2"
 basefn="TARGETFILE$hstr.na.grib2"
@@ -241,15 +241,7 @@ if [[ $verb -ne 1 ]]; then
     rm -rf ${tmpfile}
 fi
 
-
 time2=$(date '+%s')
 
-let diff=time2-time1
-let hour=diff/3600
-let diff=diff%3600
-let min=diff/60
-let sec=diff%60
-
-echo -n "Job   Ended: $(date). "
-printf 'Job run time:  %02d:%02d:%02d' $hour $min $sec
-echo " "
+diff=$((time2-time1))
+printf "\nJob   Ended: %(%a %b %d %H:%M:%S %Z %Y)T. Job run time: %s.\n" $time2 $(date -d@$diff -u +%H:%M:%S)

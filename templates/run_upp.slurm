@@ -24,6 +24,7 @@ if [[ "MACHINE" == "Jet" ]]; then
     module use ROOTDIR/modules
     module load MODULE
     module load gnu/13.2.0 wgrib2/3.1.1_wmo
+    export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/lfs5/NAGAPE/hpc-wof1/ywang/tools/micromamba/envs/wofs_an/lib
     wgrib2path="/apps/wgrib2/3.1.1/gnu_13.2.0/wmo/bin/wgrib2"
 else
     # shellcheck source=/dev/null # to ignore source path error

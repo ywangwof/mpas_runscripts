@@ -3,11 +3,10 @@
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
 
-desdir=${rootdir}/fix_files
-
 myhost=$(hostname)
 if [[ "${myhost}" == "ln"* ]]; then
     srcroot="/scratch/ywang/MPAS"
+    tool_dir="/scratch/ywang/tools"
 
     srcmpassitdir=${srcroot}/gnu/MPASSIT
     srcuppdir=${srcroot}/gnu/UPP_KATE_kjet
@@ -19,6 +18,8 @@ elif [[ "${myhost}" == "cheyenne"* || ${myhost} == "derecho"* ]]; then
     rootdir="/glade/work/ywang/mpas_runscripts"
     scpdir="/glade/work/ywang/mpas_runscripts/scripts"
     srcroot="/glade/work/ywang"
+    tool_dir="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS"
+
     srcmpassitdir=${srcroot}/MPASSIT
     srcuppdir=${srcroot}/UPP_KATE_kjet
     srcmodeldir=${srcroot}/MPAS-Model
@@ -26,14 +27,14 @@ elif [[ "${myhost}" == "cheyenne"* || ${myhost} == "derecho"* ]]; then
     srcwrfdir=${srcroot}/WRFV4.0
     srcdartdir=${srcroot}/DART
 else
-    srcroot="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS"
-
+    srcroot="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS"
+    tool_dir="/home/Yunheng.Wang/local" 
     srcmpassitdir=${srcroot}/MPASSIT
     srcuppdir=${srcroot}/UPP_KATE_kjet
-    srcmodeldir=${srcroot}/MPAS-Model.smiol2
+    srcmodeldir=${srcroot}/MPAS-Model.gsl
     srcwpsdir=${srcroot}/WPS_SRC
     srcwrfdir=${srcroot}/WRFV4.0
-    srcdartdir=${srcroot}/DART
+    srcdartdir=${srcroot}/frdd-DART
     srcmpasregion=${srcroot}/MPAS-Limited-Area
 fi
 
@@ -58,12 +59,13 @@ function usage {
     echo "              -v              Verbose mode"
     echo "              -r              For a run or for fix_files"
     echo "                              Default is for fix_files"
+    echo "              -x  xxx         An appendix to add to exec and fix_files"
     echo "              -s  DIR         Source directory"
     echo "              -m  Machine     Machine name to be run, [Jet or Vecna]"
     echo "              -cmd copy       Command for linking or copying [copy, link, clean] (default: link)"
     echo " "
     echo "   DEFAULTS:"
-    echo "              desdir     = $desdir"
+    echo "              desdir     = ${rootdir}/fix_files\${affix}"
     echo "              srcwps     = $srcwpsdir"
     echo "              srcwrf     = $srcwrfdir"
     echo "              srcmpassit = $srcmpassitdir"
@@ -93,11 +95,26 @@ function run_cmd {
         fi
         $dorun "${cmds[@]}" "${cmdfns[@]}"
     else
+
         for arg in "${cmdfns[@]}"; do
-            if [[ $verb -eq 1 ]]; then
-                echo "${cmds[@]}" "${src_dir}/$arg" "${target}"
+            subdir=$(dirname "$arg")
+            fn=$(basename "$arg")
+            if [[ ! "$subdir" == "." ]]; then
+                srcfn="$src_dir/$subdir/$fn"
+                desdir="$target/$subdir"
+                if [[ ! -e $subdir ]]; then mkdir -p "$subdir"; fi
+                #cd "$subdir" || exit 1
+            else
+                srcfn="$src_dir/$arg"
+                desdir="$target"
             fi
-            $dorun "${cmds[@]}" "${src_dir}/$arg" "${target}"
+
+            if [[ $verb -eq 1 ]]; then echo "${cmds[@]}" "${srcfn}" "${desdir}"; fi
+            $dorun "${cmds[@]}" "${srcfn}" "${desdir}"
+
+            #if [[ -n $subdir ]]; then
+            #    cd ${target} || exit 1
+            #fi
         done
     fi
 }
@@ -119,6 +136,8 @@ doclean=false
 cmdnote=""
 runcmd="ln -sf"
 
+affix=""
+
 while [[ $# -gt 0 ]]
     do
     key="$1"
@@ -138,6 +157,10 @@ while [[ $# -gt 0 ]]
             realrun=true
             packages=(mpas)
             desdir="./"
+            ;;
+        -x )
+            affix="$2"
+            shift
             ;;
         -s )
             if [[ -d $2 ]]; then
@@ -186,6 +209,8 @@ while [[ $# -gt 0 ]]
     shift # past argument or value
 done
 
+desdir=${rootdir}/fix_files${affix}
+
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
 # Perform each task
@@ -193,11 +218,15 @@ done
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\
 #@ MAIN
 
-exedir="$(dirname "${desdir}")/exec"
+exedir="$(dirname "${desdir}")/exec${affix}"
+
+cd "$exedir" || exit 1
+ln -sf ${tool_dir}/bin/gpmetis  .
 
 for pkg in "${packages[@]}"; do
     case ${pkg^^} in
 
+    #1. MPASSIT
     "MPASSIT" )
         srcmpassit=${srcdir-$srcmpassitdir}
 
@@ -211,6 +240,7 @@ for pkg in "${packages[@]}"; do
         run_cmd "${runcmd}" "$srcmpassit/build" mpassit
         ;;
 
+    #2. WRF
     "WRF" )
         srcwps=${srcdir-$srcwpsdir}
         srcwrf=${srcdir-$srcwrfdir}
@@ -224,8 +254,12 @@ for pkg in "${packages[@]}"; do
 
         echo "  -- ${cmdnote} ungrib.exe to $(pwd) ...."
         run_cmd "${runcmd}" "$srcwps/ungrib/src" ungrib.exe
+
+        echo "  -- ${cmdnote} geogrid.exe to $(pwd) ...."
+        run_cmd "${runcmd}" "$srcwps/geogrid/src" geogrid.exe
         ;;
 
+    #3. UPP
     "UPP" )
         srcupp=${srcdir-$srcuppdir}
 
@@ -248,6 +282,7 @@ for pkg in "${packages[@]}"; do
         run_cmd "${runcmd}" "${srcupp}/bin" unipost.exe
         ;;
 
+    #4. DART
     "DART" )
         srcdart=${srcdir-$srcdartdir}
 
@@ -268,6 +303,7 @@ for pkg in "${packages[@]}"; do
             run_cmd "${runcmd}" "$srcdart/models/mpas_atm/work" "${dartprograms[*]}"
         fi
         ;;
+    #5. MPASREGION
     "MPASREGION" )
         if [[ $realrun == false ]]; then
             cd "$(dirname" ${desdir}")" || exit 1
@@ -277,6 +313,8 @@ for pkg in "${packages[@]}"; do
             run_cmd "${runcmd}" "${srcmpasregion}" MPAS-Limited-Area
         fi
         ;;
+
+    #6. MPAS
     "MPAS" )
 
         srcmodel=${srcdir-$srcmodeldir}
@@ -289,26 +327,26 @@ for pkg in "${packages[@]}"; do
 
         staticfiles=(CAM_ABS_DATA.DBL  CAM_AEROPT_DATA.DBL GENPARM.TBL       LANDUSE.TBL    \
                 OZONE_DAT.TBL     OZONE_LAT.TBL       OZONE_PLEV.TBL    RRTMG_LW_DATA  \
-                RRTMG_LW_DATA.DBL RRTMG_SW_DATA       RRTMG_SW_DATA.DBL VEGPARM.TBL )
+                     RRTMG_LW_DATA.DBL RRTMG_SW_DATA       RRTMG_SW_DATA.DBL CCN_ACTIVATE_DATA )
 
         echo ""
         echo "  -- ${cmdnote} runtime static files to ${desdir} ...."
 
         run_cmd "${runcmd}" "${srcmodel}/src/core_atmosphere/physics/physics_wrf/files" "${staticfiles[*]}"
-
-        run_cmd "${runcmd}" "${srcmodel}/src/core_atmosphere/physics/TEMPO/tables" "CCN_ACTIVATE.BIN"
+        run_cmd "${runcmd}" "${srcmodel}/src/core_atmosphere/physics/TEMPO/tables" CCN_ACTIVATE.BIN
 
         if [[ ${realrun} == true ]]; then
             thompsonfiles=(MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL \
-                           MP_THOMPSON_QRacrQG_DATA.DBL MP_THOMPSON_QRacrQS_DATA.DBL)
+                           MP_THOMPSON_QRacrQG_DATA.DBL        MP_THOMPSON_QRacrQS_DATA.DBL  \
+                           MP_TEMPO_freezeH2O_DATA.DBL         MP_TEMPO_QIautQS_DATA.DBL     \
+                           MP_TEMPO_QRacrQG_DATA.DBL           MP_TEMPO_QRacrQS_DATA.DBL     \
+                           MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL CCN_ACTIVATE.BIN )
 
             cd "${desdir}" || exit 1
 
-            run_cmd "${runcmd}" "${rootdir}/fix_files" "${thompsonfiles[*]}"
+            run_cmd "${runcmd}" "${rootdir}/fix_files${affix}" "${thompsonfiles[*]}"
         else
             cd "$desdir" || exit 1
-
-            ln -sf /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/mesh_3km/x1.65536002.grid.nc .
 
             cd "$exedir" || exit 1
             echo ""
@@ -317,7 +355,8 @@ for pkg in "${packages[@]}"; do
             run_cmd "${runcmd}" "$srcmodel" "init_atmosphere_model atmosphere_model"
 
             src_dir=$(dirname "$srcmodel")
-            run_cmd "${runcmd}" "$src_dir/MPAS-Tools/mesh_tools/grid_rotate" grid_rotate
+            #run_cmd "${runcmd}" "$src_dir/MPAS-Tools/mesh_tools/grid_rotate" grid_rotate
+            run_cmd "${runcmd}" "$src_dir/project_hexes"       project_hexes
 
         fi
 

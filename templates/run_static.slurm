@@ -1,4 +1,4 @@
-#!/bin/sh -l
+#!/bin/bash
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
@@ -29,9 +29,12 @@ rm -f queue.static error.static
 
 touch running.static
 
-RUNMPCMD -n NOPART EXEDIR/init_atmosphere_model.static
+RUNMPCMD -n NOPART EXEDIR/init_atmosphere_model
 
 if [[ $? -eq 0 ]]; then
+    module load nco
+    mv DOMNAME.static.nc static_badLAI.nc
+    ncap2 -O -s 'lai12m = 0.1f*lai12m' static_badLAI.nc DOMNAME.static.nc
     touch done.static
 else
     touch error.static
@@ -41,12 +44,7 @@ rm -f running.static
 
 time2=$(date '+%s')
 
-let diff=time2-time1
-let hour=diff/3600
-let diff=diff%3600
-let min=diff/60
-let sec=diff%60
+diff=$((time2-time1))
+printf "\nJob   Ended: %(%a %b %d %H:%M:%S %Z %Y)T. Job run time: %s.\n" $time2 $(date -d@$diff -u +%H:%M:%S)
 
-echo -n "Job   Ended: $(date). "
-printf 'Job run time:  %02d:%02d:%02d' $hour $min $sec
-echo " "
+exit 0

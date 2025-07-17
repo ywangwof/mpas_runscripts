@@ -27,18 +27,22 @@ ulimit -s unlimited
 
 cd WRKDIR
 
-touch running.lbc
-rm -rf error.lbc queue.lbc
+touch running.lbcAPPENDIX
+rm -rf error.lbcAPPENDIX queue.lbcAPPENDIX
+
+ln -sf namelist.init_atmosphereAPPENDIX namelist.init_atmosphere
 
 RUNMPCMD -n NOPART EXEDIR/init_atmosphere_model
 
 if [[ $? -eq 0 ]]; then
-    touch done.lbc
+    touch done.lbcAPPENDIX
 else
-    touch error.lbc
+    touch error.lbcAPPENDIX
 fi
 
-rm -rf running.lbc
+rm -f namelist.init_atmosphere
+
+rm -rf running.lbcAPPENDIX
 
 time2=$(date '+%s')
 

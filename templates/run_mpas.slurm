@@ -31,33 +31,36 @@ fi
 nnode=$SLURM_JOB_NUM_NODES
 if (( NOPART % nnode == 0 )); then
     ncores=$(( NOPART/nnode ))
-#else
-#    echo "Number of tasks (NOPART) is not divisible by number of nodes ($nnode) allocated."
-#    echo "Job cannot be run becasue the setting for \"pio_num_iotasks\""
-#    exit 0
+else
+    echo "Number of tasks (NOPART) is not divisible by number of nodes ($nnode) allocated."
+    echo "Job cannot be run becasue the setting for \"pio_num_iotasks\""
+    exit 0
 fi
 
 ulimit -s unlimited
 
 cd WRKDIR
 
-touch running.fcst
-rm -rf error.fcst queue.fcst
+touch running.fcstAPPENDIX
+rm -rf error.fcstAPPENDIX queue.fcstAPPENDIX
+
+ln -sf namelist.atmosphereAPPENDIX namelist.atmosphere
+ln -sf streams.atmosphereAPPENDIX streams.atmosphere
 
 # first recover namelist parameters for possibly an old run.
-sed -i -e "/config_pio_num_iotasks/s/[0-9]\+/NNNODE/;/config_pio_stride/s/[0-9]\+/NNCORE/" namelist.atmosphere
-
-sed -i "s/NNNODE/$nnode/;s/NNCORE/$ncores/;" namelist.atmosphere
+sed -i -e "/config_pio_num_iotasks/s/=.*/= $nnode/g;/config_pio_stride/s/=.*/= $ncores/" namelist.atmosphere
 
 RUNMPCMD -n NOPART EXEDIR/atmosphere_model
 
 if [[ $? -eq 0 ]]; then
-    touch done.fcst
+    touch done.fcstAPPENDIX
 else
-    touch error.fcst
+    touch error.fcstAPPENDIX
 fi
 
-rm -rf running.fcst
+rm -f streams.atmosphere namelist.atmosphere
+
+rm -rf running.fcstAPPENDIX
 
 time2=$(date '+%s')
 

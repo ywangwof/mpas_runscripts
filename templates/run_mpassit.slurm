@@ -1,4 +1,4 @@
-#!/bin/sh -l
+#!/bin/bash
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
@@ -14,8 +14,10 @@ echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
 if [[ "MACHINE" == "Jet" ]]; then
-    module use ROOTDIR/modules
-    module load MODULE
+    module purge
+    module reset
+    module use /lfs5/NAGAPE/hpc-wof1/ywang/MPAS/MPASSIT.vecna/modulefiles
+    module load build.jet.intel
 
 else
     source ROOTDIR/modules/MODULE
@@ -23,7 +25,7 @@ fi
 
 ulimit -s unlimited
 
-cd WRKDIR
+cd WRKDIR || exit $?
 
 rm -rf error.mpassitHHHSTR queue.mpassitHHHSTR
 
@@ -41,12 +43,7 @@ rm -rf running.mpassitHHHSTR
 
 time2=$(date '+%s')
 
-let diff=time2-time1
-let hour=diff/3600
-let diff=diff%3600
-let min=diff/60
-let sec=diff%60
+diff=$((time2-time1))
+printf "\nJob   Ended: %(%a %b %d %H:%M:%S %Z %Y)T. Job run time: %s.\n" $time2 $(date -d@$diff -u +%H:%M:%S)
 
-echo -n "Job   Ended: $(date). "
-printf 'Job run time:  %02d:%02d:%02d' $hour $min $sec
-echo " "
+exit 0
