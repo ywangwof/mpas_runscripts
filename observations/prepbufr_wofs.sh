@@ -97,6 +97,34 @@ function usage {
 
 ########################################################################
 
+function convert2days {
+    # Convert date/time strings to days/seconds since 1601-01-01
+    # Usage:
+    #   read -r -a g_date < <(convert2days "${anlys_date}" "${anlys_time}")
+    #   echo "${g_date[0]}, ${g_date[1]}"
+    #         days          seconds since 1601-01-01 00:00:00
+
+    local datestr=$1
+    local timestr=$2
+
+    if [[ $# -ne 2 ]]; then
+        echo "No enough argument for \"${FUNCNAME[0]}:\", get: $*"
+        exit 0
+    fi
+
+    # epoch: 1970-01-01 00:00:00 is 134774 days since '1601-01-01'
+    # one day is 86400 seconds
+
+    local g_sec g_days g_secs
+    g_sec=$(date -u -d "${datestr} ${timestr}" +%s)
+    (( g_days=g_sec/86400 + 134774 ))
+    (( g_secs=g_sec-86400*(g_sec/86400) ))
+
+    echo "$g_days $g_secs"
+}
+
+########################################################################
+
 #show=""
 verb=false
 eventdate=${eventdateDF:0:8}
@@ -235,18 +263,21 @@ echo "=== $(date +%Y%m%d_%H:%M:%S) - $0 ${saved_args} ==="
 
 [[ $verb == true ]] && echo "Time: ${timebeg} to ${timeend} ...."
 
-timebeg_s=$(date -d "${timebeg:0:8} ${timebeg:8:4}" +%s)
-timeend_s=$(date -d "${timeend:0:8} ${timeend:8:4}" +%s)
+timebeg_s=$(date -u -d "${timebeg:0:8} ${timebeg:8:4}" +%s)
+timeend_s=$(date -u -d "${timeend:0:8} ${timeend:8:4}" +%s)
 
 bufr_files=(); n=0; missedfiles=()
 for((i=timebeg_s;i<=timeend_s;i+=3600)); do
 
-    timestr=$(date -d @$i +%Y%m%d%H)
+    timestr=$(date -u -d @$i +%Y%m%d%H)
 
     inyear=${timestr:0:4}
     inmonth=${timestr:4:2}
     inday=${timestr:6:2}
     inhour=${timestr:8:2}
+
+    read -r -a days_secs < <(convert2days "${timestr:0:8}" "${timestr:8:2}:00:00")
+    days="${days_secs[0]}"
 
     endyear=${inyear}              # each file contain one valid hour only
     endmonth=${inmonth}
@@ -307,6 +338,7 @@ for((i=timebeg_s;i<=timeend_s;i+=3600)); do
         ## MODIFY input.nml with correct date
         sedfile=$(mktemp -t "sbufr_${timestr}.sed_XXXX")
         cat <<EOF > "$sedfile"
+s/DAYS/${days}/g
 s/ENDYR/${endyear}/g
 s/ENDMON/${endmonth}/g
 s/ENDDAY/${endday}/g

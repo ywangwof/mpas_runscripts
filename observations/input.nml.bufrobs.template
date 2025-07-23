@@ -4,6 +4,7 @@
    month      = MON,
    day        = DAY,
    hour       = HOUR,
+   days       = DAYS,
    tot_days   = 1,
    max_num    = 800000,
    select_obs = 0,
