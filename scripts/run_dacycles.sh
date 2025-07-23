@@ -965,6 +965,13 @@ function run_filter {
         cp ${FIXDIR}/rtcoef_rttov13/rttov_sensor_db.csv .
     fi
 
+    if [[ -n "${filter_file}" ]]; then
+        ln -sf ${filter_file} .
+        filter_filename="$(basename ${filter_file})"
+    else
+        filter_filename=""
+    fi
+
     #------------------------------------------------------
     # 4. Prepare namelist file
     #------------------------------------------------------
@@ -1100,8 +1107,17 @@ function run_filter {
    tasks_per_node = ${ncores_filter}
   /
 
+&algorithm_info_nml
+  qceff_table_filename = '${filter_filename}'
+/
+
+&probit_transform_nml
+  fix_bound_violations        = .false.,
+  use_logit_instead_of_probit = .false.,
+  do_inverse_check            = .false.
+/
+
 &assim_tools_nml
-   filter_kind                       = 1
    cutoff                            = 0.036,
    distribute_mean                   = .true.
    convert_all_obs_verticals_first   = .true.
@@ -2605,12 +2621,10 @@ EOF
         if [[ ${sfcscheme} == "sf_mynn" ]]; then
             cat << EOF >> namelist.atmosphere
     config_pbl_scheme          = 'bl_mynnedmf'
-    config_radt_cld_scheme     = 'cld_fraction_mynn'
 EOF
         else
             cat << EOF >> namelist.atmosphere
     config_pbl_scheme          = '${pblscheme}'
-    config_radt_cld_scheme     = 'off'
 EOF
         fi
 

@@ -102,6 +102,8 @@ function usage {
     echo -e "              -m             Machine     Machine name to run on, [Jet, Derecho, Vecna]."
     echo -e "              --template|--fix|--exec=DIR"
     echo -e "                                         Directories for runtime files, job templates/fixed static files/executable programs respectively."
+    echo -e "              --filter=FILENAME"
+    echo -e "                                         Filter file name that control variable control about whether to use Rank Histogram filter or not. For example, bnrhf_qceff_table_wofs.csv"
     echo -e "              -a             wof         Account name for job submission."
     echo -e "              -M             init        DA cycles mode, either init or restart. default: init"
     echo -e "              -F             init        FCST launch mode, either init or restart. default same as ${BROWN}\${damode}${NC}"
@@ -185,6 +187,17 @@ function parse_args {
                     echo -e "${RED}ERROR${NC}: ${keyname^} directory ${BLUE}${keydir}${NC} does not exist."
                     usage 1
                 fi
+                ;;
+            --filter )
+                if [[ "${key}" =~ ^--filter(=(.*))?$ ]]; then
+                    if [[ -n ${BASH_REMATCH[2]} ]]; then
+                        keyfile="${BASH_REMATCH[2]}"
+                    else
+                        keyfile="$2"
+                        shift
+                    fi
+                fi
+                args["filter"]="${keyfile}"
                 ;;
             -m )
                 case ${2^^} in
@@ -1393,6 +1406,10 @@ function write_config {
     ADAPTIVE_INF=true
     update_in_place=false               # update MPAS states in-place or
                                         # making a copy of the restart files
+    filter_file="${filter_file}"
+                                        # File contains variable control whether to use RHF or EAKF (in FIXDIR)
+                                        # If empty, default to the original EAKF option
+
     use_BUFR=true                       # Whether we should wait for PrepBufr data file
     use_MESO=true                       # for a realtime run
     use_CWP=true
@@ -1784,6 +1801,19 @@ setup_machine "${args['machine']}" "$rootdir" true true
 [[ -v args["EXEDIR"] ]]  && EXEDIR=${args["EXEDIR"]}   || EXEDIR="${rootdir}/exec"
 
 [[ -v args["level_file"] ]] && fixed_level="${args['level_file']}"  || fixed_level="${FIXDIR}/L60.txt"
+if [[ -v args["filter"] ]]; then
+    if [[ -f ${args["filter"]} ]]; then
+        filter_file="${args['filter']}"
+    else
+        filter_file="${FIXDIR}/${args['filter']}"
+        if [[ ! -f "${filter_file}" ]]; then
+            echo -e "${RED}ERROR${NC}: File ${PURPLE}${filter_file}${NC} does not exist."
+            usage 1
+        fi
+    fi
+else
+    filter_file=""
+fi
 
 #-----------------------------------------------------------------------
 #
