@@ -4,16 +4,12 @@
 script_dir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${script_dir}")")
 
-MPASdir=$(dirname $(dirname "$rootdir"))
-
-mpasworkdir="/scratch/wofs_mpas"
 eventdateDF=$(date -u +%Y%m%d%H%M)
 
 #
 # To run MPAS-WoFS tasks interactively or using at/cron at background
 #
 
-post_dir=${MPASdir}/frdd-wofs-post
 script_dir=${rootdir}/scripts
 
 host="$(hostname)"
@@ -25,6 +21,7 @@ default_fcsttime="1700"
 #-----------------------------------------------------------------------
 
 source "$script_dir/Common_Colors.sh"
+source "${script_dir}/Site_Runtime.sh" || exit $?
 
 ########################################################################
 
@@ -59,10 +56,10 @@ function usage {
     echo    " "
     echo    "   DEFAULTS:"
     echo -e "              EVENTDATE  = ${DIR_CLR}${eventdateDF:0:8}$NC"
-    echo -e "              WORKDIR    = ${LIGHT_BLUE}${mpasworkdir}/run_dir${NC}"
-    echo    "              rootdir    = $rootdir"
-    echo    "              script_dir = $script_dir"
-    echo    "              post_dir   = $post_dir"
+    echo -e "              WORKDIR    = ${LIGHT_BLUE}\${workdirDF}${NC}"
+    echo    "              rootdir    = ${rootdir}"
+    echo    "              script_dir = ${script_dir}"
+    echo    "              post_dir   = \${post_dir}"
     echo    " "
     echo    "                                     -- By Y. Wang (2024.04.17)"
     echo    " "
@@ -163,13 +160,15 @@ parse_args "$@"
 [[ -v args["verb"] ]]     && verb=${args["verb"]}         || verb=false
 [[ -v args["show"] ]]     && show=${args["show"]}         || show=""
 
+[[ -v args["post_machine"] ]] && post_machine=${args["post_machine"]} || post_machine="wof-epyc8"
+setup_machine "${post_machine}" "$rootdir" false false false
+
 [[ -v args["taskopt"] ]]  && taskopt=${args["taskopt"]}   || taskopt=""
 [[ -v args["task"] ]]     && task=${args["task"]}         || task=""
 
 [[ -v args["noscript"] ]] && noscript=${args["noscript"]} || noscript=false
 
 [[ -v args["launchtime"] ]]   && launchtime=${args["launchtime"]}     || launchtime="18:00"
-[[ -v args["post_machine"] ]] && post_machine=${args["post_machine"]} || post_machine="wof-epyc8"
 
 
 if [[ -v args["eventdate"] ]]; then
@@ -185,7 +184,7 @@ fi
 
 [[ -v args["endtime"] ]]   && endtime=${args["endtime"]}     || endtime="${default_endtime}"
 [[ -v args["starttime"] ]] && starttime=${args["starttime"]}
-[[ -v args["run_dir"] ]]   && run_dir=${args["run_dir"]}     || run_dir="${mpasworkdir}/run_dirs"
+[[ -v args["run_dir"] ]]   && run_dir=${args["run_dir"]}     || run_dir="${workdirDF}"
 
 if [[ -v args["config_file"] ]]; then
     config_file="${args['config_file']}"
@@ -281,7 +280,6 @@ fi
 
 ########################################################################
 
-# Load Python environment as needed
 case $task in
 post | plot | diag | verif | snd )
     if [[ ! "${host}" == ${post_machine}* ]]; then
@@ -289,31 +287,16 @@ post | plot | diag | verif | snd )
         exit 1
     fi
 
-    if [[ -z ${MAMBA_EXE} || ! -t 0 ]]; then   # not set micromamba, load Python environment
-        # >>> mamba initialize >>>
-        # !! Contents within this block are managed by 'mamba init' !!
-        export MAMBA_EXE='/home/yunheng.wang/y/bin/micromamba';
-        export MAMBA_ROOT_PREFIX='/home/yunheng.wang/y';
-        __mamba_setup="$("$MAMBA_EXE" shell hook --shell bash --root-prefix "$MAMBA_ROOT_PREFIX" 2> /dev/null)"
-        # shellcheck disable=SC2181
-        if [ $? -eq 0 ]; then
-            eval "$__mamba_setup"
-        else
-            micromamba() { "$MAMBA_EXE"; }  # Fallback on help from mamba activate
-        fi
-        unset __mamba_setup
-        # <<< mamba initialize <<<
-        micromamba activate "/home/brian.matilla/micromamba/envs/wofs-func"
-    fi
-    #echo "Activated Python environment on ${host} ..."
+    # Load Python environment as needed
+    setup_machine "${post_machine}" "$rootdir" true false false
 
     donepost="${run_dir}/summary_files/${eventdate}${affix}/${endtime}/wofs_postswt_${endtime}_finished"
     doneplot="${run_dir}/image_files/flags/${eventdate}${affix}/${endtime}/wofs_plotpbl_${endtime}_finished"
     doneverif="${run_dir}/image_files/flags/${eventdate}${affix}/wofs_plotwwa_${endtime}_finished"
     donesnd="${run_dir}/image_files/flags/${eventdate}${affix}/wofs_postsnd_${endtime}_finished"
 
-    post_script_dir="${MPASdir}/frdd-wofs-post/wofs/scripts"
-    post_config_orig="${MPASdir}/frdd-wofs-post/conf/WOFS_MPAS_config.yaml"
+    post_script_dir="${post_dir}/wofs/scripts"
+    post_config_orig="${post_dir}/conf/WOFS_MPAS_config.yaml"
 
     dt=$(( fcstoutinvl/60 ))
     nt=$(( fcstlength/fcstoutinvl ))

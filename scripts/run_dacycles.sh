@@ -966,7 +966,14 @@ function run_filter {
     fi
 
     if [[ -n "${filter_file}" ]]; then
-        ln -sf ${filter_file} .
+        if [[ -f "${filter_file}" ]]; then
+            ln -sf ${filter_file} .
+        elif [[ -f "${FIXDIR}/${filter_file}" ]]; then
+            ln -sf ${FIXDIR}/${filter_file} .
+        else
+            mecho0 "${RED}ERROR${NC}: File ${CYAN}$filter_file${NC} not exist both as is and in ${BLUE}${FIXDIR}${NC}."
+            exit 1
+        fi
         filter_filename="$(basename ${filter_file})"
     else
         filter_filename=""

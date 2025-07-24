@@ -12,6 +12,7 @@ function setup_machine {
     local root_dir=$2
     local use_python=$3
     local initialize=$4
+    local set_up=$5
 
     if [[ -n ${machine_name} ]]; then
         machine=${machine_name}
@@ -30,6 +31,8 @@ function setup_machine {
         fi
     fi
 
+    [[ -z $set_up ]] && set_up=true
+
     #-----------------------------------------------------------------------
     #
     # Handle machine specific configuraitons
@@ -38,19 +41,22 @@ function setup_machine {
 
     runcmd="sbatch"
 
-    echo -e "\nLoading  working environment on ${LIGHT_RED}${machine}${NC} ...."
+    [[ $set_up == true ]] && echo -e "\nLoading working environment on ${LIGHT_RED}${machine}${NC} ...."
 
     case $machine in
     Jet )
         modulename="build_jet_Rocky8_intel_smiol"
 
-        source /etc/profile.d/modules.sh
-        module purge
-        module use ${root_dir}/modules
-        module load ${modulename}
-        #module load wgrib2/2.0.8
+        if [[ ${set_up} == true ]]; then
+            source /etc/profile.d/modules.sh
+            module purge
+            module use ${root_dir}/modules
+            module load ${modulename}
+            #module load wgrib2/2.0.8
+        fi
 
         workdirDF="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS/run_dirs"
+        post_dir="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS/frdd-wofs-post"
 
         if [[ ${initialize} == true ]]; then
             partition_wps="xjet,kjet"
@@ -79,9 +85,11 @@ function setup_machine {
     Hercules )
         modulename="build_hercules_intel"
 
-        module purge
-        module use ${root_dir}/modules
-        module load ${modulename}
+        if [[ ${set_up} == true ]]; then
+            module purge
+            module use ${root_dir}/modules
+            module load ${modulename}
+        fi
 
         workdirDF="/work2/noaa/wof/ywang/MPAS/MPAS_PROJECT/run_dirs"
 
@@ -141,13 +149,21 @@ function setup_machine {
         fi
 
         ;;
+    wof-epyc* )
+        # wof-epyc8 at NSSL
+        modulename="env.mpas_smiol"
+        workdirDF="/scratch/wofs_mpas/run_dirs"
+        post_dir="/scratch/home/yunheng.wang/MPAS/frdd-wofs-post"
+        ;;
     * )
         # Vecna at NSSL
         modulename="env.mpas_smiol"
-        source /usr/share/Modules/init/bash
-        source ${root_dir}/modules/${modulename} > /dev/null || exit $?
-
+        if [[ ${set_up} == true ]]; then
+            source /usr/share/Modules/init/bash
+            source ${root_dir}/modules/${modulename} > /dev/null || exit $?
+        fi
         workdirDF="/scratch/wofs_mpas/run_dirs"
+        post_dir="/home/yunheng.wang/MPAS/frdd-wofs-post"
 
         if [[ ${initialize} == true ]]; then
             ncores_static=96
@@ -182,11 +198,11 @@ function setup_machine {
 
     # Load Python Enviroment if necessary
     if [[ ${use_python} == true ]]; then
-        echo -e "Enabling Python micromamba environment - ${YELLOW}wofs_an${NC} ...."
         source ${root_dir}/modules/env.python  || exit $?
+        echo -e "Activated Python environment ${YELLOW}${python_env}${NC} on ${LIGHT_RED}${machine}${NC} ..."
     fi
 
-    export machine modulename runcmd workdirDF
+    export machine modulename runcmd workdirDF post_dir
     if [[ ${initialize} == true ]]; then
         # Will be used by 'setup_mpas-wofs.sh' for static processing.
         # For other programs, the information is in the runtime configuration file and

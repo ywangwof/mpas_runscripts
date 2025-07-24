@@ -4,10 +4,6 @@
 script_dir="$( cd "$( dirname "$0" )" && pwd )"                         # dir of script
 rootdir=$(realpath "$(dirname "${script_dir}")")
 
-MPASdir=$(dirname $(dirname "$rootdir"))                                # no compiler specific stuffs
-
-mpasworkdir="/scratch/wofs_mpas"
-
 eventdateDF=$(date -u +%Y%m%d)
 
 host="$(hostname)"
@@ -17,7 +13,8 @@ outdir2="1600"
 
 #-----------------------------------------------------------------------
 
-source "$script_dir/Common_Colors.sh"
+source "${script_dir}/Common_Colors.sh"
+source "${script_dir}/Site_Runtime.sh" || exit $?
 
 ########################################################################
 
@@ -46,7 +43,7 @@ function usage {
     echo    " "
     echo    "   DEFAULTS:"
     echo    "              eventdate  = $eventdateDF"
-    echo    "              WORKDIR    = $mpasworkdir/run_dirs"
+    echo    "              WORKDIR    = \$workdirDF/run_dirs"
     echo    "              rootdir    = $rootdir"
     echo    "              script_dir = $script_dir"
     echo    " "
@@ -148,9 +145,18 @@ parse_args "$@"
 [[ -v args["verb"] ]]     && verb=${args["verb"]}         || verb=false
 [[ -v args["show"] ]]     && show=${args["show"]}         || show=""
 
+[[ -v args["machine"] ]]  && machine=${args["machine"]}   || machine="wof-epyc"
+if [[ ! "$host" =~ ^${machine}.*$ ]]; then
+    echo " "
+    echo -e "${RED}ERROR${NC}: Please run $0 on ${machine} only".
+    echo " "
+    exit 1
+fi
+
+setup_machine "${machine}" "$rootdir" true false false
+
 [[ -v args["eventdate"] ]]   && eventdate=${args["eventdate"]}     || eventdate=${eventdateDF}
-[[ -v args["run_dir"] ]]     && run_dir=${args["run_dir"]}         || run_dir="${mpasworkdir}/run_dirs"
-[[ -v args["machine"] ]]     && machine=${args["machine"]}         || machine="wof-epyc"
+[[ -v args["run_dir"] ]]     && run_dir=${args["run_dir"]}         || run_dir="${workdirDF}"
 [[ -v args["starttime"] ]]   && starttime=${args["starttime"]}     || starttime="1500"
 [[ -v args["endtime"] ]]     && endtime=${args["endtime"]}         || endtime="0300"
 
@@ -194,43 +200,7 @@ if [[ ! -d ${run_dir}/${eventdate}/${dadir} ]]; then
     exit 1
 fi
 
-if [[ ! "$host" =~ ^${machine}.*$ ]]; then
-    echo " "
-    echo -e "${RED}ERROR${NC}: Please run $0 on ${machine} only".
-    echo " "
-    exit 1
-fi
-
 ########################################################################
-# Load Python environment
-
-if [[ -z ${MAMBA_EXE} || -t 0 ]]; then   # not set micromamba
-    if [[ "$host" =~ ^vecna.*$ ]]; then
-        micromamba_dir='/home/yunheng.wang/tools/micromamba'
-        myenv="wofs_an"
-    else
-        micromamba_dir='/home/yunheng.wang/y'
-        myenv="/home/brian.matilla/micromamba/envs/wofs-func"
-    fi
-
-    # >>> mamba initialize >>>
-    # !! Contents within this block are managed by 'mamba init' !!
-    export MAMBA_EXE="${micromamba_dir}/bin/micromamba"
-    export MAMBA_ROOT_PREFIX="${micromamba_dir}"
-    #__mamba_setup="$("$MAMBA_EXE" shell hook --shell bash --root-prefix "$MAMBA_ROOT_PREFIX" 2> /dev/null)"
-    #if [ $? -eq 0 ]; then
-    if __mamba_setup="$("$MAMBA_EXE" shell hook --shell bash --root-prefix "$MAMBA_ROOT_PREFIX" 2> /dev/null)"; then
-        eval "$__mamba_setup"
-    else
-        micromamba() { "$MAMBA_EXE"; }  # Fallback on help from mamba activate
-    fi
-    unset __mamba_setup
-
-    # <<< mamba initialize <<<
-    micromamba activate "${myenv}"
-
-    echo "Activated Python environment \"${myenv}\" on ${machine} ..."
-fi
 
 declare -rA obstypes=(["value"]="1" ["variance"]="78")
 
@@ -333,8 +303,8 @@ if [[ ! -e done.zigzag ]]; then
         done
 
         if [[ ${estatus} -eq 0 ]]; then
-            #cp "${MPASdir}/frdd-wofs-post/json/wofs_run_metadata_obsdiag.json" "${image_destdir}/wofs_run_metadata.json"
-            "${script_dir}/process_da_json.py" "${MPASdir}/frdd-wofs-post/json/wofs_run_metadata_obsdiag.json" \
+            #cp "${post_dir}/json/wofs_run_metadata_obsdiag.json" "${image_destdir}/wofs_run_metadata.json"
+            "${script_dir}/process_da_json.py" "${post_dir}/json/wofs_run_metadata_obsdiag.json" \
                                             "${image_destdir}/wofs_run_metadata.json"
             ${show} touch "done.zigzag"
         fi
