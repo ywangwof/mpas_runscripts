@@ -1480,14 +1480,6 @@ def plot_object_performance(objs,colors,labels):
         far=np.mean(obj.far_lead_time, axis=0)
         fars.append(far)
 
-    # ----------------------
-    # https://www.ncl.ucar.edu/Document/Graphics/ColorTables/BlGrYeOrReVi200.shtml
-    # ncolors=200
-    # 2, 41, 91, 151, 201
-    colors_dec = [ (0, 0, 255), (8, 175, 21), (255, 234,   0), (255,  41,   0), (87,   0, 136)]
-
-    colors_hex = [ "#%02x%02x%02x"%el for el in colors_dec]
-
     legendonly = False
 
     purple5 = (188/255., 184/255., 210/255.)
