@@ -160,12 +160,12 @@ function usage {
     echo "                              which avoids runing duplicated preprocessing jobs (ungrib, init/lbc) again. default: false"
     echo "              -s  hour        Start hour relative to the initialization time. Default: 0"
     echo "              -e  hour        End hour relative to the initialization time. Default: 60"
-    echo "              -p  nssl        MP scheme, [nssl, thompson], default: nssl"
+    echo "              -p  nssl        MP scheme, [nssl, nssl3m, thompson, tempo], default: nssl"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt = $eventdateDF"
     echo "              rootdir = $rootdir"
-    echo "              WORKDIR = $rootdir/run_dirs"
+    echo "              WORKDIR = $mpasdir/run_dirs"
     echo "              TEMPDIR = $rootdir/templates"
     echo "              FIXDIR  = $rootdir/fix_files"
     echo " "
@@ -244,7 +244,7 @@ function parse_args {
                 ;;
             -d)
                 case $2 in
-                wofs_big | wofs_small | wofs_conus | wofs_mpas | wofs_mpas_small )
+                wofs_big | wofs_small | wofs_conus | wofs_mpas | wofs_mpas_small | wofs_gsl)
                     args["domname"]="$2"
                     ;;
                 * )
@@ -308,6 +308,8 @@ function parse_args {
                     args["mpscheme"]="mp_nssl3m"
                 elif [[ ${2^^} == "THOMPSON" ]]; then
                     args["mpscheme"]="Thompson"
+                elif [[ ${2^^} == "TEMPO" ]]; then
+                    args["mpscheme"]="mp_tempo"
                 else
                     echo "ERROR: Unsupported MP scheme name, got \"$2\"."
                     usage 1
@@ -1183,7 +1185,7 @@ function run_ungrib_rrfsna {
             [[ starthour -ne 0 && h -eq starthour ]] && continue
             hstr=$(printf "%03d" $h)
             if [[ $download_aws -eq 1 ]]; then
-                rrfsfile="rrfs.t${currtime}z.natlev.3km.f${hstr}.na.grib2"
+                rrfsfile="rrfs.t${currtime}z.natlev.f${hstr}.grib2"
                 basefn=$(basename $rrfsfile)
                 basefn="HRRR_$basefn"
 
@@ -1208,7 +1210,7 @@ function run_ungrib_rrfsna {
                     done
                 fi
             else
-                rrfsfile=$rrfs_grib_dir/rrfs.t${currtime}z.natlev.3km.f${hstr}.na.grib2
+                rrfsfile=$rrfs_grib_dir/rrfs.t${currtime}z.natlev.f${hstr}.grib2
                 basefn=$(basename $rrfsfile)
                 basefn="HRRR_$basefn"
                 while [[ ! -f $rrfsfile && ! -f $basefn && $dorun == true ]]; do
@@ -1247,8 +1249,8 @@ s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
 s#MODULE#${modulename}#g
 s#MACHINE#${machine}#g
-s#GRIBFILE#$rrfs_grib_dir/rrfs.t${currtime}z.natlev.3km.f0#
-s#TARGETFILE#HRRR_rrfs.t${currtime}z.natlev.3km.f0#
+s#GRIBFILE#$rrfs_grib_dir/rrfs.t${currtime}z.natlev.f0#
+s#TARGETFILE#HRRR_rrfs.t${currtime}z.natlev.f0#
 s#VERBOSE#$verb#g
 s/ACCTSTR/${job_account_str}/
 s^EXCLSTR^${job_exclusive_str}^
@@ -1896,7 +1898,7 @@ function run_lbc {
     if [[ -d $init_dir ]]; then  # link it from somewhere
 
         if [[ $dorun == true ]]; then
-            donefile="$init_dir/lbc/done.lbc"
+            donefile="$init_dir/lbc/done.lbc${appendhour_str}"
             echo "$$: Checking: $donefile"
             while [[ ! -e $donefile ]]; do
                 if [[ $verb -eq 1 ]]; then
@@ -2112,7 +2114,7 @@ function run_mpas {
         for ((h=starthour;h<=endhour;h+=EXTINVL)); do
             [[ starthour -ne 0 && h -eq starthour ]] && continue
             timestr=$(date -u -d "${eventdate} ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
-            ln -sf $rundir/lbc/${domname}.lbc.${timestr} .
+            ln -sf $rundir/lbc/${domname}.lbc.${timestr}.nc .
         done
         if [[ starthour -eq 0 ]]; then
         ln -sf $rundir/init/$domname.init.nc .
@@ -2146,6 +2148,13 @@ function run_mpas {
                               MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL   \
                               CCN_ACTIVATE.BIN )
 
+        elif [[ "${mpscheme}" == "mp_tempo" ]]; then
+            thompson_tables=( MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL MP_TEMPO_QRacrQS_DATA.DBL   \
+                              MP_TEMPO_freezeH2O_DATA.DBL         MP_TEMPO_QIautQS_DATA.DBL   CCN_ACTIVATE_DATA )
+
+        fi
+
+        if [[ -n ${thompson_tables} ]]; then
             for fn in "${thompson_tables[@]}"; do
                 ln -sf ${FIXDIR}/$fn .
             done
@@ -2229,18 +2238,26 @@ function run_mpas {
     config_physics_suite             = 'convection_permitting'
     config_convection_scheme         = 'off'
     config_microp_re                 = true
-    config_sfclayer_scheme     = 'sf_mynn'
-    config_frac_seaice         = true
-    config_gwdo_scheme         = 'bl_ugwp_gwdo'
-    config_gvf_update          = false
-    config_pbl_scheme          = 'bl_mynnedmf'
-    config_radt_cld_scheme     = 'cld_fraction_mynn'
+    config_sfclayer_scheme           = 'sf_mynn'
+    config_frac_seaice               = true
+    config_gwdo_scheme               = 'bl_ugwp_gwdo'
+    config_gvf_update                = false
+    config_pbl_scheme                = 'bl_mynnedmf'
 EOF
 
-        if [[ ${mpscheme} =~ ^mp_nssl[23]m$ ]]; then
+        if [[ ${mpscheme} =~ ^mp_nssl3m$ ]]; then
+            echo "    config_nssl_3moment        = .true." >> ${namelist_filename}
+        fi
 
+        if [[ ${mpscheme} == "mp_tempo" ]]; then
             cat << EOF >> ${namelist_filename}
     config_microp_scheme             = '${mpscheme}'
+    config_tempo_hailaware           = .true.
+    config_tempo_aerosolaware        = .true.
+EOF
+        elif [[ ${mpscheme} =~ ^mp_nssl[23]m$ ]]; then
+            cat << EOF >> ${namelist_filename}
+    config_microp_scheme             = 'mp_nssl2m'
 /
 &nssl_mp_params
     ehw0                             = 0.9
@@ -2249,7 +2266,6 @@ EOF
     snowfallfac                      = 1.25
     iusewetsnow                      = 0
 EOF
-
         fi
 
         cat << EOF >> ${namelist_filename}
@@ -2363,7 +2379,7 @@ function run_mpassit {
     mkwrkdir $wrkdir 0
     cd $wrkdir || return
 
-    if [[ "${mpscheme}" == "Thompson" ]]; then
+    if [[ "${mpscheme}" == "Thompson" || "${mpscheme}" == "mp_tempo" ]]; then
         fileappend="THOM"
     else
         fileappend="NSSL"
@@ -2669,7 +2685,7 @@ function run_clean {
     for dirname in "$@"; do
         case $dirname in
         ungrib )
-            donelbc="$rundir/lbc/done.lbc"
+            donelbc="$rundir/lbc/done.lbc${appendhour_str}"
             for dirsn in ungrib_gfs ungrib_hrrr ungrib_rrfs ungrib; do
                 if [[ -d $rundir/$dirsn && -e $donelbc ]]; then
                     cd $rundir/$dirsn || return
@@ -2680,7 +2696,7 @@ function run_clean {
             ;;
         mpssit )
             wrkdir="$rundir/mpassit"
-            for ((h=0;h<=fcst_hours;h+=OUTINVL)); do
+            for ((h=starthour;h<=endhour;h+=OUTINVL)); do
                 hstr=$(printf "%02d" $h)
                 fcst_time_str=$(date -u -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
                 rm -rf $wrkdir/MPAS-A_out.${fcst_time_str}.nc
@@ -2692,7 +2708,7 @@ function run_clean {
             # Clean UPP directory
             #
             wrkdir="$rundir/upp"
-            for ((h=0;h<=fcst_hours;h+=OUTINVL)); do
+            for ((h=starthour;h<=endhour;h+=OUTINVL)); do
                 hstr=$(printf "%02d" $h)
                 if [[ -f $wrkdir/done.upp_$hstr ]]; then
                     if [[ $verb -eq 1 ]]; then
@@ -2712,9 +2728,9 @@ function run_clean {
             #
             mpassit_dir="$rundir/mpassit"
             upp_dir="$rundir/upp"
-            for ((h=0;h<=fcst_hours;h+=OUTINVL)); do
+            for ((h=starthour;h<=endhour;h+=OUTINVL)); do
                 hstr=$(printf "%02d" $h)
-                fcst_time_str=$(date -u -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
+                fcst_time_str=$(date -u -d "${eventdate} ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
                 if [[ -f $upp_dir/done.upp_$hstr ]]; then
                     if [[ $verb -eq 1 ]]; then
                         echo "Cleaning $upp_dir/post_$hstr & $mpassit_dir ......"
@@ -2829,16 +2845,17 @@ if [[ $machine == "Jet" ]]; then
     job_runmpexe_str="srun"
     job_runexe_str="srun"
 
-    modulename="build_jet_Rocky8_intel_smiol"
     WPSGEOG_PATH="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
 
+    wgrib2path="/apps/wgrib2/3.1.1/gnu_13.2.0/wmo/bin/wgrib2"
+    gpmetis="/lfs5/NAGAPE/hpc-wof1/ywang/bin/gpmetis"
+
+    modulename="build_jet_Rocky8_intel_smiol"
     source /etc/profile.d/modules.sh
     module purge
     module use ${rootdir}/modules
     module load $modulename
     module load gnu/13.2.0 wgrib2/3.1.1_wmo
-    wgrib2path="/apps/wgrib2/3.1.1/gnu_13.2.0/wmo/bin/wgrib2"
-    gpmetis="/lfs5/NAGAPE/hpc-wof1/ywang/bin/gpmetis"
 
 elif [[ $machine == "Cheyenne" ]]; then
 
@@ -2948,6 +2965,10 @@ fcst_hours=$((endhour-starthour))
 
 if [[ "${mpscheme}" == "Thompson" ]]; then
     mpname="T"
+elif [[ "${mpscheme}" == "mp_tempo" ]]; then
+    mpname="T2"
+elif [[ "${mpscheme}" == "mp_nssl3m" ]]; then
+    mpname="N3"
 else
     mpname="N"
 fi

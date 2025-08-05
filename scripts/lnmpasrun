@@ -37,22 +37,28 @@ done
 # Hard copy some files
 #
 
-if [[ -f $srcabsdir/run_mpas.slurm ]]; then
-    jobfile="run_mpas.slurm"
-elif [[ -f $srcabsdir/run_mpas.pbs ]]; then
-    jobfile="run_mpas.pbs"
-else
-    jobfile="none"
+jobfile=""
+if compgen -G "$srcabsdir/run_mpas*.slurm" > /dev/null; then
+    jobfile=$(basename $(compgen -G "$srcabsdir/run_mpas*.slurm"))
+elif compgen -G "$srcabsdir/run_mpas*.pbs" > /dev/null; then
+    jobfile=$(basename $(compgen -G "$srcabsdir/run_mpas*.pbs"))
 fi
 
-cpfiles=(namelist.atmosphere streams.atmosphere          \
-         stream_list.atmosphere.diagnostics stream_list.atmosphere.output stream_list.atmosphere.surface)
+namelist_files=()
+while IFS='' read -r line; do namelist_files+=("$(basename $line)"); done < <(find $srcabsdir -name "namelist.atmosphere*")
+stream_files=()
+while IFS='' read -r line; do stream_files+=("$(basename $line)"); done < <(find $srcabsdir -name "streams.atmosphere*")
 
+cpfiles=("${namelist_files[@]}" "${stream_files[@]}"         \
+         stream_list.atmosphere.diagnostics stream_list.atmosphere.output stream_list.atmosphere.surface)
 
 for fn in "${cpfiles[@]}"; do
     echo "Copying $fn ..."
     cp $srcabsdir/$fn .
 done
+
+[[ -L streams.atmosphere ]]  && rm streams.atmosphere
+[[ -L namelist.atmosphere ]] && rm namelist.atmosphere
 
 #
 # for ICs/LBCs
@@ -80,7 +86,7 @@ fi
 #
 # Modify job script
 #
-if [[ ! "${jobfile}" == "none" ]]; then
+if [[ -n "${jobfile}" ]]; then
     echo "Copying ${jobfile} ..."
     cp $srcabsdir/${jobfile} .
 

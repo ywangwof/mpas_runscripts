@@ -44,11 +44,13 @@ cd WRKDIR
 touch running.fcstAPPENDIX
 rm -rf error.fcstAPPENDIX queue.fcstAPPENDIX
 
-ln -sf namelist.atmosphereAPPENDIX namelist.atmosphere
+#ln -sf namelist.atmosphereAPPENDIX namelist.atmosphere
 ln -sf streams.atmosphereAPPENDIX streams.atmosphere
 
+rm -f namelist.atmosphere
+
 # first recover namelist parameters for possibly an old run.
-sed -i -e "/config_pio_num_iotasks/s/=.*/= $nnode/g;/config_pio_stride/s/=.*/= $ncores/" namelist.atmosphere
+sed -e "/config_pio_num_iotasks/s/=.*/= $nnode/g;/config_pio_stride/s/=.*/= $ncores/" namelist.atmosphereAPPENDIX > namelist.atmosphere
 
 RUNMPCMD -n NOPART EXEDIR/atmosphere_model
 

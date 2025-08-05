@@ -1,5 +1,15 @@
   Version History
 
+07/31/2025 Version 3.9
+   1. Upgraded MPAS to hash # ea97011a2 from https://github.com/MicroTed/MPAS-Model.git
+       which is based on GSL version v8.2.2-3.11, suggested by David Dowwell on July 21st.
+   2.  Added capability to run the workflow with several segmentations with options "-s" & "-e"
+       using the MPAS restart configuration. 
+   3. lai12m multiply a factor of 0.1. (v8.3.0 will fix this bug).
+   4. HRRR grib2 Vtable fixed CNWAT and add VEG, VEGMIN, VEGMAX.
+   5. RRFS grib2 Vtable fixed CNWAT and add QN[CIR], QNWFA/QNIFA, VEG(VEGFRA), VEGMIN(SHDMIN), VEGMAX(SHDMAX).
+   6. Added nssl3m and tempo for MP physics scheme.
+
 07/12/2024 Version 3.8
    Updated wgrid module on Jet.
    Upgraded to the merged GSL MPAS package.

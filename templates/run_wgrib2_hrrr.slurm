@@ -189,6 +189,9 @@ cat << EOF > keep_$hstr.txt
 :SOILW:3-3 m below ground:${valtime}:
 :LAND:surface:${valtime}:
 :ICEC:surface:${valtime}:
+:VEG:surface:${valtime}:
+:VEGMIN:surface:${valtime}:
+:VEGMAX:surface:${valtime}:
 EOF
 
 echo "Generating working copy: $basefn ...."

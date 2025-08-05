@@ -129,8 +129,8 @@ hstr=$(printf "%02d" $fhr)
 touch running.wgrib2_${hstr}
 rm -rf error.wgrib2_${hstr} queue.wgrib2_${hstr}
 
-rrfsfile="GRIBFILE$hstr.na.grib2"
-basefn="TARGETFILE$hstr.na.grib2"
+rrfsfile="GRIBFILE$hstr.grib2"
+basefn="TARGETFILE$hstr.grib2"
 
 #
 # Trim out un-wanted records
@@ -187,7 +187,18 @@ cat << EOF > keep_$hstr.txt
 :SOILW:3-3 m below ground:${valtime}:
 :LAND:surface:${valtime}:
 :ICEC:surface:${valtime}:
+:SPNCR:[0-9]{1,2} hybrid level:${valtime}:
+:NCONCD:[0-9]{1,2} hybrid level:${valtime}:
+:NCCICE:[0-9]{1,2} hybrid level:${valtime}:
+:PMTC:[0-9]{1,2} hybrid level:${valtime}:
+:PMTF:[0-9]{1,2} hybrid level:${valtime}:
+:VEG:surface:${valtime}:
 EOF
+#:MASSDEN:[0-9]{1,2} hybrid level:${valtime}:
+# How to distinguish these three fields
+# Particulate organic matter dry:aerosol_size <2.5e-06:
+# Dust dry:aerosol_size <2.5e-06:
+# Dust dry:aerosol_size >=2.5e-06,<1e-05:
 
 echo "Generating working copy: $basefn ...."
 grib2cmdstr="${wgrib2path} $rrfsfile | grep -Ef keep_$hstr.txt | ${wgrib2path} -i $rrfsfile -GRIB tmp_${basefn}"
