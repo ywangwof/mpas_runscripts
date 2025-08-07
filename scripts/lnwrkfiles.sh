@@ -28,7 +28,7 @@ elif [[ "${myhost}" == "cheyenne"* || ${myhost} == "derecho"* ]]; then
     srcdartdir=${srcroot}/DART
 else
     srcroot="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS"
-    tool_dir="/home/Yunheng.Wang/local" 
+    tool_dir="/home/Yunheng.Wang/local"
     srcmpassitdir=${srcroot}/MPASSIT
     srcuppdir=${srcroot}/UPP_KATE_kjet
     srcmodeldir=${srcroot}/MPAS-Model.gsl
@@ -49,8 +49,8 @@ function usage {
     echo "    PURPOSE: Link MPAS runtime static files and executables."
     echo " "
     echo "    DESTDIR  - Destination Directory"
-    echo "    CMD      - One or more jobs from [mpas,MPASSIT,UPP,WRF,DART,mpasregion]"
-    echo "               Default: all in \"[mpas, MPASSIT, UPP, WRF,DART,mpasregion]\""
+    echo "    CMD      - One or more jobs from [mpas,MPASSIT,UPP,WRF,DART,jedi,mpasregion]"
+    echo "               Default: all in \"[mpas, MPASSIT, UPP, WRF,DART,jedi,mpasregion]\""
     echo "    clean    - Clean the linked or copied files (for relink with a system version change etc.)"
     echo " "
     echo "    OPTIONS:"
@@ -186,9 +186,9 @@ while [[ $# -gt 0 ]]
             cmdnote="${2^}"
             shift
             ;;
-        mpas* | MPASSIT* | UPP* | WRF* | DART* | dart* )
+        mpas* | MPASSIT* | UPP* | WRF* | DART* | dart* | jedi* | JEDI* )
             #packages=(${key//,/ })
-            IFS="," read -r -a packages <<< "$key"
+            IFS="," read -r -a packages <<< "${key}"
             ;;
         -* )
             echo "Unknown option: $key"
@@ -388,6 +388,8 @@ for pkg in "${packages[@]}"; do
 
         fi
 
+        ;;
+    JEDI )
         ;;
     * )
         echo "Argument should be one of [${default_packages[*]}]. get \"${pkg}\"."

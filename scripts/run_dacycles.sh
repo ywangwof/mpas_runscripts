@@ -237,7 +237,7 @@ function parse_args {
                 echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
                 usage 2
                 ;;
-            filter* | mpas* | update_states* | update_bc* | clean* | obs_diag* | obs_final2nc )
+            ioda* | getkf_* | mpas* | clean* )
                 args["jobs"]="${key//,/ }"
                 ;;
             *)
@@ -259,547 +259,499 @@ function parse_args {
 
 ########################################################################
 
-function run_obsmerge {
-    # $1        $2          $3
-    # wrkdir    iseconds    seqfilename
+function run_ioda {
+    # $1        $2
+    # wrkdir    iseconds
+
     local wrkdir=$1               # DA directory for this cycle
     local iseconds=$2
 
     if [[ ! -d $wrkdir ]]; then
-        mecho0 "run_obsmerge: Working directory $wrkdir not exist"
+        mecho0 "run_ioda: Working directory $wrkdir not exist"
         exit 1
     fi
 
-    anlys_date=$(date -u -d @$iseconds  +%Y%m%d)
-    anlys_time=$(date -u -d @$iseconds  +%H%M)
+    anlys_date=$(date -u -d @$iseconds  +%Y%m%d%H)
+    anlys_hour=$(date -u -d @$iseconds  +%H)
+    anlys_min=$(date -u -d @$iseconds   +%M)
 
-    srunout="output.srun"
+    #------------------------------------------------------
+    # Run ioda_bufr for all bufr observation files
+    #------------------------------------------------------
 
-    read -r -a g_dates < <(convertS2days "${iseconds}")
-    g_date=${g_dates[0]}
-    g_sec=${g_dates[1]}
-    #echo $g_date, $g_sec
-
-    mkwrkdir $wrkdir/OBSDIR 1     # 0: Keep existing directory as is
-                                  # 1: Remove existing same name directory
-    cd $wrkdir/OBSDIR || exit $?
-
-    #-------------------------------------------------------------------
-    #
-    # Run MPAS_DART_OBS_PREPROCESS for each observation type
-    # and get an array "obsflists"
-    #
-    #-------------------------------------------------------------------
-
-    rm -fr obsflist.bufr obsflist.meso obsflist.sat obsflist.mrms obsflist.radvr obsflist obs_seq.*
-
-    obspreprocess=${EXEDIR}/dart/mpas_dart_obs_preprocess
-
-    input_base="${wrkdir}/input.nml"
-
-    mecho0 "OBS Preprocessing for analysis time: ${anlys_time}, days: ${g_date}, seconds: ${g_sec}"
-    mecho0 "OBS_DIR=${LIGHT_BLUE}${OBS_DIR}${NC}"
-
-    obsflists=()
-    k=1
-
-    #=================================================
-    # PREPROCESS NCEP PrepBufr DATA
-    #=================================================
-    #1. PrepBufr
-
-    if [[ "${anlys_time:2:2}" == "00" && ${use_BUFR} == true ]]; then
-
-        bufr_file="${OBS_DIR}/Bufr/obs_seq_bufr.${anlys_date}${anlys_time:0:2}"
-        if [[ $rt_run == true  ]]; then
-            if [[ ! -e ${bufr_file} ]]; then
-                echo "    Waiting for ${bufr_file##"${OBS_DIR}"/} ...."
-            fi
-            while [[ ! -e ${bufr_file} ]]; do
-                if [[ -e "${bufr_file}.missed" ]]; then
-                    echo "    Not found. Skip ${bufr_file##"${OBS_DIR}"/} ...."
-                    break
-                fi
-                sleep 10
-            done
-        fi
-
-        if [[ -e ${bufr_file} ]]; then
-            echo -e "    ${PURPLE}$((k++))${NC}: Using PrepBufr observations in ${LIGHT_BLUE}${bufr_file##"${OBS_DIR}"/}${NC}"
-            #echo "${bufr_file}" > obsflist.bufr
-            #obsflists+=(obsflist.bufr)
-
-            cp ${bufr_file} ./obs_seq.old
-
-            sed "/obsdistbdy/s/=.*/= 90000/;/obs_boundary/s/=.*/= 21000/" ${input_base} > input.nml
-
-            if [[ $verb -eq 1 ]]; then
-                mecho0 "Run command ${obspreprocess} with parameters: \"${g_date} ${g_sec}\""
-            fi
-
-            { echo "Run command ${obspreprocess} as:";
-              echo "echo  \"${g_date} ${g_sec}\" | ${obspreprocess}";
-              echo "";
-            }                                                          >& ${srunout}_BUFR
-
-            ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >> ${srunout}_BUFR 2>&1
-
-            # shellcheck disable=SC2181
-            if [[ $? -eq 0 ]]; then
-                mv ./obs_seq.new ./obs_seq.bufr
-
-                rm ./obs_seq.old
-                mv input.nml input.nml.BUFR
-
-                echo $wrkdir/OBSDIR/obs_seq.bufr > obsflist.bufr
-
-                obsflists+=(obsflist.bufr)
-            else
-                mecho0 "${RED}ERROR${NC}: command ${BROWN}${obspreprocess}${NC} for PREPBUFR data"
-            fi
-        else
-            echo "    PrepBufr data not found: ${bufr_file##"${OBS_DIR}"/}"
-        fi
+    if [[ ${anlys_min} == "00" ]]; then
+        run_ioda_bufr ${wrkdir} ${iseconds}
     fi
 
-    #=================================================
-    # PREPROCESS OK MESONET DATA
-    #=================================================
-    #2. MESONET
-
-    if [[ ${use_MESO} == true ]]; then
-        meso_file="${OBS_DIR}/Mesonet/obs_seq_okmeso.${anlys_date}${anlys_time}"
-        if [[ $rt_run == true ]]; then
-            if [[ ! -e ${meso_file} ]]; then
-                echo "    Waiting for ${meso_file##"${OBS_DIR}"/} ...."
-            fi
-            while [[ ! -e ${meso_file} ]]; do
-                if [[ -e "${meso_file}.missed" ]]; then
-                    echo "    Not found. Skip ${meso_file##"${OBS_DIR}"/} ...."
-                    break
-                fi
-                sleep 10
-            done
-        fi
-
-        if [[ -e ${meso_file} ]]; then
-            echo -e "    ${PURPLE}$((k++))${NC}: Using Mesonet observations in ${LIGHT_BLUE}${meso_file##"${OBS_DIR}"/}${NC}"
-            #echo "${meso_file}" > obsflist.meso
-            #obsflists+=(obsflist.meso)
-
-            cp ${meso_file} ./obs_seq.old
-
-            sed "/obsdistbdy/s/=.*/= 15000/;/obs_boundary/s/=.*/= 5000/" ${input_base} > input.nml
-
-            if [[ $verb -eq 1 ]]; then
-                mecho0 "Run command ${BROWN}${obspreprocess}${NC} with parameters: ${BLUE}${g_date} ${g_sec}${NC}"
-            fi
-            { echo "Run command ${obspreprocess} as:";
-              echo "echo  \"${g_date} ${g_sec}\" | ${obspreprocess}";
-              echo "";
-            }                                                          >& ${srunout}_MESO
-
-            ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >> ${srunout}_MESO 2>&1
-
-            # shellcheck disable=SC2181
-            if [[ $? -eq 0 ]]; then
-                mv ./obs_seq.new ./obs_seq.meso
-                mv input.nml input.nml.MESO
-                rm ./obs_seq.old
-
-                echo $wrkdir/OBSDIR/obs_seq.meso > obsflist.meso
-
-                obsflists+=(obsflist.meso)
-            else
-                mecho0 "${RED}ERROR${NC}: command ${BROWN}${obspreprocess}${NC} for MESONET data"
-            fi
-        else
-            if [[ ${use_MESO} == true ]]; then
-                echo "    Mesonet not found: ${meso_file##"${OBS_DIR}"/}"
-            fi
-        fi
-    fi
-
-    #=================================================
-    # PREPROCESS GOES SATELLITE CWP DATA
-    #=================================================
-    #3. CWP
-
-    if [[ ${use_CWP} == true ]]; then
-        CWP_DIR=${OBS_DIR}/CWP
-
-        cwp_file=$(compgen -G "${CWP_DIR}/obs_seq_cwp.G1[69]_V04.${anlys_date}${anlys_time}")
-        [[ -z $cwp_file ]] && cwp_file="${CWP_DIR}/obs_seq_cwp.G16_V04.${anlys_date}${anlys_time}"
-
-        if [[ $rt_run == true ]]; then
-            if [[ ! -e ${cwp_file} ]]; then
-                echo "    Waiting for ${cwp_file##"${OBS_DIR}"/} ...."
-            fi
-            while [[ ! -e ${cwp_file} ]]; do
-                if [[ -e "${cwp_file}.missed" ]]; then
-                    echo "    Not found. Skip ${cwp_file##"${OBS_DIR}"/} ...."
-                    break
-                fi
-                sleep 10
-            done
-        fi
-
-        if [[ -e ${cwp_file} ]]; then
-            echo -e "    ${PURPLE}$((k++))${NC}: Using CWP data in ${LIGHT_BLUE}${cwp_file##"${OBS_DIR}"/}${NC}"
-
-            cp ${cwp_file} ./obs_seq.old
-
-            sed "/obsdistbdy/s/=.*/= 15000/;/obs_boundary/s/=.*/= 5000/" ${input_base} > input.nml
-
-            if [[ $verb -eq 1 ]]; then
-                mecho0 "Run command ${BROWN}${obspreprocess}${NC} with parameters: ${BLUE}${g_date} ${g_sec}${NC}"
-            fi
-            { echo "Run command ${obspreprocess} as:";
-              echo "echo  \"${g_date} ${g_sec}\" | ${obspreprocess}";
-              echo "";
-            }                                               >& ${srunout}_CWP
-            ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >> ${srunout}_CWP 2>&1
-
-            # shellcheck disable=SC2181
-            if [[ $? -eq 0 ]]; then
-                mv ./obs_seq.new ./obs_seq.cwp
-                mv input.nml input.nml.CWP
-                rm ./obs_seq.old
-
-                echo $wrkdir/OBSDIR/obs_seq.cwp > obsflist.cwp
-
-                obsflists+=(obsflist.cwp)
-            else
-                mecho0 "${RED}ERROR${NC}: command ${BROWN}${obspreprocess}${NC} for CWP data"
-            fi
-        else
-            if [[ ${use_CWP} == true && "${anlys_time:3:1}" == "0" ]]; then
-                echo "    CWP not found: ${cwp_file##"${OBS_DIR}"/}"
-            fi
-        fi
-    fi
-
-    #=================================================
-    # PREPROCESS GOES SATELLITE Radiance DATA
-    #=================================================
-    #4. Radiance
-
-    if [[ ${use_RAD} == true ]]; then
-        channels=("08" "10")
-
-        RAD_DIR=${OBS_DIR}/Radiance
-
-        rad_files="obs_seq_abi.G1[69]_C??.${anlys_date}${anlys_time}"
-
-        if [[ $rt_run == true ]]; then
-
-            numrad=$(find ${RAD_DIR}/ -name "${rad_files}" | wc -l)
-            [[ $numrad -ne ${#channels[@]} ]] && echo "    Waiting for Radiance/${rad_files} ...."
-            while [[ $numrad -ne ${#channels[@]} ]]; do
-                nummis=$(find ${RAD_DIR}/ -name "${rad_files}.missed" | wc -l)
-                if [[ $nummis -gt 0 ]]; then
-                    echo "    Found ${nummis} missed files. Skip Radiance/${rad_files} ...."
-                    break
-                fi
-                sleep 10
-                numrad=$(find ${RAD_DIR}/ -name "${rad_files}" | wc -l)
-            done
-        fi
-
-        i=0
-        for abifile in "${RAD_DIR}"/obs_seq_abi.G1[69]_C??."${anlys_date}${anlys_time}"; do
-            if [[ -e ${abifile} ]]; then
-                i=$((i+1))
-
-                if [[ ! -e ${srunout}_RAD ]]; then
-                    { echo "Run command ${obspreprocess} as:";
-                      echo "echo  \"${g_date} ${g_sec}\" | ${obspreprocess}";
-                      echo "";
-                    }                                            >& ${srunout}_RAD
-                fi
-
-                if [[ ! -e rttov_sensor_db.csv ]]; then
-                    cp ${FIXDIR}/rtcoef_rttov13/rttov_sensor_db.csv .
-                fi
-
-                a=$(basename $abifile)
-                chan=${a##obs_seq_abi.G1[69]_C}
-                chan=${chan%%."${anlys_date}${anlys_time}"}
-                if [[ " ${channels[*]} " == *" $chan "* ]]; then
-                    echo -e "    ${PURPLE}$k-$i${NC}: Using Radiance data in ${LIGHT_BLUE}${abifile##"${OBS_DIR}"/}${NC}"
-                    cp ${abifile} ./obs_seq.old
-
-                    sed "/obsdistbdy/s/=.*/= 15000/;/obs_boundary/s/=.*/= 5000/" ${input_base} > input.nml
-
-                    if [[ $verb -eq 1 ]]; then
-                        mecho0 "Run command ${BROWN}${obspreprocess}${NC} with parameters: ${BLUE}${g_date} ${g_sec}${NC}"
-                    fi
-                    ${runcmd_str} echo "${g_date} ${g_sec}" | ${obspreprocess} >> ${srunout}_ABI 2>&1
-
-                    # shellcheck disable=SC2181
-                    if [[ $? -eq 0 ]]; then
-                        mv ./obs_seq.new ./obs_seq.abiC$chan
-                        mv input.nml input.nml.ABI$chan
-                        rm ./obs_seq.old
-                        echo $wrkdir/OBSDIR/obs_seq.abiC$chan >> obsflist.abi
-                    else
-                        mecho0 "${RED}ERROR${NC}: command ${BROWN}${obspreprocess}${NC} for Radiance data"
-                        exit 1
-                    fi
-                else
-                    echo "    Radiance file ${abifile##"${OBS_DIR}"/} is on Channel $chan, ignoring currently."
-                fi
-            else
-                echo "    Radiance not found: ${abifile##"${OBS_DIR}"/}"
-            fi
-        done
-
-        if [[ $i -ge 1 ]]; then k=$((k+1)); fi
-
-        if [[ -e obsflist.abi ]]; then
-            obsflists+=(obsflist.abi)
-        fi
-    fi
-
-    #=================================================
-    # PREPROCESS RADAR DATA
-    #=================================================
-
-    ########################
-    ### MRMS             ###
-    ########################
-    #5. REF
-
-    if [[ ${use_REF} == true ]]; then
-
-        DBZ_DIR=${OBS_DIR}/REF
-
-        dbz_file="${DBZ_DIR}/${eventdate}/obs_seq_RF_${anlys_date}_${anlys_time}.out"
-
-        if [[ $rt_run == true ]]; then
-            if [[ ! -e ${dbz_file} ]]; then
-                echo "    Waiting for ${dbz_file##"${OBS_DIR}"/} ...."
-            fi
-            while [[ ! -e ${dbz_file} ]]; do
-                if [[ -e "${dbz_file}.missed" ]]; then
-                    echo "    Not found. Skip ${dbz_file##"${OBS_DIR}"/} ...."
-                    break
-                fi
-                sleep 10
-            done
-        fi
-
-        if [[ -e ${dbz_file} ]]; then
-            wait_for_file_age ${dbz_file} 30
-
-            echo -e "    ${PURPLE}$((k++))${NC}: Using REF data in ${LIGHT_BLUE}${dbz_file##"${OBS_DIR}"/}${NC}"
-
-            cp ${dbz_file} ./obs_seq.old
-
-            sed "/obsdistbdy/s/=.*/= 15000/;/obs_boundary/s/=.*/= 5000/" ${input_base} > input.nml
-            #sed "/obsdistbdy/s/=.*/= 0/;/obs_boundary/s/=.*/= 0/" ${input_base} > input.nml
-
-            if [[ $verb -eq 1 ]]; then
-                mecho0 "    Run command ${BROWN}${obspreprocess}${NC} with parameters: ${BLUE}${g_date} ${g_sec}${NC}"
-            fi
-            { echo -e "Run command ${obspreprocess} as:\n----\n";
-              echo "cp ${dbz_file} ./obs_seq.old"
-              echo "echo  \"${g_date} ${g_sec}\" | ${obspreprocess} >> ${srunout}_REF";
-              echo -e "----\n";
-            }                                                      >& ${srunout}_REF
-
-            ${runcmd_str} echo "$g_date $g_sec" | ${obspreprocess} >> ${srunout}_REF 2>&1
-
-            # shellcheck disable=SC2181
-            if [[ $? -eq 0 ]]; then
-                mv ./obs_seq.new ./obs_seq.mrms
-                mv input.nml input.nml.REF
-                rm ./obs_seq.old
-
-                echo $wrkdir/OBSDIR/obs_seq.mrms > obsflist.mrms
-
-                obsflists+=(obsflist.mrms)
-            else
-                mecho0 "${RED}ERROR${NC}: command ${BROWN}${obspreprocess}${NC} for REF data"
-            fi
-        else
-            echo "    REF data not found: ${dbz_file##"${OBS_DIR}"/}"
-        fi
-    fi
-
-    ########################
-    ### Radial Velocity  ###
-    ########################
-    #6. VEL
-
-    if [[ ${use_VEL} == true ]]; then
-        wait_seconds=$((iseconds+600))
-
-        #
-        # Source environment for radars
-        #
-
-        if [[ -e $rundir/$domname/${domname}.${eventdate}.radars.sh ]]; then
-            source $rundir/$domname/${domname}.${eventdate}.radars.sh || exit $?
-        else
-            mecho0 "${RED}ERROR${NC}: File ${CYAN}$rundir/$domname/${domname}.${eventdate}.radars.sh${NC} not exist"
-            exit 0
-        fi
-
-        VR_DIR=${OBS_DIR}/VEL
-
-        if [[ $rt_run == true ]]; then
-
-            numrad=$(find ${VR_DIR}/${eventdate} -name "obs_seq_????_VR_${anlys_date}_${anlys_time}.out" | wc -l)
-
-            if [[ $numrad -lt ${num_rad} ]]; then
-                if [[ $currsecs -lt ${wait_seconds} ]]; then
-                    echo "    Waiting for ${VR_DIR##"${OBS_DIR}"/}/${eventdate}/obs_seq_????_VR_${anlys_date}_${anlys_time}.out ...."
-                else
-                    echo "    Not found. Skip ${VR_DIR##"${OBS_DIR}"/}/${eventdate}/obs_seq_????_VR_${anlys_date}_${anlys_time}.out ...."
-                fi
-            fi
-
-            currsecs=$(date -u +%s)
-            while [[ $numrad -lt ${num_rad} && $currsecs -lt ${wait_seconds} ]]; do
-                # do not wait more than 10 minute outside the current assimilation cycle
-                sleep 10
-                numrad=$(find ${VR_DIR}/${eventdate} -name "obs_seq_????_VR_${anlys_date}_${anlys_time}.out" | wc -l)
-                currsecs=$(date -u +%s)
-            done
-        fi
-
-        j=0; n=0
-        while [[ ${j} -lt ${num_rad} ]]; do
-
-            vrj_file=${VR_DIR}/${eventdate}/obs_seq_${rad_name[$j]}_VR_${anlys_date}_${anlys_time}.out
-
-            if [[ $verb -eq 1 ]]; then
-                mecho0 "    Checking VEL data in ${vrj_file##"${OBS_DIR}"/}"
-            fi
-
-            if [[ -e ${vrj_file} ]]; then
-
-                wait_for_file_age ${vrj_file} 30
-
-                if [[ ${run_trimvr} == true ]]; then
-                    trimvr_cmd="${scpdir}/seq_filter.py -k -o ./obs_seq.old ${vrj_file}"
-                    echo -e "    --- ${BROWN}${trimvr_cmd}${NC}" | sed "s#${scpdir}/##;s#${OBS_DIR}#\${OBS_DIR}#g"      # just to get a short message line
-
-                    if ! ${trimvr_cmd}; then
-                        #echo "        Failed. Ignore ${vrj_file}"
-                        (( j++ ))
-                        continue
-                    fi
-                else
-                    cp ${vrj_file} ./obs_seq.old
-                fi
-
-                sed "/obsdistbdy/s/=.*/= 15000/;/obs_boundary/s/=.*/= 5000/" ${input_base} > input.nml
-
-                #echo "    $k-$n: Using VEL data in ${vrj_file}"
-
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Run command ${BROWN}${obspreprocess}${NC} with parameters: ${BLUE}${g_date} ${g_sec}${NC}"
-                fi
-                { echo "Run command ${obspreprocess} as:";
-                  echo "echo  \"${g_date} ${g_sec}\" | ${obspreprocess}";
-                  echo "";
-                }                                                      >& ${srunout}_VR_${rad_name[$j]}
-
-                ${runcmd_str} echo "$g_date $g_sec" | ${obspreprocess} >> ${srunout}_VR_${rad_name[$j]} 2>&1
-
-                rm ./obs_seq.old
-
-                if [[ -e ./obs_seq.new ]]; then
-                    (( n++ ))
-                    echo -e "    ${PURPLE}$k-$n${NC}: Using VEL data in ${LIGHT_BLUE}${vrj_file##"${OBS_DIR}"/}${NC}\n"
-                    mv ./obs_seq.new ./obs_seq.vr${j}
-                    mv input.nml input.nml.VR_${rad_name[$j]}
-                    echo $wrkdir/OBSDIR/obs_seq.vr${j} >> obsflist.radvr
-                fi
-
-            fi
-
-            (( j++ ))
-        done
-
-        if [[ $n -gt 0 ]]; then
-            obsflists+=(obsflist.radvr)
-        else
-            echo "    No valid radial velocity data is processed"
-        fi
-    fi
-
-    #-------------------------------------------------------------------
-    #
-    # Run OBS_SEQUENCE_TOOL
-    #
-    #-------------------------------------------------------------------
-
-    if [[ ${#obsflists[@]} -gt 0 ]]; then
-        if [[ $verb -eq 1 ]]; then
-            echo "cat ${obsflists[*]} to obsflist"
-        fi
-        cat "${obsflists[@]}" > obsflist
-        #obs_found=true
-    else
-        mecho0 "${YELLOW}No valid observation was found${NC}."
-        #obs_found=false
-        return
-    fi
-
-    #===================================================================
-
-    (( gobef_secs=iseconds - 900 ))    # -15m
-    (( goaft_secs=iseconds + 180 ))    # +3m
-
-    read -r -a gobef_dates < <(convertS2days "${gobef_secs}")
-    read -r -a goaft_dates < <(convertS2days "${goaft_secs}")
-
-    sedfile=$(mktemp -t input.nml_${eventtime}.sed_XXXX)
-
-    cat <<EOF > $sedfile
-/first_obs_days/s/-1/${gobef_dates[0]}/
-/first_obs_seconds/s/-1/${gobef_dates[1]}/
-/last_obs_days/s/-1/${goaft_dates[0]}/
-/last_obs_seconds/s/-1/${goaft_dates[1]}/
-EOF
-
-    sed -f $sedfile ${input_base} > input.nml
-
-    rm -f $sedfile
-
-    #===================================================================
-
-    #COMBINE obs-seq FILES HERE
-    # namelist file input.nml contains:
-    # &obs_sequence_tool_nml
-    #    filename_seq_list = 'obsflist'
-    #    filename_out      = 'obs_seq.${timestr_cur}'
-    # /
-    #
-    if [[ $verb -eq 1 ]]; then echo "Runing ${EXEDIR}/dart/obs_sequence_tool"; fi
-    ${runcmd_str} ${EXEDIR}/dart/obs_sequence_tool >& ${srunout}_sequence_tool
-
-    if [[ $? -eq 0 && -e obs_seq.${anlys_date}${anlys_time} ]]; then
-        mecho0 "Observation file ${CYAN}${wrkdir##"$WORKDIR"/}/OBSDIR/obs_seq.${anlys_date}${anlys_time}${NC} created"
-        mv input.nml input.nml.sequence_tool
-    else
-        mecho0 "${RED}ERROR${NC}: ${runcmd_str} ${EXEDIR}/dart/obs_sequence_tool"
-    fi
-
-    #rm -f ./obs_seq.hfmetar ./obs_seq.meso ./obs_seq.cwp ./obs_seq.mrms ./obs_seq.rad ./obs_seq.vr*
-
-    #rm -f dart_log.* obsflist* init.nc
-    #rm -f obsflist* wrfinput_d0*
-
-    cd $wrkdir || return
+    #------------------------------------------------------
+    # Run ioda_mrms_refl for reflectivity
+    #------------------------------------------------------
+    run_ioda_mrms_refl ${wrkdir} ${iseconds}
 }
 
 ########################################################################
 
-function run_filter {
+function run_ioda_bufr {
+    # $1        $2
+    # wrkdir    iseconds
+
+    local wrkdir=$1               # DA directory for this cycle
+    local iseconds=$2
+
+    #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/ioda_bufr/running.ioda_bufr || -f $wrkdir/ioda_bufr/done.ioda_bufr || -f $wrkdir/ioda_bufr/queue.ioda_bufr ]]; then
+        return
+    fi
+
+    #------------------------------------------------------
+    # Run ioda_bufr for all bufr observation files
+    #------------------------------------------------------
+
+    mkwrkdir $wrkdir/ioda_bufr 1     # 0: Keep existing directory as is
+                                     # 1: Remove existing same name directory
+    cd $wrkdir/ioda_bufr || exit $?
+
+
+    jobscript="run_ioda_bufr.${mach}"
+
+    declare -A jobParms=(
+        [PARTION]="${partition_filter}"
+        [NOPART]="1"
+        [JOBNAME]="ioda_bufr_${eventtime}"
+        [CPUSPEC]="${claim_cpu_ioda}"
+        [EXEDIR]="${EXEDIR}/jedi"
+        [CPCMD]="${cpcmd}"
+        [CURRDATE]="${anlys_date}"
+        [CYCHR]="${anlys_hour}"
+        [OBSDIR]="${OBS_DIR}/obs_rap"
+        [FIXDIR]="${FIXDIR}"
+        [ROOTDIR]="${rootdir}"
+        [GRIDFILE]="${rundir}/$domname/${domname}.grid.nc"
+    )
+    if [[ "${mach}" == "pbs" ]]; then
+        jobParms[NNODES]="1"
+        jobParms[NCORES]="1"
+    fi
+
+    submit_a_job $wrkdir/ioda_bufr "ioda_bufr" jobParms $TEMPDIR/$jobscript $jobscript ""
+}
+
+########################################################################
+
+function run_ioda_mrms_refl {
+    # $1        $2
+    # wrkdir    iseconds
+
+    local wrkdir=$1               # DA directory for this cycle
+    local iseconds=$2
+
+    #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/ioda_mrms_refl/running.ioda_refl || -f $wrkdir/ioda_mrms_refl/done.ioda_refl || -f $wrkdir/ioda_mrms_refl/queue.ioda_refl ]]; then
+        return
+    fi
+
+    #------------------------------------------------------
+    # Run ioda_mrms_refl for MRMS observation files
+    #------------------------------------------------------
+
+    mkwrkdir $wrkdir/ioda_mrms_refl 1     # 0: Keep existing directory as is
+                                     # 1: Remove existing same name directory
+    cd $wrkdir/ioda_mrms_refl || exit $?
+
+    jobscript="run_ioda_mrms_refl.${mach}"
+
+    declare -A jobParms=(
+        [PARTION]="${partition_filter}"
+        [NOPART]="33"
+        [JOBNAME]="ioda_refl_${eventtime}"
+        [CPUSPEC]="${claim_cpu_ioda_refl}"
+        [EXEDIR]="${EXEDIR}/jedi"
+        [CPCMD]="${cpcmd}"
+        [CURRDATE]="${anlys_date}${anlys_min}"
+        [OBSDIR]="${OBS_DIR}/reflectivity"
+        [FIXDIR]="${FIXDIR}"
+        [ROOTDIR]="${rootdir}"
+        [GRIDFILE]="${rundir}/$domname/${domname}.grid.nc"
+    )
+    if [[ "${mach}" == "pbs" ]]; then
+        jobParms[NNODES]="1"
+        jobParms[NCORES]="1"
+    fi
+
+    submit_a_job $wrkdir/ioda_mrms_refl "ioda_refl" jobParms $TEMPDIR/$jobscript $jobscript ""
+}
+
+########################################################################
+
+function mpasjedi_preq {
+    # $1        $2      $3
+    # wrkdir    icycle    iseconds
+    local wrkdir=$1
+    local icycle=$2
+    local iseconds=$3
+
+    cd $wrkdir || return
+
+    timesec_pre=$((iseconds-intvl_sec))
+    event_pre=$(date -u -d @${timesec_pre}   +%H%M)
+
+
+    #if $relative_path; then
+    #    parentdir='..'  #$(realpath -m --relative-to=${wrkdir} ${parentdir_a})
+    #    casedir=$(realpath -m --relative-to=${wrkdir} ${rundir})
+    #else
+        parentdir=$(dirname $(dirname ${wrkdir}))
+        casedir="${rundir}"
+    #fi
+
+    #------------------------------------------------------
+    # Prepare runtime files
+    #------------------------------------------------------
+    # DATA=wrkdir
+    physics_convection_permitting=( CAM_ABS_DATA.DBL CAM_AEROPT_DATA.DBL CCN_ACTIVATE_DATA   \
+                                    GENPARM.TBL      LANDUSE.TBL                             \
+                                    MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL MP_TEMPO_QIautQS_DATA.DBL \
+                                    MP_TEMPO_QRacrQG_DATA.DBL           MP_TEMPO_QRacrQS_DATA.DBL \
+                                    MP_TEMPO_freezeH2O_DATA.DBL         MP_THOMPSON_QIautQS_DATA.DBL \
+                                    MP_THOMPSON_QRacrQG_DATA.DBL        MP_THOMPSON_QRacrQS_DATA.DBL \
+                                    MP_THOMPSON_freezeH2O_DATA.DBL      \
+                                    OZONE_DAT.TBL    OZONE_LAT.TBL      OZONE_PLEV.TBL \
+                                    QNWFA_QNIFA_SIGMA_MONTHLY.dat       \
+                                    RRTMG_LW_DATA RRTMG_LW_DATA.DBL     \
+                                    RRTMG_SW_DATA RRTMG_SW_DATA.DBL     \
+                                    SOILPARM.TBL VEGPARM.TBL )
+
+    for fn in "${physics_convection_permitting[@]}"; do
+        ln -sf "${FIXDIR}/${fn}" .
+    done
+
+    #ln -snf "${FIXDIR}/${domname}.ugwp_oro_data.nc" ./ugwp_oro_data.nc
+
+    ln -snf "${rundir}/init/${domname}.invariant.nc" ./invariant.nc
+
+    #mkdir -p graphinfo stream_list
+    #ln -snf "${FIXrrfs}"/graphinfo/* graphinfo/
+    #ln -snf "${FIXrrfs}/stream_list/${PHYSICS_SUITE}"/* stream_list/
+    ${cpcmd} "${FIXDIR}"/jedi/obsop_name_map.yaml .
+    ${cpcmd} "${FIXDIR}"/jedi/keptvars.yaml .
+    ${cpcmd} "${FIXDIR}"/jedi/geovars.yaml .
+
+    #
+    # create data directory
+    #
+    mkdir -p data
+
+    cd data || exit 1
+
+    mkdir -p obs ens jdiag
+
+    # link ensembles to data/ens/
+    for mem in $(seq -w 01 "${ENS_SIZE}"); do
+        if [[ $icycle -eq 0 ]]; then
+            input_file_="${casedir}/init/${domname}_${mem}.init.nc"
+            mkdir -p ana
+        else
+            input_file_="${parentdir}/${event_pre}/fcst_${mem}/${domname}_${mem}.restart.$currtime_str.nc"
+        fi
+
+        ln -snf "${input_file_}" "ens/mem0${mem}.nc"
+    done
+
+    #
+    # enter the working directory again
+    #
+    cd "${wrkdir}" || exit 1
+    #
+    # generate namelist, streams, and getkf.yaml on the fly
+    file_content=$(< "${FIXDIR}/jedi/namelist.atmosphere") # read in all content
+    dt=${time_step}
+    start_time="${currtime_str}"
+    run_duration="00:${fcstmin_str}:00"
+    substeps=4
+    pio_num_iotasks=4
+    pio_stride=20
+    MESH_NAME="${domname}"
+    do_DAcycling='false'
+    radt="05"
+    jedi_da="true"
+    eval "echo \"${file_content}\"" > namelist.atmosphere
+    cp "${FIXDIR}/jedi/streams.atmosphere.getkf" streams.atmosphere
+
+    if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npefilter} ]]; then
+        split_graph "${gpmetis}" "${domname}.graph.info" "${npefilter}" "$rundir/$domname" "$dorun" "$verb"
+    fi
+    ln -sf $rundir/$domname/$domname.graph.info.part.${npefilter} .
+
+    mkdir -p stream_list
+    ln -snf "${FIXDIR}"/jedi/stream_list/* stream_list/
+}
+
+########################################################################
+
+function run_getkf_observer {
+    # $1        $2      $3
+    # wrkdir    icycle    iseconds
+    local datimedir=$1
+    local icycle=$2
+    local iseconds=$3
+
+    wrkdir="$datimedir/getkf_observer"
+
+    #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/running.observer || -f $wrkdir/done.observer || -f $wrkdir/queue.getkf_observer ]]; then
+        return
+    fi
+
+    #
+    # GLOBAL: ENS_SIZE, rundir, ADAPTIVE_INF, OBS_DIR
+    #         intvl_sec, ncores_filter
+    # RETURN: input_file_list, output_file_list
+    #
+
+    #
+    # Build working directory
+    #
+    mkwrkdir $wrkdir 0              # 0: Keep existing directory as is
+                                    # 1: Remove existing same name directory
+    cd $wrkdir || return
+
+    #
+    # Waiting for job conditions
+    #
+    conditions=("${datimedir}/ioda_bufr/done.ioda_bufr" "${datimedir}/ioda_mrms_refl/done.ioda_mrms_refl")
+
+    if [[ $dorun == true ]]; then
+        for cond in "${conditions[@]}"; do
+            mecho0 "Checking $cond"
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    mecho0 "Waiting for file: $cond"
+                fi
+                sleep 10
+            done
+        done
+    fi
+
+    anlys_datehour=$(date -u -d @$iseconds  +%Y%m%d%H)
+    anlys_hour=$(date -u -d @$iseconds  +%H)
+    anlys_min=$(date -u -d @$iseconds   +%M)
+
+    mpasjedi_preq "${wrkdir}" $2 $3
+
+    #
+    # Copy ioda observation files
+
+    cd data || exit $?
+
+    obspath="${datimedir}/ioda_bufr"
+
+    declare -A mappings  # Declare an associative array
+
+    mappings=(  ["ioda_adpsfc.nc"]="${obspath}/ioda_adpsfc.nc"          \
+                ["ioda_adpupa.nc"]="${obspath}/ioda_adpupa.nc"          \
+                ["ioda_aircar.nc"]="${obspath}/ioda_aircar.nc"          \
+                ["ioda_aircft.nc"]="${obspath}/ioda_aircft.nc"          \
+                ["ioda_ascatw.nc"]="${obspath}/ioda_ascatw.nc"          \
+                ["ioda_msonet.nc"]="${obspath}/ioda_msonet.nc"          \
+                ["ioda_proflr.nc"]="${obspath}/ioda_proflr.nc"          \
+                ["ioda_rassda.nc"]="${obspath}/ioda_rassda.nc"          \
+                ["ioda_sfcshp.nc"]="${obspath}/ioda_sfcshp.nc"          \
+                ["ioda_vadwnd.nc"]="${obspath}/ioda_vadwnd.nc"          \
+                ["ioda_gnss_ztd.nc"]="${obspath}/ioda_gnss_ztd.nc"      \
+    # satellite observations
+                ["ioda_abi_g16.nc"]="${obspath}/ioda_abi_g16.nc"        \
+                ["ioda_abi_g18.nc"]="${obspath}/ioda_abi_g18.nc"        \
+                ["ioda_atms_npp.nc"]="${obspath}/ioda_atms_npp.nc"      \
+                ["ioda_atms_n20.nc"]="${obspath}/ioda_atms_n20.nc"      \
+                ["ioda_atms_n21.nc"]="${obspath}/ioda_atms_n21.nc"      \
+                ["ioda_crisf4_n20.nc"]="${obspath}/ioda_crisf4_n20.nc"  \
+                ["ioda_crisf4_n21.nc"]="${obspath}/ioda_crisf4_n21.nc"  \
+    # Radar observations
+                ["ioda_mrms_refl.nc"]="${datimedir}/ioda_mrms_refl/ioda_mrms_${anlys_datehour}_${anlys_min}.nc4"
+            )
+
+    # loop through and copy files
+    for dst_file in "${!mappings[@]}"; do
+        src_file=${mappings[${dst_file}]}
+        if [[ -s "${src_file}" ]]; then
+            ${cpcmd} "${src_file}"  "obs/${dst_file}"
+        else
+            mecho0 "WARNING: ${src_file} does not exist!"
+        fi
+    done
+
+    #
+    # enter the run directory again
+    #
+    cd "${wrkdir}" || exit 1
+
+    #
+    # generate getkf.yaml based on how YAML_GEN_METHOD is set
+    analysisDate="$(date -u -d @${iseconds} +%Y-%m-%dT%H:%M:%SZ)"
+    bseconds=$((iseconds - 600))
+    beginDate="$(date -u -d @${bseconds} +%Y-%m-%dT%H:%M:%SZ)"
+    lenwind="PT15M"
+
+    USHrrfs="${rootdir}/RRFS_USH"
+    # generate the JEDI yaml files using templates from the parm/ directory
+    #source "${USHrrfs}"/yaml_from_parm.sh "getkf"
+
+    sed -e "s/@analysisDate@/${analysisDate}/;s/@beginDate@/${beginDate}/;s/@lenWin@/${lenwind}/" \
+           "${FIXDIR}/jedi/getkf_observer.yaml" > getkf.yaml
+    #
+    #  Generate the final YAML configuration file based on convinfo and available ioda files
+    #
+    cp "${FIXDIR}/jedi/convinfo" .
+    [[ -s "${FIXDIR}/jedi/satinfo" ]] && cp "${FIXDIR}/jedi/satinfo" .
+    "${USHrrfs}/yaml_finalize" "getkf.yaml"
+
+    ## For post task, change a few yaml settings and remove "reduce obs space"
+    #if [[ "${TYPE}" == "post" ]]; then
+    #  "${USHrrfs}"/yaml_getkf_post getkf.yaml
+    #fi
+
+    #------------------------------------------------------
+    # Run mpasjedi_enkf.x
+    #------------------------------------------------------
+
+    taskname="observer"
+    jobscript="run_mpasjedi.${mach}"
+
+    declare -A jobParms=(
+        [PARTION]="${partition_filter}"
+        [NOPART]="${npefilter}"
+        [JOBNAME]="${taskname}-${jobname}_${eventtime}"
+        [CPUSPEC]="${claim_cpu_filter}"
+        [EXEDIR]="${EXEDIR}/jedi"
+        [WRKDIR]="${wrkdir}"
+        [TASKNAME]="${taskname}"
+    )
+    if [[ "${mach}" == "pbs" ]]; then
+        jobParms[NNODES]="${nnodes_filter}"
+        jobParms[NCORES]="${ncores_filter}"
+    fi
+
+    submit_a_job "${wrkdir}" "getkf_${taskname}" "jobParms" "$TEMPDIR/$jobscript" "run_getkf_${taskname}.${mach}" ""
+}
+
+########################################################################
+
+function run_getkf_solver {
+    # $1        $2      $3
+    # wrkdir    icycle    iseconds
+    local datimedir=$1
+    local icycle=$2
+    local iseconds=$3
+
+    wrkdir="$datimedir/getkf_solver"
+
+    #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/running.solver || -f $wrkdir/done.solver || -f $wrkdir/queue.getkf_solver ]]; then
+        return
+    fi
+
+    #
+    # GLOBAL: ENS_SIZE, rundir, ADAPTIVE_INF, OBS_DIR
+    #         intvl_sec, ncores_filter
+    # RETURN: input_file_list, output_file_list
+    #
+
+    #
+    # Build working directory
+    #
+    mkwrkdir $wrkdir 0               # 0: Keep existing directory as is
+                                     # 1: Remove existing same name directory
+    cd $wrkdir || return
+
+    #
+    # Waiting for job conditions
+    #
+    conditions=("${datimedir}/getkf_observer/done.observer")
+
+    if [[ $dorun == true ]]; then
+        for cond in "${conditions[@]}"; do
+            mecho0 "Checking $cond"
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    mecho0 "Waiting for file: $cond"
+                fi
+                sleep 10
+            done
+        done
+    fi
+
+    #------------------------------------------------------
+    # Prepare runtime files
+    #------------------------------------------------------
+    # DATA=wrkdir
+
+    mpasjedi_preq $1 $2 $3
+
+    #
+    # Copy ioda observation files
+
+    ln -snf "${datimedir}/getkf_observer"/jdiag* jdiag/
+
+    #
+    # enter the run directory again
+    #
+    cd "${wrkdir}" || exit 1
+
+    #
+    # generate getkf.yaml based on how YAML_GEN_METHOD is set
+    analysisDate="$(date -u -d @${iseconds} +%Y-%m-%dT%H:%M:%sZ)"
+    bseconds=$((iseonds - 600))
+    beginDate="$(date -u -d @${bseconds} +%Y-%m-%dT%H:%M:%sZ)"
+    lenwind="PT15M"
+
+    USHrrfs="${rootdir}/RRFS_USH"
+    # generate the JEDI yaml files using templates from the parm/ directory
+    #source "${USHrrfs}"/yaml_from_parm.sh "getkf"
+
+    sed -e "s/@analysisDate@/${analysisDate}/;s/@beginDate@/${beginDate}/;s/@lenWin@/${lenwind}/" \
+           "${FIXDIR}/jedi/getkf_solver.yaml" > getkf.yaml
+    #
+    #  Generate the final YAML configuration file based on convinfo and available ioda files
+    #
+    cp "${FIXDIR}/jedi/convinfo" .
+    [[ -s "${FIXDIR}/jedi/satinfo" ]] && cp "${FIXDIR}/jedi/satinfo" .
+    "${USHrrfs}/yaml_finalize" "getkf.yaml"
+
+    #------------------------------------------------------
+    # Run mpasjedi_enkf.x
+    #------------------------------------------------------
+
+    taskname="solver"
+    jobscript="run_mpasjedi_solver.${mach}"
+
+    declare -A jobParms=(
+        [PARTION]="${partition_filter}"
+        [NOPART]="$npefilter"
+        [JOBNAME]="${taskname}-${jobname}_${eventtime}"
+        [CPUSPEC]="${claim_cpu_filter}"
+        [EXEDIR]="${EXEDIR}/jedi"
+        [WRKDIR]="${wrkdir}"
+        [TASKNAME]="${taskname}"
+    )
+    if [[ "${mach}" == "pbs" ]]; then
+        jobParms[NNODES]="${nnodes_filter}"
+        jobParms[NCORES]="${ncores_filter}"
+    fi
+
+    submit_a_job "${wrkdir}" "getkf_${taskname}" "jobParms" "$TEMPDIR/run_mpasjedi.${mach}" "$jobscript" ""
+}
+
+########################################################################
+
+function run_getkf_post {
     # $1        $2      $3
     # wrkdir    icycle    iseconds
     local wrkdir=$1
@@ -815,1398 +767,73 @@ function run_filter {
     #
     # Build working directory
     #
-    mkwrkdir $wrkdir 0
+    mkwrkdir $wrkdir 0               # 0: Keep existing directory as is
+                                     # 1: Remove existing same name directory
     cd $wrkdir || return
 
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/running.filter || -f $wrkdir/done.filter || -f $wrkdir/queue.filter ]]; then
+    if [[ -f $wrkdir/running.post || -f $wrkdir/done.post || -f $wrkdir/queue.post ]]; then
         return
     fi
 
-    timesec_pre=$((iseconds-intvl_sec))
-    event_pre=$(date -u -d @${timesec_pre}   +%H%M)
-    timestr_cur=$(date -u -d @${iseconds}    +%Y%m%d%H%M)
-
-    datestr4obsdiag=$(date -u -d @${iseconds} +%Y,%m,%d,%H,%M,%S)
-    intvl_min=$((intvl_sec/60))
-    dateintvl4obsdiag="0, 0, 0,00,${intvl_min},00"
-
-    (( gobef_secs=iseconds - 900 ))    # -15m
-    (( goaft_secs=iseconds + 180 ))    # +3m
-    (( gobtw_secs=goaft_secs-gobef_secs ))
-    datestr4obsdiag_start=$(date -u -d @${gobef_secs} +%Y,%m,%d,%H,%M,%S)
-    datestr4obsdiag_end=$(date -u -d @${goaft_secs} +%Y,%m,%d,%H,%M,%S)
-
-    read -r -a gobef_dates < <(convertS2days "${gobef_secs}")
-    read -r -a goaft_dates < <(convertS2days "${goaft_secs}")
-
-    if $relative_path; then
-        parentdir='..'  #$(realpath -m --relative-to=${wrkdir} ${parentdir_a})
-        casedir=$(realpath -m --relative-to=${wrkdir} ${rundir})
-    else
+    #if $relative_path; then
+    #    parentdir='..'  #$(realpath -m --relative-to=${wrkdir} ${parentdir_a})
+    #    casedir=$(realpath -m --relative-to=${wrkdir} ${rundir})
+    #else
         parentdir=$(dirname ${wrkdir})
         casedir="${rundir}"
-    fi
+    #fi
 
     #------------------------------------------------------
-    # Waiting for job conditions before submit the job
+    # Prepare runtime files
     #------------------------------------------------------
+    # DATA=wrkdir
 
-    if [[ $icycle -eq 0 ]]; then
-        conditions=("${rundir}/init/done.${domname}")
-    else
-        conditions=("${parentdir}/${event_pre}/done.fcst")
-    fi
+    # generate getkf.yaml based on how YAML_GEN_METHOD is set
+    analysisDate="$(date -u -d @${iseconds} +%Y-%m-%dT%H:%M:%sZ)"
+    bseconds=$((iseonds - 600))
+    beginDate="$(date -u -d @${bseconds} +%Y-%m-%dT%H:%M:%sZ)"
+    lenwind="PT15M"
 
-    if [[ $dorun == true ]]; then
-        for cond in "${conditions[@]}"; do
-            mecho0 "Checking $cond"
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: $cond"
-                fi
-                sleep 10
-            done
-        done
-    fi
+    USHrrfs="${rootdir}/RRFS_ush"
+    # generate the JEDI yaml files using templates from the parm/ directory
+    #source "${USHrrfs}"/yaml_from_parm.sh "getkf"
 
-    #------------------------------------------------------
-    # 1. Update input files to get filter started
-    #------------------------------------------------------
-
-    currtime_str=$(date -u -d @$iseconds +%Y-%m-%d_%H.%M.%S)
-
-    rm -f filter_in.txt filter_out.txt
-    input_file_list=()
-    output_file_list=()
-    for iens in $(seq 1 $ENS_SIZE); do
-        memstr=$(printf "%02d" $iens)
-        if [[ $icycle -eq 0 ]]; then
-            input_file_="${casedir}/init/${domname}_${memstr}.init.nc"
-        else
-            input_file_="${parentdir}/${event_pre}/fcst_${memstr}/${domname}_${memstr}.restart.$currtime_str.nc"
-        fi
-        input_file="${domname}_${memstr}.prior.$currtime_str.nc"
-        ln -sf ${input_file_} ${input_file}
-
-        if [[ $dorun == true && ! -f $input_file ]]; then
-            mecho0 "${RED}ERROR${NC}: File ${CYAN}$input_file${NC} not exist."
-            exit 1
-        fi
-        echo $input_file >> filter_in.txt
-        input_file_list+=("$input_file")
-
-        #output_file="${domname}_${memstr}.analysis.$currtime_str.nc"
-        output_file="${domname}_${memstr}.analysis"
-        echo $output_file >> filter_out.txt
-        output_file_list+=("$output_file")
-    done
-
-    filename_mesh="${rundir}/init/${domname}_01.init.nc"
-
-    #------------------------------------------------------
-    # 2. Adaptive inflation & Sampling error correction
-    #------------------------------------------------------
-
-    inf_initial_restart=(".false." ".false.")
-
-    if [[ $ADAPTIVE_INF == true ]]; then
-        if [[ -e ${parentdir}/${event_pre}/output_priorinf_mean.nc ]]; then
-            ln -sf ${parentdir}/${event_pre}/output_priorinf_mean.nc input_priorinf_mean.nc
-            ln -sf ${parentdir}/${event_pre}/output_priorinf_sd.nc   input_priorinf_sd.nc
-
-            inf_initial_restart=(".true." ".false.")
-            mecho0 "${WHITE}INFO${NC}: Use ${PURPLE}adaptive inflation${NC} for this cycle."
-        else
-            mecho0 "File ${CYAN}${parentdir}/${event_pre}/output_priorinf_mean.nc${NC} does not exist."
-            mecho0 "${YELLOW}WARNING${NC}: Not using adaptive inflation for this cycle."
-            #exit 2
-        fi
-    fi
-
-    if [[ ${sampling_error_correction,,} == ".t." || ${sampling_error_correction,,} == ".true." ]]; then
-        mecho0 "${WHITE}INFO${NC}: Turning on ${PURPLE}sampling_error_correction${NC}."
-        ln -sf ${FIXDIR}/sampling_error_correction_table.nc .
-        sampling_error_correction=".true."
-    else
-        mecho0 "${YELLOW}WARNING${NC}: Not using sampling error correction: ${PURPLE}sampling_error_correction${NC}."
-        sampling_error_correction=".false."
-    fi
-
-    #------------------------------------------------------
-    # 3. Link RTTOV static files
-    #------------------------------------------------------
-
-    coef_files=(rttov9pred54L/rtcoef_goes_16_abi.dat                          \
-                rttov13pred54L/rtcoef_goes_16_abi_7gas.dat                    \
-                rttov13pred54L/rtcoef_goes_16_abi_7gas_ironly.dat             \
-                rttov13pred54L/rtcoef_goes_16_abi_o3.dat                      \
-                rttov13pred54L/rtcoef_goes_16_abi_o3co2.dat                   \
-                rttov13pred54L/rtcoef_goes_16_abi_o3co2_ironly.dat            \
-                rttov13pred54L/rtcoef_goes_16_abi_o3_ironly.dat               \
-                mfasis_lut/rttov_mfasis_cld_goes_16_abi_deff.H5               \
-                mfasis_lut/rttov_mfasis_cld_goes_16_abi_deff_sub1micron.H5    \
-                mfasis_lut/rttov_mfasis_cld_goes_16_abi_opac.H5               \
-                mfasis_lut/rttov_mfasis_cld_goes_16_abi_opac_sub1micron.H5    \
-                cldaer_visir/scaercoef_goes_16_abi_cams.dat                   \
-                cldaer_ir/scaercoef_goes_16_abi_cams_ironly.dat               \
-                cldaer_visir/scaercoef_goes_16_abi_opac.dat                   \
-                cldaer_ir/scaercoef_goes_16_abi_opac_ironly.dat               \
-                cldaer_visir/sccldcoef_goes_16_abi.dat                        \
-                cldaer_ir/sccldcoef_goes_16_abi_ironly.dat                    )
-
-    for fn in "${coef_files[@]}"; do
-        ln -sf  "${FIXDIR}/rtcoef_rttov13/$fn" .
-    done
-
-    if [[ ! -e rttov_sensor_db.csv ]]; then
-        cp ${FIXDIR}/rtcoef_rttov13/rttov_sensor_db.csv .
-    fi
-
-    if [[ -n "${filter_file}" ]]; then
-        if [[ -f "${filter_file}" ]]; then
-            ln -sf ${filter_file} .
-        elif [[ -f "${FIXDIR}/${filter_file}" ]]; then
-            ln -sf ${FIXDIR}/${filter_file} .
-        else
-            mecho0 "${RED}ERROR${NC}: File ${CYAN}$filter_file${NC} not exist both as is and in ${BLUE}${FIXDIR}${NC}."
-            exit 1
-        fi
-        filter_filename="$(basename ${filter_file})"
-    else
-        filter_filename=""
-    fi
-
-    #------------------------------------------------------
-    # 4. Prepare namelist file
-    #------------------------------------------------------
-
-    # Debug configuration:
+    sed -e "s/@analysisDate@/${analysisDate}/;s/@beginDate@/${beginDate}/;s/@lenWin@/${lenwind}/" \
+           "${FIXDIR}/jedi/getkf_solver.yaml" > getkf.yaml
     #
-    #   stages_to_write          = 'preassim', 'output'
+    #  Generate the final YAML configuration file based on convinfo and available ioda files
+    #
+    "${cpcmd}" "${EXPDIR}/config/convinfo" .
+    [[ -s "${EXPDIR}/config/satinfo" ]] && cp "${EXPDIR}/config/satinfo" .
+    "${USHrrfs}/yaml_finalize" "getkf.yaml"
 
-    declare -A mp_state_variables
-
-    mp_state_variables['qc']='QTY_CLOUDWATER_MIXING_RATIO'
-    mp_state_variables['qr']='QTY_RAINWATER_MIXING_RATIO'
-    mp_state_variables['qi']='QTY_ICE_MIXING_RATIO'
-    mp_state_variables['qs']='QTY_SNOW_MIXING_RATIO'
-    mp_state_variables['qg']='QTY_GRAUPEL_MIXING_RATIO'
-    #mp_state_variables['nr']='QTY_RAIN_NUMBER_CONCENTR'
-    #mp_state_variables['ni']='QTY_ICE_NUMBER_CONCENTRATION'
-    mp_state_bounds="'0.0','NULL','CLAMP'"
-
-    if [[ ${mpscheme} == "mp_nssl2m" ]]; then
-        mp_state_variables['qh']='QTY_HAIL_MIXING_RATIO'
-        #mp_state_variables['volg']='QTY_GRAUPEL_VOLUME'
-        #mp_state_variables['volh']='QTY_HAIL_VOLUME'
-        #mp_state_variables['nc']='QTY_DROPLET_NUMBER_CONCENTR'
-        #mp_state_variables['ns']='QTY_SNOW_NUMBER_CONCENTR'
-        #mp_state_variables['ng']='QTY_GRAUPEL_NUMBER_CONCENTR'
-        #mp_state_variables['nh']='QTY_HAIL_NUMBER_CONCENTR'
-    fi
-
-    lbc_mp_variables="'lbc_qv', 'lbc_theta', 'lbc_rho', 'lbc_u', 'lbc_w'"
-    for var in "${!mp_state_variables[@]}"; do
-        lbc_mp_variables+=", 'lbc_$var'"
-    done
-
-    cat << EOF > input.nml
-&perfect_model_obs_nml
-   read_input_state_from_file = .true.
-   single_file_in             = .false.
-   input_state_files          = 'mpas_init.nc'
-   init_time_days             = -1
-   init_time_seconds          = -1
-
-   write_output_state_to_file = .false.
-   single_file_out            = .false.
-   output_state_files         = 'perfect_restart.nc'
-   output_interval            = 1
-
-   async                      = 0
-   adv_ens_command            = './advance_model.csh'
-
-   obs_seq_in_file_name       = 'obs_seq.in'
-   obs_seq_out_file_name      = 'obs_seq.out'
-   first_obs_days             = -1
-   first_obs_seconds          = -1
-   last_obs_days              = -1
-   last_obs_seconds           = -1
-
-   trace_execution            = .true.
-   output_timestamps          = .false.
-   print_every_nth_obs        = 0
-   output_forward_op_errors   = .false.
-   silence                    = .false.
-  /
-
-&filter_nml
-   async                    = 0
-   adv_ens_command          = 'no_model_advance'
-   ens_size                 = ${ENS_SIZE}
-   output_members           = .true.
-   obs_sequence_in_name     = 'obs_seq.in'
-   obs_sequence_out_name    = 'obs_seq.final'
-   input_state_file_list    = 'filter_in.txt'
-   output_state_file_list   = 'filter_out.txt'
-   init_time_days           = -1
-   init_time_seconds        = -1
-   first_obs_days           = -1
-   first_obs_seconds        = -1
-   last_obs_days            = -1
-   last_obs_seconds         = -1
-   num_output_state_members = 36
-   num_output_obs_members   = 36
-   output_interval          = 1
-   num_groups               = 1
-   distributed_state        = .true.
-   compute_posterior        = .true.
-   output_forward_op_errors = .false.
-   output_timestamps        = .true.
-   trace_execution          = .true.
-   silence                  = .false.
-
-   stages_to_write          = 'output'
-   output_mean              = .true.
-   output_sd                = .true.
-   write_all_stages_at_end  = .false.
-
-   inf_flavor                  = 2, 0,
-   inf_initial_from_restart    = $(join_by ',' "${inf_initial_restart[@]}"),
-   inf_sd_initial_from_restart = $(join_by ',' "${inf_initial_restart[@]}"),
-   inf_deterministic           = .true.,                  .true.,
-   inf_initial                 =    1.0,                     1.0,
-   inf_sd_initial              =    0.6,                     0.0,
-   inf_damping                 =    0.9,                     1.0,
-   inf_lower_bound             =    1.0,                     1.0,
-   inf_upper_bound             = 1000.0,               1000000.0,
-   inf_sd_lower_bound          =    0.4,                     0.0,
-   inf_sd_max_change           =    1.05,                    1.05,
-  /
-
-&quality_control_nml
-   input_qc_threshold = 5,
-   outlier_threshold  = 3.5,
-   inlier_threshold   = 0.0,
-   enable_special_outlier_code = .false.,
-  /
-
-&state_vector_io_nml
-   single_precision_output    = .false.,
-  /
-
-&mpi_utilities_nml
-  /
-
-&smoother_nml
-   num_lags              = 0
-   start_from_restart    = .true.
-   output_restart        = .false.
-   restart_in_file_name  = 'smoother_ics'
-   restart_out_file_name = 'smoother_restart'
-  /
-
-&ensemble_manager_nml
-   layout = 2
-   tasks_per_node = ${ncores_filter}
-  /
-
-&algorithm_info_nml
-  qceff_table_filename = '${filter_filename}'
-/
-
-&probit_transform_nml
-  fix_bound_violations        = .false.,
-  use_logit_instead_of_probit = .false.,
-  do_inverse_check            = .false.
-/
-
-&assim_tools_nml
-   cutoff                            = 0.036,
-   distribute_mean                   = .true.
-   convert_all_obs_verticals_first   = .true.
-   convert_all_state_verticals_first = .true.
-   sort_obs_inc                      = .false.
-   spread_restoration                = .false.
-   sampling_error_correction         = ${sampling_error_correction}
-   adaptive_localization_threshold   = -1
-   output_localization_diagnostics   = .false.
-   localization_diagnostics_file     = 'localization_diagnostics'
-   print_every_nth_obs               = 0
-   special_localization_obs_types  = 'METAR_ALTIMETER',
-                                     'METAR_U_10_METER_WIND',
-                                     'METAR_V_10_METER_WIND',
-                                     'METAR_TEMPERATURE_2_METER',
-                                     'METAR_DEWPOINT_2_METER',
-                                     'MARINE_SFC_U_WIND_COMPONENT',
-                                     'MARINE_SFC_V_WIND_COMPONENT',
-                                     'MARINE_SFC_TEMPERATURE',
-                                     'MARINE_SFC_ALTIMETER',
-                                     'MARINE_SFC_DEWPOINT',
-                                     'LAND_SFC_U_WIND_COMPONENT',
-                                     'LAND_SFC_V_WIND_COMPONENT',
-                                     'LAND_SFC_TEMPERATURE',
-                                     'LAND_SFC_DEWPOINT',
-                                     'LAND_SFC_ALTIMETER',
-                                     'LAND_SFC_PRESSURE',
-                                     'RADAR_REFLECTIVITY',
-                                     'RADAR_CLEARAIR_REFLECTIVITY',
-                                     'DOPPLER_RADIAL_VELOCITY',
-                                     'GOES_CWP_PATH',
-                                     'GOES_LWP_PATH',
-                                     'GOES_IWP_PATH',
-                                     'GOES_CWP_ZERO',
-   special_localization_cutoffs    = 0.0094247,
-                                     0.0094247,
-                                     0.0094247,
-                                     0.0094247,
-                                     0.0094247,
-                                     0.0094247,
-                                     0.0094247,
-                                     0.0094247,
-                                     0.0094247,
-                                     0.0094247,
-                                     0.0047123,
-                                     0.0047123,
-                                     0.0047123,
-                                     0.0047123,
-                                     0.0094247,
-                                     0.0047123,
-                                     0.0014137,
-                                     0.0014137,
-                                     0.0014137,
-                                     0.00315,
-                                     0.00315,
-                                     0.00315,
-                                     0.0035,
-  /
-
-&location_nml
-   horiz_dist_only                 = .false.
-   vert_normalization_pressure     = 700000.0,
-   vert_normalization_height       = 111111.1,
-   vert_normalization_level        = 2666.7,
-   vert_normalization_scale_height = 2.0
-   approximate_distance            = .false.
-   nlon                            = 283,
-   nlat                            = 144,
-   output_box_info                 = .false.
-   print_box_level                 = 0
-   special_vert_normalization_obs_types =  'METAR_ALTIMETER',
-                                           'METAR_U_10_METER_WIND',
-                                           'METAR_V_10_METER_WIND',
-                                           'METAR_TEMPERATURE_2_METER',
-                                           'METAR_DEWPOINT_2_METER',
-                                           'MARINE_SFC_U_WIND_COMPONENT',
-                                           'MARINE_SFC_V_WIND_COMPONENT',
-                                           'MARINE_SFC_TEMPERATURE',
-                                           'MARINE_SFC_ALTIMETER',
-                                           'MARINE_SFC_DEWPOINT',
-                                           'LAND_SFC_U_WIND_COMPONENT',
-                                           'LAND_SFC_V_WIND_COMPONENT',
-                                           'LAND_SFC_TEMPERATURE',
-                                           'LAND_SFC_DEWPOINT',
-                                           'LAND_SFC_ALTIMETER',
-                                           'LAND_SFC_PRESSURE',
-                                           'RADAR_REFLECTIVITY',
-                                           'RADAR_CLEARAIR_REFLECTIVITY',
-                                           'DOPPLER_RADIAL_VELOCITY',
-                                           'GOES_CWP_PATH',
-                                           'GOES_LWP_PATH',
-                                           'GOES_IWP_PATH',
-                                           'GOES_CWP_ZERO',
-   special_vert_normalization_pressures =  100000.0,
-                                           100000.0,
-                                           100000.0,
-                                           100000.0,
-                                           100000.0,
-                                           100000.0,
-                                           100000.0,
-                                           100000.0,
-                                           100000.0,
-                                           100000.0,
-                                           100000.0,
-                                           100000.0,
-                                           100000.0,
-                                           100000.0,
-                                           100000.0,
-                                           100000.0,
-                                           100000.0,
-                                           100000.0,
-                                           100000.0,
-                                         15873016.0,
-                                         12698413.0,
-                                         15873016.0,
-                                           100000.0,
-   special_vert_normalization_heights  =   424416.6,
-                                           424416.6,
-                                           424416.6,
-                                           424416.6,
-                                           424416.6,
-                                           424416.6,
-                                           424416.6,
-                                           424416.6,
-                                           424416.6,
-                                           424416.6,
-                                           848842.3,
-                                           848842.3,
-                                           848842.3,
-                                           848842.3,
-                                           848842.3,
-                                           848842.3,
-                                           2122090.9,
-                                           3183098.9,
-                                           2122090.9,
-                                           1587301.0,
-                                           1587301.0,
-                                           1587301.3,
-                                           1000000.0,
-   special_vert_normalization_levels    =  20.0,
-                                           20.0,
-                                           20.0,
-                                           20.0,
-                                           20.0,
-                                           20.0,
-                                           20.0,
-                                           20.0,
-                                           20.0,
-                                           20.0,
-                                           20.0,
-                                           20.0,
-                                           20.0,
-                                           20.0,
-                                           20.0,
-                                           20.0,
-                                           20.0,
-                                           20.0,
-                                           20.0,
-                                           20.0,
-                                           20.0,
-                                           20.0,
-                                           20.0,
-   special_vert_normalization_scale_heights = 5.0,
-                                              5.0,
-                                              5.0,
-                                              5.0,
-                                              5.0,
-                                              5.0,
-                                              5.0,
-                                              5.0,
-                                              5.0,
-                                              5.0,
-                                              5.0,
-                                              5.0,
-                                              5.0,
-                                              5.0,
-                                              5.0,
-                                              5.0,
-                                              5.0,
-                                              5.0,
-                                              5.0,
-                                              5.0,
-                                              5.0,
-                                              5.0,
-                                              5.0,
-/
-
-&xyz_location_nml
-/
-
-&cov_cutoff_nml
-    select_localization = 1
-/
-
-&reg_factor_nml
-    select_regression    = 1
-    input_reg_file       = 'time_mean_reg'
-    save_reg_diagnostics = .false.
-    reg_diagnostics_file = 'reg_diagnostics'
-/
-
-&obs_sequence_nml
-    write_binary_obs_sequence = .false.
-/
-
-!   assimilate_these_obs_types = 'RADIOSONDE_TEMPERATURE',
-!                                'RADIOSONDE_U_WIND_COMPONENT',
-!                                'RADIOSONDE_V_WIND_COMPONENT',
-!                                'RADIOSONDE_SPECIFIC_HUMIDITY',
-!                                'GPSRO_REFRACTIVITY',
-!                                'LAND_SFC_ALTIMETER',
-!                                'MARINE_SFC_DEWPOINT',
-!                                'AIRCRAFT_U_WIND_COMPONENT',
-!                                'AIRCRAFT_V_WIND_COMPONENT',
-!                                'AIRCRAFT_TEMPERATURE',
-!                                'ACARS_U_WIND_COMPONENT',
-!                                'ACARS_V_WIND_COMPONENT',
-!                                'ACARS_TEMPERATURE',
-!                                'SAT_U_WIND_COMPONENT',
-!                                'SAT_V_WIND_COMPONENT',
-!                                'RADAR_REFLECTIVITY',
-!                                'RADAR_CLEARAIR_REFLECTIVITY',
-!                                'DOPPLER_RADIAL_VELOCITY'
-
-! Upper level
-!                                'AIRCRAFT_U_WIND_COMPONENT',
-!                                'AIRCRAFT_V_WIND_COMPONENT',
-!                                'AIRCRAFT_TEMPERATURE',
-!                                'ACARS_U_WIND_COMPONENT',
-!                                'ACARS_V_WIND_COMPONENT',
-!                                'ACARS_TEMPERATURE',
-
-!                                'RADIOSONDE_TEMPERATURE',
-!                                'RADIOSONDE_U_WIND_COMPONENT',
-!                                'RADIOSONDE_V_WIND_COMPONENT',
-!                                'RADIOSONDE_SPECIFIC_HUMIDITY',
-!                                'GPSRO_REFRACTIVITY',
-
-! Surface
-!                                'METAR_ALTIMETER',
-!                                'METAR_DEWPOINT_2_METER',
-!                                'METAR_U_10_METER_WIND',
-!                                'METAR_V_10_METER_WIND',
-!                                'METAR_TEMPERATURE_2_METER',
-!                                'METAR_SPECIFIC_HUMIDITY_2_METER',
-!                                'MARINE_SFC_SPECIFIC_HUMIDITY',
-!                                'MARINE_SFC_U_WIND_COMPONENT',
-!                                'MARINE_SFC_V_WIND_COMPONENT',
-!                                'MARINE_SFC_TEMPERATURE',
-!                                'MARINE_SFC_PRESSURE',
-!                                'MARINE_SFC_DEWPOINT',
-!                                'LAND_SFC_PRESSURE',
-!                                'LAND_SFC_ALTIMETER',
-!                                'LAND_SFC_DEWPOINT',
-!                                'LAND_SFC_TEMPERATURE',
-!                                'LAND_SFC_SPECIFIC_HUMIDITY',
-!                                'LAND_SFC_U_WIND_COMPONENT',
-!                                'LAND_SFC_V_WIND_COMPONENT',
-!
-&obs_kind_nml
-    assimilate_these_obs_types = 'AIRCRAFT_U_WIND_COMPONENT',
-                                 'AIRCRAFT_V_WIND_COMPONENT',
-                                 'AIRCRAFT_TEMPERATURE',
-                                 'ACARS_U_WIND_COMPONENT',
-                                 'ACARS_V_WIND_COMPONENT',
-                                 'ACARS_TEMPERATURE',
-                                 'METAR_ALTIMETER',
-                                 'METAR_DEWPOINT_2_METER',
-                                 'METAR_U_10_METER_WIND',
-                                 'METAR_V_10_METER_WIND',
-                                 'METAR_TEMPERATURE_2_METER',
-                                 'MARINE_SFC_U_WIND_COMPONENT',
-                                 'MARINE_SFC_V_WIND_COMPONENT',
-                                 'MARINE_SFC_TEMPERATURE',
-                                 'MARINE_SFC_ALTIMETER',
-                                 'MARINE_SFC_DEWPOINT',
-                                 'LAND_SFC_PRESSURE',
-                                 'LAND_SFC_ALTIMETER',
-                                 'LAND_SFC_TEMPERATURE',
-                                 'LAND_SFC_DEWPOINT',
-                                 'LAND_SFC_U_WIND_COMPONENT',
-                                 'LAND_SFC_V_WIND_COMPONENT',
-                                 'RADAR_REFLECTIVITY',
-                                 'RADAR_CLEARAIR_REFLECTIVITY',
-                                 'DOPPLER_RADIAL_VELOCITY',
-                                 'GOES_IWP_PATH',
-                                 'GOES_CWP_ZERO',
-                                 'GOES_CWP_PATH',
-                                 'GOES_LWP_PATH',
-                                 'GOES_16_ABI_TB',
-    evaluate_these_obs_types = ''
-/
-
-&obs_def_gps_nml
-    max_gpsro_obs = 100000
-/
-
-&obs_def_radar_mod_nml
-    apply_ref_limit_to_obs     =  .true. ,
-    reflectivity_limit_obs     =     0.0 ,
-    lowest_reflectivity_obs    =     0.0 ,
-    apply_ref_limit_to_fwd_op  =  .true. ,
-    reflectivity_limit_fwd_op  =     0.0 ,
-    lowest_reflectivity_fwd_op =     0.0 ,
-    dielectric_factor          =   0.224 ,
-    n0_rain                    =   8.0e6 ,
-    n0_graupel                 =   4.0e6 ,
-    n0_snow                    =   3.0e6 ,
-    rho_rain                   =  1000.0 ,
-    rho_graupel                =   400.0 ,
-    rho_snow                   =   100.0 ,
-    allow_wet_graupel          = .false. ,
-    microphysics_type          =       5 ,
-    allow_dbztowt_conv         =  .true. ,
-/
-&obs_def_cwp_nml
-    pressure_top               = 15000.0,
-    physics                    = 8
-/
-
-&model_nml
-   init_template_filename       = '${filename_mesh}'
-   assimilation_period_days     = 0
-   assimilation_period_seconds  = 2400
-   model_perturbation_amplitude = 0.0001
-   vert_localization_coord      = 3
-   calendar                     = 'Gregorian'
-   highest_obs_pressure_mb      = 20.0
-   sfc_elev_max_diff            = 100.
-   log_p_vert_interp            = .true.
-   debug                        = 0
-   use_u_for_wind               = .false.
-   use_rbf_option               = 2
-   update_u_from_reconstruct    = .true.
-   use_increments_for_u_update  = .true.
-  /
-
-!                          'theta',                 'QTY_POTENTIAL_TEMPERATURE',
-!                          'surface_pressure',      'QTY_SURFACE_PRESSURE',
-!                          'uReconstructZonal',     'QTY_U_WIND_COMPONENT',
-!                          'uReconstructMeridional','QTY_V_WIND_COMPONENT',
-!                          'u',                     'QTY_EDGE_NORMAL_SPEED',
-!                          'w',                     'QTY_VERTICAL_VELOCITY',
-!                          'qv',                    'QTY_VAPOR_MIXING_RATIO',
-!                          'rho',                   'QTY_DENSITY',
-!                          'u10',                   'QTY_10M_U_WIND_COMPONENT',
-!                          'v10',                   'QTY_10M_V_WIND_COMPONENT',
-!                          't2m',                   'QTY_2M_TEMPERATURE',
-!                          'q2',                    'QTY_2M_SPECIFIC_HUMIDITY',
-
-&mpas_vars_nml
-    mpas_state_variables = 'theta',                 'QTY_POTENTIAL_TEMPERATURE',
-                           'rho',                   'QTY_DENSITY',
-                           'uReconstructZonal',     'QTY_U_WIND_COMPONENT',
-                           'uReconstructMeridional','QTY_V_WIND_COMPONENT',
-                           'w',                     'QTY_VERTICAL_VELOCITY',
-                           'u10',                   'QTY_10M_U_WIND_COMPONENT',
-                           'v10',                   'QTY_10M_V_WIND_COMPONENT',
-                           't2m',                   'QTY_2M_TEMPERATURE',
-                           'q2',                    'QTY_2M_SPECIFIC_HUMIDITY',
-                           'surface_pressure',      'QTY_SURFACE_PRESSURE',
-                           'refl10cm',              'QTY_RADAR_REFLECTIVITY',
-                           'qv',                    'QTY_VAPOR_MIXING_RATIO',
-EOF
-
-    for var in "${!mp_state_variables[@]}"; do
-        lenstr=$((22-${#var}))
-        printf "%27s%s,%*s%s,\n" ' ' "'${var}'" $lenstr ' ' "'${mp_state_variables[$var]}'" >> input.nml
-    done
-
-    echo "    mpas_state_bounds    = 'qv','0.0','NULL','CLAMP',"     >> input.nml
-    for var in "${!mp_state_variables[@]}"; do
-        printf "%27s%s,%s,\n" ' ' "'${var}'" "${mp_state_bounds}"    >> input.nml
-    done
-    printf "%s\n" "/"                                                >> input.nml
-
-    cat << EOF >> input.nml
-
-&update_mpas_states_nml
-    update_input_file_list     = 'filter_out.txt'
-    update_output_file_list    = 'filter_in.txt'
-    print_data_ranges          = .true.
-/
-
-&update_bc_nml
-    update_analysis_file_list  = 'filter_out.txt'
-    update_boundary_file_list  = 'boundary_inout.txt'
-    mpas_lbc_variables         = ${lbc_mp_variables}
-    debug = 0
-/
-
-&utilities_nml
-    TERMLEVEL      = 1
-    module_details = .false.
-    logfilename    = 'dart_log.out'
-    nmlfilename    = 'dart_log.nml'
-    write_nml      = 'file'
-/
-
-&preprocess_nml
-    overwrite_output        = .true.
-    input_obs_def_mod_file  = '../../../observations/forward_operators/DEFAULT_obs_def_mod.F90'
-    output_obs_def_mod_file = '../../../observations/forward_operators/obs_def_mod.f90'
-    input_obs_qty_mod_file  = '../../../assimilation_code/modules/observations/DEFAULT_obs_kind_mod.F90'
-    output_obs_qty_mod_file = '../../../assimilation_code/modules/observations/obs_kind_mod.f90'
-    obs_type_files          = '../../../observations/forward_operators/obs_def_reanalysis_bufr_mod.f90',
-                              '../../../observations/forward_operators/obs_def_altimeter_mod.f90',
-                              '../../../observations/forward_operators/obs_def_gts_mod.f90',
-                              '../../../observations/forward_operators/obs_def_metar_mod.f90',
-                              '../../../observations/forward_operators/obs_def_gps_mod.f90',
-                              '../../../observations/forward_operators/obs_def_vortex_mod.f90',
-                              '../../../observations/forward_operators/obs_def_rel_humidity_mod.f90',
-                              '../../../observations/forward_operators/obs_def_dew_point_mod.f90',
-                              '../../../observations/forward_operators/obs_def_radar_mod.f90',
-                              '../../../observations/forward_operators/obs_def_cwp_mod.f90'
-    quantity_files          = '../../../assimilation_code/modules/observations/default_quantities_mod.f90',
-                              '../../../assimilation_code/modules/observations/atmosphere_quantities_mod.f90',
-/
-
-&obs_sequence_tool_nml
-    filename_seq_list = 'obsflist'
-    filename_out      = 'obs_seq.${timestr_cur}'
-    first_obs_days    = -1
-    first_obs_seconds = -1
-    last_obs_days     = -1
-    last_obs_seconds  = -1
-    print_only        = .false.
-    min_lat           = -90.0
-    max_lat           =  90.0
-    min_lon           =   0.0
-    max_lon           = 360.0
-    gregorian_cal     = .true.
-    keep_types        = .true.
-    obs_types         = ''
-/
-
-# The times in the namelist for the obs_diag program are vectors
-# that follow the following sequence:
-# year   month   day   hour   minute   second
-# max_num_bins can be used to specify a fixed number of bins,
-# in which case last_bin_center should be safely in the future.
-#
-# keep only the U and V radiosonde winds:
-#   obs_types          = 'RADIOSONDE_U_WIND_COMPONENT'
-#                        'RADIOSONDE_V_WIND_COMPONENT'
-#   keep_types         = .true.
-#
-# remove the U and V radiosonde winds:
-#   obs_types          = 'RADIOSONDE_U_WIND_COMPONENT'
-#                        'RADIOSONDE_V_WIND_COMPONENT'
-#   keep_types         = .false.
-#
-# keep only observations with a DART QC of 0:
-#   qc_metadata        = 'Dart quality control'
-#   min_qc             = 0
-#   max_qc             = 0
-#
-# keep only radiosonde temp obs between 250 and 300 K:
-#   copy_metadata      = 'NCEP BUFR observation'
-#   copy_type          = 'RADIOSONDE_TEMPERATURE'
-#   min_copy           = 250.0
-#   max_copy           = 300.0
-#
-
-
-&schedule_nml
-    calendar             = 'Gregorian'
-    first_bin_start      =  ${datestr4obsdiag_start}
-    first_bin_end        =  ${datestr4obsdiag_end}
-    last_bin_end         =  ${datestr4obsdiag_end}
-    bin_interval_days    = 0
-    bin_interval_seconds = ${gobtw_secs}
-    max_num_bins         = 1000
-    print_table          = .true.
-/
-
-
-&obs_seq_to_netcdf_nml
-    obs_sequence_name = 'obs_seq.final'
-    obs_sequence_list = ''
-    append_to_netcdf  = .false.
-    lonlim1           =    0.0
-    lonlim2           =  360.0
-    latlim1           =  -90.0
-    latlim2           =   90.0
-    verbose           = .true.
-/
-
-&obs_diag_nml
-    obs_sequence_name  = 'obs_seq.final'
-    obs_sequence_list  = ''
-    first_bin_center   = ${datestr4obsdiag}
-    last_bin_center    = ${datestr4obsdiag}
-    bin_width          = ${dateintvl4obsdiag}
-    bin_separation     = ${dateintvl4obsdiag}
-    time_to_skip       =    0, 0, 0,00,00,00
-    trusted_obs        = 'null'
-    nregions  = 1
-    lonlim1   =   0.0
-    lonlim2   = 360.0
-    latlim1   = -90.0
-    latlim2   =  90.0
-    reg_names = 'WOFS'
-    create_rank_histogram = .true.
-    outliers_in_histogram = .true.
-    use_zero_error_obs    = .false.
-    verbose               = .true.
-/
-
-&obs_common_subset_nml
-    num_to_compare_at_once = 2
-    filename_seq           = ''
-    filename_seq_list      = ''
-    filename_out_suffix    = '.common'
-    calendar               = 'Gregorian'
-    print_every            = 1000
-    dart_qc_threshold      = 3
-    print_only             = .false.
-/
-
-# possible vertical coordinate systems are:
-# VERTISUNDEF VERTISSURFACE VERTISLEVEL VERTISPRESSURE VERTISHEIGHT VERTISSCALEHEIGHT
-   quantity_of_interest = 'QTY_SURFACE_PRESSURE'
-   quantity_of_interest = 'QTY_POTENTIAL_TEMPERATURE'
-   quantity_of_interest = 'QTY_TEMPERATURE'
-   quantity_of_interest = 'QTY_U_WIND_COMPONENT'
-   quantity_of_interest = 'QTY_V_WIND_COMPONENT'
-   quantity_of_interest = 'QTY_DENSITY'
-   quantity_of_interest = 'QTY_VAPOR_MIXING_RATIO'
-
-&model_mod_check_nml
-    input_state_files     = 'mpas_init.nc'
-    output_state_files    = 'check_me.nc'
-    test1thru             = 0
-    run_tests             = 1,2,3,4,5,7
-    x_ind                 = 300
-    loc_of_interest       = 240.0, 0.0, 10000.0
-    quantity_of_interest  = 'QTY_U_WIND_COMPONENT'
-    interp_test_lonrange  = 0.0, 359.0
-    interp_test_dlon      = 1.0
-    interp_test_latrange  = -89.0, 89.0
-    interp_test_dlat      = 1.0
-    interp_test_vertrange = 100.0,  20100.0
-    interp_test_dvert     = 2000.0
-    interp_test_vertcoord = 'VERTISHEIGHT'
-    verbose               = .false.
-/
-
-&exhaustion_nml
-    dart_input_file       = 'dart_ics'
-    output_file           = 'exhaust'
-    advance_time_present  = .FALSE.
-    verbose               = .FALSE.
-    matlab_out            = .FALSE.
-    netcdf_out            = .TRUE.
-    kind_of_interest      = 'QTY_U_WIND_COMPONENT'
-    interp_test_lonrange  = 0.0, 360.0
-    interp_test_dlon      = 1.0
-    interp_test_latrange  = -89.0, 89.0
-    interp_test_dlat      = 1.0
-    interp_test_vertrange = 7000.0, 7000.0
-    interp_test_dvert     = 1000.0
-    interp_test_vertcoord = 'VERTISHEIGHT'
-    hscale                = 100.0
-    diff_threshold        = 2.0
-    pointcount            = 100000
-/
-
-&obs_def_rttov_nml
-    rttov_sensor_db_file   = 'rttov_sensor_db.csv'
-    first_lvl_is_sfc       = .true.
-    mw_clear_sky_only      = .false.
-    interp_mode            = 1
-    do_checkinput          = .true.
-    apply_reg_limits       = .true.
-    verbose                = .true.
-    fix_hgpl               = .false.
-    do_lambertian          = .false.
-    lambertian_fixed_angle = .true.
-    rad_down_lin_tau       = .true.
-    use_q2m                = .true.
-    use_uv10m              = .true.
-    use_wfetch             = .false.
-    use_water_type         = .false.
-    addrefrac              = .false.
-    plane_parallel         = .false.
-    use_salinity           = .false.
-    cfrac_data             = .true.
-    clw_data               = .true.
-    rain_data              = .true.
-    ciw_data               = .true.
-    snow_data              = .true.
-    graupel_data           = .true.
-    hail_data              = .false.
-    w_data                 = .true.
-    clw_scheme             = 1
-    clw_cloud_top          = 322.
-    fastem_version         = 6
-    supply_foam_fraction   = .false.
-    use_totalice           = .true.
-    use_zeeman             = .false.
-    cc_threshold           = 0.05
-    ozone_data             = .false.
-    co2_data               = .false.
-    n2o_data               = .false.
-    co_data                = .false.
-    ch4_data               = .false.
-    so2_data               = .false.
-    addsolar               = .false.
-    rayleigh_single_scatt  = .true.
-    do_nlte_correction     = .false.
-    solar_sea_brdf_model   = 2
-    ir_sea_emis_model      = 2
-    use_sfc_snow_frac      = .false.
-    add_aerosl             = .false.
-    aerosl_type            = 1
-    add_clouds             = .true.
-    ice_scheme             = 1
-    use_icede              = .false.
-    idg_scheme             = 2
-    user_aer_opt_param     = .false.
-    user_cld_opt_param     = .false.
-    grid_box_avg_cloud     = .true.
-    cldcol_threshold       = -1.0
-    cloud_overlap          = 1
-    cc_low_cloud_top       = 750.0
-    ir_scatt_model         = 2
-    vis_scatt_model        = 1
-    dom_nstreams           = 8
-    dom_accuracy           = 0.0
-    dom_opdep_threshold    = 0.0
-    addpc                  = .false.
-    npcscores              = -1
-    addradrec              = .false.
-    ipcreg                 = 1
-    use_htfrtc             = .false.
-    htfrtc_n_pc            = -1
-    htfrtc_simple_cloud    = .false.
-    htfrtc_overcast        = .false.
-/
-&obs_seq_coverage_nml
-    obs_sequences     = ''
-    obs_sequence_list = 'obs_coverage_list.txt'
-    obs_of_interest   = 'RADIOSONDE_TEMPERATURE', 'RADIOSONDE_U_WIND_COMPONENT', 'RADIOSONDE_V_WIND_COMPONENT'
-    textfile_out      = 'obsdef_mask.txt'
-    netcdf_out        = 'obsdef_mask.nc'
-    calendar          = 'Gregorian'
-    first_analysis    =  2008, 8, 1, 18, 0, 0
-    last_analysis     =  2008, 8, 1, 18, 0, 0
-    forecast_length_days          = 0
-    forecast_length_seconds       = 21600
-    verification_interval_seconds = 21600
-    temporal_coverage_percent     = 50.0
-    lonlim1    =    0.0
-    lonlim2    =  360.0
-    latlim1    =  -90.0
-    latlim2    =   90.0
-    verbose    = .true.
-    debug      = .false.
-/
-
-# selections_file is a list of obs_defs output
-# from the obs_seq_coverage utility.
-&obs_selection_nml
-    filename_seq          = 'obs_seq.out'
-    filename_seq_list     = ''
-    filename_out          = 'obs_seq.processed'
-    selections_file       = 'obsdef_mask.txt'
-    selections_is_obs_seq = .false.
-    print_only            = .false.
-    calendar              = 'Gregorian'
-/
-
-# one of the other, but not both
-   obs_sequences = 'obs_seq.final.2008060100', 'obs_seq.final.2008060112'
-   obs_sequence_list = 'obs_forecast_list.txt'
-&obs_seq_verify_nml
-    obs_sequences     = ''
-    obs_sequence_list = 'obs_forecast_list.txt'
-    input_template    = 'obsdef_mask.nc'
-    netcdf_out        = 'forecast.nc'
-    obtype_string     = 'RADIOSONDE_TEMPERATURE'
-    print_every       = 20000
-    verbose           = .true.
-    debug             = .false.
-/
-
-&mpas_dart_obs_preprocess_nml
-    file_name_input          = 'obs_seq.old'
-    file_name_output         = 'obs_seq.new'
-    include_sig_data         = .false.
-    superob_aircraft         = .true.
-    superob_sat_winds        = .false.
-    sfc_elevation_check      = .false.
-    overwrite_ncep_sfc_qc    = .false.
-    overwrite_ncep_satwnd_qc = .false.
-    aircraft_pres_int        = 2500.0
-    sat_wind_pres_int        = 2500.0
-    sfc_elevation_tol        = 300.0
-    obs_pressure_top         = 1.0
-    obs_height_top           = 2.0e10
-    max_num_obs              = 1000000
-    sonde_extra              = 'obs_seq.rawin'
-    metar_extra              = 'obs_seq.metar'
-    acars_extra              = 'obs_seq.acars'
-    land_sfc_extra           = 'obs_seq.land_sfc'
-    marine_sfc_extra         = 'obs_seq.marine'
-    sat_wind_extra           = 'obs_seq.satwnd'
-    profiler_extra           = 'obs_seq.profiler'
-    trop_cyclone_extra       = 'obs_seq.tc'
-    gpsro_extra              = 'obs_seq.gpsro'
-    tc_sonde_radii           = -1.0
-    overwrite_obs_time       = .false.
-    windowing_obs_time       = .true.
-    windowing_int_hour       = 0.5
-    increase_bdy_error       = .true.
-    maxobsfac                = 10.
-    obsdistbdy               = 15000.0     ! meters
-    obs_boundary             =  5000.0     ! meters
-/
-EOF
+    ## For post task, change a few yaml settings and remove "reduce obs space"
+    "${USHrrfs}"/yaml_getkf_post getkf.yaml
 
     #------------------------------------------------------
-    # 4. Prepare Obs sequence for this analysis cycle
+    # 5. Run mpasjedi_enkf.x
     #------------------------------------------------------
 
-    if [[ -e OBSDIR/obs_seq.${timestr_cur} ]]; then
-        mecho0 "Using observation file: ${CYAN}OBSDIR/obs_seq.${timestr_cur}${NC} as ${BROWN}obs_seq.in${NC}"
-        ln -sf OBSDIR/obs_seq.${timestr_cur} obs_seq.in
-    else
-        if [[ $verb -eq 1 ]]; then mecho0 "run_obsmerge $wrkdir $iseconds"; fi
-        run_obsmerge $wrkdir $iseconds |& tee ${wrkdir}/observations.log
-
-        if [[ -e OBSDIR/obs_seq.${timestr_cur} ]]; then
-            ln -sf OBSDIR/obs_seq.${timestr_cur} obs_seq.in
-        else
-            mecho0 "${YELLOW}WARNING${NC}: Observation file ${CYAN}OBSDIR/obs_seq.${timestr_cur}${NC} not found"
-            touch done.filter
-            no_observation=true
-            return
-        fi
-    fi
-
-    #------------------------------------------------------
-    # 5. Run filter
-    #------------------------------------------------------
-
-    jobscript="run_filter.${mach}"
+    jobscript="run_mpasjedi_post.${mach}"
 
     declare -A jobParms=(
         [PARTION]="${partition_filter}"
         [NOPART]="$npefilter"
-        [JOBNAME]="filter-${jobname}_${eventtime}"
+        [JOBNAME]="jedi-${jobname}_${eventtime}"
         [CPUSPEC]="${claim_cpu_filter}"
-        [EXEDIR]="${EXEDIR}/dart"
-        [ISECONDS]="${iseconds}"
-        [RUNOBS2NC]="${run_obs2nc}"
-        [RUNOBSDIAG]="${run_obsdiag}"
-        [RUNADDNOISE]="${run_addnoise}"
+        [EXEDIR]="${EXEDIR}/jedi"
+        [TASKNAME]="post"
     )
+
     if [[ "${mach}" == "pbs" ]]; then
         jobParms[NNODES]="${nnodes_filter}"
         jobParms[NCORES]="${ncores_filter}"
     fi
 
-    submit_a_job "${wrkdir}" "filter" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
-}
-
-########################################################################
-
-function run_update_states {
-    # $1        $2      $3
-    # wrkdir    icycle  iseconds
-    local wrkdir=$1
-    local icycle=$2
-    local iseconds=$3
-
-    #
-    # GLOBAL: ENS_SIZE, rundir, update_in_place
-    #         input_file_list
-    #
-
-    #
-    # Build working directory
-    #
-    cd $wrkdir || return
-
-    #
-    # Return if is running or is done
-    #
-    if [[ -f $wrkdir/running.update_states || -f $wrkdir/done.update_states || -f $wrkdir/queue.update_states ]]; then
-        return
-    fi
-
-    currtime_fil=$(date -u -d @${iseconds} +%Y-%m-%d_%H.%M.%S)
-
-    #------------------------------------------------------
-    # Prepare update_mpas_states by copying/linking the background files
-    #------------------------------------------------------
-    if [[ $update_in_place == true ]]; then
-        cpcmd="ln -sf"
-    else
-        cpcmd="cp"
-        #cpcmd="rsync -a"
-    fi
-
-    # Anaysis background file list, for retrieving update_states output file name
-    filter_input_file=$(awk '/input_state_file_list/{print $3}' input.nml)
-    readarray -t filter_infile_array < ${filter_input_file:1:${#filter_input_file}-2}
-
-    # update_states input file list, used as update_states input file names
-    filter_output_file=$(awk '/output_state_file_list/{print $3}' input.nml)
-    readarray -t update_infile_array < ${filter_output_file:1:${#filter_output_file}-2}
-
-    jobarrays=(); stateinfiles=(); stateoutfiles=()
-    for iens in $(seq 1 $ENS_SIZE); do
-        (( jindex=iens-1 ))
-
-        memstr=$(printf "%02d" $iens)
-
-        memwrkdir=$wrkdir/fcst_$memstr
-        mkwrkdir $memwrkdir 0
-        cd $memwrkdir  || return
-
-        #rm -rf input.nml
-        if [[ ! -e input.nml ]]; then
-            cp ../input.nml .
-        fi
-
-        update_input_file='update_states_in.txt'
-        rm -rf ${update_input_file}
-        echo "../${update_infile_array[$jindex]}" > ${update_input_file}
-
-        update_output_file='update_states_out.txt'
-        rm -rf ${update_output_file}
-
-        fn="../${filter_infile_array[$jindex]}"
-        fnbase=$(basename $fn)
-        [[ $icycle -eq 0 ]] && initstr="init" || initstr="$damode"
-        srcfn=${fnbase/.prior./.${initstr}.}
-        if [[ "$srcfn" =~ ^${domname}_[0-9]{2}.init.nc$ ]]; then     # insert time to init.nc
-            srcfn="${srcfn//.nc}.${currtime_fil}.nc"
-        fi
-        echo "./${srcfn}" > ${update_output_file}
-        sed -i "/update_input_file_list/s/=.*/= '${update_input_file}'/" input.nml
-        sed -i "/update_output_file_list/s/=.*/= '${update_output_file}'/" input.nml
-        filename_mesh="${rundir}/init/${domname}_${memstr}.init.nc"
-        sed -i "/init_template_filename/s#=.*#= '${filename_mesh}'#" input.nml
-
-        if [[ ! -e done.update_states_${memstr} ]]; then
-            jobarrays+=("$iens")
-            if $relative_path; then
-                stateinfiles+=("$(realpath -m --relative-to=${memwrkdir} $fn)")
-            else
-                stateinfiles+=("$(realpath -m $fn)")
-            fi
-            stateoutfiles+=("./$srcfn")
-            if [[ $no_observation == true ]]; then
-                ln -sf $fn $srcfn
-                touch done.update_states_${memstr}
-            fi
-        fi
-
-    done
-
-    cd $wrkdir || return
-
-    if [[ $no_observation == true ]]; then
-        mecho0 "${YELLOW}WARNING${NC}: no observation, skipping ...."
-        touch done.update_states
-        return
-    fi
-
-    #
-    # Waiting for job conditions
-    #
-    conditions=(done.filter)
-
-    if [[ $dorun == true ]]; then
-        for cond in "${conditions[@]}"; do
-            mecho0 "Checking $cond"
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: $cond"
-                fi
-                sleep 10
-            done
-        done
-    fi
-
-    #------------------------------------------------------
-    # Run update_mpas_states for all ensemble members
-    #------------------------------------------------------
-
-    jobscript="run_update_states.${mach}"
-
-    echo "${jobParms[@]}"
-
-    declare -A jobParms=(
-        [PARTION]="${partition_filter}"
-        [NOPART]="1"
-        [JOBNAME]="updatestates_${eventtime}"
-        [CPUSPEC]="${claim_cpu_update}"
-        [EXEDIR]="${EXEDIR}/dart"
-        [CPCMD]="${cpcmd}"
-        [STATEINFILESSTR]="${stateinfiles[*]}"
-        [STATEOUTFILESSTR]="${stateoutfiles[*]}"
-    )
-    if [[ "${mach}" == "pbs" ]]; then
-        jobParms[NNODES]="1"
-        jobParms[NCORES]="1"
-    fi
-
-    jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
-
-    submit_a_job "$wrkdir" "update_states" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" "${jobarraystr}"
-}
-
-########################################################################
-
-function run_update_bc {
-    # $1
-    # wrkdir
-    local wrkdir=$1
-    local icycle=$2
-    local iseconds=$3
-
-    cd $wrkdir || return
-
-    #
-    # Return if is running or is done
-    #
-    if [[ -f $wrkdir/running.update_bc || -f $wrkdir/done.update_bc || -f $wrkdir/queue.update_bc ]]; then
-        return
-    fi
-
-    #
-    # Waiting for job conditions
-    #
-    conditions=("${rundir}/lbc/done.${domname}")
-
-    if [[ $run_addnoise == true && $icycle -gt 0 ]]; then
-        conditions+=("${wrkdir}/done.add_noise")
-    else
-        conditions+=("${wrkdir}/done.update_states")
-    fi
-
-    if [[ $dorun == true ]]; then
-        for cond in "${conditions[@]}"; do
-            mecho0 "Checking $cond"
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: $cond"
-                fi
-                sleep 10
-            done
-        done
-    fi
-
-    if [[ ${run_updatebc} == true ]]; then
-        cpcmd="cp"
-        #cpcmd="rsync -a"
-    else
-        cpcmd="ln -sf"
-    fi
-
-    #------------------------------------------------------
-    # Prepare update_bc by copying/linking the background files
-    #------------------------------------------------------
-
-    lbcfiles_org1=(); lbcfiles_org2=()
-    lbcfiles_mem1=(); lbcfiles_mem2=()
-    lbcfiles_mems=(); lbcfiles_next=()
-
-    jobarrays=()
-    for iens in $(seq 1 $ENS_SIZE); do
-        #(( jindex=iens-1 ))
-
-        memstr=$(printf "%02d" $iens)
-
-        memwrkdir=$wrkdir/fcst_$memstr
-        mkwrkdir $memwrkdir 0
-        cd $memwrkdir  || return
-
-        update_output_file='update_bc_inout.txt'
-        update_input_file='update_bc_in.txt'
-        rm -rf ${update_output_file}
-        rm -rf ${update_input_file}
-
-        if [[ ! -e input.nml ]]; then
-            mecho0 "Should have run mpas_update_states first."
-        else
-            state_output_file=$(awk '/update_output_file_list/{print $3}' input.nml)
-            readarray -t input_file_array < ${state_output_file:1:${#state_output_file}-2}
-        fi
-
-        #
-        # lbc files
-        #
-        jens=$(( (iens-1)%nenslbc+1 ))
-        mlbcstr=$(printf "%02d" $jens)                # get LBC member string
-
-        # isec_nlbc1, isec_nlbc2, isec_elbc and icycle_lbcgap are set in the caller
-
-        # External GRIB file provided file times
-        lbctime_str1=$(date -u -d @${isec_nlbc1} +%Y-%m-%d_%H.%M.%S)
-        lbctime_str2=$(date -u -d @${isec_nlbc2} +%Y-%m-%d_%H.%M.%S)
-
-        # MPAS expected boundary file times
-        mpastime_str1=$(date -u -d @${iseconds}   +%Y-%m-%d_%H.%M.%S)
-        mpastime_str2=$(date -u -d @${isec_elbc}  +%Y-%m-%d_%H.%M.%S)
-        if [[ $verb -eq 1 ]]; then
-            mecho0 "Member: $iens use lbc files from $rundir/lbc:"
-            mecho0 "        ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc  ${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc";
-        fi
-
-        case ${relative_path} in
-        true  ) lbcdir=$(realpath -m --relative-to=${memwrkdir} ${rundir}/lbc);;
-        false ) lbcdir="${rundir}/lbc";;
-        *     ) mecho0 "${RED}ERROR${NC}: Hi, what is this <${relative_path}>?"; exit 1;;
-        esac
-
-        #ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc ${domname}_${memstr}.lbc.${mpastime_str1}.nc
-        lbc_file1="${lbcdir}/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc"
-        lbc_file2="${lbcdir}/${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc"
-        lbc_filem="./${domname}_${memstr}.lbc.${mpastime_str1}.nc"
-        lbc_filen="./${domname}_${memstr}.lbc.${mpastime_str2}.nc"
-
-        org_file1="${lbcdir}/${domname}_${mlbcstr}.lbc.${mpastime_str1}.nc"
-        org_file2="${lbcdir}/${domname}_${mlbcstr}.lbc.${mpastime_str2}.nc"
-
-        # Should copy the initial boundary file as a starting point.
-        # it is moved to the job script for parallelization to save time.
-        echo "$lbc_filem" >> ${update_output_file}
-        sed -i "/update_boundary_file_list/s/=.*/= '${update_output_file}'/" input.nml
-        echo "${input_file_array[0]}" >> ${update_input_file}
-        sed -i "/update_analysis_file_list/s/=.*/= '${update_input_file}'/" input.nml
-
-        lbcfiles_org1+=("${lbc_file1}")
-        lbcfiles_org2+=("${lbc_file2}")
-
-        lbcfiles_mem1+=("${org_file1}")
-        lbcfiles_mem2+=("${org_file2}")
-
-        lbcfiles_mems+=("${lbc_filem}")
-        lbcfiles_next+=("${lbc_filen}")
-
-        jobarrays+=("$iens")
-    done
-
-    #------------------------------------------------------
-    # Run update_bc for all ensemble members as a job array
-    #------------------------------------------------------
-
-    cd $wrkdir || return
-
-    jobscript="run_update_bc.${mach}"
-
-    declare -A jobParms=(
-        [PARTION]="${partition_filter}"
-        [NOPART]="1"
-        [JOBNAME]="updatebc_${eventtime}"
-        [CPUSPEC]="${claim_cpu_update}"
-        [EXEDIR]="${EXEDIR}/dart"
-        [CPCMD]="${cpcmd}"
-        [MPSCHEME]="${mpscheme}"
-        [LBCFILEORGSTR1]="${lbcfiles_org1[*]}"
-        [LBCFILEORGSTR2]="${lbcfiles_org2[*]}"
-        [LBCFILEMEMSSTR]="${lbcfiles_mems[*]}"
-        [LBCFILENEXTSTR]="${lbcfiles_next[*]}"
-        [LBCFILEMEMS1]="${lbcfiles_mem1[*]}"
-        [LBCFILEMEMS2]="${lbcfiles_mem2[*]}"
-        [UPDATEBC]="${run_updatebc}"
-    )
-    if [[ "${mach}" == "pbs" ]]; then
-        jobParms[NNODES]="1"
-        jobParms[NCORES]="1"
-    fi
-
-    jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
-
-    submit_a_job $wrkdir "update_bc" jobParms $TEMPDIR/$jobscript $jobscript "${jobarraystr}"
+    submit_a_job "${wrkdir}" "mpasjedi" "jobParms" "$TEMPDIR/run_mpasjedi.${mach}" "$jobscript" ""
 }
 
 ########################################################################
@@ -2432,9 +1059,6 @@ function run_mpas {
         split_graph "${gpmetis}" "${domname}.graph.info" "${npefcst}" "$rundir/$domname" "$dorun" "$verb"
     fi
 
-    intvl_min=$((intvl_sec/60))
-
-    currtime_str=$(date -u -d @${iseconds} +%Y-%m-%d_%H:%M:%S)
     currtime_fil=${currtime_str//:/.}
     #fcst_sec=$(( iseconds + intvl_sec ))
     #fcsttime_fil=$(date -u -d @${fcst_sec} +%Y-%m-%d_%H.%M.%S)
@@ -2540,8 +1164,6 @@ function run_mpas {
                 ln -sf ${FIXDIR}/$fn .
             done
         fi
-
-        fcstmin_str=$(printf "%02d" "${intvl_min}")
 
         # the ratio of radt to dt is 15
         cat << EOF > namelist.atmosphere
@@ -2867,24 +1489,45 @@ function dacycle_driver() {
             fi
         fi
 
+        intvl_min=$((intvl_sec/60))
+
+        currtime_str=$(date -u -d @${isec} +%Y-%m-%d_%H:%M:%S)
+        fcstmin_str=$(printf "%02d" "${intvl_min}")
+
         #------------------------------------------------------
-        # 1. Run filter
+        # 1. Run ioda
         #------------------------------------------------------
-        if [[ " ${jobs[*]} " =~ " filter " ]]; then
-            if [[ $verb -eq 1 ]]; then echo "  Run filter at $eventtime"; fi
-            run_filter $dawrkdir $icyc $isec
+        if [[ " ${jobs[*]} " =~ " ioda " ]]; then
+            if [[ $verb -eq 1 ]]; then echo "  Run ioda_bufr at $eventtime"; fi
+            run_ioda $dawrkdir $isec
         fi
 
         #------------------------------------------------------
-        # 2. Run update_states for all ensemble members
+        # 2. Run observer
         #------------------------------------------------------
-        if [[ " ${jobs[*]} " =~ " update_states " ]]; then
-            if [[ $verb -eq 1 ]]; then echo "  Run update_mpas_state at $eventtime"; fi
-            run_update_states $dawrkdir $icyc $isec
+        if [[ " ${jobs[*]} " =~ " getkf_observer " ]]; then
+            if [[ $verb -eq 1 ]]; then echo "  Run getkf_observer at $eventtime"; fi
+            run_getkf_observer $dawrkdir $icyc $isec
         fi
 
         #------------------------------------------------------
-        # 3. Add noise (must run after update_states)
+        # 3. Run solver
+        #------------------------------------------------------
+        if [[ " ${jobs[*]} " =~ " getkf_solver " ]]; then
+            if [[ $verb -eq 1 ]]; then echo "  Run getkf_observer at $eventtime"; fi
+            run_getkf_solver $dawrkdir $icyc $isec
+        fi
+
+        #------------------------------------------------------
+        # 4. Run post (if requested)
+        #------------------------------------------------------
+        if [[ " ${jobs[*]} " =~ " getkf_post " ]]; then
+            if [[ $verb -eq 1 ]]; then echo "  Run getkf_post at $eventtime"; fi
+            run_getkf_post $dawrkdir $icyc $isec
+        fi
+
+        #------------------------------------------------------
+        # 5. Add noise (must run after update_states)
         #------------------------------------------------------
 
         if [[ $run_addnoise == true && $icyc -gt 0 ]]; then
@@ -2899,27 +1542,7 @@ function dacycle_driver() {
         fi
 
         #------------------------------------------------------
-        # 4. Run update_bc for all ensemble members
-        #------------------------------------------------------
-        if [[ " ${jobs[*]} " =~ " update_bc " ]]; then
-            if [[ ${run_addnoise} == true && $icyc -gt 0 ]]; then   # check and set add_noise status
-                if [[ ! -e done.add_noise ]]; then
-                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-                    check_job_status "add_noise fcst_" $dawrkdir $ENS_SIZE run_noise_pert.${mach} ${num_resubmit}
-                fi
-            else                                     # check and set update_states status
-                if [[ ! -e done.update_states ]]; then
-                    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-                    check_job_status "update_states fcst_" $dawrkdir $ENS_SIZE run_update_states.${mach} ${num_resubmit}
-                fi
-            fi
-
-            if [[ $verb -eq 1 ]]; then echo "  Run update_bc at $eventtime"; fi
-            run_update_bc $dawrkdir $icyc $isec
-        fi
-
-        #------------------------------------------------------
-        # 5. Advance model for each member
+        # 6. Advance model for each member
         #------------------------------------------------------
         # Run forecast for ensemble members until the next analysis time
         if [[ " ${jobs[*]} " =~ " mpas " ]]; then
@@ -2940,7 +1563,7 @@ function dacycle_driver() {
             fi
         fi
         #------------------------------------------------------
-        # 6. MPASSIT for each member, diagnostic purpose
+        # 7. MPASSIT for each member, diagnostic purpose
         #------------------------------------------------------
         # Interpolate the forecast datasets to a virtual WRF grid
 
@@ -2969,193 +1592,6 @@ function dacycle_driver() {
 
         (( icyc+=1 ))
     done
-}
-
-########################################################################
-
-function run_obs_diag {
-    # $1     $2
-    # start  end
-    local start_sec=$1
-    local end_sec=$2
-
-    #
-    # Build working directory
-    #
-    dawrkdir="$rundir/dacycles${daffix}"
-    if [[ ! -d $dawrkdir ]]; then
-        mecho0 "${RED}ERROR${NC}: ${CYAN}$dawrkdir${NC} not exsit."
-        exit 1
-    fi
-    wrkdir=$dawrkdir/obs_diag
-    mkwrkdir $wrkdir $overwrite
-    cd $wrkdir || return
-
-    #------------------------------------------
-    # Time Cylces start here
-    #------------------------------------------
-    local date_beg_str_4obsdiag date_end_str_4obsdiag intvl_min n_cycles
-    date_beg_str_4obsdiag=$(date -u -d @$start_sec +%Y,%m,%d,%H,%M,%S)
-    date_end_str_4obsdiag=$(date -u -d @$end_sec +%Y,%m,%d,%H,%M,%S)
-    intvl_min=$((intvl_sec/60))
-    date_intvl_str_4obsdiag="0, 0, 0,00,${intvl_min},00"
-
-    n_cycles=$(( (end_sec-start_sec)/intvl_sec+1 ))
-
-    timestr_end=$(date -u -d @$end_sec    +%H%M)
-    #
-    # Return if is running or is done
-    #
-    if [[ -f $wrkdir/running.obs_diag || -f $wrkdir/done.obs_diag || -f $wrkdir/queue.obs_diag ]]; then
-        return
-    fi
-
-    #------------------------------------------------------
-    # Prepare obs_diag
-    #------------------------------------------------------
-    #obs_final_files1=$(find $dawrkdir/[12]??? -name obs_seq.final | sort)
-    #obs_final_files2=$(find $dawrkdir/0???    -name obs_seq.final | sort)
-    while IFS='' read -r line; do
-        obs_final_files1+=("$line");
-    done < <(find $dawrkdir/[12]??? -name obs_seq.final | sort)
-    while IFS='' read -r line; do
-        obs_final_files1+=("$line");
-    done < <(find $dawrkdir/0???    -name obs_seq.final | sort)
-    obs_final_files=("${obs_final_files1[@]}" "${obs_final_files2[@]}")
-
-    printf "%s\n" "${obs_final_files[@]}" > obs_seq.final.list
-
-    #
-    # Waiting for job conditions
-    #
-
-    if [[ ${#obs_final_files[@]} -ne ${n_cycles} ]]; then
-        mecho0 "${RED}ERROR${NC}: found ${YELLOW}${#obs_final_files[@]}${NC} ${CYAN}obs_seq.final${NC} files, expected ${WHITE}${n_cycles}${NC}."
-        exit 1
-    fi
-
-    cp $dawrkdir/${timestr_end}/input.nml .
-
-    sedfile=$(mktemp -t obsdiag_nml.sed_XXXX)
-
-    cat <<EOF > $sedfile
-/obs_sequence_list/c   obs_sequence_list  = 'obs_seq.final.list'
-/obs_sequence_name/c   obs_sequence_name  = ''
-/first_bin_center/c    first_bin_center   = ${date_beg_str_4obsdiag}
-/last_bin_center/c     last_bin_center    = ${date_end_str_4obsdiag}
-/bin_width/c           bin_width          = ${date_intvl_str_4obsdiag}
-/bin_separation/c      bin_separation     = ${date_intvl_str_4obsdiag}
-EOF
-    sed -f $sedfile -i input.nml
-
-    #------------------------------------------------------
-    # Run obs_diag for all analysis
-    #------------------------------------------------------
-
-    jobscript="run_obs_diag.${mach}"
-
-    declare -A jobParms=(
-        [PARTION]="${partition_filter}"
-        [NOPART]="1"
-        [JOBNAME]="obsdiag_${jobname}"
-        [CPUSPEC]="${claim_cpu_update}"
-        [EXEDIR]="${EXEDIR}/dart"
-        [EXENAME]="obs_diag"
-        [PRONAME]="obs_diag"
-    )
-    if [[ "${mach}" == "pbs" ]]; then
-        jobParms[NNODES]="1"
-        jobParms[NCORES]="1"
-    fi
-
-    submit_a_job "$wrkdir" "obs_diag" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
-}
-
-########################################################################
-
-function run_obs_final2nc {
-    # $1     $2
-    # start  end
-    local start_sec=$1
-    local end_sec=$2
-
-    #
-    # Build working directory
-    #
-    dawrkdir="$rundir/dacycles${daffix}"
-    if [[ ! -d $dawrkdir ]]; then
-        mecho0 "${RED}ERROR${NC}: ${CYAN}$dawrkdir${NC} not exsit."
-        exit 1
-    fi
-    wrkdir=$dawrkdir/obs_diag
-    mkwrkdir $wrkdir $overwrite
-    cd $wrkdir || return
-
-    #------------------------------------------
-    # Time Cylces start here
-    #------------------------------------------
-
-    n_cycles=$(( (end_sec-start_sec)/intvl_sec ))
-
-    timestr_end=$(date -u -d @$end_sec    +%H%M)
-    #
-    # Return if is running or is done
-    #
-    if [[ -f $wrkdir/running.obs_final2nc || -f $wrkdir/done.obs_final2nc || -f $wrkdir/queue.obs_final2nc ]]; then
-        return
-    fi
-
-    #------------------------------------------------------
-    # Prepare obs_diag
-    #------------------------------------------------------
-    #obs_final_files1=$(find $dawrkdir/[12]??? -name obs_seq.final | sort)
-    #obs_final_files2=$(find $dawrkdir/0??? -name obs_seq.final | sort)
-    #obs_final_files=("${obs_final_files1[@]}" "${obs_final_files2[@]}")
-    while IFS='' read -r line; do
-        obs_final_files1+=("$line");
-    done < <(find $dawrkdir/[12]??? -name obs_seq.final | sort)
-    while IFS='' read -r line; do
-        obs_final_files1+=("$line");
-    done < <(find $dawrkdir/0???    -name obs_seq.final | sort)
-    obs_final_files=("${obs_final_files1[@]}" "${obs_final_files2[@]}")
-
-    #
-    # Waiting for job conditions
-    #
-
-    if [[ ${#obs_final_files[@]} -lt ${n_cycles} ]]; then
-        mecho0 "${RED}ERROR${NC}: found ${YELLOW}${#obs_final_files[@]}${NC} ${CYAN}obs_seq.final${NC} files, expected ${WHITE}${n_cycles}${NC}."
-        exit 1
-    fi
-
-    cp $dawrkdir/${timestr_end}/input.nml .
-
-    #------------------------------------------------------
-    # Run obs_diag for all analysis
-    #------------------------------------------------------
-    #    echo "    Running ${EXEDIR}/dart/obs_seq_to_netcdf"
-    #    ${runcmd_str} ${EXEDIR}/dart/obs_seq_to_netcdf >& $srunout
-    #    mv obs_epoch_001.nc obs_seq.final.${timestr_cur}.nc
-
-    jobscript="run_obs_final2nc.${mach}"
-
-    declare -A jobParms=(
-        [PARTION]="${partition_filter}"
-        [NOPART]="1"
-        [JOBNAME]="obsdiag_${jobname}"
-        [CPUSPEC]="${claim_cpu_update}"
-        [EXEDIR]="${EXEDIR}/dart"
-        [START_S]="${start_sec}"
-        [END_S]="${end_sec}"
-        [INTVL_S]="${intvl_sec}"
-        [DACYCLEDIR]="${dawrkdir}"
-    )
-    if [[ "${mach}" == "pbs" ]]; then
-        jobParms[NNODES]="1"
-        jobParms[NCORES]="1"
-    fi
-
-    submit_a_job $wrkdir "obs_final2nc" jobParms $TEMPDIR/$jobscript $jobscript ""
 }
 
 ########################################################################
@@ -3602,6 +2038,13 @@ else
     usage 1
 fi
 
+if [[ $update_in_place == true ]]; then
+    cpcmd="ln -sf"
+else
+    cpcmd="cp"
+    #cpcmd="rsync -a"
+fi
+
 #-----------------------------------------------------------------------
 # Set Event End Date and Time
 #-----------------------------------------------------------------------
@@ -3676,12 +2119,8 @@ OUTINVL_STR=$(printf "00:%02d:00" $((OUTINVL/60)) )
 
 # $1    $2    $3
 # init start  end
-if [[ " ${jobs[*]} " =~ " "(filter|mpas|update_states|update_bc)" " ]]; then
+if [[ " ${jobs[*]} " =~ " "(getkf_observer|getkf_solver|getkf_post|mpas|ioda)" " ]]; then
     dacycle_driver $inittime_sec $starttime_sec $stoptime_sec
-elif [[ " ${jobs[*]} " =~ " "(obs_diag|obs_final2nc)" " ]]; then
-    for job in "${jobs[@]}"; do
-        run_${job} ${starttime_sec} ${stoptime_sec}
-    done
 elif [[ " ${jobs[*]} " =~ " clean " ]]; then
 
     if [[ ${#cleanjobs[@]} -eq 0 ]]; then

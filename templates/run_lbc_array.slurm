@@ -16,8 +16,12 @@ printf "Job Started: %(%a %b %d %H:%M:%S %Z %Y)T. Job Id: %s\n\n" $time1 $SLURM_
 if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
     source /etc/profile.d/modules.sh
     module purge
-    module use ROOTDIR/modules
-    module load MODULE
+    HOMErrfs="/lfs5/NAGAPE/hpc-wof1/ywang/GSL_JEDI/rrfs-workflow"
+    module use ${HOMErrfs}/modulefiles
+    module load "rrfs/jet.intel"
+
+    #module use ROOTDIR/modules
+    #module load MODULE
 else
     source ROOTDIR/modules/MODULE
 fi

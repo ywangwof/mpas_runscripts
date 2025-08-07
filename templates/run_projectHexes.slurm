@@ -25,7 +25,7 @@ ulimit -s unlimited
 
 cd WRKDIR
 
-rm -f queue.project error.project
+rm -f queue.projectHexes error.projectHexes
 
 touch running.project
 

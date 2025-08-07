@@ -1400,6 +1400,7 @@ function write_config {
     npelbc="${npelbc}"; ncores_lbc="${ncores_lbc}"
     partition_lbc="${partition_lbc}"
     claim_cpu_lbc="${claim_cpu_lbc}"
+    claim_cpu_ungrib="${claim_cpu_ungrib}"
 
 [dacycles]
     ENS_SIZE=36
@@ -1439,7 +1440,8 @@ function write_config {
 
     claim_cpu_fcst="${claim_cpu_dafcst}"
     claim_cpu_filter="${claim_cpu_filter}"
-    claim_cpu_update="${claim_cpu_update}"
+    claim_cpu_ioda="${claim_cpu_ioda}"
+    claim_cpu_ioda_refl="${claim_cpu_ioda_refl}"
     claim_time_fcst="00:20:00"
 
     npepost="${npepost}"; claim_cpu_post=""; claim_time_mpassit_alltimes="00:30:00"

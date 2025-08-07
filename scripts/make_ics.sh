@@ -185,7 +185,8 @@ function run_ungrib {
     if [[ -f running.ungrib || -f done.ungrib || -f queue.ungrib ]]; then
         return 0                   # skip
     else
-        starthr=$(((eventtime-gribtime)/100))
+        [[ ${#gribtime} -eq 2 ]] && gribinit=$((gribtime*100)) || gribinit=${gribtime}
+        starthr=$(((eventtime-gribinit)/100))
         hstr=$(printf "%02d" "$starthr")
 
         jobarrays=()
@@ -193,7 +194,8 @@ function run_ungrib {
         mecho0 "GRIB files from ${grib_dir}:"
         for mem in $(seq 1 "$nensics"); do
             memstr=$(printf "%02d" "$mem")
-            gribfilename="$eventdate/${gribtime}/${hrrr_subdir}${memstr}/wrfnat_hrrre_newse_mem00${memstr}_${hstr}.grib2"
+            #gribfilename="$eventdate/${gribtime}/${hrrr_subdir}${memstr}/wrfnat_hrrre_newse_mem00${memstr}_${hstr}.grib2"
+            gribfilename="gefs.$eventdate/${gribtime}/${hrrr_subdir}/gep${memstr}.t${gribtime}z.pgrb2a.0p50.f0${hstr}"
             gribfile="${grib_dir}/${gribfilename}"
 
             mecho0 "mem $memstr GRIB file: ${gribfilename}"
@@ -764,6 +766,7 @@ EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 # Start to execute each procedue
 #
 declare -A jobargs=([ungrib]="$hrrr_dir $hrrr_time"                     \
+                    [ungrib_gefs]="$hrrr_dir $hrrr_time"                \
                     [init4invariant]="init/ungrib/done.ungrib $domname/done.static" \
                     [init]="init/ungrib/done.ungrib $domname/done.static"           \
                     [clean]="ungrib init"                               \

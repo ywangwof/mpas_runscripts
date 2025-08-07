@@ -73,8 +73,8 @@ function setup_machine {
             runcmd_str=""
 
             WPSGEOG_PATH="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
-            wgrib2path="/apps/wgrib2/2.0.8/intel/18.0.5.274/bin/wgrib2"
-            nckspath="/apps/nco/4.9.3/gnu/9.2.0/bin/ncks"
+            wgrib2path="/apps/wgrib2/3.1.1/gnu_13.2.0/wmo/bin/wgrib2"
+            nckspath="/apps/nco/5.1.6/gcc-13.2.0/bin/ncks"
             gpmetis="/home/Yunheng.Wang/local/bin/gpmetis"
 
             OBS_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS/run_dirs/OBS_SEQ.Reduced"
@@ -244,9 +244,10 @@ function default_site_settings {
         ncores_dafcst=6;  ncores_filter=6
         partition_dafcst="xjet,kjet"; claim_cpu_dafcst="--cpus-per-task=2"
         partition_filter="xjet,kjet"; claim_cpu_filter="--cpus-per-task=2"
-                                                     claim_cpu_update="--cpus-per-task=1 --mem-per-cpu=8G"
+                                      claim_cpu_ioda="--cpus-per-task=1 --mem-per-cpu=8G"
+                                      claim_cpu_ioda_refl="--cpus-per-task=2"
         npedafcst=48        #; nnodes_fcst=$(( npefcst/ncores_fcst ))
-        npefilter=1536      #; nnodes_filter=$(( npefilter/ncores_filter ))
+        npefilter=80        #; nnodes_filter=$(( npefilter/ncores_filter ))
         nnodes_filter="1"
         nnodes_dafcst="1"
 
@@ -367,7 +368,7 @@ function default_site_settings {
     export partition_lbc    claim_cpu_lbc    npelbc        ncores_lbc
     export partition_dafcst claim_cpu_dafcst npedafcst     ncores_dafcst  nnodes_dafcst
     export partition_filter claim_cpu_filter nnodes_filter ncores_filter  nnodes_filter
-    export                  claim_cpu_update npepost
+    export claim_cpu_ioda   claim_cpu_ioda_refl  npepost
     export partition_fcst   claim_cpu_fcst   npefcst       ncores_fcst    nnodes_fcst
     export partition_post   claim_cpu_post   npepost       ncores_post    nnodes_post
 }

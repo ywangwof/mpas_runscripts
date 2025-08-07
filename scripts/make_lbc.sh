@@ -216,6 +216,9 @@ function run_ungrib {
     if [[ ${#gribtime} -eq 12 ]]; then
         hdate=${gribtime:0:8}
         htime=${gribtime:8:4}
+    elif [[ ${#gribtime} -eq 2 ]]; then
+        hdate=${eventdate}
+        htime=$((gribtime*100))
     else
         hdate=${eventdate}
         htime=${gribtime}
@@ -239,7 +242,8 @@ function run_ungrib {
         gribfiles=()
         for (( h=starthr;h<=endhr;h+=$((EXTINVL/3600)) )); do
             hstr=$(printf "%02d" $h)
-            gribfilename="$hdate/${htime}/${hrrr_subdir}${memstr}/wrfnat_pert_hrrr_mem00${memstr}_${hstr}.grib2"
+            #gribfilename="$hdate/${htime}/${hrrr_subdir}${memstr}/wrfnat_pert_hrrr_mem00${memstr}_${hstr}.grib2"
+            gribfilename="gefs.$eventdate/${gribtime}/${hrrr_subdir}/gep${memstr}.t${gribtime}z.pgrb2a.0p50.f0${hstr}"
             gribfile="${grib_dir}/${gribfilename}"
 
             mecho0 "mem $memstr GRIB file $hstr: ${gribfilename}"
