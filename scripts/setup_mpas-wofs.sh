@@ -1764,7 +1764,7 @@ parse_args "$@"
 [[ -v args["overwrite"] ]] && overwrite=${args["overwrite"]} || overwrite=0
 [[ -v args["dorun"] ]]     && dorun=${args["dorun"]}         || dorun=true
 
-[[ -v args["damode"] ]]    && damode="${args['damode']}"     || damode="init"
+[[ -v args["damode"] ]]    && damode="${args['damode']}"     || damode="restart"
 [[ -v args["fcstmode"] ]]  && fcstmode="${args['fcstmode']}" || fcstmode="${damode}"
 
 [[ -v args["domname"] ]]    && domname="${args['domname']}"   || domname="wofs_mpas"

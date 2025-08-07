@@ -994,18 +994,18 @@ function run_filter {
     mp_state_variables['qi']='QTY_ICE_MIXING_RATIO'
     mp_state_variables['qs']='QTY_SNOW_MIXING_RATIO'
     mp_state_variables['qg']='QTY_GRAUPEL_MIXING_RATIO'
-    #mp_state_variables['nr']='QTY_RAIN_NUMBER_CONCENTR'
-    #mp_state_variables['ni']='QTY_ICE_NUMBER_CONCENTRATION'
+    mp_state_variables['nr']='QTY_RAIN_NUMBER_CONCENTR'
+    mp_state_variables['ni']='QTY_ICE_NUMBER_CONCENTRATION'
     mp_state_bounds="'0.0','NULL','CLAMP'"
 
     if [[ ${mpscheme} == "mp_nssl2m" ]]; then
         mp_state_variables['qh']='QTY_HAIL_MIXING_RATIO'
-        #mp_state_variables['volg']='QTY_GRAUPEL_VOLUME'
-        #mp_state_variables['volh']='QTY_HAIL_VOLUME'
-        #mp_state_variables['nc']='QTY_DROPLET_NUMBER_CONCENTR'
-        #mp_state_variables['ns']='QTY_SNOW_NUMBER_CONCENTR'
-        #mp_state_variables['ng']='QTY_GRAUPEL_NUMBER_CONCENTR'
-        #mp_state_variables['nh']='QTY_HAIL_NUMBER_CONCENTR'
+        mp_state_variables['volg']='QTY_GRAUPEL_VOLUME'
+        mp_state_variables['volh']='QTY_HAIL_VOLUME'
+        mp_state_variables['nc']='QTY_DROPLET_NUMBER_CONCENTR'
+        mp_state_variables['ns']='QTY_SNOW_NUMBER_CONCENTR'
+        mp_state_variables['ng']='QTY_GRAUPEL_NUMBER_CONCENTR'
+        mp_state_variables['nh']='QTY_HAIL_NUMBER_CONCENTR'
     fi
 
     lbc_mp_variables="'lbc_qv', 'lbc_theta', 'lbc_rho', 'lbc_u', 'lbc_w'"
@@ -2625,9 +2625,12 @@ function run_mpas {
     config_gwdo_scheme         = 'bl_ugwp_gwdo'
     config_gvf_update          = false
 EOF
+#    config_radt_cld_scheme           = 'cld_fraction'
         if [[ ${sfcscheme} == "sf_mynn" ]]; then
             cat << EOF >> namelist.atmosphere
-    config_pbl_scheme          = 'bl_mynnedmf'
+    config_pbl_scheme                = 'bl_mynnedmf'
+    config_icloud_bl                 = 0
+    config_mynn_cloudpdf             = 0
 EOF
         else
             cat << EOF >> namelist.atmosphere

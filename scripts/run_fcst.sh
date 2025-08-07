@@ -535,9 +535,13 @@ function run_mpas {
     config_gwdo_scheme         = 'bl_ugwp_gwdo'
     config_gvf_update          = false
 EOF
+
+#    config_radt_cld_scheme           = 'cld_fraction'
         if [[ ${sfcscheme} == "sf_mynn" ]]; then
             cat << EOF >> namelist.atmosphere
     config_pbl_scheme                = 'bl_mynnedmf'
+    config_icloud_bl                 = 0
+    config_mynn_cloudpdf             = 0
 EOF
         else
             cat << EOF >> namelist.atmosphere
