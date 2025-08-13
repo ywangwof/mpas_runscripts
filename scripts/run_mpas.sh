@@ -265,23 +265,29 @@ function parse_args {
                 esac
                 shift
                 ;;
-            --init )
-                if [[ -d ${2} ]]; then        # use init & lbc from another run directory
-                    args["init_dir"]=$2
-                    while [[ ! -d $2/init ]]; do
-                        echo "Waiting for $2/init"
+            --init* )
+                if [[ "${key}" =~ ^--init(=(.*)?)$ ]]; then
+                    keydir="${BASH_REMATCH[2]}"
+                else
+                    keydir="$2"
+                    shift
+                fi
+
+                if [[ -d ${keydir} ]]; then        # use init & lbc from another run directory
+                    args["init_dir"]=${keydir}
+                    while [[ ! -d ${keydir}/init ]]; do
+                        echo "Waiting for ${keydir}/init"
                         sleep 10
                     done
 
-                    while [[ ! -d $2/lbc ]]; do
-                        echo "Waiting for $2/lbc"
+                    while [[ ! -d ${keydir}/lbc ]]; do
+                        echo "Waiting for ${keydir}/lbc"
                         sleep 10
                     done
                 else
-                    echo "ERROR: initialization directory  \"$2\" not exists."
+                    echo "ERROR: initialization directory  \"${keydir}\" not exists."
                     usage 1
                 fi
-                shift
                 ;;
             -s )
                 if [[ "$2" =~ ^[0-9]+$ ]]; then
