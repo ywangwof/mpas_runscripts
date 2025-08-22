@@ -1,5 +1,6 @@
 #!/bin/bash
 # shellcheck disable=SC2317  # Don't warn about unreachable commands in this function
+# shellcheck disable=SC2329
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
@@ -2987,7 +2988,7 @@ starthour_str=$(printf "%02d" $starthour)
 endhour_str=$(printf "%02d" $endhour)
 
 appendhour_str="_${starthour_str}-${endhour_str}"
-[[ endhour -eq end_hour && starthour -eq 0 ]] && appendhour_str=""
+#[[ endhour -eq end_hour && starthour -eq 0 ]] && appendhour_str=""
 
 RSTINVL=$((end_hour+1))
 [[ endhour -lt end_hour ]] && RSTINVL=$fcst_hours
