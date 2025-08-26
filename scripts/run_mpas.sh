@@ -812,6 +812,7 @@ function run_static {
     config_stop_time = '${inittime_str}'
     config_theta_adv_order = 3
     config_coef_3rd_order = 0.25
+    config_interface_projection = 'linear_interpolation'
 /
 &dimensions
     config_nvertlevels   = 1
@@ -831,10 +832,11 @@ function run_static {
     config_topo_data    = 'GMTED2010'
     config_vegfrac_data = 'MODIS'
     config_albedo_data  = 'MODIS'
-    config_maxsnowalbedo_data = 'MODIS'
-    config_lai_data           = 'MODIS'
-    config_supersample_factor = 1
-    config_use_spechumd = true
+    config_maxsnowalbedo_data     = 'MODIS'
+    config_lai_data               = 'MODIS'
+    config_supersample_factor     = 3
+    config_30s_supersample_factor = 1
+    config_use_spechumd           = false
 /
 &vertical_grid
     config_ztop = 25878.712
@@ -847,15 +849,16 @@ function run_static {
     config_specified_zeta_levels = '${FIXDIR}/L60.txt'
 /
 &interpolation_control
-    config_extrap_airtemp = 'linear'
+    config_extrap_airtemp = 'lapse-rate'
 /
 &preproc_stages
-    config_static_interp = true
-    config_native_gwd_static = true
-    config_vertical_grid = false
-    config_met_interp = false
-    config_input_sst = false
-    config_frac_seaice = false
+    config_static_interp         = true
+    config_native_gwd_static     = false
+    config_native_gwd_gsl_static = true
+    config_vertical_grid         = false
+    config_met_interp            = false
+    config_input_sst             = false
+    config_frac_seaice           = true
 /
 &io
     config_pio_num_iotasks = 0
@@ -882,19 +885,10 @@ EOF
                   clobber_mode="replace_files"
                   output_interval="initial_only" />
 
-<immutable_stream name="surface"
+<immutable_stream name="ugwp_oro_data"
                   type="output"
-                  filename_template="${domname}.sfc_update.nc"
-                  filename_interval="none"
-                  packages="sfc_update"
-                  output_interval="${EXTINVL_STR}" />
-
-<immutable_stream name="lbc"
-                  type="output"
-                  filename_template="${domname}.lbc.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-                  filename_interval="output_interval"
-                  packages="lbcs"
-                  output_interval="${EXTINVL_STR}" />
+                  filename_template="${domname}.ugwp_oro_data.nc"
+                  output_interval="initial_only" />
 
 </streams>
 EOF
@@ -1797,16 +1791,17 @@ function run_init {
 /
 &data_sources
     config_geog_data_path = '/lfs5/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/'
-    config_met_prefix = '${EXTHEAD}'
-    config_sfc_prefix = 'SST'
-    config_fg_interval = $((EXTINVL*3600))
+    config_met_prefix     = '${EXTHEAD}'
+    config_sfc_prefix     = 'SST'
+    config_fg_interval  = $((EXTINVL*3600))
     config_landuse_data = 'MODIFIED_IGBP_MODIS_NOAH_15s'
-    config_topo_data = 'GMTED2010'
+    config_soilcat_data = 'BNU'
+    config_topo_data    = 'GMTED2010'
     config_vegfrac_data = 'MODIS'
-    config_albedo_data = 'MODIS'
+    config_albedo_data  = 'MODIS'
     config_maxsnowalbedo_data = 'MODIS'
     config_supersample_factor = 1
-    config_use_spechumd = true
+    config_use_spechumd       = true
 /
 &vertical_grid
     config_ztop = 25878.712
@@ -1822,12 +1817,13 @@ function run_init {
     config_extrap_airtemp = 'lapse-rate'
 /
 &preproc_stages
-    config_static_interp = false
-    config_native_gwd_static = false
-    config_vertical_grid = true
-    config_met_interp = true
-    config_input_sst = false
-    config_frac_seaice = true
+    config_static_interp         = false
+    config_native_gwd_static     = false
+    config_native_gwd_gsl_static = true
+    config_vertical_grid         = true
+    config_met_interp            = true
+    config_input_sst             = false
+    config_frac_seaice           = true
 /
 &io
     config_pio_num_iotasks = 0
@@ -1980,12 +1976,13 @@ function run_lbc {
     config_sfc_prefix = 'SST'
     config_fg_interval = $((EXTINVL*3600))
     config_landuse_data = 'MODIFIED_IGBP_MODIS_NOAH_15s'
-    config_topo_data = 'GMTED2010'
+    config_soilcat_data = 'BNU'
+    config_topo_data    = 'GMTED2010'
     config_vegfrac_data = 'MODIS'
-    config_albedo_data = 'MODIS'
+    config_albedo_data  = 'MODIS'
     config_maxsnowalbedo_data = 'MODIS'
     config_supersample_factor = 1
-    config_use_spechumd = true
+    config_use_spechumd       = true
 /
 &vertical_grid
     config_ztop = 25878.712
@@ -2001,12 +1998,13 @@ function run_lbc {
     config_extrap_airtemp = 'lapse-rate'
 /
 &preproc_stages
-    config_static_interp = false
-    config_native_gwd_static = false
-    config_vertical_grid = true
-    config_met_interp = true
-    config_input_sst = false
-    config_frac_seaice = true
+    config_static_interp         = false
+    config_native_gwd_static     = false
+    config_native_gwd_gsl_static = true
+    config_vertical_grid         = true
+    config_met_interp            = true
+    config_input_sst             = false
+    config_frac_seaice           = true
 /
 &io
     config_pio_num_iotasks = 0
@@ -2136,6 +2134,8 @@ function run_mpas {
         fi
         ln -sf $FIXDIR/$domname.graph.info.part.${npefcst} .
 
+        ln -sf ${rundir}/${domname}/${domname}.ugwp_oro_data.nc .
+
         streamlists=(stream_list.atmosphere.diagnostics stream_list.atmosphere.output stream_list.atmosphere.surface)
         for fn in "${streamlists[@]}"; do
             cp -f ${FIXDIR}/$fn .
@@ -2242,7 +2242,6 @@ function run_mpas {
     config_bucket_update             = 'none'
     config_lsm_scheme                = '${MPASLSM}'
     num_soil_layers                  = ${MPASNFLS}
-    config_physics_suite             = 'convection_permitting'
     config_convection_scheme         = 'off'
     config_microp_re                 = true
     config_sfclayer_scheme           = 'sf_mynnsfclay'
@@ -2261,12 +2260,15 @@ EOF
         if [[ ${mpscheme} == "mp_tempo" ]]; then
             cat << EOF >> ${namelist_filename}
     config_microp_scheme             = '${mpscheme}'
+    config_physics_suite             = 'hrrrv5'
     config_tempo_hailaware           = .true.
     config_tempo_aerosolaware        = .true.
     config_tempo_ml_nc_pbl           = .true.
+    config_radt_cld_scheme           = 'cld_fraction_mynn'
 EOF
         elif [[ ${mpscheme} =~ ^mp_nssl[23]m$ ]]; then
             cat << EOF >> ${namelist_filename}
+    config_physics_suite             = 'convection_permitting'
     config_microp_scheme             = 'mp_nssl2m'
 /
 &nssl_mp_params
@@ -2349,6 +2351,10 @@ EOF
                   packages="limited_area"
                   input_interval="${EXTINVL_STR}" />
 
+<immutable_stream name="ugwp_oro_data_in"
+                  type="input"
+                  filename_template="${domname}.ugwp_oro_data.nc"
+                  input_interval="initial_only" />
 </streams>
 EOF
         #
