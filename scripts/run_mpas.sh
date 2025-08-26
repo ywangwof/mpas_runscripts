@@ -2175,7 +2175,7 @@ function run_mpas {
         cat << EOF > ${namelist_filename}
 &nhyd_model
     config_time_integration_order   = 2
-    config_dt                       = 25
+    config_dt                       = 20
     config_start_time               = '${starttime_str}'
     config_run_duration             = '${fcsthour_str}:00:00'
     config_split_dynamics_transport = true
@@ -2237,19 +2237,21 @@ function run_mpas {
     config_sst_update                = false
     config_sstdiurn_update           = false
     config_deepsoiltemp_update       = false
-    config_radtlw_interval           = '00:30:00'
-    config_radtsw_interval           = '00:30:00'
+    config_radtlw_interval           = '00:15:00'
+    config_radtsw_interval           = '00:15:00'
     config_bucket_update             = 'none'
     config_lsm_scheme                = '${MPASLSM}'
     num_soil_layers                  = ${MPASNFLS}
     config_physics_suite             = 'convection_permitting'
     config_convection_scheme         = 'off'
     config_microp_re                 = true
-    config_sfclayer_scheme           = 'sf_mynn'
+    config_sfclayer_scheme           = 'sf_mynnsfclay'
     config_frac_seaice               = true
     config_gwdo_scheme               = 'bl_ugwp_gwdo'
     config_gvf_update                = false
     config_pbl_scheme                = 'bl_mynnedmf'
+    config_tsk_seaice_threshold      = 271.4
+    config_mynn_mixnumcon            = 0
 EOF
 
         if [[ ${mpscheme} =~ ^mp_nssl3m$ ]]; then
@@ -2261,6 +2263,7 @@ EOF
     config_microp_scheme             = '${mpscheme}'
     config_tempo_hailaware           = .true.
     config_tempo_aerosolaware        = .true.
+    config_tempo_ml_nc_pbl           = .true.
 EOF
         elif [[ ${mpscheme} =~ ^mp_nssl[23]m$ ]]; then
             cat << EOF >> ${namelist_filename}
