@@ -860,6 +860,9 @@ function run_static {
     config_input_sst             = false
     config_frac_seaice           = true
 /
+&physics
+    config_tsk_seaice_threshold  = 271.4
+/
 &io
     config_pio_num_iotasks = 0
     config_pio_stride = 1
@@ -1825,6 +1828,9 @@ function run_init {
     config_input_sst             = false
     config_frac_seaice           = true
 /
+&physics
+    config_tsk_seaice_threshold  = 271.4
+/
 &io
     config_pio_num_iotasks = 0
     config_pio_stride = 1
@@ -2005,6 +2011,9 @@ function run_lbc {
     config_met_interp            = true
     config_input_sst             = false
     config_frac_seaice           = true
+/
+&physics
+    config_tsk_seaice_threshold  = 271.4
 /
 &io
     config_pio_num_iotasks = 0
@@ -2249,7 +2258,6 @@ function run_mpas {
     config_gwdo_scheme               = 'bl_ugwp_gwdo'
     config_gvf_update                = false
     config_pbl_scheme                = 'bl_mynnedmf'
-    config_tsk_seaice_threshold      = 271.4
     config_mynn_mixnumcon            = 0
 EOF
 
