@@ -2143,7 +2143,7 @@ function run_mpas {
         fi
         ln -sf $FIXDIR/$domname.graph.info.part.${npefcst} .
 
-        ln -sf ${rundir}/${domname}/${domname}.ugwp_oro_data.nc .
+        ln -sf ${WORKDIR}/${domname}/${domname}.ugwp_oro_data.nc .
 
         streamlists=(stream_list.atmosphere.diagnostics stream_list.atmosphere.output stream_list.atmosphere.surface)
         for fn in "${streamlists[@]}"; do

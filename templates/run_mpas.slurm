@@ -60,7 +60,7 @@ else
     touch error.fcstAPPENDIX
 fi
 
-rm -f streams.atmosphere namelist.atmosphere
+#rm -f streams.atmosphere namelist.atmosphere
 
 rm -rf running.fcstAPPENDIX
 

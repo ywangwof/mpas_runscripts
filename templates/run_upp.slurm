@@ -50,7 +50,7 @@ if [[ $? -eq 0 ]]; then
 
     grid_specs_hrrr="lambert:-97.5:38.5 -122.719528:1799:3000.0 21.138123:1059:3000.0"
 
-    infile=WRFPRS.GrbFHHHSTR
+    infile=$(compgen -G WRFPRS.GrbF??)
     tmpfile=tmpGrbFHHHSTR.grib2
     outfile=../MPAS-A_${dtstr[-3]}fHHHSTR.grib2
 
