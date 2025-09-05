@@ -15,7 +15,7 @@ echo " "
 
 if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
     module use ROOTDIR/modules
-    module load MODULE
+    module load MPASSIT/build.jet.intel
 else
     source ROOTDIR/modules/MODULE
 fi

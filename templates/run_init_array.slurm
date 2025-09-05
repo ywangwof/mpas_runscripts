@@ -16,7 +16,7 @@ echo " "
 if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
     source /etc/profile.d/modules.sh
     module purge
-    HOMErrfs="/lfs5/NAGAPE/hpc-wof1/ywang/GSL_JEDI/rrfs-workflow"
+    HOMErrfs="RRFSDIR"
     module use ${HOMErrfs}/modulefiles
     module load "rrfs/jet.intel"
     #module use ROOTDIR/modules
@@ -30,7 +30,7 @@ ulimit -s unlimited
 mem=${SLURM_ARRAY_TASK_ID}
 memstr=$(printf "%02d" $mem)
 
-cd WRKDIR/PREFIX_$memstr
+cd WRKDIR/PREFIX_$memstr || exit $?
 
 touch running.PREFIX_$memstr
 rm -rf error.PREFIX_$memstr queue.PREFIX_$memstr
@@ -48,12 +48,6 @@ rm -rf running.PREFIX_$memstr
 
 time2=$(date '+%s')
 
-let diff=time2-time1
-let hour=diff/3600
-let diff=diff%3600
-let min=diff/60
-let sec=diff%60
+diff=$((time2-time1))
 
-echo -n "Job   Ended: $(date). "
-printf 'Job run time:  %02d:%02d:%02d' $hour $min $sec
-echo " "
+printf "\nJob   Ended: %(%a %b %d %H:%M:%S %Z %Y)T. Job run time: %s.\n" $time2 $(date -d@$diff -u +%H:%M:%S)

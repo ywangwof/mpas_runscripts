@@ -374,7 +374,7 @@ for pkg in "${packages[@]}"; do
 
             run_cmd "${runcmd}" "${rootdir}/fix_files${affix}" "${thompsonfiles[*]}"
         else
-            cd "$desdir" || exit 1
+            #cd "$desdir" || exit 1
 
             cd "$exedir" || exit 1
             echo ""
@@ -390,6 +390,66 @@ for pkg in "${packages[@]}"; do
 
         ;;
     JEDI )
+        #
+        # MPAS programs
+        #
+        cd "$exedir" || exit 1
+        ln -sf "${srcmodel}/exec/init_atmosphere_model.x" init_atmosphere_model
+        ln -sf "${srcmodel}/exec/atmosphere_model.x" atmosphere_model
+
+        #
+        # JEDI programs
+        #
+        mkdir -p jedi
+
+        jedi_exe=(bufr2ioda.x  bufr2netcdf.x  mpasjedi_enkf.x  process_NSSL_mosaic.exe)
+        for prog in "${jedi_exe[@]}"; do
+            ln -sf "${srcmodel}/exec/${prog}" jedi/
+        done
+
+        #
+        # PARM files
+        #
+        mkdir -p "${desdir}/jedi"
+        cd "${desdir}/jedi" || exit 1
+
+        parm_files=(prepbufr_ascatw.yaml  prepbufr_satwnd.yaml  prepbufr_aircft.yaml  \
+                    prepbufr_adpsfc.yaml  prepbufr_gpsipw.yaml  prepbufr_sfcshp.yaml  \
+                    prepbufr_adpupa.yaml  prepbufr_msonet.yaml  prepbufr_vadwnd.yaml  \
+                    prepbufr_aircar.yaml  prepbufr_proflr.yaml  prepbufr_rassda.yaml  \
+                    bufr2ioda_cris.yaml  bufr_atms_mapping.yaml  \
+                    streams.atmosphere.getkf namelist.atmosphere    )
+
+        for fn in "${parm_files[@]}"; do
+            ln -sf "${srcmodel}/parm/$fn" .
+        done
+
+        #
+        # FIX files
+        #
+        fix_files=(atms_beamwidth.txt  geovars.yaml ioda_empty.nc keptvars.yaml obsop_name_map.yaml )
+        for fn in "${fix_files[@]}"; do
+            ln -sf "${srcmodel}/fix/jedi/$fn" .
+        done
+
+        #
+        # Localized files
+        #
+        cp_files=(getkf_observer.yaml getkf_solver.yaml)
+
+        for fn in "${cp_files[@]}"; do
+            if [[ ! -e $fn ]]; then
+               cp "${srcmodel}/parm/$fn" .
+            fi
+        done
+        cp "${srcmodel}/sorc/RDASApp/rrfs-test/gsi_fix/convinfo" .
+        ln -sf getkf_solver.yaml getkf_post.yaml
+
+        #
+        # Stream_list files
+        #
+        #fix_dirs=(stream_list)
+        ln -sf "${srcmodel}/fix/stream_list" .
         ;;
     * )
         echo "Argument should be one of [${default_packages[*]}]. get \"${pkg}\"."

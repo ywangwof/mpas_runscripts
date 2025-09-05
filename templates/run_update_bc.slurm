@@ -121,22 +121,13 @@ fi
 #fi
 
 # for diagnostics and add some delays
-sleep 10
+#sleep 10
 #for idx in "${!lbcfile_orgs1[@]}"; do
 #    (( indx = idx+1 ))
 #    echo "$indx: ${lbcfile_orgs1[$idx]} --> ${lbcfile_mems[$idx]}"
 #    echo "$indx: ${lbcfile_orgs2[$idx]} --> ${lbcfile_next[$idx]}"
 #done
 
-#-----------------------------------------------------------------------
-# Run the job itself
-#-----------------------------------------------------------------------
-
-if [[ "UPDATEBC" == "true" ]]; then
-    RUNMPCMD -n NOPART EXEDIR/update_bc
-else
-    echo "Program update_bc skipped."
-fi
 
 if [[ $? -eq 0 ]]; then
     touch done.update_bc_${memstr}

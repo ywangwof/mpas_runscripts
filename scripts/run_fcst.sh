@@ -275,6 +275,42 @@ function parse_args {
 
 ########################################################################
 
+function run_intrp_bc {
+
+    #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/running.intrp_bc || -f $wrkdir/done.intrp_bc || -f $wrkdir/queue.intrp_bc ]]; then
+        return
+    fi
+
+    #------------------------------------------------------
+    # Run intrp_bc for all ensemble members as a job array
+    #------------------------------------------------------
+
+    jobscript="run_intrp_bc.${mach}"
+
+    local -A jobParms=(
+        [PARTION]="${partition_post}"
+        [NOPART]="1"
+        [JOBNAME]="intrpbc_${eventtime}"
+        [CPUSPEC]="${claim_cpu_post}"
+        [DOMNAME]="${domname}"
+        [CASEDIR]="${casedir}"
+        [LBCTIMESTR1]="${ext_lbc_time1[*]}"
+        [LBCTIMESTR2]="${ext_lbc_time2[*]}"
+        [LBCTIMESTR]="${exp_lbc_times[*]}"
+    )
+    if [[ "${mach}" == "pbs" ]]; then
+        jobParms[NNODES]="1"
+        jobParms[NCORES]="1"
+    fi
+
+    submit_a_job $wrkdir "intrp_bc" jobParms $TEMPDIR/$jobscript $jobscript "${jobarraystr}"
+}
+
+########################################################################
+
 function run_mpas {
     # $1        $2
     # wrkdir    iseconds
@@ -298,7 +334,7 @@ function run_mpas {
     #
     # Waiting for job conditions
     #
-    conditions=("${rundir}/lbc/done.${domname}" "${dawrkdir}/done.update_states" "${dawrkdir}/done.update_bc")
+    conditions=("${rundir}/lbc/done.${domname}" "${dawrkdir}/done.update_bc")
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
@@ -338,7 +374,7 @@ function run_mpas {
     [[ ! -v visc4_2dsmag ]]        && visc4_2dsmag=0.125
     [[ ! -v h_mom_eddy_visc4 ]]    && h_mom_eddy_visc4=0.0
     [[ ! -v h_theta_eddy_visc4 ]]  && h_theta_eddy_visc4=0.25
-    [[ ! -v h_scalar_eddy_visc4 ]] && h_scalar_eddy_visc4=0.25
+    #[[ ! -v h_scalar_eddy_visc4 ]] && h_scalar_eddy_visc4=0.25
     [[ ! -v smdiv ]]               && smdiv=0.1
     [[ ! -v physics_suite ]]       && physics_suite='convection_permitting'
 
@@ -408,15 +444,25 @@ function run_mpas {
             mecho0 "Member: $iens lbc file ${mpastime_str}: ${lbc_dafile}";
         fi
 
+        exp_lbc_times=(); ext_lbc_time1=(); ext_lbc_time2=()
         for ((i=icycle_lbcgap;i<=fcst_seconds;i+=icycle_lbcgap)); do
             isec=$(( iseconds+i ))                # MPAS expects time string
-            jsec=${isec}             # $(( iseconds-iseconds%3600+i ))  # External GRIB file provided around to whole hour
-            lbctime_str=$(date -u -d @$jsec +%Y-%m-%d_%H.%M.%S)
+            jsec=$(( isec-isec%EXTINVL ))  # External GRIB file provided around to whole hour
+            lbctime_str=$(date  -u -d @$jsec +%Y-%m-%d_%H.%M.%S)
             mpastime_str=$(date -u -d @$isec +%Y-%m-%d_%H.%M.%S)
             lbc_file="${casedir}/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str}.nc"
-            ln -sf $lbc_file ${domname}_${memstr}.lbc.${mpastime_str}.nc
-            if [[ $verb -eq 1 ]]; then
-                mecho0 "Member: $iens lbc file ${mpastime_str}: ${lbc_file}";
+            if [[ ${isec} -eq ${jsec} ]]; then
+                ln -sf $lbc_file ${domname}_${memstr}.lbc.${mpastime_str}.nc
+                [[ $verb -eq 1 ]] && mecho0 "Member: $iens lbc file ${mpastime_str}: ${lbc_file}";
+            else
+                nsec=$((jsec+EXTINVL))
+                ntime_str=$(date -u -d @$nsec +%Y-%m-%d_%H.%M.%S)
+                lbc_filen="${casedir}/lbc/${domname}_${mlbcstr}.lbc.${ntime_str}.nc"
+                [[ $verb -eq 1 ]] && mecho0 "Member: $iens lbc file ${mpastime_str} interpolate from:\n\t\t${lbc_file}\n\t\t${lbc_filen}"
+                exp_lbc_times+=("${mpastime_str}")
+                ext_lbc_time1+=("${lbctime_str}")
+                ext_lbc_time2+=("${ntime_str}")
+                #(${scpdir}/intrp_time.py -t "${mpastime_str}" "${lbc_file}" "${lbc_filen}" "${domname}_${memstr}.lbc.${mpastime_str}.nc") &
             fi
         done
 
@@ -454,6 +500,7 @@ function run_mpas {
 
         fcsthr_str=$(printf "%02d:00:00" $((fcst_seconds/3600)))
 
+#    config_h_scalar_eddy_visc4      = ${h_scalar_eddy_visc4}
         cat << EOF > namelist.atmosphere
 &nhyd_model
     config_time_integration_order   = 2
@@ -469,7 +516,6 @@ function run_mpas {
     config_h_theta_eddy_visc2       = 0.0
     config_h_theta_eddy_visc4       = ${h_theta_eddy_visc4}
     config_v_theta_eddy_visc2       = 0.0
-    config_h_scalar_eddy_visc4      = ${h_scalar_eddy_visc4}
     config_horiz_mixing             = '2d_smagorinsky'
     config_len_disp                 = 3000.0
     config_visc4_2dsmag             = ${visc4_2dsmag}
@@ -668,6 +714,7 @@ EOF
         jobarrays+=("$iens")
     done
 
+
     #
     # Create job script and submit it
     #
@@ -675,14 +722,22 @@ EOF
 
     jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
 
+    if [[ ${#exp_lbc_times[@]} -gt 0 ]]; then
+        run_intrp_bc     # jobarrays, exp_lbc_times, ext_lbc_time1, ext_lbc_time2
+        while [[ ! -e done.intrp_bc ]]; do    # wait forever
+            check_job_status "intrp_bc fcst_" $wrkdir $ENS_SIZE "run_intrp_bc.${mach}" 1
+        done
+    fi
+
     # undefined variables are from the config file
-    declare -A jobParms=(
+    local -A jobParms=(
         [PARTION]="${partition_fcst}"
         [NOPART]="$npefcst"
         [NNODES]="${nnodes_fcst}"
         [JOBNAME]="mpas-${jobname}_${eventtime}"
         [CPUSPEC]="${claim_cpu_fcst}"
         [CLAIMTIME]="${claim_time_fcst}"
+        [RRFSDIR]="${rrfs_dir}"
     )
     if [[ "${mach}" == "pbs" ]]; then
         jobParms[NNODES]="${nnodes_fcst}"
@@ -851,7 +906,7 @@ function run_mpassit_onetime {
         #
         jobscript="run_mpassit_$minstr.${mach}"
 
-        declare -A jobParms=(
+        local -A jobParms=(
             [PARTION]="${partition_post}"
             [NOPART]="${npepost}"
             [JOBNAME]="mpassit${minstr}_${eventtime}"
@@ -914,7 +969,7 @@ function run_mpassit_alltimes {
 
         jobscript="run_mpassit.${mach}"
 
-        declare -A jobParms=(
+        local -A jobParms=(
             [PARTION]="${partition_post}"
             [NOPART]="$npepost"
             [JOBNAME]="mpassit_${eventtime}"
@@ -1206,7 +1261,7 @@ EOF
             jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
 
             # shellcheck disable=SC2034
-            declare -A jobParms=(
+            local -A jobParms=(
                 [PARTION]="${partition_post}"
                 [NOPART]="$npepost"
                 [CPUSPEC]="${claim_cpu_post}"

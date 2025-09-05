@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2317,SC1090,SC1091,SC2086
+# shellcheck disable=SC2317,SC1090,SC1091,SC2086,SC2329
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
@@ -774,6 +774,7 @@ function run_static {
     config_stop_time = '${starttime_str}'
     config_theta_adv_order = 3
     config_coef_3rd_order = 0.25
+    config_interface_projection = 'linear_interpolation'
 /
 &dimensions
     config_nvertlevels   = 1
@@ -795,8 +796,9 @@ function run_static {
     config_albedo_data = 'MODIS'
     config_maxsnowalbedo_data = 'MODIS'
     config_lai_data = 'MODIS'
-    config_supersample_factor = 1
-    config_use_spechumd = true
+    config_supersample_factor     = 3
+    config_30s_supersample_factor = 1
+    config_use_spechumd           = false
 /
 &vertical_grid
     config_ztop = 25878.712
@@ -809,15 +811,15 @@ function run_static {
     config_specified_zeta_levels = '${fixed_level}'
 /
 &interpolation_control
-    config_extrap_airtemp = 'linear'
+    config_extrap_airtemp = 'lapse-rate'
 /
 &preproc_stages
-    config_static_interp = true
+    config_static_interp     = true
     config_native_gwd_static = true
-    config_vertical_grid = false
-    config_met_interp = false
-    config_input_sst = false
-    config_frac_seaice = false
+    config_vertical_grid     = false
+    config_met_interp        = false
+    config_input_sst         = false
+    config_frac_seaice       = false
 /
 &io
     config_pio_num_iotasks = 0
@@ -844,19 +846,10 @@ EOF
                   clobber_mode="replace_files"
                   output_interval="initial_only" />
 
-<immutable_stream name="surface"
+<immutable_stream name="ugwp_oro_data"
                   type="output"
-                  filename_template="${domname}.sfc_update.nc"
-                  filename_interval="none"
-                  packages="sfc_update"
-                  output_interval="${EXTINVL_STR}" />
-
-<immutable_stream name="lbc"
-                  type="output"
-                  filename_template="${domname}.lbc.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-                  filename_interval="output_interval"
-                  packages="lbcs"
-                  output_interval="${EXTINVL_STR}" />
+                  filename_template="${domname}.ugwp_oro_data.nc"
+                  output_interval="initial_only" />
 
 </streams>
 EOF
@@ -873,6 +866,7 @@ EOF
         [JOBNAME]="static_${jobname}"
         [CPUSPEC]="${claim_cpu_static}"
         [DOMNAME]="${domname}"
+        [RRFSDIR]="${rrfs_dir}"
     )
     submit_a_job "$wrkdir" "static" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
 }
@@ -1407,27 +1401,15 @@ function write_config {
     ADAPTIVE_INF=true
     update_in_place=false               # update MPAS states in-place or
                                         # making a copy of the restart files
-    filter_file="${filter_file}"
-                                        # File contains variable control whether to use RHF or EAKF (in FIXDIR)
-                                        # If empty, default to the original EAKF option
 
     use_BUFR=true                       # Whether we should wait for PrepBufr data file
-    use_MESO=true                       # for a realtime run
-    use_CWP=true
-    use_RAD=true
     use_REF=true
-    use_VEL=true
 
-    run_updatebc=true                   # run mpas_update_bc
-    run_obs2nc=true                     # run obs_seq_to_netcdf after filter
-    run_obsdiag=true                    # run obs_diag after filter for each cycle
-    run_addnoise=true                   # run WoFS add_noise facility (Python)
-    run_trimvr=true                     # Trim NaNs from radial velocity observations (Python)
+    run_addnoise=false                  # run WoFS add_noise facility (Python)
     WOFSAN_PATH="${mpas_wofs_python}"
 
-    OUTIOTYPE="netcdf4"
+    OUTIOTYPE="pnetcdf,cdf5"
     outwrf=false                        # Run MPASSIT after each data assimilation
-    sampling_error_correction=".true."
 
     OBS_DIR="${OBS_DIR}"
 
@@ -1442,7 +1424,7 @@ function write_config {
     claim_cpu_filter="${claim_cpu_filter}"
     claim_cpu_ioda="${claim_cpu_ioda}"
     claim_cpu_ioda_refl="${claim_cpu_ioda_refl}"
-    claim_time_fcst="00:20:00"
+    claim_time_fcst="00:40:00"
 
     npepost="${npepost}"; claim_cpu_post=""; claim_time_mpassit_alltimes="00:30:00"
 
@@ -1751,7 +1733,7 @@ function check_obs_files {
 
 source "${scpdir}/Common_Utilfuncs.sh" || exit $?
 
-relative_path=true
+relative_path=false
 
 #-----------------------------------------------------------------------
 #

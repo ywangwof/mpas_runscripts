@@ -279,14 +279,20 @@ function run_ioda {
     # Run ioda_bufr for all bufr observation files
     #------------------------------------------------------
 
-    if [[ ${anlys_min} == "00" ]]; then
+    obs_string=""
+
+    if [[ ${anlys_min} == "00" && ${use_BUFR} == true ]]; then
         run_ioda_bufr ${wrkdir} ${iseconds}
+        obs_string="t120,t133,q120,q133,uv220,uv233"
     fi
 
     #------------------------------------------------------
     # Run ioda_mrms_refl for reflectivity
     #------------------------------------------------------
-    run_ioda_mrms_refl ${wrkdir} ${iseconds}
+    if [[ ${use_REF} == true ]]; then
+        run_ioda_mrms_refl ${wrkdir} ${iseconds}
+        obs_string="${obs_string},refl10cm"
+    fi
 }
 
 ########################################################################
@@ -329,6 +335,7 @@ function run_ioda_bufr {
         [FIXDIR]="${FIXDIR}"
         [ROOTDIR]="${rootdir}"
         [GRIDFILE]="${rundir}/$domname/${domname}.grid.nc"
+        [RRFSDIR]="${rrfs_dir}"
     )
     if [[ "${mach}" == "pbs" ]]; then
         jobParms[NNODES]="1"
@@ -350,7 +357,7 @@ function run_ioda_mrms_refl {
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/ioda_mrms_refl/running.ioda_refl || -f $wrkdir/ioda_mrms_refl/done.ioda_refl || -f $wrkdir/ioda_mrms_refl/queue.ioda_refl ]]; then
+    if [[ -f $wrkdir/ioda_mrms_refl/running.ioda_mrms_refl || -f $wrkdir/ioda_mrms_refl/done.ioda_mrms_refl || -f $wrkdir/ioda_mrms_refl/queue.ioda_refl ]]; then
         return
     fi
 
@@ -376,6 +383,7 @@ function run_ioda_mrms_refl {
         [FIXDIR]="${FIXDIR}"
         [ROOTDIR]="${rootdir}"
         [GRIDFILE]="${rundir}/$domname/${domname}.grid.nc"
+        [RRFSDIR]="${rrfs_dir}"
     )
     if [[ "${mach}" == "pbs" ]]; then
         jobParms[NNODES]="1"
@@ -387,12 +395,362 @@ function run_ioda_mrms_refl {
 
 ########################################################################
 
+function create_namelist {
+
+    local filename="$1"
+
+    #
+    # Default runtime parameters for MPAS model
+    #
+    [[ ! -v coef_3rd_order ]]      && coef_3rd_order=1.0
+    [[ ! -v smagorinsky_coe ]]     && smagorinsky_coef=0.25
+    [[ ! -v visc4_2dsmag ]]        && visc4_2dsmag=0.125
+    [[ ! -v h_mom_eddy_visc4 ]]    && h_mom_eddy_visc4=0.0
+    [[ ! -v h_theta_eddy_visc4 ]]  && h_theta_eddy_visc4=0.25
+    #[[ ! -v h_scalar_eddy_visc4 ]] && h_scalar_eddy_visc4=0.25
+    [[ ! -v smdiv ]]               && smdiv=0.1
+    [[ ! -v physics_suite ]]       && physics_suite='convection_permitting'
+
+        # the ratio of radt to dt is 15
+#    config_h_scalar_eddy_visc4      = ${h_scalar_eddy_visc4}
+
+    cat << EOF > "${filename}"
+&nhyd_model
+    config_time_integration_order   = 2
+    config_dt                       = ${time_step}
+    config_start_time               = '${currtime_str}'
+    config_run_duration             = '00:${fcstmin_str}:00'
+    config_split_dynamics_transport = true
+    config_number_of_sub_steps      = 4
+    config_dynamics_split_steps     = 3
+    config_h_mom_eddy_visc2         = 0.0
+    config_h_mom_eddy_visc4         = ${h_mom_eddy_visc4}
+    config_v_mom_eddy_visc2         = 0.0
+    config_h_theta_eddy_visc2       = 0.0
+    config_h_theta_eddy_visc4       = ${h_theta_eddy_visc4}
+    config_v_theta_eddy_visc2       = 0.0
+    config_horiz_mixing             = '2d_smagorinsky'
+    config_len_disp                 = 3000.0
+    config_visc4_2dsmag             = ${visc4_2dsmag}
+    config_w_adv_order              = 3
+    config_theta_adv_order          = 3
+    config_scalar_adv_order         = 3
+    config_u_vadv_order             = 3
+    config_w_vadv_order             = 3
+    config_theta_vadv_order         = 3
+    config_scalar_vadv_order        = 3
+    config_scalar_advection         = true
+    config_monotonic                = true
+    config_coef_3rd_order           = ${coef_3rd_order}
+    config_epssm                    = 0.1
+    config_smdiv                    = ${smdiv}
+    config_smagorinsky_coef         = ${smagorinsky_coef}
+/
+&damping
+    config_mpas_cam_coef             = 2.0
+    config_rayleigh_damp_u           = true
+    config_zd                        = 16000.0
+    config_xnutr                     = 0.2
+    config_number_cam_damping_levels = 8
+/
+&limited_area
+    config_apply_lbcs                = true
+/
+&io
+    config_pio_num_iotasks           = NNNODE
+    config_pio_stride                = NNCORE
+/
+&decomposition
+    config_block_decomp_file_prefix  = '${domname}.graph.info.part.'
+/
+&restart
+    config_do_restart                = ${do_restart}
+    config_do_DAcycling              = ${do_dacyle}
+/
+&printout
+    config_print_global_minmax_sca   = true
+    config_print_global_minmax_vel   = true
+    config_print_detailed_minmax_vel = false
+/
+&IAU
+    config_IAU_option                = 'off'
+    config_IAU_window_length_s       = 21600.
+/
+&physics
+    config_sst_update                = false
+    config_sstdiurn_update           = false
+    config_deepsoiltemp_update       = false
+    config_radtlw_interval           = '00:05:00'
+    config_radtsw_interval           = '00:05:00'
+    config_bucket_update             = 'none'
+    config_lsm_scheme                = '${MPASLSM}'
+    num_soil_layers                  = ${MPASNFLS}
+    config_microp_re                 = true
+    config_physics_suite             = '${physics_suite}'
+    config_convection_scheme         = 'off'
+    config_sfclayer_scheme           = '${sfcscheme}'
+
+    config_frac_seaice         = true
+    config_gwdo_scheme         = 'bl_ugwp_gwdo'
+    config_gvf_update          = false
+EOF
+        if [[ ${sfcscheme} == "sf_mynn" ]]; then
+            cat << EOF >> namelist.atmosphere
+    config_pbl_scheme          = 'bl_mynnedmf'
+EOF
+        else
+            cat << EOF >> namelist.atmosphere
+    config_pbl_scheme          = '${pblscheme}'
+EOF
+        fi
+
+        if [[ ${mpscheme} == "mp_nssl2m" ]]; then
+            cat << EOF >> namelist.atmosphere
+    config_microp_scheme             = '${mpscheme}'
+/
+&nssl_mp_params
+    ehw0                             = 0.9
+    ehlw0                            = 0.9
+    icefallfac                       = 1.5
+    snowfallfac                      = 1.25
+    iusewetsnow                      = 0
+/
+EOF
+        elif [[ ${mpscheme} == "mp_tempo" ]]; then
+            cat << EOF >> namelist.atmosphere
+    config_microp_scheme             = '${mpscheme}'
+    config_tempo_hailaware           = .true.
+    config_tempo_aerosolaware        = .true.
+/
+EOF
+        else
+            echo "/" >> namelist.atmosphere
+        fi
+
+        cat << EOF >> namelist.atmosphere
+&soundings
+    config_sounding_interval         = 'none'
+/
+&assimilation
+    config_jedi_da                   = true
+/
+&development
+    config_halo_exch_method          = 'mpas_halo'
+/
+EOF
+}
+
+########################################################################
+
+function create_streams {
+
+    local filename="$1"
+
+    icycle_extinvl_str=$(date -d@${icycle_lbcgap} -u +%H:%M:%S)
+    #echo "icycle_extinvl_str=${icycle_extinvl_str}"
+
+    cat << EOF > "${filename}"
+<streams>
+<immutable_stream name="input"
+                  type="input"
+                  filename_template="${mpas_inputfile_template}"
+                  input_interval="initial_only" />
+
+<immutable_stream name="invariant"
+                  type="input"
+                  filename_template="${domname}.invariant.nc"
+                  input_interval="initial_only" />
+
+<immutable_stream name="restart"
+                  type="input;output"
+                  filename_template="${domname}_${memstr}.restart.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+                  io_type="${OUTIOTYPE}"
+                  input_interval="initial_only"
+                  clobber_mode="replace_files"
+                  output_interval="${RSTINVL_STR}" />
+
+<stream name="output"
+                  type="output"
+                  filename_template="${domname}_${memstr}.history.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+                  io_type="${OUTIOTYPE}"
+                  clobber_mode="replace_files"
+                  output_interval="${OUTINVL_STR}" >
+
+                <file name="stream_list.atmosphere.output"/>
+</stream>
+
+<stream name="diagnostics"
+                  type="output"
+                  filename_template="${domname}_${memstr}.diag.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+                  io_type="${OUTIOTYPE}"
+                  clobber_mode="replace_files"
+                  output_interval="${RSTINVL_STR}" >
+
+                <file name="${diag_stream}"/>
+</stream>
+
+<stream name="surface"
+                  type="input"
+                  filename_template="${domname}_${memstr}.sfc_update.nc"
+                  filename_interval="none"
+                  input_interval="none" >
+
+                <file name="stream_list.atmosphere.surface"/>
+</stream>
+
+<immutable_stream name="iau"
+                  type="input"
+                  filename_template="${domname}_${memstr}.AmB.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+                  filename_interval="none"
+                  packages="iau"
+                  input_interval="initial_only" />
+
+<immutable_stream name="lbc_in"
+                  type="input"
+                  filename_template="${domname}_${memstr}.lbc.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+                  filename_interval="input_interval"
+                  packages="limited_area"
+                  input_interval="${icycle_extinvl_str}" />
+
+</streams>
+EOF
+}
+
+########################################################################
+
+function create_streams_jedi {
+
+    local filename="$1"
+
+    cat << EOF > "${filename}"
+<streams>
+<immutable_stream name="invariant"
+                  type="input"
+                  precision="single"
+                  filename_template="invariant.nc"
+                  io_type="pnetcdf,cdf5"
+                  input_interval="initial_only" />
+
+<stream name="background"
+        type="input;output"
+        precision="single"
+        io_type="pnetcdf,cdf5"
+        filename_template="foo1.nc"
+        input_interval="none"
+        output_interval="none"
+        clobber_mode="overwrite">
+        <file name="stream_list/stream_list.atmosphere.background"/>
+</stream>
+
+<stream name="analysis"
+        type="output"
+        precision="single"
+        io_type="pnetcdf,cdf5"
+        filename_template="foo2.nc"
+        output_interval="none"
+        clobber_mode="overwrite">
+        <file name="stream_list/stream_list.atmosphere.analysis"/>
+</stream>
+
+<stream name="control"
+        type="input;output"
+        precision="single"
+        io_type="pnetcdf,cdf5"
+        filename_template="foo4.nc"
+        input_interval="none"
+        output_interval="none"
+        clobber_mode="overwrite">
+        <file name="stream_list/stream_list.atmosphere.control"/>
+</stream>
+
+<stream name="output"
+        type="none"
+        filename_template="foo5.nc"
+        output_interval="0_01:00:00" >
+</stream>
+<stream name="diagnostics"
+        type="none"
+        filename_template="foo6.nc"
+        output_interval="0_01:00:00" >
+</stream>
+<immutable_stream name="lbc_in"
+                  type="input"
+                  filename_template="lbc.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+                  filename_interval="input_interval"
+                  io_type="pnetcdf,cdf5"
+                  packages="limited_area"
+                  input_interval="1:00:00" />
+
+
+</streams>
+EOF
+}
+
+########################################################################
+
+function get_convinfo {
+    local infile="$1"
+    local outfile="$2"
+    local obs_list
+
+    IFS=',' read -ra obs_list <<<"$3"
+
+    if [[ -s ${outfile} ]]; then
+        rm -f ${outfile}
+    fi
+
+    #file_content=$(< "${FIXDIR}/jedi/convinfo") # read in all content
+    while read -r line; do
+        # remove leading whitespace from a string
+        aline=${line##+([[:space:]])}
+        # remove trailing whitespace from a string
+        aline=${aline%%+([[:space:]])}
+
+        found=false
+        if [[ $aline == "!"* ]]; then
+            echo "${line}" >> "${outfile}"
+        else
+            read -ra fields <<< "${aline}"
+            if [[ ${#fields[@]} -ne 9 ]]; then
+                mecho1 "${YELLOW}WARNING${NC}: get_convinfo expected 9 fields in ${PURPLE}${line}${NC}"
+            fi
+
+            atype="${fields[0]}"
+            if [[ ${fields[1]} -ne 0 ]]; then
+                type=$(printf "%03d" ${fields[1]})
+                atype="${atype}${type}"
+            fi
+            if [[ ${fields[2]} -ne 0 ]]; then
+                type=$(printf "%03d" ${fields[2]})
+                atype="${atype}_${type}"
+            fi
+
+            #iuse=${fields[3]}
+
+            for obs in "${obs_list[@]}"; do
+                if [[ "$obs" == "$atype" ]]; then
+                    found=true
+                    break
+                fi
+            done
+            if [[ $found == true ]]; then
+                echo " ${line:0:19}  1 ${line:23}" >> "${outfile}"
+            else
+                echo " ${line:0:19}  0 ${line:23}" >> "${outfile}"
+            fi
+        fi
+    done < "${infile}"
+}
+
+########################################################################
+
 function mpasjedi_preq {
-    # $1        $2      $3
-    # wrkdir    icycle    iseconds
-    local wrkdir=$1
-    local icycle=$2
-    local iseconds=$3
+    # $1       $2      $3      $4
+    # taskname wrkdir  icycle  iseconds
+    local taskname=$1
+    local wrkdir=$2
+    local icycle=$3
+    local iseconds=$4
 
     cd $wrkdir || return
 
@@ -404,7 +762,7 @@ function mpasjedi_preq {
     #    parentdir='..'  #$(realpath -m --relative-to=${wrkdir} ${parentdir_a})
     #    casedir=$(realpath -m --relative-to=${wrkdir} ${rundir})
     #else
-        parentdir=$(dirname $(dirname ${wrkdir}))
+        parentdir=$(dirname "$(dirname ${wrkdir})")
         casedir="${rundir}"
     #fi
 
@@ -447,19 +805,35 @@ function mpasjedi_preq {
 
     cd data || exit 1
 
-    mkdir -p obs ens jdiag
+    cpreq=("ln" "-snf")
+    case ${taskname} in
+    observer )
+        mkdir -p ens obs
+        ;;
+    solver )
+        mkdir -p ens jdiag ana
+        ;;
+    post )
+        mkdir -p ens jdiag
+        ;;
+    * )
+        mecho1 "${RED}ERROR${NC}: Unsupported taskname = ${PURPLE}${taskname}${NC}."
+        exit 1
+    esac
 
     # link ensembles to data/ens/
+    currtime_fil=${currtime_str//:/.}
     for mem in $(seq -w 01 "${ENS_SIZE}"); do
         if [[ $icycle -eq 0 ]]; then
             input_file_="${casedir}/init/${domname}_${mem}.init.nc"
-            mkdir -p ana
+            #mkdir -p ana
         else
-            input_file_="${parentdir}/${event_pre}/fcst_${mem}/${domname}_${mem}.restart.$currtime_str.nc"
+            input_file_="${parentdir}/${event_pre}/fcst_${mem}/${domname}_${mem}.restart.${currtime_fil}.nc"
         fi
 
-        ln -snf "${input_file_}" "ens/mem0${mem}.nc"
+        ( "${cpreq[@]}" "${input_file_}" "ens/mem0${mem}.nc" ) &
     done
+    wait
 
     #
     # enter the working directory again
@@ -467,19 +841,25 @@ function mpasjedi_preq {
     cd "${wrkdir}" || exit 1
     #
     # generate namelist, streams, and getkf.yaml on the fly
-    file_content=$(< "${FIXDIR}/jedi/namelist.atmosphere") # read in all content
-    dt=${time_step}
-    start_time="${currtime_str}"
-    run_duration="00:${fcstmin_str}:00"
-    substeps=4
-    pio_num_iotasks=4
-    pio_stride=20
-    MESH_NAME="${domname}"
-    do_DAcycling='false'
-    radt="05"
-    jedi_da="true"
-    eval "echo \"${file_content}\"" > namelist.atmosphere
-    cp "${FIXDIR}/jedi/streams.atmosphere.getkf" streams.atmosphere
+    #file_content=$(< "${FIXDIR}/jedi/namelist.atmosphere") # read in all content
+    #dt=${time_step}
+    #start_time="${currtime_str}"
+    #run_duration="00:${fcstmin_str}:00"
+    #substeps=4
+    #pio_num_iotasks=4
+    #pio_stride=20
+    #MESH_NAME="${domname}"
+    #do_DAcycling='false'
+    #radt="05"
+    #jedi_da="true"
+    #eval "echo \"${file_content}\"" > namelist.atmosphere
+    do_restart="false"
+    do_dacyle="false"
+    pblscheme="bl_mynnedmf"
+    sfcscheme="sf_mynn"
+    create_namelist "namelist.atmosphere"
+    #cp "${FIXDIR}/jedi/streams.atmosphere.getkf" streams.atmosphere
+    create_streams_jedi "streams.atmosphere"
 
     if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npefilter} ]]; then
         split_graph "${gpmetis}" "${domname}.graph.info" "${npefilter}" "$rundir/$domname" "$dorun" "$verb"
@@ -488,6 +868,43 @@ function mpasjedi_preq {
 
     mkdir -p stream_list
     ln -snf "${FIXDIR}"/jedi/stream_list/* stream_list/
+
+    # Prepare convinfo file based on obsvations
+
+    echo "task = ${taskname}, obs_string = ${obs_string}"
+    get_convinfo "${FIXDIR}/jedi/convinfo" ./convinfo "${obs_string}"
+
+    # generate getkf.yaml based on how YAML_GEN_METHOD is set
+    local analysisDate bseconds beginDate lenwind
+    analysisDate="$(date -u -d @${iseconds} +%Y-%m-%dT%H:%M:%SZ)"
+    bseconds=$((iseconds - 600))
+    beginDate="$(date -u -d @${bseconds} +%Y-%m-%dT%H:%M:%SZ)"
+    lenwind="PT15M"
+
+    # generate the JEDI yaml files using templates from the parm/ directory
+    #source "${USHrrfs}"/yaml_from_parm.sh "getkf"
+
+    sed -e "s/@analysisDate@/${analysisDate}/;s/@beginDate@/${beginDate}/;s/@lenWin@/${lenwind}/" \
+           "${FIXDIR}/jedi/getkf_${taskname}.yaml" > getkf.yaml
+    #
+    #  Generate the final YAML configuration file based on convinfo and available ioda files
+    #
+    [[ -s "${FIXDIR}/jedi/satinfo" ]] && cp "${FIXDIR}/jedi/satinfo" .
+    "${rrfs_dir}/ush/yaml_finalize" "getkf.yaml"
+
+    if [[ "${taskname}" == "post" ]]; then
+        ## For post task, change a few yaml settings and remove "reduce obs space"
+        "${rrfs_dir}/ush/yaml_getkf_post" getkf.yaml
+    fi
+
+    sed -i "/background:/,/nmembers:/{s/nmembers:.*$/nmembers: ${ENS_SIZE}/}" getkf.yaml
+    if [[ "${JEDI_DIR}" == *CADRE* ]]; then
+        #${scpdir}/process_yaml.py getkf.yaml -f CADRE -o "${obs_string}" -m ${ENS_SIZE} -v
+        sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: GETKF/}' getkf.yaml
+    else
+        #${scpdir}/process_yaml.py getkf.yaml -f RRFS  -o "${obs_string}" -m ${ENS_SIZE} -v
+        sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: Deterministic GETKF/}' getkf.yaml
+    fi
 }
 
 ########################################################################
@@ -499,7 +916,7 @@ function run_getkf_observer {
     local icycle=$2
     local iseconds=$3
 
-    wrkdir="$datimedir/getkf_observer"
+    local wrkdir="$datimedir/getkf_observer"
 
     #
     # Return if is running or is done
@@ -513,6 +930,9 @@ function run_getkf_observer {
     #         intvl_sec, ncores_filter
     # RETURN: input_file_list, output_file_list
     #
+    anlys_datehour=$(date -u -d @$iseconds  +%Y%m%d%H)
+    anlys_hour=$(date -u -d @$iseconds  +%H)
+    anlys_min=$(date -u -d @$iseconds   +%M)
 
     #
     # Build working directory
@@ -524,7 +944,8 @@ function run_getkf_observer {
     #
     # Waiting for job conditions
     #
-    conditions=("${datimedir}/ioda_bufr/done.ioda_bufr" "${datimedir}/ioda_mrms_refl/done.ioda_mrms_refl")
+    conditions=("${datimedir}/ioda_mrms_refl/done.ioda_mrms_refl")
+    [[ "${anlys_min}" == "00" ]] && conditions+=("${datimedir}/ioda_bufr/done.ioda_bufr")
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
@@ -538,11 +959,14 @@ function run_getkf_observer {
         done
     fi
 
-    anlys_datehour=$(date -u -d @$iseconds  +%Y%m%d%H)
-    anlys_hour=$(date -u -d @$iseconds  +%H)
-    anlys_min=$(date -u -d @$iseconds   +%M)
+    #------------------------------------------------------
+    # Prepare runtime files
+    #------------------------------------------------------
+    # DATA=wrkdir
 
-    mpasjedi_preq "${wrkdir}" $2 $3
+    taskname="observer"
+
+    mpasjedi_preq "${taskname}" "${wrkdir}" $2 $3
 
     #
     # Copy ioda observation files
@@ -591,53 +1015,29 @@ function run_getkf_observer {
     #
     cd "${wrkdir}" || exit 1
 
-    #
-    # generate getkf.yaml based on how YAML_GEN_METHOD is set
-    analysisDate="$(date -u -d @${iseconds} +%Y-%m-%dT%H:%M:%SZ)"
-    bseconds=$((iseconds - 600))
-    beginDate="$(date -u -d @${bseconds} +%Y-%m-%dT%H:%M:%SZ)"
-    lenwind="PT15M"
-
-    USHrrfs="${rootdir}/RRFS_USH"
-    # generate the JEDI yaml files using templates from the parm/ directory
-    #source "${USHrrfs}"/yaml_from_parm.sh "getkf"
-
-    sed -e "s/@analysisDate@/${analysisDate}/;s/@beginDate@/${beginDate}/;s/@lenWin@/${lenwind}/" \
-           "${FIXDIR}/jedi/getkf_observer.yaml" > getkf.yaml
-    #
-    #  Generate the final YAML configuration file based on convinfo and available ioda files
-    #
-    cp "${FIXDIR}/jedi/convinfo" .
-    [[ -s "${FIXDIR}/jedi/satinfo" ]] && cp "${FIXDIR}/jedi/satinfo" .
-    "${USHrrfs}/yaml_finalize" "getkf.yaml"
-
-    ## For post task, change a few yaml settings and remove "reduce obs space"
-    #if [[ "${TYPE}" == "post" ]]; then
-    #  "${USHrrfs}"/yaml_getkf_post getkf.yaml
-    #fi
-
     #------------------------------------------------------
     # Run mpasjedi_enkf.x
     #------------------------------------------------------
 
-    taskname="observer"
     jobscript="run_mpasjedi.${mach}"
 
     declare -A jobParms=(
         [PARTION]="${partition_filter}"
         [NOPART]="${npefilter}"
+        [NNODES]="${nnodes_filter}"
         [JOBNAME]="${taskname}-${jobname}_${eventtime}"
         [CPUSPEC]="${claim_cpu_filter}"
         [EXEDIR]="${EXEDIR}/jedi"
         [WRKDIR]="${wrkdir}"
         [TASKNAME]="${taskname}"
+        [JEDIDIR]="${JEDI_DIR}"
     )
     if [[ "${mach}" == "pbs" ]]; then
         jobParms[NNODES]="${nnodes_filter}"
         jobParms[NCORES]="${ncores_filter}"
     fi
 
-    submit_a_job "${wrkdir}" "getkf_${taskname}" "jobParms" "$TEMPDIR/$jobscript" "run_getkf_${taskname}.${mach}" ""
+    submit_a_job "${wrkdir}" "getkf_${taskname}" "jobParms" "$TEMPDIR/$jobscript" "run_mpasjedi_${taskname}.${mach}" ""
 }
 
 ########################################################################
@@ -649,7 +1049,7 @@ function run_getkf_solver {
     local icycle=$2
     local iseconds=$3
 
-    wrkdir="$datimedir/getkf_solver"
+    local wrkdir="$datimedir/getkf_solver"
 
     #
     # Return if is running or is done
@@ -692,55 +1092,42 @@ function run_getkf_solver {
     # Prepare runtime files
     #------------------------------------------------------
     # DATA=wrkdir
+    taskname="solver"
 
-    mpasjedi_preq $1 $2 $3
+    mpasjedi_preq "${taskname}" "${wrkdir}" $2 $3
 
     #
     # Copy ioda observation files
 
-    ln -snf "${datimedir}/getkf_observer"/jdiag* jdiag/
+    ln -snf "${datimedir}"/getkf_observer/jdiag* data/jdiag/
+
+    varstr="pressure_p,rho,qv,qc,qr,qi,qs,qg,ni,nr,ng,nc,nifa,nwfa,volg,surface_pressure,theta,u,uReconstructZonal,uReconstructMeridional,refl10cm,w"
 
     #
     # enter the run directory again
     #
     cd "${wrkdir}" || exit 1
 
-    #
-    # generate getkf.yaml based on how YAML_GEN_METHOD is set
-    analysisDate="$(date -u -d @${iseconds} +%Y-%m-%dT%H:%M:%sZ)"
-    bseconds=$((iseonds - 600))
-    beginDate="$(date -u -d @${bseconds} +%Y-%m-%dT%H:%M:%sZ)"
-    lenwind="PT15M"
-
-    USHrrfs="${rootdir}/RRFS_USH"
-    # generate the JEDI yaml files using templates from the parm/ directory
-    #source "${USHrrfs}"/yaml_from_parm.sh "getkf"
-
-    sed -e "s/@analysisDate@/${analysisDate}/;s/@beginDate@/${beginDate}/;s/@lenWin@/${lenwind}/" \
-           "${FIXDIR}/jedi/getkf_solver.yaml" > getkf.yaml
-    #
-    #  Generate the final YAML configuration file based on convinfo and available ioda files
-    #
-    cp "${FIXDIR}/jedi/convinfo" .
-    [[ -s "${FIXDIR}/jedi/satinfo" ]] && cp "${FIXDIR}/jedi/satinfo" .
-    "${USHrrfs}/yaml_finalize" "getkf.yaml"
-
     #------------------------------------------------------
     # Run mpasjedi_enkf.x
     #------------------------------------------------------
 
-    taskname="solver"
     jobscript="run_mpasjedi_solver.${mach}"
 
     declare -A jobParms=(
         [PARTION]="${partition_filter}"
-        [NOPART]="$npefilter"
+        [NOPART]="${npefilter}"
+        [NNODES]="${nnodes_filter}"
         [JOBNAME]="${taskname}-${jobname}_${eventtime}"
         [CPUSPEC]="${claim_cpu_filter}"
         [EXEDIR]="${EXEDIR}/jedi"
         [WRKDIR]="${wrkdir}"
         [TASKNAME]="${taskname}"
+        [JEDIDIR]="${JEDI_DIR}"
+        [VARLIST]="${varstr}"
+        [ENS_SIZE]="${ENS_SIZE}"
     )
+
     if [[ "${mach}" == "pbs" ]]; then
         jobParms[NNODES]="${nnodes_filter}"
         jobParms[NCORES]="${ncores_filter}"
@@ -754,9 +1141,18 @@ function run_getkf_solver {
 function run_getkf_post {
     # $1        $2      $3
     # wrkdir    icycle    iseconds
-    local wrkdir=$1
+    local datimedir=$1
     local icycle=$2
     local iseconds=$3
+
+    local wrkdir="$datimedir/getkf_post"
+
+    #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/running.post || -f $wrkdir/done.post || -f $wrkdir/queue.post ]]; then
+        return
+    fi
 
     #
     # GLOBAL: ENS_SIZE, rundir, ADAPTIVE_INF, OBS_DIR
@@ -772,60 +1168,51 @@ function run_getkf_post {
     cd $wrkdir || return
 
     #
-    # Return if is running or is done
+    # Waiting for job conditions
     #
-    if [[ -f $wrkdir/running.post || -f $wrkdir/done.post || -f $wrkdir/queue.post ]]; then
-        return
-    fi
+    conditions=("${datimedir}/getkf_solver/done.solver")
 
-    #if $relative_path; then
-    #    parentdir='..'  #$(realpath -m --relative-to=${wrkdir} ${parentdir_a})
-    #    casedir=$(realpath -m --relative-to=${wrkdir} ${rundir})
-    #else
-        parentdir=$(dirname ${wrkdir})
-        casedir="${rundir}"
-    #fi
+    if [[ $dorun == true ]]; then
+        for cond in "${conditions[@]}"; do
+            mecho0 "Checking $cond"
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    mecho0 "Waiting for file: $cond"
+                fi
+                sleep 10
+            done
+        done
+    fi
 
     #------------------------------------------------------
     # Prepare runtime files
     #------------------------------------------------------
     # DATA=wrkdir
+    taskname="post"
 
-    # generate getkf.yaml based on how YAML_GEN_METHOD is set
-    analysisDate="$(date -u -d @${iseconds} +%Y-%m-%dT%H:%M:%sZ)"
-    bseconds=$((iseonds - 600))
-    beginDate="$(date -u -d @${bseconds} +%Y-%m-%dT%H:%M:%sZ)"
-    lenwind="PT15M"
+    mpasjedi_preq "${taskname}" "${wrkdir}" $2 $3
 
-    USHrrfs="${rootdir}/RRFS_ush"
-    # generate the JEDI yaml files using templates from the parm/ directory
-    #source "${USHrrfs}"/yaml_from_parm.sh "getkf"
-
-    sed -e "s/@analysisDate@/${analysisDate}/;s/@beginDate@/${beginDate}/;s/@lenWin@/${lenwind}/" \
-           "${FIXDIR}/jedi/getkf_solver.yaml" > getkf.yaml
     #
-    #  Generate the final YAML configuration file based on convinfo and available ioda files
-    #
-    "${cpcmd}" "${EXPDIR}/config/convinfo" .
-    [[ -s "${EXPDIR}/config/satinfo" ]] && cp "${EXPDIR}/config/satinfo" .
-    "${USHrrfs}/yaml_finalize" "getkf.yaml"
+    # Copy ioda observation files
 
-    ## For post task, change a few yaml settings and remove "reduce obs space"
-    "${USHrrfs}"/yaml_getkf_post getkf.yaml
+    ln -snf "${datimedir}"/getkf_observer/jdiag* data/jdiag/
 
     #------------------------------------------------------
-    # 5. Run mpasjedi_enkf.x
+    # Run mpasjedi_enkf.x
     #------------------------------------------------------
 
     jobscript="run_mpasjedi_post.${mach}"
 
     declare -A jobParms=(
         [PARTION]="${partition_filter}"
-        [NOPART]="$npefilter"
-        [JOBNAME]="jedi-${jobname}_${eventtime}"
+        [NOPART]="${npefilter}"
+        [NNODES]="${nnodes_filter}"
+        [JOBNAME]="${taskname}-${jobname}_${eventtime}"
         [CPUSPEC]="${claim_cpu_filter}"
         [EXEDIR]="${EXEDIR}/jedi"
-        [TASKNAME]="post"
+        [WRKDIR]="${wrkdir}"
+        [TASKNAME]="${taskname}"
+        [JEDIDIR]="${JEDI_DIR}"
     )
 
     if [[ "${mach}" == "pbs" ]]; then
@@ -833,7 +1220,7 @@ function run_getkf_post {
         jobParms[NCORES]="${ncores_filter}"
     fi
 
-    submit_a_job "${wrkdir}" "mpasjedi" "jobParms" "$TEMPDIR/run_mpasjedi.${mach}" "$jobscript" ""
+    submit_a_job "${wrkdir}" "getkf_${taskname}" "jobParms" "$TEMPDIR/run_mpasjedi.${mach}" "$jobscript" ""
 }
 
 ########################################################################
@@ -1011,6 +1398,139 @@ function run_add_noise {
 
 ########################################################################
 
+function run_update_bc {
+    # $1
+    # wrkdir
+    local wrkdir=$1
+    local icycle=$2
+    local iseconds=$3
+
+    cd $wrkdir || return
+
+    #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/running.update_bc || -f $wrkdir/done.update_bc || -f $wrkdir/queue.update_bc ]]; then
+        return
+    fi
+
+    #
+    # Waiting for job conditions
+    #
+    conditions=("${rundir}/lbc/done.${domname}")
+
+    if [[ $dorun == true ]]; then
+        for cond in "${conditions[@]}"; do
+            mecho0 "Checking $cond"
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    mecho0 "Waiting for file: $cond"
+                fi
+                sleep 10
+            done
+        done
+    fi
+
+    #------------------------------------------------------
+    # Prepare update_bc by copying/linking the background files
+    #------------------------------------------------------
+
+    lbcfiles_org1=(); lbcfiles_org2=()
+    lbcfiles_mem1=(); lbcfiles_mem2=()
+    lbcfiles_mems=(); lbcfiles_next=()
+
+    jobarrays=()
+    for iens in $(seq 1 $ENS_SIZE); do
+        #(( jindex=iens-1 ))
+
+        memstr=$(printf "%02d" $iens)
+
+        memwrkdir=$wrkdir/fcst_$memstr
+        mkwrkdir $memwrkdir 0
+        cd $memwrkdir  || return
+
+        #
+        # lbc files
+        #
+        jens=$(( (iens-1)%nenslbc+1 ))
+        mlbcstr=$(printf "%02d" $jens)                # get LBC member string
+
+        # isec_nlbc1, isec_nlbc2, isec_elbc and icycle_lbcgap are set in the caller
+
+        # External GRIB file provided file times
+        lbctime_str1=$(date -u -d @${isec_nlbc1} +%Y-%m-%d_%H.%M.%S)
+        lbctime_str2=$(date -u -d @${isec_nlbc2} +%Y-%m-%d_%H.%M.%S)
+
+        # MPAS expected boundary file times
+        mpastime_str1=$(date -u -d @${iseconds}   +%Y-%m-%d_%H.%M.%S)
+        mpastime_str2=$(date -u -d @${isec_elbc}  +%Y-%m-%d_%H.%M.%S)
+        if [[ $verb -eq 1 ]]; then
+            mecho0 "Member: $iens use lbc files from $rundir/lbc:"
+            mecho0 "        ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc  ${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc";
+        fi
+
+        case ${relative_path} in
+        true  ) lbcdir=$(realpath -m --relative-to=${memwrkdir} ${rundir}/lbc);;
+        false ) lbcdir="${rundir}/lbc";;
+        *     ) mecho0 "${RED}ERROR${NC}: Hi, what is this <${relative_path}>?"; exit 1;;
+        esac
+
+        #ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc ${domname}_${memstr}.lbc.${mpastime_str1}.nc
+        lbc_file1="${lbcdir}/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc"
+        lbc_file2="${lbcdir}/${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc"
+        lbc_filem="./${domname}_${memstr}.lbc.${mpastime_str1}.nc"
+        lbc_filen="./${domname}_${memstr}.lbc.${mpastime_str2}.nc"
+
+        org_file1="${lbcdir}/${domname}_${mlbcstr}.lbc.${mpastime_str1}.nc"
+        org_file2="${lbcdir}/${domname}_${mlbcstr}.lbc.${mpastime_str2}.nc"
+
+        lbcfiles_org1+=("${lbc_file1}")
+        lbcfiles_org2+=("${lbc_file2}")
+
+        lbcfiles_mem1+=("${org_file1}")
+        lbcfiles_mem2+=("${org_file2}")
+
+        lbcfiles_mems+=("${lbc_filem}")
+        lbcfiles_next+=("${lbc_filen}")
+
+        jobarrays+=("$iens")
+    done
+
+    #------------------------------------------------------
+    # Run update_bc for all ensemble members as a job array
+    #------------------------------------------------------
+
+    cd $wrkdir || return
+
+    jobscript="run_update_bc.${mach}"
+
+    declare -A jobParms=(
+        [PARTION]="${partition_filter}"
+        [NOPART]="1"
+        [JOBNAME]="updatebc_${eventtime}"
+        [CPUSPEC]="${claim_cpu_update}"
+        [CPCMD]="${cpcmd}"
+        [MPSCHEME]="${mpscheme}"
+        [LBCFILEORGSTR1]="${lbcfiles_org1[*]}"
+        [LBCFILEORGSTR2]="${lbcfiles_org2[*]}"
+        [LBCFILEMEMSSTR]="${lbcfiles_mems[*]}"
+        [LBCFILENEXTSTR]="${lbcfiles_next[*]}"
+        [LBCFILEMEMS1]="${lbcfiles_mem1[*]}"
+        [LBCFILEMEMS2]="${lbcfiles_mem2[*]}"
+        [UPDATEBC]="${update_in_place}"
+    )
+    if [[ "${mach}" == "pbs" ]]; then
+        jobParms[NNODES]="1"
+        jobParms[NCORES]="1"
+    fi
+
+    jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
+
+    submit_a_job $wrkdir "update_bc" jobParms $TEMPDIR/$jobscript $jobscript "${jobarraystr}"
+}
+
+########################################################################
+
 function run_mpas {
     # $1        $2      $3
     # wrkdir    icycle    iseconds
@@ -1038,7 +1558,7 @@ function run_mpas {
     #
     # Waiting for job conditions
     #
-    conditions=("${wrkdir}/done.update_bc")
+    conditions=("${wrkdir}/getkf_solver/done.solver")
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
@@ -1063,17 +1583,6 @@ function run_mpas {
     #fcst_sec=$(( iseconds + intvl_sec ))
     #fcsttime_fil=$(date -u -d @${fcst_sec} +%Y-%m-%d_%H.%M.%S)
 
-    #
-    # Default runtime parameters for MPAS model
-    #
-    [[ ! -v coef_3rd_order ]]      && coef_3rd_order=1.0
-    [[ ! -v smagorinsky_coe ]]     && smagorinsky_coef=0.25
-    [[ ! -v visc4_2dsmag ]]        && visc4_2dsmag=0.125
-    [[ ! -v h_mom_eddy_visc4 ]]    && h_mom_eddy_visc4=0.0
-    [[ ! -v h_theta_eddy_visc4 ]]  && h_theta_eddy_visc4=0.25
-    [[ ! -v h_scalar_eddy_visc4 ]] && h_scalar_eddy_visc4=0.25
-    [[ ! -v smdiv ]]               && smdiv=0.1
-    [[ ! -v physics_suite ]]       && physics_suite='convection_permitting'
 
     #
     # Preparation for each member
@@ -1111,9 +1620,10 @@ function run_mpas {
             initfile="./${domname}_${memstr}.restart.${currtime_fil}.nc"
         fi
 
+        ln -sf "${wrkdir}/getkf_solver/data/ana/mem0${memstr}.nc" "${initfile}"
         if [[ $verb -eq 1 ]]; then
-            realinit=$(realpath -m --relative-to=. ${initfile})
-            mecho0 "Member $iens init file: ${realinit}";
+            #realinit=$(realpath -m --relative-to=. ${initfile})
+            mecho0 "Member $iens init file: ${initfile}";
         fi
 
         if [[ ! -e ${initfile} && ${dorun} == true ]]; then
@@ -1165,201 +1675,10 @@ function run_mpas {
             done
         fi
 
-        # the ratio of radt to dt is 15
-        cat << EOF > namelist.atmosphere
-&nhyd_model
-    config_time_integration_order   = 2
-    config_dt                       = ${time_step}
-    config_start_time               = '${currtime_str}'
-    config_run_duration             = '00:${fcstmin_str}:00'
-    config_split_dynamics_transport = true
-    config_number_of_sub_steps      = 4
-    config_dynamics_split_steps     = 3
-    config_h_mom_eddy_visc2         = 0.0
-    config_h_mom_eddy_visc4         = ${h_mom_eddy_visc4}
-    config_v_mom_eddy_visc2         = 0.0
-    config_h_theta_eddy_visc2       = 0.0
-    config_h_theta_eddy_visc4       = ${h_theta_eddy_visc4}
-    config_v_theta_eddy_visc2       = 0.0
-    config_h_scalar_eddy_visc4      = ${h_scalar_eddy_visc4}
-    config_horiz_mixing             = '2d_smagorinsky'
-    config_len_disp                 = 3000.0
-    config_visc4_2dsmag             = ${visc4_2dsmag}
-    config_w_adv_order              = 3
-    config_theta_adv_order          = 3
-    config_scalar_adv_order         = 3
-    config_u_vadv_order             = 3
-    config_w_vadv_order             = 3
-    config_theta_vadv_order         = 3
-    config_scalar_vadv_order        = 3
-    config_scalar_advection         = true
-    config_monotonic                = true
-    config_coef_3rd_order           = ${coef_3rd_order}
-    config_epssm                    = 0.1
-    config_smdiv                    = ${smdiv}
-    config_smagorinsky_coef         = ${smagorinsky_coef}
-/
-&damping
-    config_mpas_cam_coef             = 2.0
-    config_rayleigh_damp_u           = true
-    config_zd                        = 16000.0
-    config_xnutr                     = 0.2
-    config_number_cam_damping_levels = 8
-/
-&limited_area
-    config_apply_lbcs                = true
-/
-&io
-    config_pio_num_iotasks           = NNNODE
-    config_pio_stride                = NNCORE
-/
-&decomposition
-    config_block_decomp_file_prefix  = '${domname}.graph.info.part.'
-/
-&restart
-    config_do_restart                = ${do_restart}
-    config_do_DAcycling              = ${do_dacyle}
-/
-&printout
-    config_print_global_minmax_sca   = true
-    config_print_global_minmax_vel   = true
-    config_print_detailed_minmax_vel = false
-/
-&IAU
-    config_IAU_option                = 'off'
-    config_IAU_window_length_s       = 21600.
-/
-&physics
-    config_sst_update                = false
-    config_sstdiurn_update           = false
-    config_deepsoiltemp_update       = false
-    config_radtlw_interval           = '00:05:00'
-    config_radtsw_interval           = '00:05:00'
-    config_bucket_update             = 'none'
-    config_lsm_scheme                = '${MPASLSM}'
-    num_soil_layers                  = ${MPASNFLS}
-    config_microp_re                 = true
-    config_physics_suite             = '${physics_suite}'
-    config_convection_scheme         = 'off'
-    config_sfclayer_scheme           = '${sfcscheme}'
+        create_namelist namelist.atmosphere
 
-    config_frac_seaice         = true
-    config_gwdo_scheme         = 'bl_ugwp_gwdo'
-    config_gvf_update          = false
-EOF
-        if [[ ${sfcscheme} == "sf_mynn" ]]; then
-            cat << EOF >> namelist.atmosphere
-    config_pbl_scheme          = 'bl_mynnedmf'
-EOF
-        else
-            cat << EOF >> namelist.atmosphere
-    config_pbl_scheme          = '${pblscheme}'
-EOF
-        fi
+        create_streams streams.atmosphere
 
-        if [[ ${mpscheme} == "mp_nssl2m" ]]; then
-            cat << EOF >> namelist.atmosphere
-    config_microp_scheme             = '${mpscheme}'
-/
-&nssl_mp_params
-    ehw0                             = 0.9
-    ehlw0                            = 0.9
-    icefallfac                       = 1.5
-    snowfallfac                      = 1.25
-    iusewetsnow                      = 0
-/
-EOF
-        elif [[ ${mpscheme} == "mp_tempo" ]]; then
-            cat << EOF >> namelist.atmosphere
-    config_microp_scheme             = '${mpscheme}'
-    config_tempo_hailaware           = .true.
-    config_tempo_aerosolaware        = .true.
-/
-EOF
-        else
-            echo "/" >> namelist.atmosphere
-        fi
-
-        cat << EOF >> namelist.atmosphere
-&soundings
-    config_sounding_interval         = 'none'
-/
-&assimilation
-    config_jedi_da                   = false
-/
-&development
-    config_halo_exch_method          = 'mpas_halo'
-/
-EOF
-
-        icycle_extinvl_str=$(date -d@${icycle_lbcgap} -u +%H:%M:%S)
-        #echo "icycle_extinvl_str=${icycle_extinvl_str}"
-
-        cat << EOF > streams.atmosphere
-<streams>
-<immutable_stream name="input"
-                  type="input"
-                  filename_template="${mpas_inputfile_template}"
-                  input_interval="initial_only" />
-
-<immutable_stream name="invariant"
-                  type="input"
-                  filename_template="${domname}.invariant.nc"
-                  input_interval="initial_only" />
-
-<immutable_stream name="restart"
-                  type="input;output"
-                  filename_template="${domname}_${memstr}.restart.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-                  io_type="${OUTIOTYPE}"
-                  input_interval="initial_only"
-                  clobber_mode="replace_files"
-                  output_interval="${RSTINVL_STR}" />
-
-<stream name="output"
-                  type="output"
-                  filename_template="${domname}_${memstr}.history.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-                  io_type="${OUTIOTYPE}"
-                  clobber_mode="replace_files"
-                  output_interval="${OUTINVL_STR}" >
-
-                <file name="stream_list.atmosphere.output"/>
-</stream>
-
-<stream name="diagnostics"
-                  type="output"
-                  filename_template="${domname}_${memstr}.diag.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-                  io_type="${OUTIOTYPE}"
-                  clobber_mode="replace_files"
-                  output_interval="${RSTINVL_STR}" >
-
-                <file name="${diag_stream}"/>
-</stream>
-
-<stream name="surface"
-                  type="input"
-                  filename_template="${domname}_${memstr}.sfc_update.nc"
-                  filename_interval="none"
-                  input_interval="none" >
-
-                <file name="stream_list.atmosphere.surface"/>
-</stream>
-
-<immutable_stream name="iau"
-                  type="input"
-                  filename_template="${domname}_${memstr}.AmB.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-                  filename_interval="none"
-                  packages="iau"
-                  input_interval="initial_only" />
-
-<immutable_stream name="lbc_in"
-                  type="input"
-                  filename_template="${domname}_${memstr}.lbc.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-                  filename_interval="input_interval"
-                  packages="limited_area"
-                  input_interval="${icycle_extinvl_str}" />
-
-</streams>
-EOF
         jobarrays+=("$iens")
     done
 
@@ -1375,6 +1694,7 @@ EOF
         [JOBNAME]="mfrd-${jobname}_${eventtime}"
         [CPUSPEC]="${claim_cpu_fcst}"
         [CLAIMTIME]="${claim_time_fcst}"
+        [JEDIDIR]="${JEDI_DIR}"
     )
     #mpas_jobscript="run_mpas.${mach}"
     jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
@@ -1441,6 +1761,8 @@ function dacycle_driver() {
         num_resubmit=0               # Just check job status
     fi
 
+    obs_string="t120,t133,q120,q133,uv220,uv233,refl10cm"
+
     local icyc=$(( (start_sec-init_sec)/intvl_sec ))
     for isec in $(seq $start_sec $intvl_sec $end_sec ); do
         timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
@@ -1460,7 +1782,7 @@ function dacycle_driver() {
         # Lateral boundary times for this cycle
         #------------------------------------------------------
 
-        isec_nlbc1=$(( isec - isec%3600 ))            # get whole hour in seconds
+        isec_nlbc1=$(( isec - isec%EXTINVL ))            # get whole hour in seconds
         isec_nlbc2=$(( isec_nlbc1 + EXTINVL ))        # next whole hour
         isec_elbc=$(( isec + intvl_sec ))
         while [[ $isec_elbc -gt $isec_nlbc2 ]]; do
@@ -1493,7 +1815,6 @@ function dacycle_driver() {
 
         currtime_str=$(date -u -d @${isec} +%Y-%m-%d_%H:%M:%S)
         fcstmin_str=$(printf "%02d" "${intvl_min}")
-
         #------------------------------------------------------
         # 1. Run ioda
         #------------------------------------------------------
@@ -1501,6 +1822,8 @@ function dacycle_driver() {
             if [[ $verb -eq 1 ]]; then echo "  Run ioda_bufr at $eventtime"; fi
             run_ioda $dawrkdir $isec
         fi
+
+        export DO_RADAR_REF=true
 
         #------------------------------------------------------
         # 2. Run observer
@@ -1527,7 +1850,17 @@ function dacycle_driver() {
         fi
 
         #------------------------------------------------------
-        # 5. Add noise (must run after update_states)
+        # 4. Run update_bc for all ensemble members
+        #------------------------------------------------------
+        if [[ " ${jobs[*]} " =~ " update_bc " ]]; then
+
+            if [[ $verb -eq 1 ]]; then echo "  Run update_bc at $eventtime"; fi
+            run_update_bc $dawrkdir $icyc $isec
+
+        fi
+
+        #------------------------------------------------------
+        # 6. Add noise (must run after update_states)
         #------------------------------------------------------
 
         if [[ $run_addnoise == true && $icyc -gt 0 ]]; then
@@ -1542,7 +1875,7 @@ function dacycle_driver() {
         fi
 
         #------------------------------------------------------
-        # 6. Advance model for each member
+        # 7. Advance model for each member
         #------------------------------------------------------
         # Run forecast for ensemble members until the next analysis time
         if [[ " ${jobs[*]} " =~ " mpas " ]]; then
@@ -1961,7 +2294,7 @@ parse_args "$@"
 #
 #-----------------------------------------------------------------------
 
-[[ -v args["jobs"] ]] && read -r -a jobs <<< "${args['jobs']}" || jobs=(filter update_states update_bc mpas clean)
+[[ -v args["jobs"] ]] && read -r -a jobs <<< "${args['jobs']}" || jobs=(ioda getkf_observer getkf_solver getkf_post update_bc mpas clean)
 
 #-----------------------------------------------------------------------
 #
@@ -2119,7 +2452,7 @@ OUTINVL_STR=$(printf "00:%02d:00" $((OUTINVL/60)) )
 
 # $1    $2    $3
 # init start  end
-if [[ " ${jobs[*]} " =~ " "(getkf_observer|getkf_solver|getkf_post|mpas|ioda)" " ]]; then
+if [[ " ${jobs[*]} " =~ " "(ioda|getkf_observer|getkf_solver|getkf_post|mpas|ioda)" " ]]; then
     dacycle_driver $inittime_sec $starttime_sec $stoptime_sec
 elif [[ " ${jobs[*]} " =~ " clean " ]]; then
 

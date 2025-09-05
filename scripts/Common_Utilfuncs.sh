@@ -17,7 +17,7 @@
 # o convertS2days            # Convert epoch seconds to days/seconds since 1601-01-01
 # o convert2date             # Convert days/seconds since 1601-01-01 to date/time strings
 # o upnlevels                # get n level parent directory path
-# o link_grib                # Link grib files for ungrib.exe
+# o get_3char_order          # Get 3-character letters from 0 for GRIB file processing
 # o clean_mem_runfiles       # Clean the runtime files of an ensemble task
 # o wait_for_file_size       # Hold the task until the file size exceeds the give number of bytes
 # o wait_for_file_age        # Hold the task until the file age is older than the give number of seconds
@@ -135,7 +135,7 @@ function submit_a_job {
     # shellcheck disable=SC2154
     case ${relative_path} in
     true  ) jobdir="."         ;;
-    false ) jobdir="${wrkdir}" ;;
+    false ) jobdir="${mywrkdir}" ;;
     *     ) mecho0 "${RED}ERROR${NC}: Hi, what is this <${relative_path}>?"; exit 1;;
     esac
     #
@@ -760,30 +760,23 @@ function wait_for_file_size {
 
 ########################################################################
 
-function link_grib {
-    alpha=( A B C D E F G H I J K L M N O P Q R S T U V W X Y Z )
-    i1=0
-    i2=0
-    i3=0
+function get_3char_order {
+    local i=$1
 
-    rm -f GRIBFILE.??? >& /dev/null
+    local alpha=( {A..Z} )
 
-    for f in "$@"; do
-       ln -sf ${f} GRIBFILE.${alpha[$i3]}${alpha[$i2]}${alpha[$i1]}
-       (( i1++ ))
+    local num=$((10#$i))
+    local i1=$((10#$num % 26))
+    local leftover=$((num/26))
+    local i2=$((leftover % 26 ))
+    local i3=$((leftover/26))
 
-       if [[ $i1 -ge 26 ]]; then
-          (( i1=0 ))
-          (( i2++ ))
-         if [[ $i2 -ge 26 ]]; then
-            (( i2=0 ))
-            (( i3++ ))
-            if [[ $i3 -ge 26 ]]; then
-               echo "RAN OUT OF GRIB FILE SUFFIXES!"
-            fi
-         fi
-       fi
-    done
+    if [[ $i3 -ge 26 ]]; then
+       mecho1 "RAN OUT OF 3-CHARACTER ORDER!"
+       exit 1
+    fi
+
+    echo "${alpha[$i3]}${alpha[$i2]}${alpha[$i1]}"
 }
 
 ########################################################################

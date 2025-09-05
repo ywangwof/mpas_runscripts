@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2317,SC1091,SC1090,SC2086,SC2154
+# shellcheck disable=SC2317,SC1091,SC1090,SC2086,SC2154,SC2329
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
@@ -194,8 +194,12 @@ function run_ungrib {
         mecho0 "GRIB files from ${grib_dir}:"
         for mem in $(seq 1 "$nensics"); do
             memstr=$(printf "%02d" "$mem")
-            #gribfilename="$eventdate/${gribtime}/${hrrr_subdir}${memstr}/wrfnat_hrrre_newse_mem00${memstr}_${hstr}.grib2"
-            gribfilename="gefs.$eventdate/${gribtime}/${hrrr_subdir}/gep${memstr}.t${gribtime}z.pgrb2a.0p50.f0${hstr}"
+            if [[ ${hrrr_subdir} == "pgrb2ap5" ]]; then
+                gribfilename="gefs.$eventdate/${gribtime}/${hrrr_subdir}/gep${memstr}.t${gribtime}z.pgrb2a.0p50.f0${hstr}"
+                gribfilename2="gefs.$eventdate/${gribtime}/${hrrr_subdir/pgrb2ap5/pgrb2bp5}/gep${memstr}.t${gribtime}z.pgrb2b.0p50.f0${hstr}"
+            else
+                gribfilename="$eventdate/${gribtime}/${hrrr_subdir}${memstr}/wrfnat_hrrre_newse_mem00${memstr}_${hstr}.grib2"
+            fi
             gribfile="${grib_dir}/${gribfilename}"
 
             mecho0 "mem $memstr GRIB file: ${gribfilename}"
@@ -210,7 +214,12 @@ function run_ungrib {
             mkwrkdir "$mywrkdir" 1
             cd "$mywrkdir" || return
 
-            ln -sf "$gribfile" GRIBFILE.AAA
+            if [[ -n ${gribfilename2} ]]; then
+                cp "$gribfile" GRIBFILE.AAA
+                cat "${grib_dir}/${gribfilename2}" >> GRIBFILE.AAA
+            else
+                ln -sf "$gribfile" GRIBFILE.AAA
+            fi
              # shellcheck disable=SC2154
             ln -sf "$FIXDIR/WRFV4.0/${hrrrvtable}" Vtable
 
@@ -341,8 +350,10 @@ function run_init4invariant {
     config_vegfrac_data = 'MODIS'
     config_albedo_data = 'MODIS'
     config_maxsnowalbedo_data = 'MODIS'
-    config_supersample_factor = 1
+    config_supersample_factor     = 3
+    config_30s_supersample_factor = 1
     config_use_spechumd = true
+    config_soilcat_data = 'BNU'
 /
 &vertical_grid
     config_ztop = 25878.712
@@ -358,12 +369,17 @@ function run_init4invariant {
     config_extrap_airtemp = 'lapse-rate'
 /
 &preproc_stages
-    config_static_interp = false
-    config_native_gwd_static = false
+    config_static_interp         = false
+    config_native_gwd_static     = false
+    config_native_gwd_gsl_static = false
     config_vertical_grid = true
-    config_met_interp = false
-    config_input_sst = false
-    config_frac_seaice = true
+    config_met_interp    = true
+    config_input_sst     = false
+    config_frac_seaice   = true
+    config_tempo_rap     = false
+/
+&physics
+    config_tsk_seaice_threshold = 271.4
 /
 &io
     config_pio_num_iotasks = 0
@@ -383,11 +399,24 @@ EOF
 
 <immutable_stream name="output"
                   type="output"
-                  filename_template="${domname}.invariant.nc"
-                  io_type="${ICSIOTYPE}"
+                  filename_template="none.nc"
                   packages="initial_conds"
-                  clobber_mode="replace_files"
-                  output_interval="initial_only" />
+                  output_interval="none" />
+
+<stream name="jedi_ics"
+                  type="output"
+                  clobber_mode="truncate"
+                  filename_template="${domname}_${memstr}.init.nc"
+                  io_type="${ICSIOTYPE}"
+                  output_interval="initial_only" >
+
+        <stream name="output" />
+        <var name="pressure" />
+        <var name="pressure_p" />
+        <var name="pressure_base" />
+        <var name="uReconstructZonal" />
+        <var name="uReconstructMeridional" />
+</stream>
 
 <immutable_stream name="surface"
                   type="output"
@@ -417,6 +446,7 @@ EOF
         [CPUSPEC]="${claim_cpu_ics}"
         [JOBNAME]="invariant_${jobname}"
         [PREFIX]="${domname}"
+        [RRFSDIR]="${rrfs_dir}"
     )
     # shellcheck disable=SC2154
     if [[ "${mach}" == "pbs" ]]; then
@@ -515,8 +545,10 @@ function run_init {
     config_vegfrac_data = 'MODIS'
     config_albedo_data = 'MODIS'
     config_maxsnowalbedo_data = 'MODIS'
-    config_supersample_factor = 1
+    config_supersample_factor     = 3
+    config_30s_supersample_factor = 1
     config_use_spechumd = true
+    config_soilcat_data = 'BNU'
 /
 &vertical_grid
     config_ztop = 25878.712
@@ -532,12 +564,17 @@ function run_init {
     config_extrap_airtemp = 'lapse-rate'
 /
 &preproc_stages
-    config_static_interp = false
-    config_native_gwd_static = false
+    config_static_interp         = false
+    config_native_gwd_static     = false
+    config_native_gwd_gsl_static = false
     config_vertical_grid = true
-    config_met_interp = true
-    config_input_sst = false
-    config_frac_seaice = true
+    config_met_interp    = true
+    config_input_sst     = false
+    config_frac_seaice   = true
+    config_tempo_rap     = false
+/
+&physics
+    config_tsk_seaice_threshold = 271.4
 /
 &io
     config_pio_num_iotasks = 0
@@ -557,11 +594,24 @@ EOF
 
 <immutable_stream name="output"
                   type="output"
+                  filename_template="none.nc"
+                  packages="initial_conds"
+                  output_interval="none" />
+
+<stream name="jedi_ics"
+                  type="output"
+                  clobber_mode="truncate"
                   filename_template="${domname}_${memstr}.init.nc"
                   io_type="${ICSIOTYPE}"
-                  packages="initial_conds"
-                  clobber_mode="replace_files"
-                  output_interval="initial_only" />
+                  output_interval="initial_only" >
+
+        <stream name="output" />
+        <var name="pressure" />
+        <var name="pressure_p" />
+        <var name="pressure_base" />
+        <var name="uReconstructZonal" />
+        <var name="uReconstructMeridional" />
+</stream>
 
 <immutable_stream name="surface"
                   type="output"
@@ -595,6 +645,7 @@ EOF
             [CPUSPEC]="${claim_cpu_ics}"
             [JOBNAME]="init_${jobname}"
             [PREFIX]="${domname}"
+            [RRFSDIR]="${rrfs_dir}"
         )
         # shellcheck disable=SC2154
         if [[ "${mach}" == "pbs" ]]; then

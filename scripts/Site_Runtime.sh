@@ -45,23 +45,29 @@ function setup_machine {
 
     case $machine in
     Jet )
-        modulename="build_jet_Rocky8_intel_smiol"
+        #modulename="build_jet_Rocky8_intel_smiol"
+        #modulename="RDAS/jet.intel"
+        modulename="jet.intel"
+
+        workdirDF="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS/run_dirs"
+        post_dir="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS/frdd-wofs-post"
+        rrfs_dir="/lfs5/NAGAPE/hpc-wof1/ywang/GSL_JEDI/rrfs-workflow.new"
+        #JEDI_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/GSL_JEDI/rrfs-workflow.new/sorc/RDASApp"
+        JEDI_DIR="/lfs6/NAGAPE/hpc-wof1/ywang/CADRE2/CADRE_JEDI_MODEL"
 
         if [[ ${set_up} == true ]]; then
             source /etc/profile.d/modules.sh
             module purge
-            module use ${root_dir}/modules
+            module use ${JEDI_DIR}/modulefiles
             module load ${modulename}
             #module load wgrib2/2.0.8
         fi
-
-        workdirDF="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS/run_dirs"
-        post_dir="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS/frdd-wofs-post"
+        export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/home/Yunheng.Wang/local/lib
 
         if [[ ${initialize} == true ]]; then
             partition_wps="xjet,kjet"
             partition_static="xjet,kjet"  ; claim_cpu_static="--cpus-per-task=12"
-            partition_create="bigmem"                    ; claim_cpu_create="--mem-per-cpu=128G"
+            partition_create="bigmem"     ; claim_cpu_create="--mem-per-cpu=128G"
 
             npestatic=24
 
@@ -202,7 +208,7 @@ function setup_machine {
         echo -e "Activated Python environment ${YELLOW}${python_env}${NC} on ${LIGHT_RED}${machine}${NC} ..."
     fi
 
-    export machine modulename runcmd workdirDF post_dir
+    export machine modulename runcmd workdirDF post_dir rrfs_dir JEDI_DIR
     if [[ ${initialize} == true ]]; then
         # Will be used by 'setup_mpas-wofs.sh' for static processing.
         # For other programs, the information is in the runtime configuration file and
@@ -241,22 +247,22 @@ function default_site_settings {
         claim_cpu_lbc="--cpus-per-task=2"
 
         # DA cycles
-        ncores_dafcst=6;  ncores_filter=6
-        partition_dafcst="xjet,kjet"; claim_cpu_dafcst="--cpus-per-task=2"
+        ncores_dafcst=24;  ncores_filter=24
+        partition_dafcst="xjet,kjet"; claim_cpu_dafcst="--cpus-per-task=1"
         partition_filter="xjet,kjet"; claim_cpu_filter="--cpus-per-task=2"
                                       claim_cpu_ioda="--cpus-per-task=1 --mem-per-cpu=8G"
                                       claim_cpu_ioda_refl="--cpus-per-task=2"
-        npedafcst=48        #; nnodes_fcst=$(( npefcst/ncores_fcst ))
-        npefilter=80        #; nnodes_filter=$(( npefilter/ncores_filter ))
-        nnodes_filter="1"
-        nnodes_dafcst="1"
+        npedafcst=96         #; nnodes_fcst=$(( npefcst/ncores_fcst ))
+        npefilter=120        #; nnodes_filter=$(( npefilter/ncores_filter ))
+        nnodes_filter=$(( npefilter/ncores_filter ))
+        nnodes_dafcst=$(( npedafcst/ncores_dafcst ))
 
         # FCST cycles
-        ncores_fcst=6;  ncores_post=6
+        ncores_fcst=24;  ncores_post=24
         partition_fcst="xjet,kjet";   claim_cpu_fcst="--cpus-per-task=2"
         partition_post="xjet,kjet";   claim_cpu_post="--cpus-per-task=12"
 
-        npefcst=48     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
+        npefcst=96     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
         npepost=48     ; nnodes_post=$(( npepost/ncores_post ))
         ;;
 

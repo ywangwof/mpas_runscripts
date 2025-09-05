@@ -160,7 +160,7 @@ parse_args "$@"
 [[ -v args["verb"] ]]     && verb=${args["verb"]}         || verb=false
 [[ -v args["show"] ]]     && show=${args["show"]}         || show=""
 
-[[ -v args["post_machine"] ]] && post_machine=${args["post_machine"]} || post_machine="wof-epyc8"
+[[ -v args["post_machine"] ]] && post_machine=${args["post_machine"]^} || post_machine="fe"
 setup_machine "${post_machine}" "$rootdir" false false false
 
 [[ -v args["taskopt"] ]]  && taskopt=${args["taskopt"]}   || taskopt=""
@@ -282,10 +282,10 @@ fi
 
 case $task in
 post | plot | diag | verif | snd )
-    if [[ ! "${host}" == ${post_machine}* ]]; then
-        echo -e "${RED}ERROR${NC}: Please run ${BROWN}$task${NC} on ${post_machine} only".
-        exit 1
-    fi
+    #if [[ ! "${host}" == ${post_machine}* ]]; then
+    #    echo -e "${RED}ERROR${NC}: Please run ${BROWN}$task${NC} on ${post_machine} only".
+    #    exit 1
+    #fi
 
     # Load Python environment as needed
     setup_machine "${post_machine}" "$rootdir" true false false

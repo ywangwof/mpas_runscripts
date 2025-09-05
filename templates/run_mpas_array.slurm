@@ -15,7 +15,8 @@ printf "Job Started: %(%a %b %d %H:%M:%S %Z %Y)T. Job Id: %s\n\n" $time1 $SLURM_
 
 if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
     module purge
-    module use ROOTDIR/modules
+    HOMErrfs="JEDIDIR"
+    module use ${HOMErrfs}/modulefiles
     module load MODULE
 else
     source ROOTDIR/modules/MODULE

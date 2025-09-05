@@ -14,7 +14,7 @@ echo -e "Job Started: $(date). Job Id:  $SLURM_JOBID\n"
 
 if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
     module purge
-    HOMErrfs="/lfs5/NAGAPE/hpc-wof1/ywang/GSL_JEDI/rrfs-workflow"
+    HOMErrfs="RRFSDIR"
     module use ${HOMErrfs}/sorc/RDASApp/modulefiles
     module load RDAS/jet.intel
     module load py-jinja2 py-matplotlib py-cartopy py-netcdf4
@@ -112,24 +112,22 @@ ulimit -s unlimited
 
     # --------------------------------------------------
     # run python bufr2ioda tool for ZTD and AMV bufr obs
-    HOMErdasapp=ROOTDIR/RDASApp/
-    ${cpreq} "${HOMErdasapp}"/rrfs-test/IODA/python/bufr2ioda_adpupa_prepbufr.json .
-    ${cpreq} "${HOMErdasapp}"/rrfs-test/IODA/python/bufr2ioda_adpupa_prepbufr.py .
-    ${cpreq} "${HOMErdasapp}"/rrfs-test/IODA/python/bufr2ioda_ztd.py .
-    #${cpreq} "${HOMErdasapp}"/rrfs-test/IODA/python/bufr2ioda_satwnd.py .
-    ${cpreq} "${HOMErdasapp}"/rrfs-test/IODA/python/bufr2ioda.json .
-    ${cpreq} "${HOMErdasapp}"/rrfs-test/IODA/python/bufr2ioda_gsrcsr.json .
-    ${cpreq} "${HOMErdasapp}"/rrfs-test/IODA/python/bufr2ioda_gsrcsr.py .
-    USHrrfs="ROOTDIR/RRFS_USH"
-    ${cpreq} "${USHrrfs}/run_bufr2ioda_gsrcsr.sh" .
+    ${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/bufr2ioda_adpupa_prepbufr.json" .
+    ${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/bufr2ioda_adpupa_prepbufr.py" .
+    ${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/bufr2ioda_ztd.py" .
+    #${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/bufr2ioda_satwnd.py" .
+    ${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/bufr2ioda.json" .
+    ${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/bufr2ioda_gsrcsr.json" .
+    ${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/bufr2ioda_gsrcsr.py" .
+    ${cpreq} "${HOMErrfs}/ush/run_bufr2ioda_gsrcsr.sh" .
 
     # pyioda libraries
-    PYIODALIB=$(echo "${HOMErdasapp}"/build/lib/python3.*)
-    WXFLOWLIB=${USHrrfs}/wxflow/src
+    PYIODALIB=$(echo "${HOMErrfs}"/sorc/RDASApp/build/lib/python3.*)
+    WXFLOWLIB=${HOMErrfs}/ush/wxflow/src
     export PYTHONPATH="${WXFLOWLIB}:${PYIODALIB}:${PYTHONPATH}"
 
     # generate a JSON w CDATE from the template and convert to IODA
-    ${cpreq} "${HOMErdasapp}"/rrfs-test/IODA/python/gen_bufr2ioda_json.py .
+    ${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/gen_bufr2ioda_json.py" .
     # ADPUPA
     ./gen_bufr2ioda_json.py -t bufr2ioda_adpupa_prepbufr.json -o bufr2ioda_adpupa_prepbufr_0.json
     ./bufr2ioda_adpupa_prepbufr.py -c bufr2ioda_adpupa_prepbufr_0.json
@@ -144,15 +142,15 @@ ulimit -s unlimited
     # GSRCSR
     DATA=WRKDIR
     ln -sf abibufr "rap.t${cyc}z.gsrcsr.tm00.bufr_d"
-    ./run_bufr2ioda_gsrcsr.sh "${CDATE}" rap "${DATA}" "${DATA}" "${DATA}" "${HOMErdasapp}"
+    ./run_bufr2ioda_gsrcsr.sh "${CDATE}" rap "${DATA}" "${DATA}" "${DATA}" "${HOMErrfs}/sorc/RDASApp"
     cp "rap.t${cyc}z.abi_g16.tm00.nc" "ioda_abi_g16.nc"
     cp "rap.t${cyc}z.abi_g18.tm00.nc" "ioda_abi_g18.nc"
 
     # run offline IODA tools
-    ${cpreq} "${USHrrfs}"/offline_domain_check.py .
-    ${cpreq} "${USHrrfs}"/offline_domain_check_satrad.py .
-    ${cpreq} "${USHrrfs}"/offline_ioda_tweak.py .
-    ${cpreq} "${USHrrfs}"/offline_vad_thinning.py .
+    ${cpreq} "${HOMErrfs}/ush"/offline_domain_check.py .
+    ${cpreq} "${HOMErrfs}/ush"/offline_domain_check_satrad.py .
+    ${cpreq} "${HOMErrfs}/ush"/offline_ioda_tweak.py .
+    ${cpreq} "${HOMErrfs}/ush"/offline_vad_thinning.py .
 
     for ioda_file in ioda*nc; do
         grid_file="GRIDFILE"

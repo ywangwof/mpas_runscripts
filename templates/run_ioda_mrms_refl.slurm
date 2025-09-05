@@ -14,7 +14,7 @@ echo -e "Job Started: $(date). Job Id:  $SLURM_JOBID\n"
 
 if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
     module purge
-    HOMErrfs="/lfs5/NAGAPE/hpc-wof1/ywang/GSL_JEDI/rrfs-workflow"
+    HOMErrfs="RRFSDIR"
     module use ${HOMErrfs}/sorc/RDASApp/modulefiles
     module load RDAS/jet.intel
     export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${HOMErrfs}/sorc/RDASApp/build/lib64
@@ -93,8 +93,8 @@ ulimit -s unlimited
             rm -f filelist_mrms
         fi
         echo "bigmin = ${bigmin}"
-        for (( j=0; j < 4; $((j=j+1)) )); do
-            for l in 1 -1; do
+        for (( j=0; j < 5; $((j=j+1)) )); do
+            for l in -1 1; do
                 min=$( printf %2.2i $((bigmin_this+j*l)) )
                 echo "Looking for data valid:${YYYY}-${MM}-${DD} ${HH}:${min}"
                 s=0
@@ -206,12 +206,10 @@ EOF
         # Run ioda converter to generate radar reflectivity ioda file
         #
         #-----------------------------------------------------------------------
-        HOMErdasapp=ROOTDIR/RDASApp/
         # pyioda libraries
-        PYIODALIB=$(echo "${HOMErdasapp}"/build/lib/python3.*)
+        PYIODALIB=$(echo "${HOMErrfs}"/sorc/RDASApp/build/lib/python3.*)
         export PYTHONPATH=${PYIODALIB}:${PYTHONPATH}
-        USHrrfs="ROOTDIR/RRFS_USH"
-        "${USHrrfs}"/MRMS2ioda.py -i ./Gridded_ref.nc -c "${YYYY}-${MM}-${DD}T${HH}:${bigmin}:00" -o "ioda_mrms_${YYYYMMDD}${HH}_${bigmin}.nc4"
+        "${HOMErrfs}/ush/MRMS2ioda.py" -i ./Gridded_ref.nc -c "${YYYY}-${MM}-${DD}T${HH}:${bigmin}:00" -o "ioda_mrms_${YYYYMMDD}${HH}_${bigmin}.nc4"
 
         # file count sanity check and copy to COMOUT
         if [[ -s "ioda_mrms_${YYYYMMDD}${HH}_${bigmin}.nc4" ]]; then

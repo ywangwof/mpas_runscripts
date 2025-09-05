@@ -1,12 +1,16 @@
 #!/bin/bash
 
-mpasworkdir="/scratch/wofs_mpas/run_dirs"
+script_dir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
+#rootdir=$(realpath "$(dirname "${script_dir}")")
 
 eventdateDF=$(date -u +%Y%m%d)
 
 fcstlength=$((6*3600))
 fcstintvl=300
 fcstmems=18
+
+source "${script_dir}/Site_Runtime.sh" || exit $?
+mpasworkdir="${workdirDF}"
 
 #-----------------------------------------------------------------------
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2317,SC1090,SC1091,SC2086,SC2154
+# shellcheck disable=SC2317,SC1090,SC1091,SC2086,SC2154,SC2329
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
@@ -239,11 +239,15 @@ function run_ungrib {
         gribendtm_str=$(date -u -d "$hdate $htime $endhr hours"   +%Y-%m-%d_%H:%M:%S )
 
         mecho0 "GRIB files from ${grib_dir}:"
-        gribfiles=()
+        gribfiles=(); gribfiles2=()
         for (( h=starthr;h<=endhr;h+=$((EXTINVL/3600)) )); do
             hstr=$(printf "%02d" $h)
-            #gribfilename="$hdate/${htime}/${hrrr_subdir}${memstr}/wrfnat_pert_hrrr_mem00${memstr}_${hstr}.grib2"
-            gribfilename="gefs.$eventdate/${gribtime}/${hrrr_subdir}/gep${memstr}.t${gribtime}z.pgrb2a.0p50.f0${hstr}"
+            if [[ ${hrrr_subdir} == "pgrb2ap5" ]]; then
+                gribfilename="gefs.$eventdate/${gribtime}/${hrrr_subdir}/gep${memstr}.t${gribtime}z.pgrb2a.0p50.f0${hstr}"
+                gribfilename2="gefs.$eventdate/${gribtime}/${hrrr_subdir/pgrb2ap5/pgrb2bp5}/gep${memstr}.t${gribtime}z.pgrb2b.0p50.f0${hstr}"
+            else
+                gribfilename="$hdate/${htime}/${hrrr_subdir}${memstr}/wrfnat_pert_hrrr_mem00${memstr}_${hstr}.grib2"
+            fi
             gribfile="${grib_dir}/${gribfilename}"
 
             mecho0 "mem $memstr GRIB file $hstr: ${gribfilename}"
@@ -255,13 +259,24 @@ function run_ungrib {
             done
 
             gribfiles+=("$gribfile")
+            [[ -n ${gribfilename2} ]] && gribfiles2+=("${grib_dir}/${gribfilename2}")
         done
 
         mywrkdir="$wrkdir/ungrib_$memstr"
         mkwrkdir $mywrkdir 1
         cd $mywrkdir || return
 
-        link_grib "${gribfiles[@]}"
+        rm -f GRIBFILE.??? >& /dev/null
+        for i in "${!gribfiles[@]}"; do
+            char3=$(get_3char_order $i)
+            if [[ ${#gribfiles2[@]} -gt 0 ]]; then
+                cp "${gribfiles[$i]}" "GRIBFILE.${char3}"
+                cat "${gribfiles2[$i]}" >> "GRIBFILE.${char3}"
+            else
+                ln -sf "${gribfiles[$i]}" "GRIBFILE.${char3}"
+            fi
+        done
+
         # shellcheck disable=SC2154
         ln -sf $FIXDIR/WRFV4.0/${hrrrvtable} Vtable
 
@@ -405,8 +420,10 @@ function run_lbc {
     config_vegfrac_data = 'MODIS'
     config_albedo_data = 'MODIS'
     config_maxsnowalbedo_data = 'MODIS'
-    config_supersample_factor = 1
-    config_use_spechumd = true
+    config_supersample_factor     = 3
+    config_30s_supersample_factor = 1
+    config_use_spechumd           = true
+    config_soilcat_data           = 'BNU'
 /
 &vertical_grid
     config_ztop = 25878.712
@@ -422,12 +439,17 @@ function run_lbc {
     config_extrap_airtemp = 'lapse-rate'
 /
 &preproc_stages
-    config_static_interp = false
-    config_native_gwd_static = false
+    config_static_interp         = false
+    config_native_gwd_static     = false
+    config_native_gwd_static     = false
     config_vertical_grid = true
-    config_met_interp = true
-    config_input_sst = false
-    config_frac_seaice = true
+    config_met_interp    = true
+    config_input_sst     = false
+    config_frac_seaice   = true
+    config_tempo_rap     = false
+/
+&physics
+    config_tsk_seaice_threshold = 271.4
 /
 &io
     config_pio_num_iotasks = 0
@@ -486,6 +508,7 @@ EOF
             [CPUSPEC]="${claim_cpu_lbc}"
             [JOBNAME]="lbc_${jobname}"
             [PREFIX]="${domname}"
+            [RRFSDIR]="${rrfs_dir}"
         )
         # shellcheck disable=SC2154
         if [[ "${mach}" == "pbs" ]]; then
