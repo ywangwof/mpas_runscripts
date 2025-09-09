@@ -2473,6 +2473,7 @@ function run_mpassit {
     interp_hist          = .true.
     wrf_mod_vars         = .true.
     esmf_log             = .false.
+    initialization_time  = "${inittime_str}"
 /
 EOF
         #
