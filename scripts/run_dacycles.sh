@@ -33,7 +33,7 @@ eventtimeDF="1500"
 #        run_filter.slurm                    or run_filter.pbs
 #        run_mpas_array.slurm                or run_mpas_array.pbs
 #        run_update_states.slurm             or run_update_states.pbs
-#        run_update_sbc.slurm                or run_update_bc.pbs
+#        run_update_bc.slurm                 or run_update_bc.pbs
 #
 # 3. fix_files                              # runtime fix files for MPAS model and accompany programs
 #

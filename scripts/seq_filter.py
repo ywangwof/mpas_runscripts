@@ -426,7 +426,7 @@ def write_obs_seq(obs, filename, number=0 ):
                 # GOES CWP etc. add cloud base/top and an index number
                 if it.clouds:
                     fi.write(f"    {it.clouds[0]:f}          {it.clouds[1]:f}\n" )
-                    fi.write(f"    {it.clouds[2]:d}                      \n" )
+                    fi.write(f"    {int(it.clouds[2]):d}                      \n" )
 
                 # Check to see if its radial velocity and add platform informationp...need BETTER CHECK HERE!
                 if it.platform:
@@ -468,6 +468,143 @@ def write_obs_seq(obs, filename, number=0 ):
                 #if iobs % 10000 == 0: print(" write_DART_ascii:  Processed observation # %d" % iobs)
 
                 if cargs.verbose: update_progress(" write_DART_ascii:  Processed observation ",iobs/obs.nobs)
+    return
+
+
+########################################################################
+
+def write_obs_nc(obs, filename, number=0 ):
+    '''
+     write_obs_nc is a program to dump radar data to netCDF file that will be suitable for GSI
+    '''
+
+    #
+    # Retrieve the observation data into numpy arrays
+    #
+    data_index = np.full((obs.nobs,), -1, dtype=np.int64)
+    data_value = np.full((obs.nobs,), np.nan, dtype=np.float64)
+    data_lat   = np.full((obs.nobs,), np.nan, dtype=np.float64)
+    data_lon   = np.full((obs.nobs,), np.nan, dtype=np.float64)
+    data_hgt   = np.full((obs.nobs,), np.nan, dtype=np.float64)
+    data_err   = np.full((obs.nobs,), np.nan, dtype=np.float32)
+    data_time  = np.full((obs.nobs,), np.nan, dtype=np.float64)
+    data_date  = np.full((obs.nobs,19), ' ',  dtype='S1')
+    data_day   = np.full((obs.nobs,), -1,     dtype=np.int64)
+    data_second= np.full((obs.nobs,), -1,     dtype=np.int64)
+    data_plat  = np.full((obs.nobs,), np.nan, dtype=np.float64)
+    data_plon  = np.full((obs.nobs,), np.nan, dtype=np.float64)
+    data_phgt  = np.full((obs.nobs,), np.nan, dtype=np.float64)
+    data_pdir1 = np.full((obs.nobs,), np.nan, dtype=np.float64)
+    data_pdir2 = np.full((obs.nobs,), np.nan, dtype=np.float64)
+    data_pdir3 = np.full((obs.nobs,), np.nan, dtype=np.float64)
+    data_pnyq  = np.full((obs.nobs,), np.nan, dtype=np.float64)
+
+    for i,it in enumerate(obs.obs):
+
+        data_index[i] = i
+        data_value[i] = it.values[0]  # Assuming single value per observation for simplicity
+
+        data_lat[i] = np.degrees(float(it.location.latr))
+        data_lon[i] = np.degrees(float(it.location.lonr))
+        if data_lon[i] > 180.:
+            data_lon[i] -= 360.
+        data_hgt[i] = float(it.location.level)
+        data_err[i] = float(it.variance)
+
+        data_day[i]    = int(it.time.days)
+        data_second[i] = int(it.time.seconds)
+        # epoch: 1970-01-01 00:00:00 is 134774 days since '1601-01-01'
+        # one day is 86400 seconds
+        seconds_since_epoch = (it.time.days - 134774)* 86400 + it.time.seconds
+        data_time[i]  = float(seconds_since_epoch)     # Convert days and seconds to total seconds since epoch
+        dt_object_utc = datetime.fromtimestamp(seconds_since_epoch, tz=timezone.utc)
+        data_date[i]  = list(dt_object_utc.strftime("%Y-%m-%d %H:%M:%S"))
+
+        if it.platform:
+            loc3d = it.platform.loc3d
+            data_plon[i] = loc3d[0]
+            data_plat[i] = loc3d[1]
+            data_phgt[i] = loc3d[2]
+
+            dir3 = it.platform.dir3d
+            data_pdir1[i] = dir3[0]
+            data_pdir2[i] = dir3[1]
+            data_pdir3[i] = dir3[2]
+
+            data_pnyq[i] = it.platform.nyquist
+
+    #
+    # Open netCDF file for writing
+    #
+
+    with ncdf.Dataset(filename, "w", format="NETCDF4") as dst:
+
+        # Write global attributes
+        dst.setncattr('history', f'Created on {datetime.now(timezone.utc).strftime("%Y-%m-%d_%H:%M:%S UTC")} by `{" ".join(sys.argv)}`')
+        dst.setncattr('version',  'Version 1.0')
+
+        # Write dimensions
+        dim_index = dst.createDimension( 'index', obs.nobs)
+        dim_str19 = dst.createDimension( 'string19', 19)
+
+        # Write variables
+        var_index = dst.createVariable('index', 'i8', dim_index)
+        var_value = dst.createVariable('value', 'f8', dim_index, fill_value=np.nan)
+
+        var_lat = dst.createVariable('lat', 'f8', dim_index, fill_value=np.nan)
+        var_lat.setncattr('units', 'degrees')
+        var_lat.setncattr('description', 'latitude of observation')
+
+        var_lon = dst.createVariable('lon', 'f8', dim_index, fill_value=np.nan)
+        var_lon.setncattr('units', 'degrees')
+        var_lon.setncattr('description', 'longitude of observation (deg. west)')
+
+        var_hgt = dst.createVariable('height', 'f8', dim_index, fill_value=np.nan)
+        var_hgt.setncattr('units', 'meters')
+        var_hgt.setncattr('description', 'height above sea level')
+
+        var_err = dst.createVariable('error_var', 'f4', dim_index, fill_value=np.nan)
+
+        var_time = dst.createVariable('utime', 'f8', dim_index, fill_value=np.nan)
+        var_time.setncattr('units', 'seconds since 1970-01-01 00:00:00 UTC')
+        var_time.setncattr('description', 'time of observation')
+
+        var_date = dst.createVariable('date', 'S1', (dim_index, dim_str19) )
+        var_date.setncattr('units', 'UTC date and time in YYYY-MM-DD HH:MM:SS format')
+        var_date.setncattr('description', 'date and time of obsevation')
+
+        var_day = dst.createVariable('day', 'i8', dim_index)
+        var_second = dst.createVariable('second', 'i8', dim_index)
+
+        pltform_lat  = dst.createVariable('platform_lat',     'f8', dim_index, fill_value=np.nan)
+        pltform_lon  = dst.createVariable('platform_lon',     'f8', dim_index, fill_value=np.nan)
+        pltform_hgt  = dst.createVariable('platform_hgt',     'f8', dim_index, fill_value=np.nan)
+        pltform_dir1 = dst.createVariable('platform_dir1',    'f8', dim_index, fill_value=np.nan)
+        pltform_dir2 = dst.createVariable('platform_dir2',    'f8', dim_index, fill_value=np.nan)
+        pltform_dir3 = dst.createVariable('platform_dir3',    'f8', dim_index, fill_value=np.nan)
+        pltform_nyq  = dst.createVariable('platform_nyquist', 'f8', dim_index, fill_value=np.nan)
+
+        #
+        # Write observation data into variables
+        #
+        var_index[:] = data_index
+        var_value[:] = data_value
+        var_lat[:]   = data_lat
+        var_lon[:]   = data_lon
+        var_hgt[:]   = data_hgt
+        var_err[:]   = data_err
+        var_time[:]  = data_time
+        var_date[:]  = data_date
+        var_day[:]   = data_day
+        var_second[:] = data_second
+        pltform_lat[:]  = data_plat
+        pltform_lon[:]  = data_plon
+        pltform_hgt[:]  = data_phgt
+        pltform_dir1[:] = data_pdir1
+        pltform_dir2[:] = data_pdir2
+        pltform_dir3[:] = data_pdir3
+        pltform_nyq[:]  = data_pnyq
+
     return
 
 ########################################################################
@@ -685,7 +822,7 @@ def parse_args():
     """
     obs_fields=("values","variance","time","location","qcs","platform","clouds","visir","mask")
 
-    parser = argparse.ArgumentParser(description='Trim DART obs_seq file with nan values',
+    parser = argparse.ArgumentParser(description='Read and parse DART obs_seq file by dropping NaN values (mainly in the radial velocity observations).\n',
                                      epilog='        ---- Yunheng Wang (2024-01-24).\n ',
                                      formatter_class=argparse.RawTextHelpFormatter)
 
@@ -693,20 +830,21 @@ def parse_args():
                         help=f'DART obs_seq files, "list", or one or more from\n{obs_fields}')
 
     parser.add_argument('-v','--verbose', help='Verbose output',                                    action="store_true", default=False)
-    parser.add_argument('-o','--outdir' , help='Name of the output file or an output directory',    default='./',        type=str)
+    parser.add_argument('-o','--outdir' , help='Name of the output file or an output directory\n'
+                                               'When the output file name ends with ".nc", it will write out netCDF formatted file instead',
+                                          default='./',        type=str)
     parser.add_argument('-x','--xtypes' , help='Type Numbers of observation to be removed',         default=None,        type=str)
     parser.add_argument('-c','--ctypes' , help='Type Numbers of observation that contains cloud lines',
-                                                                                                    default=None, type=str)
+                                                                                                    default=None,        type=str)
     parser.add_argument('-t','--type'   , help='''Type Numbers of observation to be kept, for examples, 44 or 44,42''',
                                                                                                     default=None,        type=str)
-    parser.add_argument('-s','--set'   ,
-                        help='Set values for an observation type, [type,{value,variance},float].\n'
-                             'for example, clear air reflectivity, 13,value,-15.0 or 13,variance,4.0',
-                        default=None,        type=str)
+    parser.add_argument('-s','--set'   ,  help='Set values for an observation type, [type,{value,variance},float].\n'
+                                               'for example, clear air reflectivity, 13,value,-15.0 or 13,variance,4.0',
+                                          default=None,        type=str)
 
-    parser.add_argument('-r','--range' ,  help='Filter records by location range, [lat1-lat2,lon1-lon2]', default=None, type=str)
-    parser.add_argument('-k','--keep' ,   help='After drop observations, keep it links as possible',   action="store_true", default=False)
-    parser.add_argument('-n','--number' , help='Fist N number of observations to be written',          default=0,           type=int)
+    parser.add_argument('-r','--range' ,  help='Filter records by location range, [lat1-lat2,lon1-lon2]', default=None,        type=str)
+    parser.add_argument('-k','--keep' ,   help='After drop observations, keep it links as possible',      action="store_true", default=False)
+    parser.add_argument('-n','--number' , help='Fist N number of observations to be written',             default=0,           type=int)
     parser.add_argument('-N','--notrim' , help='Do not trim NaN in observations (default: Trim obs_seq for NaNs)', action="store_true", default=False)
 
     args = parser.parse_args()
@@ -876,6 +1014,7 @@ if __name__ == "__main__":
             #
             if rargs.outfile is not None:
                 outfilename = rargs.outfile
+
             else:
                 basefilename = os.path.basename(filename)
                 outfilename  = os.path.join(cargs.outdir,basefilename)
@@ -894,4 +1033,7 @@ if __name__ == "__main__":
                 #print(f"        {short_filename} -> {outfilename}\n        Number of good observations: {obs_out.nobs}")
                 print(f"        Number of good observations: {obs_out.nobs}, use {short_filename}")
 
-            write_obs_seq(obs_out, outfilename, rargs.number)
+            if outfilename.endswith('.nc'):
+                write_obs_nc(obs_out, outfilename, rargs.number)
+            else:
+                write_obs_seq(obs_out, outfilename, rargs.number)
