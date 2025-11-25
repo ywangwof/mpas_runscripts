@@ -166,7 +166,7 @@ static_files=(  CAM_ABS_DATA.DBL     RRTMG_LW_DATA      CAM_AEROPT_DATA.DBL  RRT
 
 echo "Linking static files ..."
 for fn in "${static_files[@]}"; do
-    if compgen -G $srcdir/$fn > /dev/null; then
+    if compgen -G "$srcdir/$fn" > /dev/null; then
         [[ $verb == true ]] && echo "$fn -> $(readlink $fn)"
         [[ -v fix_dir ]]    && src_file="${fix_dir}/$fn" || src_file=$(realpath "${srcdir}/$fn")
         echo "Linking $fn ..."
@@ -197,20 +197,20 @@ done
 #
 # for ICs/LBCs
 #
-if compgen -G ./*.invariant.nc > /dev/null; then
+if compgen -G "./*.invariant.nc" > /dev/null; then
     :                                                  # skip if the file already exists
 else
-    if compgen -G $srcdir/*.invariant.nc > /dev/null; then
-        ${show} ln -sf $srcdir/*.invariant.nc .
-    fi
+    for fn in $(compgen -G "$srcdir/*.invariant.nc"); do
+        ${show} ln -sf $fn .
+    done
 fi
 
-if compgen -G ./*.init*.nc > /dev/null; then
+if compgen -G "./*.init*.nc" > /dev/null; then
     :
 else
-    if compgen -G $srcdir/*.init*.nc > /dev/null; then
-        ${show} ln -sf $srcdir/*.init*.nc .
-    fi
+    for fn in $(compgen -G $srcdir/*.init*.nc); do
+        ${show} ln -sf $fn .
+    done
 fi
 
 if compgen -G ./*.lbc*.nc > /dev/null; then

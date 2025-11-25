@@ -16,9 +16,8 @@ echo " "
 if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
     source /etc/profile.d/modules.sh
     module purge
-    HOMErrfs="RRFSDIR"
-    module use ${HOMErrfs}/modulefiles
-    module load "rrfs/jet.intel"
+    module use MPASDIR/modulefiles
+    module load MODULE
 else
     source ROOTDIR/modules/MODULE
 fi
@@ -34,9 +33,9 @@ touch running.static
 RUNMPCMD -n NOPART EXEDIR/init_atmosphere_model
 
 if [[ $? -eq 0 ]]; then
-    source ROOTDIR/modules/env.python
-    mv DOMNAME.static.nc static_badLAI.nc
-    ncap2 -O -s 'lai12m = 0.1f*lai12m' static_badLAI.nc DOMNAME.static.nc
+    #source ROOTDIR/modules/env.python
+    #mv DOMNAME.static.nc static_badLAI.nc
+    #ncap2 -O -s 'lai12m = 0.1f*lai12m' static_badLAI.nc DOMNAME.static.nc
     touch done.static
 else
     touch error.static

@@ -110,8 +110,9 @@ function usage {
     echo "    WORKDIR  - Run Directory"
     echo "    CONFIG   - MPAS-WoFS runtime configuration file with full path."
     echo "               WORKDIR & DATETIME will be extracted from the CONFIG name unless they are given explicitly."
-    echo "    JOBS     - One or more jobs from [filter,update_states,update_bc,mpas,obs_diag,obs_final2nc,clean]"
-    echo "               Default all jobs in [filter,update_states,update_bc,mpas] for a DA cyle"
+    echo "    JOBS     - One or more jobs from [ioda_bufr,ioda_mrms_refl,getkf_observer,getkf_solver,"
+    echo "               jedi_prior_mean,jedi_prior_members,jedi_solver,jedi_post,update_bc,mpas,clean]"
+    echo "               Default all jobs in [ioda_bufr,ioda_mrms_refl,getkf_observer,getkf_solver,update_bc,mpas] for a DA cyle"
     echo " "
     echo "    OPTIONS:"
     echo "              -h                  Display this message"
@@ -130,6 +131,7 @@ function usage {
     echo "              -e  HHMM            End time of the DA cycles, or YYYYmmddHHMM."
     echo "              -r                  Realtime run, will wait for observations, default: research mode (no waiting)."
     echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
+    echo "              -w wrkflow          Workflow to follow, [letkf,getkf], default is getkf."
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdate = $eventdateDF"
@@ -233,11 +235,20 @@ function parse_args {
                 fi
                 shift
                 ;;
+            -w )
+                if [[ ${2,,} == "letkf" || ${2,,} == "getkf" ]]; then
+                    args["workflow"]="${2,,}"
+                else
+                    echo -e "${RED}ERROR${NC}: Unsupported workflow, got ${PURPLE}$2${NC}."
+                    usage 1
+                fi
+                shift
+                ;;
             -*)
                 echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
                 usage 2
                 ;;
-            ioda* | getkf_* | mpas* | clean* )
+            ioda* | getkf_* | update_* | mpas* | jedi_* | clean* )
                 args["jobs"]="${key//,/ }"
                 ;;
             *)
@@ -411,10 +422,10 @@ function create_namelist {
     [[ ! -v smdiv ]]               && smdiv=0.1
     [[ ! -v physics_suite ]]       && physics_suite='convection_permitting'
 
-        # the ratio of radt to dt is 15
-#    config_h_scalar_eddy_visc4      = ${h_scalar_eddy_visc4}
+    # the ratio of radt to dt is 15
+    # config_h_scalar_eddy_visc4      = ${h_scalar_eddy_visc4}
 
-    cat << EOF > "${filename}"
+    cat << EOF_MPAS > "${filename}"
 &nhyd_model
     config_time_integration_order   = 2
     config_dt                       = ${time_step}
@@ -488,24 +499,26 @@ function create_namelist {
     config_microp_re                 = true
     config_physics_suite             = '${physics_suite}'
     config_convection_scheme         = 'off'
-    config_sfclayer_scheme           = '${sfcscheme}'
 
     config_frac_seaice         = true
+EOF_MPAS
+
+    if [[ ${sfcscheme} == "sf_mynn" && ${mpscheme} != "mp_tcwa2" ]]; then
+        cat << EOF >> "${filename}"
+    config_pbl_scheme          = 'bl_mynnedmf'
     config_gwdo_scheme         = 'bl_ugwp_gwdo'
     config_gvf_update          = false
 EOF
-        if [[ ${sfcscheme} == "sf_mynn" ]]; then
-            cat << EOF >> namelist.atmosphere
-    config_pbl_scheme          = 'bl_mynnedmf'
-EOF
-        else
-            cat << EOF >> namelist.atmosphere
+    else
+        cat << EOF >> "${filename}"
     config_pbl_scheme          = '${pblscheme}'
+    config_gwdo_scheme         = 'bl_ysu_gwdo'
 EOF
-        fi
+    fi
 
-        if [[ ${mpscheme} == "mp_nssl2m" ]]; then
-            cat << EOF >> namelist.atmosphere
+    if [[ ${mpscheme} == "mp_nssl2m" ]]; then
+        cat << EOF >> "${filename}"
+    config_sfclayer_scheme           = '${sfcscheme}'
     config_microp_scheme             = '${mpscheme}'
 /
 &nssl_mp_params
@@ -516,18 +529,24 @@ EOF
     iusewetsnow                      = 0
 /
 EOF
-        elif [[ ${mpscheme} == "mp_tempo" ]]; then
-            cat << EOF >> namelist.atmosphere
+    elif [[ ${mpscheme} == "mp_tempo" ]]; then
+        cat << EOF >> "${filename}"
+    config_sfclayer_scheme           = '${sfcscheme/sf_mynn/sf_mynnsfclay}'
     config_microp_scheme             = '${mpscheme}'
     config_tempo_hailaware           = .true.
     config_tempo_aerosolaware        = .true.
+    config_tempo_ml_nc_pbl           = .true.
+    config_mynn_mixnumcon            = 0
 /
 EOF
-        else
-            echo "/" >> namelist.atmosphere
-        fi
+    else
+        cat << EOF >> "${filename}"
+    config_microp_scheme             = '${mpscheme}'
+/
+EOF
+    fi
 
-        cat << EOF >> namelist.atmosphere
+    cat << EOF >> "${filename}"
 &soundings
     config_sounding_interval         = 'none'
 /
@@ -544,12 +563,14 @@ EOF
 
 function create_streams {
 
-    local filename="$1"
+    local scheme="$1"
+    local filename="$2"
 
     icycle_extinvl_str=$(date -d@${icycle_lbcgap} -u +%H:%M:%S)
     #echo "icycle_extinvl_str=${icycle_extinvl_str}"
 
-    cat << EOF > "${filename}"
+    if [[ ${scheme} == "MPAS" ]]; then
+        cat << EOF_MPAS > "${filename}"
 <streams>
 <immutable_stream name="input"
                   type="input"
@@ -611,18 +632,42 @@ function create_streams {
                   filename_interval="input_interval"
                   packages="limited_area"
                   input_interval="${icycle_extinvl_str}" />
+EOF_MPAS
+#<immutable_stream name="ugwp_oro_data_in"
+#                  type="input"
+#                  filename_template="${domname}.ugwp_oro_data.nc"
+#                  input_interval="initial_only" />
+#</streams>
+#EOF
+        if [[ ${args["workflow"]} == "letkf" ]]; then
+            cat << EOF_MPAS >> "${filename}"
+<immutable_stream name="da_state"
+        type="output"
+        precision="single"
+        filename_template="mpasout.nc"
+        io_type="pnetcdf,cdf5"
+        packages="jedi_da"
+        clobber_mode="replace_files"
+        output_interval="none" />
 
-</streams>
-EOF
-}
+<stream name="da_state_new"
+        type="output"
+        precision="single"
+        filename_template="${domname}_${memstr}.da_state_new.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+        io_type="pnetcdf,cdf5"
+        clobber_mode="replace_files"
+        output_interval="${RSTINVL_STR}" >
 
-########################################################################
+        <stream name="da_state" />
+            <var name="refl10cm" />
+</stream>
+EOF_MPAS
+        fi
+        echo "</streams>" >> "${filename}"
 
-function create_streams_jedi {
+    elif [[ ${scheme} == "GETKF" ]]; then
 
-    local filename="$1"
-
-    cat << EOF > "${filename}"
+        cat << EOF_GETKF > "${filename}"
 <streams>
 <immutable_stream name="invariant"
                   type="input"
@@ -683,7 +728,111 @@ function create_streams_jedi {
 
 
 </streams>
-EOF
+EOF_GETKF
+    elif [[ ${scheme} == "LETKF" ]]; then
+
+        cat << EOF_NCAR > "${filename}"
+<streams>
+<immutable_stream name="invariant"
+                  type="input"
+                  precision="single"
+                  filename_template="${input_invariant_file}"
+                  io_type="pnetcdf,cdf5"
+                  input_interval="initial_only" />
+
+<immutable_stream name="input"
+                  type="input"
+                  precision="single"
+                  filename_template="${input_file}"
+                  io_type="pnetcdf,cdf5"
+                  input_interval="initial_only" />
+
+<immutable_stream name="da_state"
+                  type="output"
+                  precision="single"
+                  filename_template="mpasout.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+                  io_type="pnetcdf,cdf5"
+                  packages="jedi_da"
+                  clobber_mode="overwrite"
+                  output_interval="none" />
+
+<immutable_stream name="lbc_in"
+                  type="input"
+                  precision="single"
+                  io_type="pnetcdf,cdf5"
+                  filename_template="lbc.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+                  filename_interval="input_interval"
+                  packages="limited_area"
+                  input_interval="${icycle_extinvl_str}" />
+
+<immutable_stream name="iau"
+                  type="none"
+                  filename_template="x1.62691.AmB.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+                  filename_interval="none"
+                  packages="iau"
+                  input_interval="none" />
+
+<stream name="background"
+        type="input;output"
+        precision="single"
+        io_type="pnetcdf,cdf5"
+        filename_template="background.nc"
+        input_interval="none"
+        output_interval="none"
+        clobber_mode="overwrite">
+        <file name="./stream_list.atmosphere.background"/>
+</stream>
+
+<stream name="analysis"
+        type="output"
+        precision="single"
+        io_type="pnetcdf,cdf5"
+        filename_template="analysis.nc"
+        output_interval="none"
+        clobber_mode="overwrite">
+        <file name="./stream_list.atmosphere.analysis"/>
+</stream>
+
+<stream name="ensemble"
+        type="input;output"
+        precision="single"
+        io_type="pnetcdf,cdf5"
+        filename_template="ensemble.nc"
+        input_interval="none"
+        output_interval="none"
+        clobber_mode="overwrite">
+        <file name="./stream_list.atmosphere.ensemble"/>
+</stream>
+
+<stream name="control"
+        type="input;output"
+        precision="single"
+        io_type="pnetcdf,cdf5"
+        filename_template="control.nc"
+        input_interval="none"
+        output_interval="none"
+        clobber_mode="overwrite">
+        <file name="./stream_list.atmosphere.control"/>
+</stream>
+
+<stream name="output"
+        type="none"
+        filename_template="output.nc"
+        output_interval="0_01:00:00" >
+</stream>
+
+<stream name="diagnostics"
+        type="none"
+        filename_template="diagnostics.nc"
+        output_interval="0_01:00:00">
+</stream>
+
+</streams>
+EOF_NCAR
+    else
+        mecho1 "${RED}ERROR${NC}: Unsupported streams scheme, got ${PURPLE}${scheme}${NC}."
+        exit 1
+    fi
 }
 
 ########################################################################
@@ -744,7 +893,7 @@ function get_convinfo {
 
 ########################################################################
 
-function mpasjedi_preq {
+function getkf_preparation {
     # $1       $2      $3      $4
     # taskname wrkdir  icycle  iseconds
     local taskname=$1
@@ -789,7 +938,8 @@ function mpasjedi_preq {
 
     #ln -snf "${FIXDIR}/${domname}.ugwp_oro_data.nc" ./ugwp_oro_data.nc
 
-    ln -snf "${rundir}/init/${domname}.invariant.nc" ./invariant.nc
+    ln -sf "${rundir}/init/${domname}.invariant.nc" ./invariant.nc
+    ln -sf "${rundir}/${domname}/${domname}.ugwp_oro_data.nc" .
 
     #mkdir -p graphinfo stream_list
     #ln -snf "${FIXrrfs}"/graphinfo/* graphinfo/
@@ -859,7 +1009,7 @@ function mpasjedi_preq {
     sfcscheme="sf_mynn"
     create_namelist "namelist.atmosphere"
     #cp "${FIXDIR}/jedi/streams.atmosphere.getkf" streams.atmosphere
-    create_streams_jedi "streams.atmosphere"
+    create_streams "GETKF" "streams.atmosphere"
 
     if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npefilter} ]]; then
         split_graph "${gpmetis}" "${domname}.graph.info" "${npefilter}" "$rundir/$domname" "$dorun" "$verb"
@@ -966,7 +1116,7 @@ function run_getkf_observer {
 
     taskname="observer"
 
-    mpasjedi_preq "${taskname}" "${wrkdir}" $2 $3
+    getkf_preparation "${taskname}" "${wrkdir}" $2 $3
 
     #
     # Copy ioda observation files
@@ -1094,7 +1244,7 @@ function run_getkf_solver {
     # DATA=wrkdir
     taskname="solver"
 
-    mpasjedi_preq "${taskname}" "${wrkdir}" $2 $3
+    getkf_preparation "${taskname}" "${wrkdir}" $2 $3
 
     #
     # Copy ioda observation files
@@ -1190,7 +1340,7 @@ function run_getkf_post {
     # DATA=wrkdir
     taskname="post"
 
-    mpasjedi_preq "${taskname}" "${wrkdir}" $2 $3
+    getkf_preparation "${taskname}" "${wrkdir}" $2 $3
 
     #
     # Copy ioda observation files
@@ -1242,7 +1392,7 @@ function run_add_noise {
     cd $wrkdir || return
 
     timestr_cur=$(date  -u -d @$iseconds    +%Y%m%d%H%M)
-    read -r -a days_secs < <(convertS2days "${iseconds}")
+    mapfile -t days_secs < <(convertS2days "${iseconds}")
 
     #
     # Return if is running or is done
@@ -1531,6 +1681,24 @@ function run_update_bc {
 
 ########################################################################
 
+function anlysis_file {
+
+    local analy_file
+    if [[ ${args["workflow"]} == "letkf" ]]; then
+        analy_file="${wrkdir}/enkf/analysis.${currtime_fil}_en0${memstr}.nc"
+    else
+        analy_file="${wrkdir}/getkf_solver/data/ana/mem0${memstr}.nc"
+    fi
+
+    if [[ ! -s $analy_file ]]; then
+        mecho1 "${RED}ERROR: file ${LIGHT_BLUE}${analy_file}${NC} not exist. exiting ..."
+        exit 11
+    fi
+    echo "${analy_file}"
+}
+
+########################################################################
+
 function run_mpas {
     # $1        $2      $3
     # wrkdir    icycle    iseconds
@@ -1558,17 +1726,26 @@ function run_mpas {
     #
     # Waiting for job conditions
     #
-    conditions=("${wrkdir}/getkf_solver/done.solver")
+    [[ $icycle -gt 0 ]] && conditions=("${wrkdir}/getkf_solver/done.solver|${wrkdir}/enkf/done.solver")
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
             mecho0 "Checking $cond"
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: $cond"
-                fi
-                sleep 10
-            done
+            if [[ "$cond" =~ (.+)"|"(.+) ]]; then
+                cond1=${BASH_REMATCH[1]}
+                cond2=${BASH_REMATCH[2]}
+                while [[ ! -e "${cond1}" && ! -e "${cond2}" ]]; do
+                    [[ $verb -eq 1 ]] && mecho0 "Waiting for file: ${LIGHT_BLUE}$cond1${NC} or ${LIGHT_BLUE}$cond2${NC}"
+                    sleep 10
+                done
+            else
+                while [[ ! -e $cond ]]; do
+                    if [[ $verb -eq 1 ]]; then
+                        mecho0 "Waiting for file: $cond"
+                    fi
+                    sleep 10
+                done
+            fi
         done
     fi
 
@@ -1620,7 +1797,12 @@ function run_mpas {
             initfile="./${domname}_${memstr}.restart.${currtime_fil}.nc"
         fi
 
-        ln -sf "${wrkdir}/getkf_solver/data/ana/mem0${memstr}.nc" "${initfile}"
+        if [[ $icycle -eq 0 && ${init_da} == false ]]; then
+            ln -sf "${rundir}/init/${domname}_${memstr}.init.nc" "${initfile}"
+        else
+            ln -sf "$(anlysis_file)" "${initfile}"
+        fi
+
         if [[ $verb -eq 1 ]]; then
             #realinit=$(realpath -m --relative-to=. ${initfile})
             mecho0 "Member $iens init file: ${initfile}";
@@ -1637,7 +1819,8 @@ function run_mpas {
             casedir="${rundir}"
         fi
 
-        ln -sf ${casedir}/$domname/$domname.graph.info.part.${npefcst} .
+        ln -sf ${casedir}/${domname}/${domname}.graph.info.part.${npefcst} .
+        ln -sf ${casedir}/${domname}/${domname}.ugwp_oro_data.nc .
         ln -sf ${casedir}/init/${domname}.invariant.nc .
 
         diag_stream="stream_list.atmosphere.diagnostics_da"
@@ -1677,7 +1860,7 @@ function run_mpas {
 
         create_namelist namelist.atmosphere
 
-        create_streams streams.atmosphere
+        create_streams MPAS streams.atmosphere
 
         jobarrays+=("$iens")
     done
@@ -1694,7 +1877,8 @@ function run_mpas {
         [JOBNAME]="mfrd-${jobname}_${eventtime}"
         [CPUSPEC]="${claim_cpu_fcst}"
         [CLAIMTIME]="${claim_time_fcst}"
-        [JEDIDIR]="${JEDI_DIR}"
+        [MPASDIR]="${MPAS_DIR}"
+        [MODULE]="${mpas_modulename}"
     )
     #mpas_jobscript="run_mpas.${mach}"
     jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
@@ -1705,6 +1889,1444 @@ function run_mpas {
     fi
 
     submit_a_job "$wrkdir" "fcst" "jobParms" "$TEMPDIR/run_mpas_array.${mach}" "$mpas_jobscript" "${jobarraystr}"
+}
+
+########################################################################
+
+function letkf_preparation {
+    # $1       $2      $3
+    # taskname wrkdir  icycle  iseconds
+    local taskname=$1
+    local wrkdir=$2
+    local iseconds=$3
+
+    cd $wrkdir || return
+
+    mpas_fix_files=( GENPARM.TBL LANDUSE.TBL OZONE_DAT.TBL OZONE_LAT.TBL          \
+                    OZONE_PLEV.TBL SOILPARM.TBL VEGPARM.TBL CAM_ABS_DATA.DBL      \
+                    CAM_AEROPT_DATA.DBL RRTMG_LW_DATA.DBL RRTMG_SW_DATA.DBL       \
+                    RRTMG_LW_DATA RRTMG_SW_DATA )
+
+    for fname in "${mpas_fix_files[@]}"; do
+        ln -sf ${FIXDIR}/$fname .
+    done
+
+    if [[ "${mpscheme}" == "mp_tempo" ]]; then
+        thompson_tables=( MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL MP_TEMPO_QRacrQS_DATA.DBL   \
+                          MP_TEMPO_freezeH2O_DATA.DBL         MP_TEMPO_QIautQS_DATA.DBL   CCN_ACTIVATE_DATA )
+
+        for fn in "${thompson_tables[@]}"; do
+            ln -sf ${FIXDIR}/$fn .
+        done
+    elif [[ "${mpscheme}" == "mp_thompson" ]]; then
+        thompson_tables=( MP_THOMPSON_QRacrQG_DATA.DBL   MP_THOMPSON_QRacrQS_DATA.DBL   \
+                          MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL CCN_ACTIVATE.BIN )
+
+        for fn in "${thompson_tables[@]}"; do
+            ln -sf ${FIXDIR}/$fn .
+        done
+    fi
+
+    mpas_runtime_files=(stream_list.atmosphere.{analysis,background,control,ensemble})
+    jedi_runtime_files=(geovars.yaml keptvars.yaml obsop_name_map.yaml)
+    radar_dacoeffs_files=(cband_graupel_coefs.txt cband_rain_coefs.txt cband_hail_coefs.txt cband_snow_coefs.txt  \
+                          sband_graupel_coefs.txt sband_rain_coefs.txt sband_hail_coefs.txt sband_snow_coefs.txt)
+
+    for fname in "${mpas_runtime_files[@]}" "${jedi_runtime_files[@]}" "${radar_dacoeffs_files[@]}"; do
+        f="${FIXDIR}/jedi/$fname"
+        if [[ -z "$f" ]]; then
+            echo "$f is missing. Check ${FXIDIR}/jedi for it."
+            exit
+        else
+            ln -sf $f .
+        fi
+    done
+
+    #
+    # link all prior ensemble members to the working directory.
+    #
+    this_mpas_date=$(date -d @${iseconds} +%Y-%m-%d_%H.%M.%S) # valid time of interest
+
+    file_type="da_state_new"
+    if [[ "$damode" == "restart" ]]; then
+       file_type="restart"
+    fi
+
+    #num_diag_files=0
+    ie=1
+    while [[ $ie -le $ENS_SIZE ]]; do
+        m2=$(printf "%02d" $ie) # Each member must have three digits (i.e.,  01,  10)
+        m3=$(printf "%03d" $ie) # Each member must have three digits (i.e., 001, 010, 100)
+        fname=${PREV_ENS_DIR_TOP}/fcst_${m2}/${domname}_${m2}.${file_type}.${this_mpas_date}.nc
+        if [[ -e $fname ]]; then
+            ln -sf $fname ./mpas_en${m3}.nc # Prior ensemble members; YAML looks for ./mpas_en${m3}.nc
+        else
+            #echo "$fname not there...but needed.  exit" >> ./MISSING_ENSEMBLE_MEMBERS
+            mecho0 "${RED}ERROR${NC}: missing ${CYAN}$fname${NC}"
+            exit 2
+        fi
+        # Also link diag files...not as strict error checking
+        #fname=${PREV_ENS_DIR_TOP}/${ie}/diag.${this_mpas_date}.nc
+        #if [[ -e $fname ]]; then
+        #   ln -sf $fname ./mpas_diag_${this_mpas_date}_en${m3}    # Link the ensemble member, this file is input
+        #   ((num_diag_files++))
+        #fi
+        ((ie++))
+    done
+
+    # Also need to find an invariant.nc file on the ensemble grid
+    # (which can be an init.nc file) to link as invariant.nc
+    ln -sf ${rundir}/init/${domname}.invariant.nc ./invariant_ens.nc
+    if [[ ! -e "./invariant_ens.nc" ]]; then
+       #touch -f ./MISSING_STATIC_ENS
+       mecho0 "${RED}ERROR${NC}: missing ${CYAN}${rundir}/init/${domname}.invariant.nc${NC}"
+       exit 7
+    fi
+
+    if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npefilter} ]]; then
+        split_graph "${gpmetis}" "${domname}.graph.info" "${npefilter}" "$rundir/$domname" "$dorun" "$verb"
+    fi
+    ln -sf $rundir/$domname/$domname.graph.info.part.${npefilter} .
+
+    #-----------------------------------------------------
+    # Make MPAS streams file, and link proper backgrounds.
+    #   Output is always ./streams.atmosphere for streams
+    #-----------------------------------------------------
+    input_file=./mpas_en001.nc #needs to be at correct time, but just grid info used
+    input_invariant_file=./invariant_ens.nc
+    #$STREAMS_TEMPLATE mpas_jedi $JEDI_RUN_DIR # Streams file
+    #mv ./streams.atmosphere ./streams.atmosphere_ens
+    create_streams LETKF ./streams.atmosphere_ens
+
+    #------------------------------------
+    # Make MPAS namelist file
+    #------------------------------------
+    #export update_sst=".false." # MPAS-JEDI doesn't care about SST update, so force this to false so MPAS-JEDI doesn't
+                  #   try to read a surface "input" stream
+
+    create_namelist namelist.atmosphere_${anlys_datetime}
+
+    export enkf_type="GETKF"
+}
+
+########################################################################
+
+function letkf_get_observation {
+    # $1       $2      $3
+    # taskname wrkdir  imember
+    local taskname=$1
+    local wrkdir=$2
+    local imember=$3
+
+    cd $wrkdir || return
+
+    ####################################################################
+
+    # shellcheck disable=SC2329
+    function CWB_dualpol_yaml {
+
+        # Assign the input arguments to variables for clarity
+        local output_fname=$2 # The file to be output (appended to)
+        local wrkdir=$1      # Working directory
+        cd "${wrkdir}" || exit $?
+
+        # The rest of the script is a heredoc that writes the YAML configuration
+        cat >> "$output_fname" << EOF
+  - obs space:
+      <<: *ObsSpace
+      name: RadarZh
+      _obsdatain: &ObsDataInZh
+        engine:
+          type: H5File
+          obsfile: $inputDataFile
+      _obsdataout: &ObsDataOutZh
+        engine:
+          type: H5File
+          obsfile: $outputDataFile
+      obsdatain:
+        <<: *ObsDataInZh
+      obsdataout: *ObsDataOutZh
+      simulated variables: [equivalentReflectivityFactor]
+    obs error: *ObsErrorDiagonal
+    obs operator:
+      name: VertInterp
+      observation vertical coordinate: height
+      vertical coordinate: height_above_mean_sea_level
+      interpolation method: linear
+      #name: PPRO
+      #microphysics option: NSSL
+      #use variational method: false
+      #var_rain_mixing_ratio: mixing_ratio_of_rain
+      #var_snow_mixing_ratio: mixing_ratio_of_snow
+      #var_graupel_mixing_ratio: mixing_ratio_of_graupel
+      #var_hail_mixing_ratio: mixing_ratio_of_hail
+      #var_rain_number_concentration: rain_number_concentration
+      #var_snow_number_concentration: snow_number_concentration
+      #var_graupel_number_concentration: graupel_number_concentration
+      #var_hail_number_concentration: hail_number_concentration
+      #var_graupel_vol_mixing_ratio: volume_mixing_ratio_of_graupel_in_air
+      #var_hail_vol_mixing_ratio: volume_mixing_ratio_of_hail_in_air
+    get values:
+      nnearest: 3
+    obs filters:
+    - filter: PreQC
+      maxvalue: $PreQC_maxvalue
+    - filter: Bounds Check
+      filter variables:
+      - name: equivalentReflectivityFactor
+      test variables:
+      - name: GeoVaLs/observable_domain_mask
+      flag all filter variables if any test variable is out of bounds: true
+      minvalue: 0.0
+      maxvalue: 0.1
+    - filter: Perform Action
+      filter variables:
+      - name: equivalentReflectivityFactor
+      action:
+        name: assign error
+        error parameter: 3.0
+    - filter: Bounds Check
+      filter variables:
+      - name: equivalentReflectivityFactor
+      maxvalue: 75.0
+      minvalue: -15.0
+    - filter: Background Check
+      threshold: $bgchk_thresh #5.0
+      <<: *multiIterationFilter
+    ${filter_option}
+EOF
+    }
+
+    ####################################################################
+
+    # shellcheck disable=SC2329
+    function CWB_rw_yaml {
+       # Assign the input arguments to variables for clarity
+        local output_fname=$2 # The file to be output (appended to)
+        local wrkdir=$1      # Working directory
+        cd "${wrkdir}" || exit $?
+
+        # The rest of the script is a heredoc that writes the YAML configuration
+        cat >> "$output_fname" << EOF
+  - obs space:
+      <<: *ObsSpace
+      name: RadarRW
+      _obsdatain: &ObsDataInRW
+        engine:
+          type: H5File
+          obsfile: $inputDataFile
+      _obsdataout: &ObsDataOutRW
+        engine:
+          type: H5File
+          obsfile: $outputDataFile
+      obsdatain:
+        <<: *ObsDataInRW
+      obsdataout: *ObsDataOutRW
+      simulated variables: [radialVelocity]
+    obs error: *ObsErrorDiagonal
+    obs operator:
+      name: RadarRadialVelocity
+    get values:
+      nnearest: 3
+    obs filters:
+    - filter: PreQC
+      maxvalue: $PreQC_maxvalue
+    - filter: Bounds Check
+      filter variables:
+      - name: radialVelocity
+      test variables:
+      - name: GeoVaLs/observable_domain_mask
+      flag all filter variables if any test variable is out of bounds: true
+      minvalue: 0.0
+      maxvalue: 0.1
+    - filter: Perform Action
+      filter variables:
+      - name: radialVelocity
+      action:
+        name: assign error
+        error parameter: 1.5
+    #- filter: Thinning
+    #  amount: 0.6 # fraction to be thinned
+    #  random seed: 2022062406
+    - filter: Background Check
+      threshold: $bgchk_thresh #5.0
+      <<: *multiIterationFilter
+    ${filter_option}
+EOF
+    }
+
+    ####################################################################
+
+    # shellcheck disable=SC2329
+    function ahi_himawari8_yaml {
+        # Assign the input arguments to variables for clarity
+        local output_fname=$2 # The file to be output (appended to)
+        local wrkdir=$1      # Working directory
+        cd "${wrkdir}" || exit $?
+
+        # The rest of the script is a heredoc that writes the YAML configuration
+        cat >> "$output_fname" << EOF
+  - obs space:
+      <<: *ObsSpace
+      name: ahi_himawari8
+      _obsdatain: &ObsDataInAhi
+        engine:
+          type: H5File
+          obsfile: $inputDataFile     #./aircraft_obs_\${DATE}.h5
+      _obsdataout: &ObsDataOutAhi
+        engine:
+          type: H5File
+          obsfile: $outputDataFile    #Data/obsout_omb_aircraft.h5
+      obsdatain:
+        <<: *ObsDataInAhi
+      obsdataout: *ObsDataOutAhi
+      simulated variables: [brightnessTemperature]
+      channels: &ahi_himawari8_channels $channels # 8-10
+    obs error: *ObsErrorDiagonal
+    obs operator:
+      <<: *cloudyCRTMObsOperator
+      obs options:
+        <<: *CRTMObsOptions
+        Sensor_ID: ahi_himawari8
+    get values:
+      nnearest: 3
+    obs filters:
+    - filter: PreQC
+      maxvalue: 0
+    #- filter: Bounds Check
+    #  filter variables:
+    #  - name: brightnessTemperature
+    #  test variables:
+    #  - name: GeoVaLs/observable_domain_mask
+    #  flag all filter variables if any test variable is out of bounds: true
+    #  minvalue: 0.0
+    #  maxvalue: 0.1
+    - filter: Gaussian Thinning
+      horizontal_mesh: $horiz_thin
+    - filter: Background Check
+      threshold: $bgchk_thresh #3.0
+      <<: *multiIterationFilter
+    ${filter_option}
+    - filter: Domain Check
+      where:
+      - variable:
+          name: MetaData/sensorZenithAngle
+        maxvalue: 60.0
+    - filter: GOMsaver
+      filename: ${jedi_output_dir}/geovals_ahi_himawari8.nc4
+    - filter: YDIAGsaver
+      filename: ${jedi_output_dir}/ydiag_ahi_himawari8.nc4
+      filter variables:
+      - name: brightness_temperature_assuming_clear_sky
+        channels: *ahi_himawari8_channels
+      - name: weightingfunction_of_atmosphere_layer
+        channels: *ahi_himawari8_channels
+      - name: pressure_level_at_peak_of_weightingfunction
+        channels: *ahi_himawari8_channels
+      - name: brightness_temperature_jacobian_air_temperature
+        channels: *ahi_himawari8_channels
+      - name: brightness_temperature_jacobian_humidity_mixing_ratio
+        channels: *ahi_himawari8_channels
+      - name: brightness_temperature_jacobian_surface_emissivity
+        channels: *ahi_himawari8_channels
+      - name: brightness_temperature_jacobian_surface_temperature
+        channels: *ahi_himawari8_channels
+    # Assign obsError.
+    - filter: Perform Action
+      <<: *multiIterationFilter
+      filter variables:
+      - name: brightnessTemperature
+        channels: *ahi_himawari8_channels
+      action:
+        name: assign error
+        _symmetric cld: &ahi_g16_SymmCld
+          x0: [0.5, 0.5, 0.5]
+          x1: [17.0, 20.5, 24.5]
+          err0: [3.21, 3.11, 2.47]
+          err1: [12.57, 14.57, 17.09]
+        error function:
+          name: ObsFunction/ObsErrorModelRamp
+          channels: *ahi_himawari8_channels
+          options:
+            <<: *ahi_g16_SymmCld
+            channels: *ahi_himawari8_channels
+            xvar:
+              #name: ObsFunction/SymmCldImpactIR  # Okamoto (2014) error model
+              name: ObsFunction/SymmCldImpactBTlim # Harnisch et al. (2016) error model
+              channels: *ahi_himawari8_channels
+              options:
+                channels: *ahi_himawari8_channels
+                btlim: [235.2, 245.7, 258.3] # comment out if using Okamoto (2014) error model
+EOF
+    }
+
+    ####################################################################
+
+    # shellcheck disable=SC2329
+    function aircraft_yaml {
+        # Assign the input arguments to variables for clarity
+        local output_fname=$2 # The file to be output (appended to)
+        local wrkdir=$1      # Working directory
+        cd "${wrkdir}" || exit $?
+
+        # The rest of the script is a heredoc that writes the YAML configuration
+        cat >> "$output_fname" << EOF
+  - obs space:
+      <<: *ObsSpace
+      name: aircraft
+      _obsdatain: &ObsDataInAir
+        engine:
+          type: H5File
+          obsfile: $inputDataFile     #./aircraft_obs_\${DATE}.h5
+      _obsdataout: &ObsDataOutAir
+        engine:
+          type: H5File
+          obsfile: $outputDataFile #Data/obsout_omb_aircraft.h5
+      obsdatain:
+        <<: *ObsDataInAir
+      obsdataout: *ObsDataOutAir
+      simulated variables: [air_temperature, eastward_wind, northward_wind, specific_humidity]
+    obs error: *ObsErrorDiagonal
+    obs operator:
+      name: VertInterp
+    get values:
+      nnearest: 3
+    obs filters:
+    - filter: PreQC
+      maxvalue: 0
+    - filter: Gaussian Thinning
+      horizontal_mesh: $horiz_thin
+      vertical_mesh: $vert_thin
+    - filter: Background Check
+      threshold: $bgchk_thresh #5.0
+      <<: *multiIterationFilter
+    ${filter_option}
+EOF
+    }
+
+    ####################################################################
+
+    # shellcheck disable=SC2329
+    function obsSpaceLocalization_yaml {
+        # Assign the input arguments to variables for clarity
+        local output_fname=$2 # The file to be output (appended to)
+        local wrkdir=$1      # Working directory
+        cd "${wrkdir}" || exit $?
+
+        # The rest of the script is a heredoc that writes the YAML configuration
+        cat >> "$output_fname" << EOF
+    obs localizations:
+    - localization method: Horizontal Gaspari-Cohn
+      lengthscale: $hloc
+      max nobs: 1000
+EOF
+
+        # Conditional block
+        if [ "$enkf_type" != "GETKF" ]; then
+           cat >> "$output_fname" << EOF2
+    - localization method: Vertical localization
+      vertical lengthscale: $vloc
+      ioda vertical coordinate: $vloc_unit #pressure or height
+      ioda vertical coordinate group: MetaData
+      apply log transformation: $applyLogTransformation #true
+      localization function: Gaspari Cohn
+EOF2
+        fi
+    }
+
+    #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+    OBS_INFO_FILE=${FIXDIR}/jedi/obs_table.txt
+    if [[ ! -s "$OBS_INFO_FILE" ]]; then   # exists and size greater than zero
+       echo "$OBS_INFO_FILE is missing. exit"
+       exit 10
+    fi
+    SUPPORTED_OBS_TYPES=(CWB_dualpol CWB_rw ahi_himawari8 aircraft)
+
+    #export VARBC_CYCLE_PERIOD=$CYCLE_PERIOD # Cycle length for VarBC (minutes). Usually, $CYCLE_PERIOD, but could be longer (like 24 h if doing regional DA).
+    #export MAX_VARBC_CYCLE=1440 # Farthest we can go back in time to find VarBC coefficients for a given cycle (minutes)
+
+    EXP_DIR_TOP=${datimedir}
+    #-----------------------------------------------------------------------
+    # Get observation information,link the observation files, and fill a
+    #  YAML file for the observations
+    #------------------------------------------------------------------------
+    [[ $imember -lt 2 ]] && mecho0 "JEDI_RUN_DIR = ${wrkdir}, Processing observations ....."
+
+    if [[ "$taskname" =~ "prior" ]]; then
+        filter_option="- *regionalReduceObsSpace"
+    elif [[ "$taskname" == "solver" ]]; then
+        filter_option="- *regionalReduceObsSpace"
+    elif [[ "$taskname" == "enkf_all_at_once" ]]; then
+        filter_option="- *regionalReduceObsSpace"
+    elif [[ "$taskname" == "post" ]]; then
+        filter_option=""
+    else
+        mecho1 "${RED}ERROR${NC}: Unsupported taskname = ${YELLOW}${taskname}${NC}."
+        exit
+    fi
+
+    obs_str=""; radiance_str=""
+    export max_hloc=-1 # maximum obs-space localization across all obs types; set correctly below
+
+    rm -f obs.yaml
+
+    # Select all lines not containing # (grep -v "#"); these are assumed to be lines with valid data
+    mapfile -t instruments         < <(cat $OBS_INFO_FILE | grep -v "#" | cut -d "|" -f 1)
+    mapfile -t horiz_localizations < <(cat $OBS_INFO_FILE | grep -v "#" | cut -d "|" -f 2) # km
+    mapfile -t vert_localizations  < <(cat $OBS_INFO_FILE | grep -v "#" | cut -d "|" -f 3) # km or scale-height
+    mapfile -t vert_loc_unit       < <(cat $OBS_INFO_FILE | grep -v "#" | cut -d "|" -f 4)
+    mapfile -t outlier_thresholds  < <(cat $OBS_INFO_FILE | grep -v "#" | cut -d "|" -f 5)
+    mapfile -t horiz_thinning      < <(cat $OBS_INFO_FILE | grep -v "#" | cut -d "|" -f 6) # km
+    mapfile -t vert_thinning       < <(cat $OBS_INFO_FILE | grep -v "#" | cut -d "|" -f 7) # Pa
+    mapfile -t radiance_channels   < <(cat $OBS_INFO_FILE | grep -v "#" | cut -d "|" -f 8)
+    mapfile -t radiance_bc         < <(cat $OBS_INFO_FILE | grep -v "#" | cut -d "|" -f 9)
+
+    THIS_OB_DIR=${OBS_DIR}/${anlys_datetime}
+    export jedi_output_dir="./dbOut"    # Make an environmental variable so .yaml.csh files can see it.
+    rm -rf "${jedi_output_dir}"
+    if [[ "$taskname" != "solver" ]]; then mkdir -p "${jedi_output_dir}"; fi
+
+    n=${#instruments[@]}; (( m=1 ))
+    nob=0; runtime_instruments=()
+    for ((i=0; i<n; i++)); do
+        inst=${instruments[$i]// /}
+        if [[ "${inst}" == "CWB_dualpol" ]]; then
+            obsfile="${EXP_DIR_TOP}/ioda_mrms_refl/ioda_mrms_${anlys_date}${anlys_hour}_${anlys_min}.nc4"
+        elif [[ "${inst}" == "CWB_rw" ]]; then
+            obsfile="${OBS_VEL_DIR}/${anlys_date}/ioda_VR_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
+        else
+            obsfile="${THIS_OB_DIR}/${inst}_obs_${anlys_datetime}.h5"
+        fi
+        # shellcheck disable=SC2076
+        if [[ $verb -eq 1 ]]; then
+            mecho1 "Checking observations file ${LIGHT_BLUE}${obsfile}${NC}"
+        fi
+        if [[ -e "${obsfile}" && " ${SUPPORTED_OBS_TYPES[*]} " == *" ${inst} "* ]]; then
+            if [[ $imember -lt 2 ]]; then
+                mecho1 "Processing ${PURPLE}$inst${NC} observations from "
+                mecho1 "${CYAN}${obsfile}${NC}"
+                [[ $imember -eq 1 && $i -eq $m ]] && mecho0 "MEMs: ."
+            else
+                #[[ $imember -eq $ENS_SIZE && $i -eq $m ]] && echo "." || echo -n "."
+                [[ $imember -eq 1 && $i -eq $m ]] && echo "." || echo -n "."
+            fi
+            export inputDataFile=./${inst}_obs_${anlys_datetime}.h5
+            export outputDataFile=${jedi_output_dir}/obsout_omb_${inst}.h5
+            export hloc=$(( ${horiz_localizations[$i]} * 1000 )) # km --> meters
+            export vloc_unit=${vert_loc_unit[$i]// /}
+            export horiz_thin=${horiz_thinning[$i]}
+            export vert_thin=${vert_thinning[$i]}
+            export channels=${radiance_channels[$i]}
+            export varBC=${radiance_bc[$i]}
+            if [[ "$taskname" == "prior_members" ]]; then
+                #ln -sf ${EXP_DIR_TOP}/${DATE}/enkf/ens_mean/dbOut/obsout_omb_${inst}.h5 $inputDataFile
+                ln -sf ${EXP_DIR_TOP}/enkf/ens_mean/dbOut/obsout_omb_${inst}_1st_pass.h5 $inputDataFile
+                export bgchk_thresh=999999
+                export PreQC_maxvalue=3 #0
+                #export horiz_thin=-1
+                #export vert_thin=-1
+            elif [[ "$taskname" == "solver" ]]; then
+                ln -sf ${EXP_DIR_TOP}/enkf/ens_mean/dbOut/obsout_omb_${inst}.h5 ./${inst}_obs_${anlys_datetime}_orig.h5 # save a copy
+                cp ${EXP_DIR_TOP}/enkf/ens_mean/dbOut/obsout_omb_${inst}.h5 $inputDataFile
+                #for ((ie=1;ie<=ENS_SIZE;ie++)); do
+                    # Append to $inputDataFile
+                    iestr=$(printf "%02d" $ie)
+                    #if ! ncks -A ${EXP_DIR_TOP}/enkf/ens_${iestr}/dbOut/obsout_omb_${inst}_processed.h5 $inputDataFile; then
+                    if ! ncks -A ${EXP_DIR_TOP}/enkf/ens_members/dbOut/obsout_omb_${inst}_processed.h5 $inputDataFile; then
+                        mecho1 "${RED}ERROR${NC}: ncks for mem=1" #$ie."
+                        mecho1 "ncks -A ${LIGHT_BLUE}${EXP_DIR_TOP}/enkf/ens_${iestr}/dbOut/obsout_omb_${inst}_processed.h5${NC} ${CYAN}${inputDataFile}${NC}"
+                        exit 0
+                    fi
+
+                export outputDataFile=$inputDataFile # EnKF in solver mode looks for $outputDataFile to read in
+                export bgchk_thresh=999999
+                export PreQC_maxvalue=3 #0
+            elif [[ "$taskname" == "post" ]]; then
+                export outputDataFile=${jedi_output_dir}/obsout_oma_${inst}.h5
+                ln -sf ${EXP_DIR_TOP}/enkf/${inst}_obs_${anlys_datetime}.h5 .
+
+                export bgchk_thresh=999999
+                export PreQC_maxvalue=3 #0
+            else
+                ln -sf ${obsfile} $inputDataFile
+                export bgchk_thresh=${outlier_thresholds[$i]}
+                export PreQC_maxvalue=3
+            fi
+            if [[ "$vloc_unit" == "pressure" ]]; then
+                export applyLogTransformation="true"
+                export vloc=${vert_localizations[$i]}
+            elif [[ "$vloc_unit" == "height" ]]; then
+                export vloc=$(( ${vert_localizations[$i]} * 1000 ))  # km --> meters
+                export applyLogTransformation="false"
+            else
+                echo "vloc_unit = $vloc_unit invalid. should be either height or pressure"
+                exit 11
+            fi
+            if (( hloc > max_hloc )); then
+                export max_hloc=$hloc    # largest horiz. localization, for EnKF obs distribution
+            fi
+            ${inst}_yaml ${wrkdir} obs.yaml   # 'execute' the file to fill-in variables and add to obs.yaml
+            # add localization yaml.csh
+            obsSpaceLocalization_yaml ${wrkdir} obs.yaml
+            ((nob++)); obs_str+="'${inst}',"
+
+            # if $channels is NOT -1, it's a radiance ob
+            if [[ "$channels" != -1 ]]; then
+                radiance_str+="'${inst}',"
+            fi
+
+            ## If radiance, and we're doing bias correction, look for files at the last cycle, defined by $VARBC_CYCLE_PERIOD,
+            ## but if not there, keep going back in time until $MAX_VARBC_CYCLE is met
+            #if [[ "$channels" != -1 && "$varBC" =~ "T" ]]; then
+            #
+            #    found_it="false"
+            #
+            #    for offset in $(seq $VARBC_CYCLE_PERIOD 1 $MAX_VARBC_CYCLE); do
+            #        #export PREV_DATE_VARBC=$(${TOOL_DIR}/da_advance_time.exe ${DATE} -${offset}m -f ccyymmddhhnn)
+            #        export PREV_DATE_VARBC=$(date -d "${anlys_date} ${anlys_hour}:${anlys_min} ${intvl_sec} seconds ago" +%H%M)
+            #
+            #        possible_dirs=( ${EXP_DIR_TOP}/${PREV_DATE_VARBC}/letkf \
+            #                        ${EXP_DIR_TOP}/${PREV_DATE_VARBC}/letkf/prior_mean )
+            #        for LAST_RAD_BC_DIR in ${possible_dirs[@]}; do
+            #            n=0
+            #            if [[ -e ${LAST_RAD_BC_DIR}/satbias_${inst}_out.nc4 ]]; then
+            #                 ln -sf ${LAST_RAD_BC_DIR}/satbias_${inst}_out.nc4  ./satbias_${inst}.nc4
+            #                 ((n++))
+            #            fi
+            #            bias_covariance_dir=$LAST_RAD_BC_DIR
+            #            if [[ -e ${bias_covariance_dir}/satbias_cov_${inst}_out.nc4 ]]; then
+            #                 ln -sf ${bias_covariance_dir}/satbias_cov_${inst}_out.nc4 ./satbias_cov_${inst}.nc4
+            #                 ((n++))
+            #            fi
+            #            # For each sensor, we have a file for bias correction and preconditioning
+            #            # So that's why we look for 2 files
+            #            if [[ $n == 2 ]]; then
+            #                 found_it="true"
+            #                 break 2 # break 2 means get out of 2 levels of loops
+            #            fi
+            #        done
+            #        # loop for LAST_RAD_BC_DIR
+            #    done
+            #    # loop for offset
+            #    if [[ "$found_it" == "false" ]]; then
+            #        echo "Missing satbias_out file for ${inst}.  Exit"
+            #        touch -f ./MISSING_BIAS_CORRECTION
+            #        exit 9
+            #    fi
+            #
+            #    # Link lapse rate files needed for MPAS-JEDI
+            #    ln -sf ${FIXDIR}/jedi/*tlapmean.txt .
+            #
+            #fi #end if if radiance
+            runtime_instruments+=("${inst}")
+        fi # end if file existence
+    done
+    # end loop over number of instruments in the $OBS_INFO_FILE
+
+    if [[ $nob -eq 0 ]]; then
+        #echo "all obs files in ${THIS_OB_DIR} are missing. exit"
+        #echo "Check $THIS_OB_DIR" > ./MISSING_OBS
+        mecho0 "${RED}ERROR${NC}: all obs file in ${LIGHT_BLUE}${THIS_OB_DIR}${NC} are missing. exit"
+        exit 11
+    fi
+
+    #------------------------------------------------------------------
+    # Make namelist for program to concatenate all JEDI/UFO output files
+    # from individual processors into one file
+    # Helpful to do up here, so we can call the program in multiple places
+    #  If you want to remove the final comma: "$string" | sed -e "s/  /,/g"
+    #obs_platforms = ${conv_sensor_str} !'gnssro',${radiance_sensor_str}
+    #obs_platforms = 'sondes','aircraft','satwind','gnssro','sfc',${radiance_sensor_str}
+    #------------------------------------------------------------------
+    if [[ -n "$radiance_str" && "${taskname}" =~ "prior_" ]]; then
+        #ln -sf $NETCDF_CONCATENATE_EXEC .
+        for prefx in geovals ydiag; do
+           rm -f ./input_${prefx}.nml
+           cat << EOF4 > ./input_${prefx}.nml
+&share
+    obspath       = '${jedi_output_dir}'
+    obs_platforms = ${radiance_str}
+    output_path   = '${jedi_output_dir}'
+    fname_prefx   = '${prefx}'
+/
+EOF4
+        done
+    fi
+}
+
+########################################################################
+
+function create_jedi_yaml {
+    local taskname=$1    # prior_mean, prior_members, solver, enkf_all_at_once
+    local full_yaml_file="$2"
+    local member=$3
+    #------------------------------------------------------
+    # Add stuff to YAML files, and then concatenate
+    #------------------------------------------------------
+    #full_yaml_file=./input.yaml
+    rm -f $full_yaml_file
+
+    #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+    # All JEDI applications get the same common block
+    if [[ "$taskname" == "solver" ]]; then
+       export obsDistribution=HaloDistribution
+    else
+       export obsDistribution=RoundRobinDistribution # in common.yaml.csh, so we need, but maybe only used for EnKF...
+    fi
+
+    ob_time_window=$((intvl_sec/2))    # minutes before analysis time
+    time_window_begin=$(date -u -d @$((iseconds-ob_time_window)) +%Y-%m-%dT%H:%M:%SZ)   #$(${TOOL_DIR}/da_advance_time.exe ${DATE} -${ob_time_window}m -f ccyy-mm-ddThh:nn:ssZ)
+    jedi_time_string=$(date  -u -d @$iseconds +%Y-%m-%dT%H:%M:%SZ)
+
+    export vertloc_length_model_space=4000.0
+    export vertloc_coord_model_space="height"
+    export rtps_inflation_factor=0.9
+    export rtpp_inflation_factor=0.0
+    export CRTM_COEFFS_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/NCAR_JEDI/fix_files/CRTM_V3_coeffs/"
+    # The rest of the script is a heredoc that writes the YAML configuration
+    cat >> "${full_yaml_file}" << EOF
+# reduce obs space for regional applications
+_regional reduce obs space: &regionalReduceObsSpace
+  filter: Domain Check
+  where:
+    - variable:
+        name: MetaData/latitude
+      minvalue: -90.0
+      maxvalue: 90.0
+    - variable:
+        name: MetaData/longitude
+      minvalue: -180.0
+      maxvalue: 180.0
+  action:
+    name: reduce obs space
+
+_round robin dist: &RoundRobinDistribution
+  name: RoundRobin
+
+_halo dist: &HaloDistribution
+  name: Halo
+  halo size: $max_hloc
+
+_obs space: &ObsSpace
+  #obs perturbations seed: 1
+  #io pool:
+  #  write multiple files: true
+  #  max pool size: 1024
+  distribution: *${obsDistribution}                            # either *HaloDistribution or *RoundRobinDistribution
+
+_obs error diagonal: &ObsErrorDiagonal
+  covariance model: diagonal
+  # Note: the same 'obs perturbations seed' must be used for all members for the 'zero-mean perturbations' option to work
+  #zero-mean perturbations: true
+  #member: 1
+  #number of members: 1
+_clear crtm: &clearCRTMObsOperator
+  name: CRTM
+  SurfaceWindGeoVars: uv
+  Absorbers: [H2O, O3]
+  linear obs operator:
+    Absorbers: [H2O]
+  obs options: &CRTMObsOptions
+    EndianType: little_endian
+    CoefficientPath: $CRTM_COEFFS_DIR #/glade/work/guerrett/pandac/fixed_input/crtm_bin/
+    IRVISlandCoeff: IGBP #USGS
+_cloudy crtm: &cloudyCRTMObsOperator
+  name: CRTM
+  SurfaceWindGeoVars: uv
+  Absorbers: [H2O, O3]
+  Clouds: [Water, Ice, Rain, Snow, Graupel]
+  Cloud_Seeding: true
+  linear obs operator:
+    Absorbers: [H2O]
+    Clouds: [Water, Ice, Rain, Snow, Graupel]
+  obs options:
+    <<: *CRTMObsOptions
+
+EOF
+
+    if [[ "$taskname" =~ "prior" ]]; then
+        export letkf_stage="asObserver"
+        export SaveSingleMember="true"
+
+        if [[ "$taskname" == "prior_mean" ]]; then
+           export SingleMemberNumber=0
+        elif [[ "$taskname" == "prior_members" ]]; then
+           export SingleMemberNumber=$member
+        fi
+    elif [[ "$taskname" == "solver" ]]; then
+        export letkf_stage="asSolver"
+        export SaveSingleMember="false"
+        export SingleMemberNumber=0             # shouldn't matter
+    elif [[ "$taskname" == "enkf_all_at_once" ]]; then
+        export letkf_stage="asObserver"
+        export SaveSingleMember="false"
+        export SingleMemberNumber=0             # shouldn't matter
+    elif [[ "$taskname" == "post" ]]; then
+        export letkf_stage="asPost"
+        export SaveSingleMember="false"
+        export SingleMemberNumber=0             # shouldn't matter
+    else
+        echo "need to add YAML for ${taskname}."
+        exit
+    fi
+
+    #mecho0 "Writing to $full_yaml_file ....."
+    # The rest of the script is a heredoc that writes the YAML configuration
+    cat >> "${full_yaml_file}" << EOF
+_member: &memberConfig
+  date: &analysisDate '${jedi_time_string}'
+  state variables:
+  - water_vapor_mixing_ratio_wrt_moist_air
+  - air_pressure_at_surface
+  - air_temperature
+  - northward_wind
+  - eastward_wind
+  - air_potential_temperature
+  - dry_air_density
+  - u
+  - w
+  - upward_air_velocity
+  - water_vapor_mixing_ratio_wrt_dry_air
+  - air_pressure
+  - landmask
+  - seaice_fraction
+  - snowc
+  - skin_temperature_at_surface
+  - ivgtyp
+  - isltyp
+  - snowh
+  - vegetation_area_fraction
+  - eastward_wind_at_10m
+  - northward_wind_at_10m
+  - lai
+  - smois
+  - tslb
+  - pressure_p
+  - cloud_liquid_water
+  - cloud_liquid_ice
+  - graupel
+  - rain_water
+  - snow_water
+  - cldfrac
+  - equivalent_reflectivity_factor
+  stream name: background
+
+_multi iteration filter: &multiIterationFilter
+  _blank: null
+
+_as observer: &asObserver
+  run as observer only: true
+  update obs config with geometry info: false
+  #save single member for observer: $SaveSingleMember
+  #single memeber number for save: $SingleMemberNumber
+  #save prior mean: false
+
+_as solver: &asSolver
+  read HX from disk: true
+  #do test prints: false
+  do posterior observer: false
+  save posterior ensemble: true
+  save posterior mean: true
+
+_as post: &asPost
+  run as observer only: true
+  save posterior ensemble: false
+  save prior mean: false
+  save posterior mean: false
+
+_letkf geometry: &3DLETKFGeometry
+  iterator dimension: 3
+
+_lgetkf geometry: &3DGETKFGeometry
+  iterator dimension: 2
+
+geometry:
+  <<: *3D${enkf_type}Geometry
+  nml_file: "./namelist.atmosphere_${anlys_datetime}"
+  streams_file: "./streams.atmosphere_ens"
+  deallocate non-da fields: true
+  #interpolation type: unstructured # no Increment/State interp in enkf
+
+time window:
+  begin: '${time_window_begin}'
+  length: PT$((intvl_sec/60))M #PT1H
+
+background:
+  members from template:
+    template:
+      <<: *memberConfig
+      filename: ./mpas_en%iMember%.nc
+    pattern: '%iMember%'
+    start: 1
+    zero padding: 3
+    nmembers: $ENS_SIZE
+
+increment variables:
+  - air_temperature
+  - water_vapor_mixing_ratio_wrt_moist_air
+  - eastward_wind
+  - northward_wind
+  - air_pressure_at_surface
+  - cloud_liquid_water
+  - cloud_liquid_ice
+  - rain_water
+  - snow_water
+  - graupel
+  - equivalent_reflectivity_factor
+  - upward_air_velocity
+
+driver: *${letkf_stage} #*asObserver or *asSolver
+
+local ensemble DA:
+  solver: Deterministic $enkf_type # LETKF
+  use linear observer: False
+  vertical localization: # only used by GETKF solver
+    fraction of retained variance: 0.95
+    lengthscale: $vertloc_length_model_space # meters if height 4000.0
+    lengthscale units: $vertloc_coord_model_space #height
+  inflation:
+    rtps: $rtps_inflation_factor
+    rtpp: $rtpp_inflation_factor
+    mult: 1.0
+output:
+  filename: ./analysis.\$Y-\$M-\$D_\$h.\$m.\$s_en%{member}%.nc
+  stream name: analysis
+
+#output mean prior:
+#  filename: ./ens_mean_prior.\$Y-\$M-\$D_\$h.\$m.\$s.nc
+#  stream name: analysis
+observations:
+  observers:
+EOF
+
+    cat obs.yaml >> ${full_yaml_file} # add observations to $full_yaml_file
+    rm -f obs.yaml
+
+    if [[ "$taskname" == "solver" ]]; then
+       sed -i "s/*ObsDataIn/*ObsDataOut/g" ${full_yaml_file}
+       sed -i '/ obsdataout/d' ${full_yaml_file}           # note the space in front of obsdata out; this deletes the whole line
+    fi
+}
+
+########################################################################
+
+function run_jedi_prior_mean {
+    # $1        $2      $3
+    # wrkdir    icycle    iseconds
+    local datimedir=$1
+    local icycle=$2
+    local iseconds=$3
+
+    local wrkdir="$datimedir/enkf/ens_mean"
+
+    local casedir
+    casedir=$(dirname ${datimedir})
+
+    taskname="prior_mean"
+
+    #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/running.${taskname} || -f $wrkdir/done.${taskname} || -f $wrkdir/queue.${taskname} ]]; then
+        return
+    fi
+
+    #
+    # GLOBAL: ENS_SIZE, rundir, ADAPTIVE_INF, OBS_DIR
+    #         intvl_sec, ncores_filter
+    # RETURN: input_file_list, output_file_list
+    #
+    anlys_date=$(date -u -d @$iseconds  +%Y%m%d)
+    anlys_datetime=$(date -u -d @$iseconds  +%Y%m%d%H%M)
+
+    anlys_hour=$(date -u -d @$iseconds  +%H)
+    anlys_min=$(date -u -d @$iseconds   +%M)
+
+    timesec_pre=$((iseconds-intvl_sec))
+    event_pre=$(date -u -d @${timesec_pre}   +%H%M)
+
+    PREV_ENS_DIR_TOP=${casedir}/${event_pre}       # Location of prior ensemble when cycling
+
+    #
+    # Build working directory
+    #
+    mkwrkdir $wrkdir 0               # 0: Keep existing directory as is
+                                     # 1: Remove existing same name directory
+    cd $wrkdir || return
+
+    #
+    # Waiting for job conditions
+    #
+    conditions=("${casedir}/${event_pre}/done.fcst" "${datimedir}/ioda_mrms_refl/done.ioda_mrms_refl")
+    #[[ "${anlys_min}" == "00" ]] && conditions+=("${datimedir}/ioda_bufr/done.ioda_bufr")
+    #conditions=("${casedir}/${event_pre}/done.fcst")
+
+    if [[ $dorun == true ]]; then
+        for cond in "${conditions[@]}"; do
+            mecho0 "Checking $cond"
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    mecho0 "Waiting for file: $cond"
+                fi
+                sleep 10
+            done
+        done
+    fi
+
+    #------------------------------------------------------
+    # Prepare runtime files
+    #------------------------------------------------------
+
+    do_dacyle=".true."
+    use_2stream_IO="true"
+    if [[ "${use_2stream_IO,,}" =~ "true" ]]; then
+        do_restart=".false."
+    else
+        do_restart=".true."
+    fi
+
+    pblscheme="${pbl_schemes[0]}"
+    sfcscheme="${sfclayer_schemes[0]}"
+
+    letkf_preparation "${taskname}" "${wrkdir}" $iseconds
+
+    declare -a runtime_instruments
+
+    letkf_get_observation "${taskname}" "${wrkdir}" 0
+
+    create_jedi_yaml "${taskname}" "./observer.yaml" 0
+
+    #------------------------------------------------------
+    # Run mpasjedi_enkf.x
+    #------------------------------------------------------
+
+    jobscript="run_prior_mean.${mach}"
+
+    declare -A jobParms=(
+        [PARTION]="${partition_filter}"
+        [NOPART]="${npefilter}"
+        [NNODES]="${nnodes_filter}"
+        [JOBNAME]="${taskname}-${jobname}_${eventtime}"
+        [CPUSPEC]="${claim_cpu_filter}"
+        [EXEDIR]="${EXEDIR}/jedi"
+        [WRKDIR]="${wrkdir}"
+        [TASKNAME]="${taskname}"
+        [LOGNAME]="enkf_${taskname}"
+        [JEDIDIR]="${JEDI_DIR}"
+        [ENS_SIZE]="${ENS_SIZE}"
+        [DATETIME]="${anlys_datetime}"
+        [SCPDIR]="${scpdir}"
+        [DBOUTDIR]="${jedi_output_dir}"
+        [INSTRUMENTS]="${runtime_instruments[*]}"
+        [MODULE]="${jedi_modulename}"
+    )
+
+    if [[ "${mach}" == "pbs" ]]; then
+        jobParms[NNODES]="${nnodes_filter}"
+        jobParms[NCORES]="${ncores_filter}"
+    fi
+
+    submit_a_job "${wrkdir}" "${taskname}" "jobParms" "$TEMPDIR/run_ncarjedi.${mach}" "$jobscript" ""
+}
+
+########################################################################
+
+function run_jedi_prior_members {
+    # $1        $2      $3
+    # wrkdir    icycle    iseconds
+    local datimedir=$1
+    local icycle=$2
+    local iseconds=$3
+
+    local wrkdir="$datimedir/enkf/ens_members"
+    local casedir
+    casedir=$(dirname ${datimedir})
+
+    taskname="prior_members"
+
+    #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/done.${taskname} || -f $wrkdir/queue.${taskname} ]]; then
+        return
+    fi
+
+    #
+    # GLOBAL: ENS_SIZE, rundir, ADAPTIVE_INF, OBS_DIR
+    #         intvl_sec, ncores_filter
+    # RETURN: input_file_list, output_file_list
+    #
+    anlys_date=$(date -u -d @$iseconds  +%Y%m%d)
+    anlys_datetime=$(date -u -d @$iseconds  +%Y%m%d%H%M)
+
+    anlys_hour=$(date -u -d @$iseconds  +%H)
+    anlys_min=$(date -u -d @$iseconds   +%M)
+
+    timesec_pre=$((iseconds-intvl_sec))
+    event_pre=$(date -u -d @${timesec_pre}   +%H%M)
+
+    PREV_ENS_DIR_TOP=${casedir}/${event_pre}       # Location of prior ensemble when cycling
+
+    #
+    # Build working directory
+    #
+    mkwrkdir $wrkdir 0               # 0: Keep existing directory as is
+                                     # 1: Remove existing same name directory
+    cd $wrkdir || return
+
+    #
+    # Waiting for job conditions
+    #
+    conditions=("${datimedir}/enkf/ens_mean/done.prior_mean")
+
+    if [[ $dorun == true ]]; then
+        for cond in "${conditions[@]}"; do
+            mecho0 "Checking $cond"
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    mecho0 "Waiting for file: $cond"
+                fi
+                sleep 10
+            done
+        done
+    fi
+
+    #------------------------------------------------------
+    # Prepare runtime files
+    #------------------------------------------------------
+
+    #
+    # Preparation for each member
+    #
+    iens=1
+    #jobarrays=()
+    #for iens in $(seq 1 $ENS_SIZE); do
+        memstr=$(printf "%02d" $iens)
+        basen=$(( (iens-1)%6 ))
+        if [[ $basen -lt 2 ]]; then     # map to 0,1,2
+            idx=0
+        elif [[ $basen -lt 4 ]]; then
+            idx=1
+        else
+            idx=2
+        fi
+        pblscheme=${pbl_schemes[$idx]}
+        sfcscheme=${sfclayer_schemes[$idx]}
+
+        if [[ $icycle -eq 0 || ${damode} == "init" ]]; then
+            do_restart="false"
+            do_dacyle="false"
+            #mpas_inputfile_template="${domname}_${memstr}.init.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+            #initfile="./${domname}_${memstr}.init.${currtime_fil}.nc"
+        else
+            do_restart="true"
+            do_dacyle="true"
+            #mpas_inputfile_template="${domname}_${memstr}.init.nc"
+            #initfile="./${domname}_${memstr}.restart.${currtime_fil}.nc"
+        fi
+
+    memwrkdir="${wrkdir}"
+    #    memwrkdir=$wrkdir/ens_$memstr
+    #    mkwrkdir $memwrkdir 0
+    #    cd $memwrkdir  || return
+
+        letkf_preparation "${taskname}" "${memwrkdir}" $iseconds
+
+        declare -a runtime_instruments
+
+        letkf_get_observation "${taskname}" "${memwrkdir}" $iens
+
+        # first run EnKF in "observer" mode
+        create_jedi_yaml "${taskname}" "./observer.yaml" $iens
+
+    #    jobarrays+=("$iens")
+    #done
+
+    #------------------------------------------------------
+    # Run mpasjedi_enkf.x
+    #------------------------------------------------------
+
+    cd $wrkdir || exit $?
+
+    jobscript="run_prior_members.${mach}"
+
+    declare -A jobParms=(
+        [PARTION]="${partition_filter}"
+        [NOPART]="${npefilter}"
+        [NNODES]="${nnodes_filter}"
+        [JOBNAME]="${taskname}-${jobname}_${eventtime}"
+        [CPUSPEC]="${claim_cpu_filter}"
+        [EXEDIR]="${EXEDIR}/jedi"
+        [WRKDIR]="${wrkdir}"
+        [TASKNAME]="${taskname}"
+        #[LOGNAME]="enkf_${taskname}_%a"
+        [LOGNAME]="enkf_${taskname}"
+        [JEDIDIR]="${JEDI_DIR}"
+        [ENS_SIZE]="${ENS_SIZE}"
+        [DATETIME]="${anlys_datetime}"
+        [SCPDIR]="${scpdir}"
+        [DBOUTDIR]="${jedi_output_dir}"
+        [INSTRUMENTS]="${runtime_instruments[*]}"
+        [MODULE]="${jedi_modulename}"
+   )
+
+    if [[ "${mach}" == "pbs" ]]; then
+        jobParms[NNODES]="${nnodes_filter}"
+        jobParms[NCORES]="${ncores_filter}"
+    fi
+
+    #jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
+    #submit_a_job "${wrkdir}" "${taskname}" "jobParms" "$TEMPDIR/run_ncarjedi.${mach}" "$jobscript" "${jobarraystr}"
+    submit_a_job "${wrkdir}" "${taskname}" "jobParms" "$TEMPDIR/run_ncarjedi.${mach}" "$jobscript" ""
+}
+
+########################################################################
+
+function run_jedi_solver {
+    # $1        $2      $3
+    # wrkdir    icycle    iseconds
+    local datimedir=$1
+    local icycle=$2
+    local iseconds=$3
+
+    local wrkdir="$datimedir/enkf"
+    local casedir
+    casedir=$(dirname ${datimedir})
+
+    taskname="solver"
+
+    #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/running.${taskname} || -f $wrkdir/done.${taskname} || -f $wrkdir/queue.${taskname} ]]; then
+        return
+    fi
+
+    #
+    # GLOBAL: ENS_SIZE, rundir, ADAPTIVE_INF, OBS_DIR
+    #         intvl_sec, ncores_filter
+    # RETURN: input_file_list, output_file_list
+    #
+    anlys_date=$(date -u -d @$iseconds  +%Y%m%d)
+    anlys_datetime=$(date -u -d @$iseconds  +%Y%m%d%H%M)
+
+    anlys_hour=$(date -u -d @$iseconds  +%H)
+    anlys_min=$(date -u -d @$iseconds   +%M)
+
+    timesec_pre=$((iseconds-intvl_sec))
+    event_pre=$(date -u -d @${timesec_pre}   +%H%M)
+
+    PREV_ENS_DIR_TOP=${casedir}/${event_pre}       # Location of prior ensemble when cycling
+
+    #
+    # Build working directory
+    #
+    mkwrkdir $wrkdir 0               # 0: Keep existing directory as is
+                                     # 1: Remove existing same name directory
+    cd $wrkdir || return
+
+    #
+    # Waiting for job conditions
+    #
+    #check_job_status "prior_members ens_" $wrkdir $ENS_SIZE run_jedi_prior_members.${mach} ${num_resubmit}
+
+    conditions=("${datimedir}/enkf/ens_members/done.prior_members")
+
+    if [[ $dorun == true ]]; then
+        for cond in "${conditions[@]}"; do
+            mecho0 "Checking $cond"
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    mecho0 "Waiting for file: $cond"
+                fi
+                sleep 10
+            done
+        done
+
+        #for((ie=1;ie<=ENS_SIZE;ie++)); do
+        #    iestr=$(printf "%02d" $ie)
+        #    for filename in $(compgen -G "enkf_prior_members_${ie}_*.log"); do
+        #        mv  "${filename}" "ens_${iestr}"
+        #    done
+        #done
+        rm -f queue.prior_members
+    fi
+
+    #------------------------------------------------------
+    # Prepare runtime files
+    #------------------------------------------------------
+
+    do_dacyle=".true."
+    use_2stream_IO="true"
+    if [[ "${use_2stream_IO,,}" =~ "true" ]]; then
+        do_restart=".false."
+    else
+        do_restart=".true."
+    fi
+
+    pblscheme="${pbl_schemes[0]}"
+    sfcscheme="${sfclayer_schemes[0]}"
+
+    letkf_preparation "${taskname}" "${wrkdir}" $iseconds
+
+    declare -a runtime_instruments
+
+    letkf_get_observation "${taskname}" "${wrkdir}" 0
+
+    create_jedi_yaml "${taskname}" "./solver.yaml" 0
+
+    #------------------------------------------------------
+    # Run mpasjedi_enkf.x
+    #------------------------------------------------------
+
+    jobscript="run_solver.${mach}"
+
+    declare -A jobParms=(
+        [PARTION]="${partition_filter}"
+        [NOPART]="${npefilter}"
+        [NNODES]="${nnodes_filter}"
+        [JOBNAME]="${taskname}-${jobname}_${eventtime}"
+        [CPUSPEC]="${claim_cpu_filter}"
+        [EXEDIR]="${EXEDIR}/jedi"
+        [WRKDIR]="${wrkdir}"
+        [TASKNAME]="${taskname}"
+        [LOGNAME]="${taskname}"
+        [JEDIDIR]="${JEDI_DIR}"
+        [ENS_SIZE]="${ENS_SIZE}"
+        [DATETIME]="${anlys_datetime}"
+        [SCPDIR]="${scpdir}"
+        [DBOUTDIR]="${jedi_output_dir}"
+        [INSTRUMENTS]="${runtime_instruments[*]}"
+        [MODULE]="${jedi_modulename}"
+    )
+
+    if [[ "${mach}" == "pbs" ]]; then
+        jobParms[NNODES]="${nnodes_filter}"
+        jobParms[NCORES]="${ncores_filter}"
+    fi
+
+    submit_a_job "${wrkdir}" "${taskname}" "jobParms" "$TEMPDIR/run_ncarjedi.${mach}" "$jobscript" ""
+}
+
+########################################################################
+
+function run_jedi_post {
+    # $1        $2      $3
+    # wrkdir    icycle    iseconds
+    local datimedir=$1
+    local icycle=$2
+    local iseconds=$3
+
+    local wrkdir="${datimedir}/enkf/ens_post"
+
+    local casedir
+    casedir=$(dirname ${datimedir})
+
+    #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/running.post || -f $wrkdir/done.post || -f $wrkdir/queue.post ]]; then
+        return
+    fi
+
+    #
+    # GLOBAL: ENS_SIZE, rundir, ADAPTIVE_INF, OBS_DIR
+    #         intvl_sec, ncores_filter
+    # RETURN: input_file_list, output_file_list
+    #
+    anlys_date=$(date -u -d @$iseconds  +%Y%m%d)
+    anlys_datetime=$(date -u -d @$iseconds  +%Y%m%d%H%M)
+
+    anlys_hour=$(date -u -d @$iseconds  +%H)
+    anlys_min=$(date -u -d @$iseconds   +%M)
+
+    timesec_pre=$((iseconds-intvl_sec))
+    event_pre=$(date -u -d @${timesec_pre}   +%H%M)
+
+    PREV_ENS_DIR_TOP=${casedir}/${event_pre}       # Location of prior ensemble when cycling
+
+    #
+    # Build working directory
+    #
+    mkwrkdir $wrkdir 0               # 0: Keep existing directory as is
+                                     # 1: Remove existing same name directory
+    cd $wrkdir || return
+
+    #
+    # Waiting for job conditions
+    #
+    conditions=("${datimedir}/enkf/done.solver")
+
+    if [[ $dorun == true ]]; then
+        for cond in "${conditions[@]}"; do
+            mecho0 "Checking $cond"
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    mecho0 "Waiting for file: $cond"
+                fi
+                sleep 10
+            done
+        done
+    fi
+
+    #------------------------------------------------------
+    # Prepare runtime files
+    #------------------------------------------------------
+    # DATA=wrkdir
+    taskname="post"
+
+    do_dacyle=".true."
+    use_2stream_IO="true"
+    if [[ "${use_2stream_IO,,}" =~ "true" ]]; then
+        do_restart=".false."
+    else
+        do_restart=".true."
+    fi
+
+    pblscheme="${pbl_schemes[0]}"
+    sfcscheme="${sfclayer_schemes[0]}"
+
+    letkf_preparation "${taskname}" "${wrkdir}" $iseconds
+
+    declare -a runtime_instruments
+
+    letkf_get_observation "${taskname}" "${wrkdir}" 0
+
+    create_jedi_yaml "${taskname}" "./post.yaml" 0
+
+    #------------------------------------------------------
+    # Run mpasjedi_enkf.x
+    #------------------------------------------------------
+
+    jobscript="run_mpasjedi_post.${mach}"
+
+    declare -A jobParms=(
+        [PARTION]="${partition_filter}"
+        [NOPART]="${npefilter}"
+        [NNODES]="${nnodes_filter}"
+        [JOBNAME]="${taskname}-${jobname}_${eventtime}"
+        [CPUSPEC]="${claim_cpu_filter}"
+        [EXEDIR]="${EXEDIR}/jedi"
+        [WRKDIR]="${wrkdir}"
+        [TASKNAME]="${taskname}"
+        [LOGNAME]="${taskname}"
+        [JEDIDIR]="${JEDI_DIR}"
+        [ENS_SIZE]="${ENS_SIZE}"
+        [DATETIME]="${anlys_datetime}"
+        [SCPDIR]="${scpdir}"
+        [DBOUTDIR]="${jedi_output_dir}"
+        [INSTRUMENTS]="${runtime_instruments[*]}"
+        [MODULE]="${jedi_modulename}"
+    )
+
+    if [[ "${mach}" == "pbs" ]]; then
+        jobParms[NNODES]="${nnodes_filter}"
+        jobParms[NCORES]="${ncores_filter}"
+    fi
+
+    submit_a_job "${wrkdir}" "${taskname}" "jobParms" "$TEMPDIR/run_ncarjedi.${mach}" "$jobscript" ""
 }
 
 ########################################################################
@@ -1833,12 +3455,27 @@ function dacycle_driver() {
             run_getkf_observer $dawrkdir $icyc $isec
         fi
 
+        if [[ " ${jobs[*]} " =~ " jedi_prior_mean " && $icyc -gt 0 ]]; then
+            if [[ $verb -eq 1 ]]; then echo "  Run jedi_prior_mean at $eventtime"; fi
+            run_jedi_prior_mean $dawrkdir $icyc $isec
+        fi
+
+        if [[ " ${jobs[*]} " =~ " jedi_prior_members " && $icyc -gt 0 ]]; then
+            if [[ $verb -eq 1 ]]; then echo "  Run jedi_prior_members at $eventtime"; fi
+            run_jedi_prior_members $dawrkdir $icyc $isec
+        fi
+
         #------------------------------------------------------
         # 3. Run solver
         #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " getkf_solver " ]]; then
-            if [[ $verb -eq 1 ]]; then echo "  Run getkf_observer at $eventtime"; fi
+            if [[ $verb -eq 1 ]]; then echo "  Run getkf_solver at $eventtime"; fi
             run_getkf_solver $dawrkdir $icyc $isec
+        fi
+
+        if [[ " ${jobs[*]} " =~ " jedi_solver " && $icyc -gt 0 ]]; then
+            if [[ $verb -eq 1 ]]; then echo "  Run jedi_solver at $eventtime"; fi
+            run_jedi_solver $dawrkdir $icyc $isec
         fi
 
         #------------------------------------------------------
@@ -1849,14 +3486,17 @@ function dacycle_driver() {
             run_getkf_post $dawrkdir $icyc $isec
         fi
 
+        if [[ " ${jobs[*]} " =~ " jedi_post " ]]; then
+            if [[ $verb -eq 1 ]]; then echo "  Run jedi_post at $eventtime"; fi
+            run_jedi_post $dawrkdir $icyc $isec
+        fi
+
         #------------------------------------------------------
-        # 4. Run update_bc for all ensemble members
+        # 5. Run update_bc for all ensemble members
         #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " update_bc " ]]; then
-
             if [[ $verb -eq 1 ]]; then echo "  Run update_bc at $eventtime"; fi
             run_update_bc $dawrkdir $icyc $isec
-
         fi
 
         #------------------------------------------------------
@@ -1896,7 +3536,7 @@ function dacycle_driver() {
             fi
         fi
         #------------------------------------------------------
-        # 7. MPASSIT for each member, diagnostic purpose
+        # 8. MPASSIT for each member, diagnostic purpose
         #------------------------------------------------------
         # Interpolate the forecast datasets to a virtual WRF grid
 
@@ -2064,6 +3704,7 @@ function run_mpassit_alltimes {
     )
     if [[ "${mach}" == "pbs" ]]; then
         jobParms[NNODES]="${nnodes_post}"
+        # shellcheck disable=SC2034
         jobParms[NCORES]="${ncores_post}"
     fi
 
@@ -2294,7 +3935,18 @@ parse_args "$@"
 #
 #-----------------------------------------------------------------------
 
-[[ -v args["jobs"] ]] && read -r -a jobs <<< "${args['jobs']}" || jobs=(ioda getkf_observer getkf_solver getkf_post update_bc mpas clean)
+init_da=true
+if [[ -v args["jobs"] ]]; then
+    read -r -a jobs <<< "${args['jobs']}"
+else
+    if [[ ${args["workflow"]} == "letkf" ]]; then
+        jobs=(ioda jedi_prior_mean jedi_prior_members jedi_solver update_bc mpas)
+        #jobs=(jedi_prior_mean jedi_prior_members jedi_solver update_bc mpas)
+        init_da=false
+    else
+        jobs=(ioda getkf_observer getkf_solver getkf_post update_bc mpas clean)
+    fi
+fi
 
 #-----------------------------------------------------------------------
 #
@@ -2364,7 +4016,7 @@ else
     usage 1
 fi
 
-if [[ "${mpscheme}" =~ ^(mp_nssl2m|mp_thompson|mp_tempo)$ ]]; then
+if [[ "${mpscheme}" =~ ^(mp_nssl2m|mp_thompson|mp_tempo|mp_tcwa2)$ ]]; then
     :
 else
     echo -e "${RED}ERROR${NC}: mpscheme=${PURPLE}${mpscheme}${NC} is not supported."
@@ -2452,7 +4104,7 @@ OUTINVL_STR=$(printf "00:%02d:00" $((OUTINVL/60)) )
 
 # $1    $2    $3
 # init start  end
-if [[ " ${jobs[*]} " =~ " "(ioda|getkf_observer|getkf_solver|getkf_post|mpas|ioda)" " ]]; then
+if [[ " ${jobs[*]} " =~ " "(ioda_|getkf_|mpas|jedi_|update_).*" " ]]; then
     dacycle_driver $inittime_sec $starttime_sec $stoptime_sec
 elif [[ " ${jobs[*]} " =~ " clean " ]]; then
 

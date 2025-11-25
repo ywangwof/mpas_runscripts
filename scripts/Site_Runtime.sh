@@ -45,21 +45,25 @@ function setup_machine {
 
     case $machine in
     Jet )
-        #modulename="build_jet_Rocky8_intel_smiol"
+        modulename="build_jet_Rocky8_intel_smiol"
         #modulename="RDAS/jet.intel"
-        modulename="jet.intel"
+        mpas_modulename="rrfs/jet.intel"
+        #jedi_modulename="jet.intel"
+        jedi_modulename="RDAS/jet.intel"
 
         workdirDF="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS/run_dirs"
         post_dir="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS/frdd-wofs-post"
         rrfs_dir="/lfs5/NAGAPE/hpc-wof1/ywang/GSL_JEDI/rrfs-workflow.new"
-        #JEDI_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/GSL_JEDI/rrfs-workflow.new/sorc/RDASApp"
-        JEDI_DIR="/lfs6/NAGAPE/hpc-wof1/ywang/CADRE2/CADRE_JEDI_MODEL"
+        JEDI_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/GSL_JEDI/rrfs-workflow.new/sorc/RDASApp"
+        #JEDI_DIR="/lfs6/NAGAPE/hpc-wof1/ywang/CADRE2/CADRE_JEDI_MODEL"
+        #JEDI_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/NCAR_JEDI"
+        MPAS_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/GSL_JEDI/rrfs-workflow.new"
 
         if [[ ${set_up} == true ]]; then
             source /etc/profile.d/modules.sh
             module purge
-            module use ${JEDI_DIR}/modulefiles
-            module load ${modulename}
+            module use ${MPAS_DIR}/modulefiles
+            module load ${mpas_modulename}
             #module load wgrib2/2.0.8
         fi
         export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/home/Yunheng.Wang/local/lib
@@ -208,7 +212,7 @@ function setup_machine {
         echo -e "Activated Python environment ${YELLOW}${python_env}${NC} on ${LIGHT_RED}${machine}${NC} ..."
     fi
 
-    export machine modulename runcmd workdirDF post_dir rrfs_dir JEDI_DIR
+    export machine mpas_modulename jedi_modulename runcmd workdirDF post_dir rrfs_dir JEDI_DIR MPAS_DIR
     if [[ ${initialize} == true ]]; then
         # Will be used by 'setup_mpas-wofs.sh' for static processing.
         # For other programs, the information is in the runtime configuration file and
@@ -239,7 +243,7 @@ function default_site_settings {
         npeics=24; ncores_ics=2
         partition_ics="xjet,kjet"
         claim_cpu_ics="--cpus-per-task=2"
-        claim_cpu_ungrib="--cpus-per-task=12 --mem-per-cpu=10G"
+        claim_cpu_ungrib="--cpus-per-task=12"   # --mem-per-cpu=10G"
 
         # LBCs
         npelbc=24;  ncores_lbc=2

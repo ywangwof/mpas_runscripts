@@ -785,41 +785,45 @@ function run_static {
     config_nvegopt       = 2
 /
 &data_sources
-    config_geog_data_path = '${WPSGEOG_PATH}'
-    config_met_prefix = '${EXTHEAD}'
-    config_sfc_prefix = 'SST'
-    config_fg_interval = ${EXTINVL}
-    config_landuse_data = 'MODIFIED_IGBP_MODIS_NOAH_15s'
-    config_soilcat_data = 'BNU'
-    config_topo_data = 'GMTED2010'
-    config_vegfrac_data = 'MODIS'
-    config_albedo_data = 'MODIS'
-    config_maxsnowalbedo_data = 'MODIS'
-    config_lai_data = 'MODIS'
+    config_geog_data_path         = '${WPSGEOG_PATH}'
+    config_met_prefix             = '${EXTHEAD}'
+    config_sfc_prefix             = 'SST'
+    config_fg_interval            = ${EXTINVL}
+    config_landuse_data           = 'MODIFIED_IGBP_MODIS_NOAH_15s'
+    config_soilcat_data           = 'BNU'
+    config_topo_data              = 'GMTED2010'
+    config_vegfrac_data           = 'MODIS'
+    config_albedo_data            = 'MODIS'
+    config_maxsnowalbedo_data     = 'MODIS'
+    config_lai_data               = 'MODIS'
     config_supersample_factor     = 3
     config_30s_supersample_factor = 1
     config_use_spechumd           = false
 /
 &vertical_grid
-    config_ztop = 25878.712
-    config_nsmterrain = 1
-    config_smooth_surfaces = true
-    config_dzmin = 0.3
-    config_nsm = 30
-    config_tc_vertical_grid = false
-    config_blend_bdy_terrain = false
+    config_ztop                  = 25878.712
+    config_nsmterrain            = 1
+    config_smooth_surfaces       = true
+    config_dzmin                 = 0.3
+    config_nsm                   = 30
+    config_tc_vertical_grid      = false
+    config_blend_bdy_terrain     = false
     config_specified_zeta_levels = '${fixed_level}'
 /
 &interpolation_control
     config_extrap_airtemp = 'lapse-rate'
 /
 &preproc_stages
-    config_static_interp     = true
-    config_native_gwd_static = true
-    config_vertical_grid     = false
-    config_met_interp        = false
-    config_input_sst         = false
-    config_frac_seaice       = false
+    config_static_interp         = true
+    config_native_gwd_static     = false
+    config_native_gwd_gsl_static = true
+    config_vertical_grid         = false
+    config_met_interp            = false
+    config_input_sst             = false
+    config_frac_seaice           = true
+/
+&physics
+    config_tsk_seaice_threshold  = 271.4
 /
 &io
     config_pio_num_iotasks = 0
@@ -866,7 +870,8 @@ EOF
         [JOBNAME]="static_${jobname}"
         [CPUSPEC]="${claim_cpu_static}"
         [DOMNAME]="${domname}"
-        [RRFSDIR]="${rrfs_dir}"
+        [MPASDIR]="${MPAS_DIR}"
+        [MODULE]="${mpas_modulename}"
     )
     submit_a_job "$wrkdir" "static" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
 }
@@ -1376,6 +1381,8 @@ function write_config {
     hrrr_subdir="${hrrr_sub_ics}"         # + 2-digit member string
     hrrr_time="${hrrr_time_ics}"
 
+    initscheme="GSL"
+
     partition_ics="${partition_ics}"
     claim_cpu_ics="${claim_cpu_ics}"
     npeics="${npeics}";    ncores_ics="${ncores_ics}"
@@ -1390,6 +1397,8 @@ function write_config {
     hrrr_dir="${hrrr_dir}"
     hrrr_subdir="${hrrr_sub_lbc}"         # + 2-digit member string
     hrrr_time="${hrrr_time_lbc}"
+
+    lbcscheme="GSL"
 
     npelbc="${npelbc}"; ncores_lbc="${ncores_lbc}"
     partition_lbc="${partition_lbc}"
@@ -1843,15 +1852,16 @@ echo " "
 #[static]
 STATICIOTYPE="pnetcdf,cdf5"
 EXTINVL=10800
-EXTHEAD="HRRRE"
+EXTHEAD="HRRRE"  #"GEFS"
 #hrrrvtable="Vtable.raphrrr"
-hrrrvtable="Vtable.HRRRE.2018"
+hrrrvtable="Vtable.HRRRE.2018"    #"Vtable.GEFS_withSpechum"
 hrrr_time_ics="${inittime}"
 hrrr_time_lbc="${lbctime}"
 hrrr_sub_ics="postprd_mem00"         # + 2-digit member string
 hrrr_sub_lbc="postprd_mem00"         # + 2-digit member string
 
 hrrrfile0="${hrrr_dir}/${eventdate}/${hrrr_time_ics}/${hrrr_sub_ics}01/wrfnat_hrrre_newse_mem0001_01.grib2"
+#hrrrfile0="/lfs5/NAGAPE/hpc-wof1/ywang/NCAR_JEDI/fix_files/GEFS_0p5_degree_grib_files/2022062218/ens_1/gep01.t18z.pgrb2.0p50.f000"
 
 EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 
@@ -1871,9 +1881,9 @@ if [[ " ${jobs[*]} " =~ [[:space:]]check(bg|obs)*[[:space:]]  ]]; then
     exit 0
 fi
 
-if $dorun && [[ " ${jobs[*]} " != " clean " && " ${jobs[*]} " != " setup " ]] && ! check_hrrr_subdir; then
-    exit $?
-fi
+#if $dorun && [[ " ${jobs[*]} " != " clean " && " ${jobs[*]} " != " setup " ]] && ! check_hrrr_subdir; then
+#    exit $?
+#fi
 
 starttime_str=$(date -u -d "${eventdate} ${eventtime}" +%Y-%m-%d_%H:%M:%S)
 

@@ -16,11 +16,8 @@ echo " "
 if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
     source /etc/profile.d/modules.sh
     module purge
-    HOMErrfs="RRFSDIR"
-    module use ${HOMErrfs}/modulefiles
-    module load "rrfs/jet.intel"
-    #module use ROOTDIR/modules
-    #module load MODULE
+    module use MPASDIR/modulefiles
+    module load MODULE
 else
     source ROOTDIR/modules/MODULE
 fi

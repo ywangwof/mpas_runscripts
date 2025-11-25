@@ -198,7 +198,8 @@ function run_ungrib {
                 gribfilename="gefs.$eventdate/${gribtime}/${hrrr_subdir}/gep${memstr}.t${gribtime}z.pgrb2a.0p50.f0${hstr}"
                 gribfilename2="gefs.$eventdate/${gribtime}/${hrrr_subdir/pgrb2ap5/pgrb2bp5}/gep${memstr}.t${gribtime}z.pgrb2b.0p50.f0${hstr}"
             else
-                gribfilename="$eventdate/${gribtime}/${hrrr_subdir}${memstr}/wrfnat_hrrre_newse_mem00${memstr}_${hstr}.grib2"
+                #gribfilename="$eventdate/${gribtime}/${hrrr_subdir}${memstr}/wrfnat_hrrre_newse_mem00${memstr}_${hstr}.grib2"
+                gribfilename="${eventdate}${gribtime}/${hrrr_subdir}${mem}/gep${memstr}.t${gribtime}z.pgrb2.0p50.f0${hstr}"
             fi
             gribfile="${grib_dir}/${gribfilename}"
 
@@ -267,6 +268,240 @@ EOF
     if [[ $dorun == true && $jobwait -eq 1 ]]; then
         #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
         check_job_status "ungrib" "$wrkdir" "$nensics" "$jobscript" 2
+    fi
+}
+
+########################################################################
+
+function create_namelist {
+    local scheme=$1
+    local filename=$2
+
+    if [[ "$scheme" == "GSL" ]]; then
+        cat << EOF_GSL > "${filename}"
+&nhyd_model
+    config_init_case = 7
+    config_start_time = '${starttime_str}'
+    config_stop_time = '${stoptime_str}'
+    config_theta_adv_order = 3
+    config_coef_3rd_order = 0.25
+/
+&dimensions
+    config_nvertlevels   = ${nvertlevels}
+    config_nsoillevels   = ${MPASNFLS}
+    config_nfglevels     = ${EXTNFGL}
+    config_nfgsoillevels = ${EXTNFLS}
+    config_nsoilcat      = 16
+    config_nvegopt       = 2
+/
+&data_sources
+    config_geog_data_path = '${WPSGEOG_PATH}'
+    config_met_prefix = '${EXTHEAD}${memstr}'
+    config_sfc_prefix = 'SST'
+    config_fg_interval = ${EXTINVL}
+    config_landuse_data = 'MODIFIED_IGBP_MODIS_NOAH_15s'
+    config_topo_data = 'GMTED2010'
+    config_vegfrac_data = 'MODIS'
+    config_albedo_data = 'MODIS'
+    config_maxsnowalbedo_data = 'MODIS'
+    config_supersample_factor     = 3
+    config_30s_supersample_factor = 1
+    config_use_spechumd = true
+    config_soilcat_data = 'BNU'
+/
+&vertical_grid
+    config_ztop = 25878.712
+    config_nsmterrain = 1
+    config_smooth_surfaces = true
+    config_dzmin = 0.3
+    config_nsm = 30
+    config_tc_vertical_grid = true
+    config_blend_bdy_terrain = true
+    config_specified_zeta_levels = '${vertLevel_file}'
+/
+&interpolation_control
+    config_extrap_airtemp = 'lapse-rate'
+/
+&preproc_stages
+    config_static_interp         = false
+    config_native_gwd_static     = false
+    config_native_gwd_gsl_static = false
+    config_vertical_grid = true
+    config_met_interp    = true
+    config_input_sst     = false
+    config_frac_seaice   = true
+    config_tempo_rap     = false
+/
+&physics
+    config_tsk_seaice_threshold = 271.4
+/
+&io
+    config_pio_num_iotasks = 0
+    config_pio_stride = 1
+/
+&decomposition
+    config_block_decomp_file_prefix = '$domname.graph.info.part.'
+/
+EOF_GSL
+
+    elif [[ "$scheme" == "NCAR" ]]; then
+        cat << EOF_NCAR > "${filename}"
+&nhyd_model
+    config_init_case = 7
+    config_start_time = '${starttime_str}'
+    config_stop_time = '${stoptime_str}'
+    config_theta_adv_order = 3
+    config_coef_3rd_order = 0.25
+    config_interface_projection = 'layer_integral'
+/
+&dimensions
+    config_nvertlevels   = ${nvertlevels}
+    config_nsoillevels   = ${MPASNFLS}
+    config_nfglevels     = ${EXTNFGL}
+    config_nfgsoillevels = ${EXTNFLS}
+/
+&data_sources
+    config_geog_data_path = '${WPSGEOG_PATH}'
+    config_met_prefix = '${EXTHEAD}${memstr}'
+    config_sfc_prefix = 'SST'
+    config_fg_interval = ${EXTINVL}
+    config_landuse_data = 'MODIFIED_IGBP_MODIS_NOAH'
+    config_topo_data = 'GMTED2010'
+    config_vegfrac_data = 'MODIS'
+    config_albedo_data = 'MODIS'
+    config_maxsnowalbedo_data = 'MODIS'
+    config_supersample_factor     = 3
+    config_use_spechumd = false
+/
+&vertical_grid
+    config_ztop = 25878.712
+    config_nsmterrain = 1
+    config_smooth_surfaces = true
+    config_dzmin = 0.3
+    config_nsm = 30
+    config_tc_vertical_grid = true
+    config_blend_bdy_terrain = true
+    config_specified_zeta_levels = '${vertLevel_file}'
+/
+&interpolation_control
+    config_extrap_airtemp = 'linear'
+/
+&preproc_stages
+    config_static_interp         = false
+    config_vertical_grid = true
+    config_met_interp    = true
+    config_input_sst     = false
+    config_frac_seaice   = true
+/
+&io
+    config_pio_num_iotasks = 0
+    config_pio_stride = 1
+/
+&decomposition
+    config_block_decomp_file_prefix = '$domname.graph.info.part.'
+/
+EOF_NCAR
+    else
+        echo -e "${RED}ERROR${NC}: Unsupported interpolation scheme, got ${PURPLE}$scheme${NC}."
+        usage 4
+    fi
+}
+
+########################################################################
+
+function create_streams {
+    local scheme=$1
+    local filename=$2
+
+    if [[ "$scheme" == "GSL" ]]; then
+
+       cat << EOF_GSL > "${filename}"
+<streams>
+<immutable_stream name="input"
+                  type="input"
+                  filename_template="${domname}.static.nc"
+                  input_interval="initial_only" />
+
+<immutable_stream name="output"
+                  type="output"
+                  filename_template="none.nc"
+                  packages="initial_conds"
+                  output_interval="none" />
+
+<stream name="jedi_ics"
+                  type="output"
+                  clobber_mode="truncate"
+                  filename_template="${domname}_${memstr}.init.nc"
+                  io_type="${ICSIOTYPE}"
+                  output_interval="initial_only" >
+
+        <stream name="output" />
+        <var name="pressure" />
+        <var name="pressure_p" />
+        <var name="pressure_base" />
+        <var name="uReconstructZonal" />
+        <var name="uReconstructMeridional" />
+</stream>
+
+<immutable_stream name="surface"
+                  type="output"
+                  filename_template="$domname.sfc_update.nc"
+                  filename_interval="none"
+                  packages="sfc_update"
+                  output_interval="${EXTINVL_STR}" />
+
+<immutable_stream name="lbc"
+                  type="output"
+                  filename_template="$domname.lbc.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+                  filename_interval="output_interval"
+                  packages="lbcs"
+                  clobber_mode="replace_files"
+                  output_interval="${EXTINVL_STR}" />
+
+</streams>
+EOF_GSL
+    elif [[ "$scheme" == "NCAR" ]]; then
+
+       cat << EOF_NCAR > "${filename}"
+<streams>
+<immutable_stream name="input"
+                  type="input"
+                  filename_template="${domname}.static.nc"
+                  input_interval="initial_only" />
+
+<immutable_stream name="output"
+                  type="output"
+                  io_type="${ICSIOTYPE}"
+                  filename_template="${domname}_${memstr}.init.nc"
+                  clobber_mode="replace_files"
+                  precision="single"
+                  packages="initial_conds"
+                  output_interval="initial_only" />
+
+<immutable_stream name="surface"
+                  type="output"
+                  io_type="${ICSIOTYPE}"
+                  filename_template="${domname}_${memstr}.sfc_update.nc"
+                  clobber_mode="replace_files"
+                  precision="single"
+                  packages="sfc_update"
+                  filename_interval="none"
+                  output_interval="24:00:00"/>
+
+<immutable_stream name="lbc"
+                  type="output"
+                  precision="single"
+                  io_type="${ICSIOTYPE}"
+                  filename_template="$domname.lbc.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+                  clobber_mode="replace_files"
+                  packages="lbcs"
+                  filename_interval="none"
+                  output_interval="none" />
+</streams>
+EOF_NCAR
+    else
+        echo -e "${RED}ERROR${NC}: Unsupported initialization scheme, got ${PURPLE}$scheme${NC}."
+        usage 4
     fi
 }
 
@@ -341,19 +576,19 @@ function run_init4invariant {
     config_nvegopt       = 2
 /
 &data_sources
-    config_geog_data_path = '${WPSGEOG_PATH}'
-    config_met_prefix = '${EXTHEAD}${memstr}'
-    config_sfc_prefix = 'SST'
-    config_fg_interval = ${EXTINVL}
-    config_landuse_data = 'MODIFIED_IGBP_MODIS_NOAH_15s'
-    config_topo_data = 'GMTED2010'
-    config_vegfrac_data = 'MODIS'
-    config_albedo_data = 'MODIS'
-    config_maxsnowalbedo_data = 'MODIS'
+    config_geog_data_path         = '${WPSGEOG_PATH}'
+    config_met_prefix             = '${EXTHEAD}${memstr}'
+    config_sfc_prefix             = 'SST'
+    config_fg_interval            = ${EXTINVL}
+    config_landuse_data           = 'MODIFIED_IGBP_MODIS_NOAH_15s'
+    config_topo_data              = 'GMTED2010'
+    config_vegfrac_data           = 'MODIS'
+    config_albedo_data            = 'MODIS'
+    config_maxsnowalbedo_data     = 'MODIS'
     config_supersample_factor     = 3
     config_30s_supersample_factor = 1
-    config_use_spechumd = true
-    config_soilcat_data = 'BNU'
+    config_use_spechumd           = true
+    config_soilcat_data           = 'BNU'
 /
 &vertical_grid
     config_ztop = 25878.712
@@ -372,14 +607,14 @@ function run_init4invariant {
     config_static_interp         = false
     config_native_gwd_static     = false
     config_native_gwd_gsl_static = false
-    config_vertical_grid = true
-    config_met_interp    = true
-    config_input_sst     = false
-    config_frac_seaice   = true
-    config_tempo_rap     = false
+    config_vertical_grid         = true
+    config_met_interp            = true
+    config_input_sst             = false
+    config_frac_seaice           = true
+    config_tempo_rap             = false
 /
 &physics
-    config_tsk_seaice_threshold = 271.4
+    config_tsk_seaice_threshold  = 271.4
 /
 &io
     config_pio_num_iotasks = 0
@@ -519,117 +754,10 @@ function run_init {
         fi
         ln -sf $rundir/$domname/$domname.graph.info.part.${npeics} .
 
-        cat << EOF > namelist.init_atmosphere
-&nhyd_model
-    config_init_case = 7
-    config_start_time = '${starttime_str}'
-    config_stop_time = '${stoptime_str}'
-    config_theta_adv_order = 3
-    config_coef_3rd_order = 0.25
-/
-&dimensions
-    config_nvertlevels   = ${nvertlevels}
-    config_nsoillevels   = ${MPASNFLS}
-    config_nfglevels     = ${EXTNFGL}
-    config_nfgsoillevels = ${EXTNFLS}
-    config_nsoilcat      = 16
-    config_nvegopt       = 2
-/
-&data_sources
-    config_geog_data_path = '${WPSGEOG_PATH}'
-    config_met_prefix = '${EXTHEAD}${memstr}'
-    config_sfc_prefix = 'SST'
-    config_fg_interval = ${EXTINVL}
-    config_landuse_data = 'MODIFIED_IGBP_MODIS_NOAH_15s'
-    config_topo_data = 'GMTED2010'
-    config_vegfrac_data = 'MODIS'
-    config_albedo_data = 'MODIS'
-    config_maxsnowalbedo_data = 'MODIS'
-    config_supersample_factor     = 3
-    config_30s_supersample_factor = 1
-    config_use_spechumd = true
-    config_soilcat_data = 'BNU'
-/
-&vertical_grid
-    config_ztop = 25878.712
-    config_nsmterrain = 1
-    config_smooth_surfaces = true
-    config_dzmin = 0.3
-    config_nsm = 30
-    config_tc_vertical_grid = true
-    config_blend_bdy_terrain = true
-    config_specified_zeta_levels = '${vertLevel_file}'
-/
-&interpolation_control
-    config_extrap_airtemp = 'lapse-rate'
-/
-&preproc_stages
-    config_static_interp         = false
-    config_native_gwd_static     = false
-    config_native_gwd_gsl_static = false
-    config_vertical_grid = true
-    config_met_interp    = true
-    config_input_sst     = false
-    config_frac_seaice   = true
-    config_tempo_rap     = false
-/
-&physics
-    config_tsk_seaice_threshold = 271.4
-/
-&io
-    config_pio_num_iotasks = 0
-    config_pio_stride = 1
-/
-&decomposition
-    config_block_decomp_file_prefix = '$domname.graph.info.part.'
-/
-EOF
+        create_namelist "${initscheme}" namelist.init_atmosphere
 
-        cat << EOF > streams.init_atmosphere
-<streams>
-<immutable_stream name="input"
-                  type="input"
-                  filename_template="${domname}.static.nc"
-                  input_interval="initial_only" />
+        create_streams "${initscheme}" streams.init_atmosphere
 
-<immutable_stream name="output"
-                  type="output"
-                  filename_template="none.nc"
-                  packages="initial_conds"
-                  output_interval="none" />
-
-<stream name="jedi_ics"
-                  type="output"
-                  clobber_mode="truncate"
-                  filename_template="${domname}_${memstr}.init.nc"
-                  io_type="${ICSIOTYPE}"
-                  output_interval="initial_only" >
-
-        <stream name="output" />
-        <var name="pressure" />
-        <var name="pressure_p" />
-        <var name="pressure_base" />
-        <var name="uReconstructZonal" />
-        <var name="uReconstructMeridional" />
-</stream>
-
-<immutable_stream name="surface"
-                  type="output"
-                  filename_template="$domname.sfc_update.nc"
-                  filename_interval="none"
-                  packages="sfc_update"
-                  output_interval="${EXTINVL_STR}" />
-
-<immutable_stream name="lbc"
-                  type="output"
-                  filename_template="$domname.lbc.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-                  filename_interval="output_interval"
-                  packages="lbcs"
-                  clobber_mode="replace_files"
-                  output_interval="${EXTINVL_STR}" />
-
-</streams>
-EOF
         jobarrays+=("$mem")
     done
     #
@@ -645,7 +773,8 @@ EOF
             [CPUSPEC]="${claim_cpu_ics}"
             [JOBNAME]="init_${jobname}"
             [PREFIX]="${domname}"
-            [RRFSDIR]="${rrfs_dir}"
+            [MPASDIR]="${MPAS_DIR}"
+            [MODULE]="${mpas_modulename}"
         )
         # shellcheck disable=SC2154
         if [[ "${mach}" == "pbs" ]]; then

@@ -467,6 +467,7 @@ function run_mpas {
         done
 
         ln -sf ${casedir}/${domname}/$domname.graph.info.part.${npefcst} .
+        ln -sf ${casedir}/${domname}/${domname}.ugwp_oro_data.nc .
 
         streamlists=(stream_list.atmosphere.diagnostics_fcst stream_list.atmosphere.output stream_list.atmosphere.surface)
         for fn in "${streamlists[@]}"; do
@@ -575,7 +576,6 @@ function run_mpas {
     config_physics_suite             = '${physics_suite}'
     config_convection_scheme         = 'off'
     config_microp_re                 = true
-    config_sfclayer_scheme           = '${sfcscheme}'
 
     config_frac_seaice         = true
     config_gwdo_scheme         = 'bl_ugwp_gwdo'
@@ -594,6 +594,7 @@ EOF
         if [[ ${mpscheme} == "mp_nssl2m" ]]; then
 
             cat << EOF >> namelist.atmosphere
+    config_sfclayer_scheme           = '${sfcscheme}'
     config_microp_scheme             = '${mpscheme}'
 /
 &nssl_mp_params
@@ -605,9 +606,12 @@ EOF
 EOF
         elif [[ ${mpscheme} == "mp_tempo" ]]; then
             cat << EOF >> namelist.atmosphere
-    config_microp_scheme               = '${mpscheme}'
-    config_tempo_hailaware             = .true.
-    config_tempo_aerosolaware          = .true.
+    config_sfclayer_scheme           = '${sfcscheme/sf_mynn/sf_mynnsfclay}'
+    config_microp_scheme             = '${mpscheme}'
+    config_tempo_hailaware           = .true.
+    config_tempo_aerosolaware        = .true.
+    config_tempo_ml_nc_pbl           = .true.
+    config_mynn_mixnumcon            = 0
 /
 EOF
         fi
@@ -688,6 +692,10 @@ EOF
                   packages="limited_area"
                   input_interval="${EXTINVL_STR}" />
 
+<immutable_stream name="ugwp_oro_data_in"
+                  type="input"
+                  filename_template="${domname}.ugwp_oro_data.nc"
+                  input_interval="initial_only" />
 EOF
         if [[ ${outpsfc} == true ]]; then
             cat << EOF >> streams.atmosphere

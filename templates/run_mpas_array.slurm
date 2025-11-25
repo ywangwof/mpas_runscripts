@@ -14,9 +14,9 @@ time1=$(date '+%s')
 printf "Job Started: %(%a %b %d %H:%M:%S %Z %Y)T. Job Id: %s\n\n" $time1 $SLURM_JOBID
 
 if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
+    source /etc/profile.d/modules.sh
     module purge
-    HOMErrfs="JEDIDIR"
-    module use ${HOMErrfs}/modulefiles
+    module use MPASDIR/modulefiles
     module load MODULE
 else
     source ROOTDIR/modules/MODULE
