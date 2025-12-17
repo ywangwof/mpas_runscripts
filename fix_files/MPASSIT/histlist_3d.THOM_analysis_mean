@@ -1,0 +1,14 @@
+w				W
+theta				T
+uReconstructZonal		U
+uReconstructMeridional		V
+qv				QVAPOR
+qc				QCLOUD
+qr				QRAIN
+qi                              QICE
+qs                              QSNOW
+qg                              QGRAUP
+ni                              QNICE
+nr                              QNRAIN
+pressure_p			P_HYD
+rho				MUB

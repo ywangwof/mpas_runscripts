@@ -12,6 +12,7 @@ EXCLSTR
 time1=$(date '+%s')
 echo -e "Job Started: $(date). Job Id:  $SLURM_JOBID\n"
 
+# shellcheck disable=SC2050
 if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
     module purge
     HOMErrfs="RRFSDIR"
@@ -19,12 +20,18 @@ if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
     module load RDAS/jet.intel
     export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${HOMErrfs}/sorc/RDASApp/build/lib64
 else
+    # shellcheck source=/dev/null
     source ROOTDIR/modules/MODULE
 fi
 
 ulimit -s unlimited
 
-    CDATE=CURRDATE
+    cd "WRKDIR" || exit $?
+
+    echo "Getting into working directory for radar reflectivity process ..."
+
+    touch running.ioda_mrms_refl
+    rm -rf error.ioda_mrms_refl queue.ioda_refl
 
     #
     #-----------------------------------------------------------------------
@@ -34,158 +41,15 @@ ulimit -s unlimited
     #
     #-----------------------------------------------------------------------
     #
+    CDATE=CURRDATE
+
     YYYY=${CDATE:0:4}
     MM=${CDATE:4:2}
     DD=${CDATE:6:2}
     HH=${CDATE:8:2}
     min=${CDATE:10:2}
     YYYYMMDD=${CDATE:0:8}
-    #
-    #-----------------------------------------------------------------------
-    #
-    # Loop through different time levels
-    # Get into working directory
-    #
-    #-----------------------------------------------------------------------
-    #
-    DATA=WRKDIR
-    gridfile=GRIDFILE
 
-    cd "${DATA}" || exit $?
-
-    echo "Getting into working directory for radar reflectivity process ..."
-
-    touch running.ioda_mrms_refl
-    rm -rf error.ioda_mrms_refl queue.ioda_refl
-
-    bigmin_this="${min}"
-    #for bigmin_this in ${RADARREFL_TIMELEVEL[@]}; do
-        bigmin=$( printf %2.2i ${bigmin_this} )
-        #
-        #-----------------------------------------------------------------------
-        #
-        # link or copy background files
-        #
-        #-----------------------------------------------------------------------
-        #
-        echo "meshgriddir is $gridfile"
-        ln -sf "${gridfile}" grid.nc
-
-        #
-        #-----------------------------------------------------------------------
-        #
-        # link/copy observation files to working directory
-        #
-        #-----------------------------------------------------------------------
-        #
-        obs_appendix=grib2
-        OBSPATH_NSSLMOSIAC=OBSDIR
-
-        mrms="MergedReflectivityQC"
-        #
-        #-----------------------------------------------------------------------
-        #
-        # Link to the MRMS operational data
-        #
-        #-----------------------------------------------------------------------
-        #
-        if [ -f filelist_mrms ]; then
-            rm -f filelist_mrms
-        fi
-        echo "bigmin = ${bigmin}"
-        for (( j=0; j < 5; $((j=j+1)) )); do
-            for l in -1 1; do
-                min=$( printf %2.2i $((bigmin_this+j*l)) )
-                echo "Looking for data valid:${YYYY}-${MM}-${DD} ${HH}:${min}"
-                s=0
-                while [[ s -le 59 ]]; do
-                    ss=$(printf %2.2i ${s})
-                    nsslfile="${OBSPATH_NSSLMOSIAC}/*${mrms}_00.50_${YYYY}${MM}${DD}-${HH}${min}${ss}.${obs_appendix}"
-                    if [ -s ${nsslfile} ]; then
-                        echo "Found ${nsslfile}"
-                        nsslfile1="*${mrms}_*_${YYYY}${MM}${DD}-${HH}${min}*.${obs_appendix}"
-                        numgrib2=$(find ${OBSPATH_NSSLMOSIAC}/${nsslfile1} -maxdepth 1 -type f | wc -l)
-                        echo "Number of GRIB-2 files: ${numgrib2}"
-                        if [ "${numgrib2}" -ge 10 ] && [ ! -e filelist_mrms ]; then
-                            cp ${OBSPATH_NSSLMOSIAC}/${nsslfile1} .
-                            ls ${nsslfile1} > filelist_mrms
-                            echo "Copyed MRMS files at ${YYYY}${MM}${DD}-${HH}${min}"
-                            break
-                        fi
-                    fi
-                    ((s+=1))
-                done
-                [[ -e filelist_mrms ]] && break
-            done
-            [[ -e filelist_mrms ]] && break
-        done
-        #
-        #-----------------------------------------------------------------------
-        #
-        # remove filelist_mrms if zero bytes
-        #
-        #-----------------------------------------------------------------------
-        #
-        if [ ! -s filelist_mrms ]; then
-          rm -f filelist_mrms
-        fi
-
-        if [ -s filelist_mrms ]; then
-            if [ "${obs_appendix}" == "grib2.gz" ]; then
-               gzip -d ./*.gz
-               mv filelist_mrms filelist_mrms_org
-               ls "MergedReflectivityQC_*_${YYYY}${MM}${DD}-${HH}????.grib2" > filelist_mrms
-            fi
-
-            numgrib2=$(more filelist_mrms | wc -l)
-            echo "Using radar data from: $(head -1 filelist_mrms | cut -c10-15)"
-            echo "NSSL grib2 file levels = $numgrib2"
-        else
-            echo "WARNING: Not enough radar reflectivity files available for loop ${bigmin}."
-            continue
-        fi
-
-        #
-        #  if [ ${RADAR_REF_THINNING} -eq 2 ]; then
-        #    # heavy data thinning, typically used for EnKF
-        #    precipdbzhorizskip=1
-        #    precipdbzvertskip=2
-        #    clearairdbzhorizskip=2
-        #    clearairdbzvertskip=4
-        #  else
-        #    if [ ${RADAR_REF_THINNING} -eq 1 ]; then
-        #      # light data thinning, typically used for hybrid EnVar
-        #      precipdbzhorizskip=1
-        #      precipdbzvertskip=1
-        #      clearairdbzhorizskip=1
-        #      clearairdbzvertskip=1
-        #    else
-        #      # no data thinning
-            precipdbzhorizskip=0
-            precipdbzvertskip=0
-            clearairdbzhorizskip=0
-            clearairdbzvertskip=0
-        #    fi
-        #  fi
-
-        cat << EOF > namelist.mosaic
-&setup
-    analysis_time = ${CDATE},
-    dataPath = './',
-/
-&setup_netcdf
-    output_netcdf = .true.,
-    max_height = 11001.0,
-    use_clear_air_type = .true.,
-    precip_dbz_thresh = 10.0,
-    clear_air_dbz_thresh = 5.0,
-    clear_air_dbz_value = 0.0,
-    precip_dbz_horiz_skip = ${precipdbzhorizskip},
-    precip_dbz_vert_skip = ${precipdbzvertskip},
-    clear_air_dbz_horiz_skip = ${clearairdbzhorizskip},
-    clear_air_dbz_vert_skip = ${clearairdbzvertskip},
-/
-EOF
         #
         #-----------------------------------------------------------------------
         #
@@ -195,24 +59,26 @@ EOF
         #
 
         RUNMPCMD "EXEDIR/process_NSSL_mosaic.exe"
-        export err=$?                    # check the status
+        istatus=$?                    # check the status
         #err_chk
 
         #cp RefInGSI3D.dat  "${COMOUT}/ioda_mrms_refl/${WGF}/rrfs.t${HH}z.RefInGSI3D.bin.${bigmin}"
 
+        if [[ $istatus -eq 0 ]]; then
         #
         #-----------------------------------------------------------------------
         #
         # Run ioda converter to generate radar reflectivity ioda file
         #
         #-----------------------------------------------------------------------
-        # pyioda libraries
-        PYIODALIB=$(echo "${HOMErrfs}"/sorc/RDASApp/build/lib/python3.*)
-        export PYTHONPATH=${PYIODALIB}:${PYTHONPATH}
-        "${HOMErrfs}/ush/MRMS2ioda.py" -i ./Gridded_ref.nc -c "${YYYY}-${MM}-${DD}T${HH}:${bigmin}:00" -o "ioda_mrms_${YYYYMMDD}${HH}_${bigmin}.nc4"
+            # pyioda libraries
+            PYIODALIB=$(echo "${HOMErrfs}"/sorc/RDASApp/build/lib/python3.*)
+            export PYTHONPATH=${PYIODALIB}:${PYTHONPATH}
+            "${HOMErrfs}/ush/MRMS2ioda.py" -i ./Gridded_ref.nc -c "${YYYY}-${MM}-${DD}T${HH}:${min}:00" -o "ioda_mrms_${YYYYMMDD}_${HH}${min}.nc4"
+        fi
 
         # file count sanity check and copy to COMOUT
-        if [[ -s "ioda_mrms_${YYYYMMDD}${HH}_${bigmin}.nc4" ]]; then
+        if [[ -s "ioda_mrms_${YYYYMMDD}_${HH}${min}.nc4" ]]; then
             #${cpreq} "ioda_mrms_${YYYYMMDD}${HH}_${bigmin}.nc4" "${COMOUT}/ioda_mrms_refl/${WGF}"
             touch done.ioda_mrms_refl
         else
@@ -221,11 +87,10 @@ EOF
             #err_exit # err_exit if no ioda files generated at the development stage
         fi
 
-    #done # done with the bigmin for-loop
-    rm -rf running.ioda_mrms_refl
+rm -rf running.ioda_mrms_refl
 
 time2=$(date '+%s')
 
 diff=$((time2-time1))
 
-printf "\nJob   Ended: %(%a %b %d %H:%M:%S %Z %Y)T. Job run time: %s.\n" $time2 $(date -d@$diff -u +%H:%M:%S)
+printf "\nJob   Ended: %(%a %b %d %H:%M:%S %Z %Y)T. Job run time: %s.\n" "$time2" "$(date -d@$diff -u +%H:%M:%S)"

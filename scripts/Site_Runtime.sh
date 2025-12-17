@@ -47,17 +47,19 @@ function setup_machine {
     Jet )
         modulename="build_jet_Rocky8_intel_smiol"
         #modulename="RDAS/jet.intel"
+
+        MPAS_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/GSL_JEDI/rrfs-workflow.new"
         mpas_modulename="rrfs/jet.intel"
-        #jedi_modulename="jet.intel"
-        jedi_modulename="RDAS/jet.intel"
+
+        rrfs_dir="/lfs5/NAGAPE/hpc-wof1/ywang/GSL_JEDI/rrfs-workflow.new"
+        #JEDI_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/GSL_JEDI/rrfs-workflow.new/sorc/RDASApp"
+        JEDI_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/CADRE2/CADRE_JEDI_MODEL"
+        #JEDI_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/NCAR_JEDI"
+        jedi_modulename="jet.intel"            # CADRE
+        #jedi_modulename="RDAS/jet.intel"      # RRFS
 
         workdirDF="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS/run_dirs"
         post_dir="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS/frdd-wofs-post"
-        rrfs_dir="/lfs5/NAGAPE/hpc-wof1/ywang/GSL_JEDI/rrfs-workflow.new"
-        JEDI_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/GSL_JEDI/rrfs-workflow.new/sorc/RDASApp"
-        #JEDI_DIR="/lfs6/NAGAPE/hpc-wof1/ywang/CADRE2/CADRE_JEDI_MODEL"
-        #JEDI_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/NCAR_JEDI"
-        MPAS_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/GSL_JEDI/rrfs-workflow.new"
 
         if [[ ${set_up} == true ]]; then
             source /etc/profile.d/modules.sh

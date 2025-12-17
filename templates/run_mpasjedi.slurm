@@ -59,17 +59,43 @@ if [[ $istatus -eq 0 ]]; then
     solver )
         # ncks increments to cold_start IC
         var_list="VARLIST"
+        # Take background file, look for every variable except those listed in ${var_list},
+        # and append them into the analysis file.
+        # -A	Append	Instead of overwriting the output file, this tells NCO to add the variables to the existing file.
+        # -C	No Clobber (Don't Copy)	This tells ncks to not copy the associated coordinate variables (like latitude, longitude, time)
+        #       if they already exist in the destination file. This prevents errors when appending variables to a file
+        #       that already has the same grid dimensions.
+        # -x	Exclude	This inverts the selection. Instead of saying "select these variables," it says "select everything except these variables."
+        # -v	Variable	Specifies the variables to operate on.
+        #
+        declare -a pids=()
         for mem in $(seq -w 001 ENS_SIZE); do
-            srun --ntasks=1 --cpus-per-task=1 -N 1 ncks -A -C -x -v ${var_list} "data/ens/mem${mem}.nc" "data/ana/mem${mem}.nc" &
+            srun --ntasks=1 --cpus-per-task=1 -N 1 ncks -A -C -x -v ${var_list} "ens/mem${mem}.nc" "ana/mem${mem}.nc" &
+            pids+=($!)
             #istatus=$?
-            #ncks -A -v ${var_list} "data/ana/mem${mem}.nc" "data/ens/tmp${mem}.nc"
-            #[[ $istatus -ne 0 ]] && break
+            #if [[ $istatus -eq 0 ]]; then ((icount+=1)); fi
         done
-        wait
+        #wait
+
+        icount=0
+        # Wait for all and check status
+        for pid in "${pids[@]}"; do
+            if wait "$pid"; then ((icount+=1)); fi
+        done
+
+        if [ "$icount" -eq ENS_SIZE ]; then
+            istatus=0
+        else
+            istatus=1
+        fi
         ;;
     esac
 
-    if [[ $istatus -eq 0 ]]; then touch done.${task}; else touch error.${task}; fi
+    if [[ $istatus -eq 0 ]]; then
+        touch done.${task}
+    else
+        touch error.${task}
+    fi
 else
     touch error.${task}
 fi

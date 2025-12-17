@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2317,SC1090,SC1091,SC2086
+# shellcheck disable=SC2317,SC1090,SC1091,SC2086,SC2154
 
 # Export Functions:
 #
@@ -545,27 +545,140 @@ function setsubtract {
 
 ########################################################################
 
+# Function to check if parentheses or quotes are balanced
+# Returns 0 (true) if balanced, 1 (false) otherwise
+function is_balanced {
+    local str="$1"
+    # Count double quotes
+    local dq_count
+    dq_count=$(grep -o '"' <<< "$str" | wc -l)
+    # Count single quotes
+    local sq_count
+    sq_count=$(grep -o "'" <<< "$str" | wc -l)
+
+    # Both must be even numbers
+    (( dq_count % 2 == 0 )) && (( sq_count % 2 == 0 ))
+}
+
+########################################################################
+
+# Function to check if parentheses or quotes are balanced
+# Returns 0 (true) if balanced, 1 (false) otherwise
+
+function validate_assignment {
+    local line="$1"
+
+    varname=""; varvalue=""; vartype=""
+
+    # 1. Check basic assignment structure (Key=Value)
+    if [[ ! "$line" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$ ]]; then
+        #echo "❌ Invalid Syntax: Not a valid assignment line."
+        return 1
+    fi
+
+    varname="${BASH_REMATCH[1]}"
+    varvalue="${BASH_REMATCH[2]}"
+
+    # --- CHECK A: Literal Array (Strict) ---
+    if [[ "${varvalue}" =~ ^\(.*\)$ ]]; then
+        # Strip the outer parentheses to check the inside
+        # ${value:1:-1} removes first and last char
+        local content="${varvalue:1:-1}"
+
+        # Security Check 1: Reject Danger Characters
+        # We reject: $ (variable/command sub), ` (backtick), ; (terminator), & (background), | (pipe)
+        if [[ "$content" =~ [\$\`\;\&\|] ]]; then
+            #echo "❌ Invalid Array: Contains unsafe characters (${varname})"
+            return 1
+        fi
+
+        # Security Check 2: Reject Unbalanced Quotes
+        if ! is_balanced "$content"; then
+             #echo "❌ Invalid Array: Unbalanced quotes (${varname})"
+             return 1
+        fi
+
+        #echo "✅ Valid: Safe Literal Array (${varname})"
+        vartype="Array"
+        return 0
+    fi
+
+    # --- CHECK B: Number (Integer or Float) ---
+    if [[ "${varvalue}" =~ ^(\'|\")?[-+]?([0-9]*\.[0-9]+|[0-9]+)(\'|\")?$ ]]; then
+        #echo "✅ Valid: Number (${varname})"
+        vartype="Number"
+        return 0
+    fi
+
+    # --- CHECK C: Bool (true or false) ---
+    if [[ "${varvalue}" =~ ^(true|false)$ ]]; then
+        #echo "✅ Valid: Bool (${varname})"
+        vartype="Bool"
+        return 0
+    fi
+
+    # --- CHECK D: String ---
+    # Case 1: Strictly quoted (Start/End with " or ')
+    if [[ "${varvalue}" =~ ^(\".*\"|\'.*\')$ ]]; then
+        # Ensure the quotes inside aren't broken/unbalanced
+        if ! is_balanced "${varvalue}"; then
+            #echo "❌ Invalid String: Unbalanced quotes (${varname})"
+            return 1
+        fi
+        #echo "✅ Valid: Quoted String (${varname})"
+        vartype="String"
+        return 0
+    fi
+
+    # Case 2: Safe unquoted string (No spaces, no special chars)
+    if [[ "${varvalue}" =~ ^[a-zA-Z0-9_./-]+$ ]]; then
+        #echo "✅ Valid: Simple String (${varname})"
+        vartype="String"
+        return 0
+    fi
+
+    #echo "❌ Invalid Value: ${varvalue} - Does not match Number, Safe Array, or String."
+    return 1
+}
+
+# echo "--- VALID EXAMPLES ---"
+# validate_assignment 'my_array=( 1 2 "three" )'   # Valid
+# validate_assignment 'coords=(10.5 -20.1)'        # Valid
+# validate_assignment 'empty_list=()'              # Valid
+#
+# echo -e "\n--- INVALID EXAMPLES ---"
+# validate_assignment 'hack=( $(rm -rf /) )'       # Invalid (Contains $)
+# validate_assignment 'bad=( "open quote )'        # Invalid (Unbalanced)
+# validate_assignment 'inject=( a; ls )'           # Invalid (Contains ;)
+# validate_assignment 'pipe=( a | grep b )'        # Invalid (Contains |)
+
+########################################################################
+
 #verb=false
 #readconf config.ini COMMON SECTION1
 
 function readconf {
     if [[ $# -lt 2 ]]; then
-        echo -e "${RED}ERROR${NC}: No enough argument to function \"readconf\"."
+        mecho0 "${RED}ERROR${NC}: No enough argument to function \"readconf\"."
         exit 1
     fi
     local configfile=$1
     local sections
 
     sections=$(join_by \| "${@:2}")
-    local debug=0
+    local debug=1
 
     if [[ ! -e $configfile ]]; then
-        echo -e "${RED}ERROR${NC}: Case configuration file: $configfile not exist. Have you run ${BROWN}setup_mpas-wofs.sh${NC}?"
+        mecho0 "${RED}ERROR${NC}: Case configuration file: $configfile not exist. Have you run ${BROWN}setup_mpas-wofs.sh${NC}?"
         exit 1
     fi
 
     local readmode line
     declare -a read_sections=()
+    declare -A type_colors=(["Number"]=GREEN ["String"]=PURPLE ["Array"]=RED ["Bool"]=LIGHT_BLUE)
+
+    #local regex="^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$"
+    local varname varvalue vartype
 
     readmode=false
     while read -r line; do
@@ -574,7 +687,7 @@ function readconf {
                 echo "$line"
                 continue
             else
-                echo -ne "$line \t\t\t ### \t"
+                printf "%-132s" "$line"
             fi
         fi
 
@@ -584,10 +697,10 @@ function readconf {
         line=${line%%+([[:space:]])}
 
         if [[ "$line" =~ ^#.* ]]; then
-            if [[ $debug -eq 1 ]]; then echo "Comment"; fi
+            if [[ $debug -eq 1 ]]; then echo "### Comment"; fi
             continue
         elif [[ "$line" =~ ^\[$sections\]$ ]]; then
-            if [[ $debug -eq 1 ]]; then echo "Found $sections"; fi
+            if [[ $debug -eq 1 ]]; then echo "=== Found $sections"; fi
             readmode=true
             sname="${line#[}"
             sname="${sname%]}"
@@ -595,7 +708,7 @@ function readconf {
             #echo "read_sections = ${read_sections[*]}"
             continue
         elif [[ "$line" == \[*\] ]]; then
-            if [[ $debug -eq 1 ]]; then echo "Another Section"; fi
+            if [[ $debug -eq 1 ]]; then echo "%%% Another Section"; fi
             readmode=false
             continue
         fi
@@ -604,14 +717,34 @@ function readconf {
             # remove comment starting with "# "
             line=${line%%# *}
 
-            if [[ "$line" =~ "=" ]]; then
-                if [[ $debug -eq 1 ]]; then echo "source: $line"; fi
-                eval "$line"
-            else
-                if [[ $debug -eq 1 ]]; then echo "skip: $line"; fi
-            fi
+            # 1. Split the line by semicolon into an array
+            IFS=';' read -ra STATEMENTS <<< "$line"
+
+            # 2. Iterate over each statement
+            i=0
+            for part in "${STATEMENTS[@]}"; do
+                # remove leading whitespace from a string
+                clean_part=${part##+([[:space:]])}
+                # remove trailing whitespace from a string
+                clean_part=${clean_part%%+([[:space:]])}
+
+                # 3. Validate the assignment statement with the clean part
+                if validate_assignment "${clean_part}"; then
+                    if [[ $debug -eq 1 ]]; then
+                        (( i > 0)) && printf "%-132s" " "
+                        echo -ne "+++ Variable Assignment (${!type_colors[$vartype]}$vartype${NC}): "
+                        echo -e "${BROWN}${varname}${NC} = ${WHITE}${varvalue}${NC}"
+                    fi
+                    [[ -v ${varname} ]] && mecho0 "*** ${LIGHT_PURPLE}WARNING${NC} *** Variable ${BROWN}${varname}${NC} value changed from ${YELLOW}${!varname}${NC} to ${WHITE}${varvalue}${NC}"
+                    eval "${clean_part}"
+                else
+                    mecho0 "${LIGHT_RED}ERROR${NC}: ${YELLOW}${clean_part}${NC} ${YELLOW}Should not happen${NC}."
+                    exit 1
+                fi
+                ((i++))
+            done
         else
-            if [[ $debug -eq 1 ]]; then echo "ignored"; fi
+            if [[ $debug -eq 1 ]]; then echo "--- Ignore: $line"; fi
         fi
 
     done < $configfile

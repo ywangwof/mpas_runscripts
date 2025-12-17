@@ -1298,8 +1298,11 @@ function write_config {
 # It does NOT contain anything that is configurable from the command line
 # for each task. Use optin "-h" to check command line options.
 #
-# Except for comments which must start with "# " in this file, the syntax
-# will be the same as a Bash shell script.
+# Except for
+#     1. comments must start with "# " in this file,
+#     2. not support semicolons inside values
+#
+# the syntax will be the same as a Bash shell script.
 #
 # [COMMON] variables
 #
@@ -1413,6 +1416,7 @@ function write_config {
 
     use_BUFR=true                       # Whether we should wait for PrepBufr data file
     use_REF=true
+    use_VR=true
 
     run_addnoise=false                  # run WoFS add_noise facility (Python)
     WOFSAN_PATH="${mpas_wofs_python}"

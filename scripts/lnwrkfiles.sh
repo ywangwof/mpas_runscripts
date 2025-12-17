@@ -400,7 +400,9 @@ for pkg in "${packages[@]}"; do
         #
         # JEDI programs
         #
-        mkdir -p jedi
+        if [[ ! -d jedi ]]; then
+            mkdir -p jedi
+        fi
 
         jedi_exe=(bufr2ioda.x  bufr2netcdf.x  mpasjedi_enkf.x  process_NSSL_mosaic.exe)
         for prog in "${jedi_exe[@]}"; do
@@ -410,7 +412,7 @@ for pkg in "${packages[@]}"; do
         #
         # PARM files
         #
-        mkdir -p "${desdir}/jedi"
+        #mkdir -p "${desdir}/jedi"
         cd "${desdir}/jedi" || exit 1
 
         parm_files=(prepbufr_ascatw.yaml  prepbufr_satwnd.yaml  prepbufr_aircft.yaml  \
@@ -435,21 +437,24 @@ for pkg in "${packages[@]}"; do
         #
         # Localized files
         #
-        cp_files=(getkf_observer.yaml getkf_solver.yaml)
+        #cp_files=(getkf_observer.yaml getkf_solver.yaml)
 
-        for fn in "${cp_files[@]}"; do
-            if [[ ! -e $fn ]]; then
-               cp "${srcmodel}/parm/$fn" .
-            fi
-        done
-        cp "${srcmodel}/sorc/RDASApp/rrfs-test/gsi_fix/convinfo" .
-        ln -sf getkf_solver.yaml getkf_post.yaml
+        #for fn in "${cp_files[@]}"; do
+        #    if [[ ! -e $fn ]]; then
+        #       cp "${srcmodel}/parm/$fn" .
+        #    fi
+        #done
+        ln -sf "${srcmodel}/sorc/RDASApp/rrfs-test/gsi_fix/convinfo" .
+        #ln -sf getkf_solver.yaml getkf_post.yaml
 
         #
         # Stream_list files
         #
         #fix_dirs=(stream_list)
-        ln -sf "${srcmodel}/fix/stream_list" .
+        if [[ ! -d stream_list ]]; then
+            mkdir -p stream_list
+        fi
+        ln -sf "${srcmodel}/fix/stream_list/*" stream_list
         ;;
     * )
         echo "Argument should be one of [${default_packages[*]}]. get \"${pkg}\"."
