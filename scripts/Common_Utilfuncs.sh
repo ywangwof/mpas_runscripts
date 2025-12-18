@@ -12,6 +12,8 @@
 # o intersection             # Intersection of two arrays, pass in as two strings and pass out as one intersected string
 # o typeset2array            # Typeset output to an associative array
 # o string2array             # '_' separated string to an array
+# o is_balanced              # Quote character is balanced
+# o validate_assignment      # String is a valid Bash variable assignment statement (String, Number, Array, Bool)
 # o readconf                 # Read config file, written from "setup_mpas-wofs.sh"
 # o convert2days             # Convert date/time strings to days/seconds since 1601-01-01
 # o convertS2days            # Convert epoch seconds to days/seconds since 1601-01-01
@@ -24,6 +26,8 @@
 # o num_pending_jobs_greater_than       # Check number of jobs in the queue before submit a new job to avoid job flooding
 # o mecho/mecho0/mecho1/mecho2    # Print text with function name prefix
 # o split_graph              # Split graph.info file for the corresponding MPI processes
+# o array_contains           # String is an element in the Array
+# o array_keys_contains      # String is a key in the associated Array
 # o sortnumarray             # Sort a number array and get a string
 # o sortnumarrayuniq         # Sort a number array by removing duplicates and get a string
 # o nums2range               # Condense a number array into a string with comma separated number and dash denotes range
@@ -33,6 +37,8 @@
 
 mydir=$(dirname "${BASH_SOURCE[0]}")
 source $mydir/Common_Colors.sh
+
+shopt -s extglob
 
 ########################################################################
 
@@ -568,11 +574,12 @@ function is_balanced {
 function validate_assignment {
     local line="$1"
 
+    local debug=false
     varname=""; varvalue=""; vartype=""
 
     # 1. Check basic assignment structure (Key=Value)
     if [[ ! "$line" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$ ]]; then
-        #echo "❌ Invalid Syntax: Not a valid assignment line."
+        if $debug; then echo "❌ Invalid Syntax: Not a valid assignment line."; fi
         return 1
     fi
 
@@ -588,31 +595,31 @@ function validate_assignment {
         # Security Check 1: Reject Danger Characters
         # We reject: $ (variable/command sub), ` (backtick), ; (terminator), & (background), | (pipe)
         if [[ "$content" =~ [\$\`\;\&\|] ]]; then
-            #echo "❌ Invalid Array: Contains unsafe characters (${varname})"
+            if $debug; then echo "❌ Invalid Array: Contains unsafe characters (${varname})"; fi
             return 1
         fi
 
         # Security Check 2: Reject Unbalanced Quotes
         if ! is_balanced "$content"; then
-             #echo "❌ Invalid Array: Unbalanced quotes (${varname})"
+             if $debug; then echo "❌ Invalid Array: Unbalanced quotes (${varname})"; fi
              return 1
         fi
 
-        #echo "✅ Valid: Safe Literal Array (${varname})"
+        if $debug; then echo "✅ Valid: Safe Literal Array (${varname})"; fi
         vartype="Array"
         return 0
     fi
 
     # --- CHECK B: Number (Integer or Float) ---
     if [[ "${varvalue}" =~ ^(\'|\")?[-+]?([0-9]*\.[0-9]+|[0-9]+)(\'|\")?$ ]]; then
-        #echo "✅ Valid: Number (${varname})"
+        if $debug; then echo "✅ Valid: Number (${varname})"; fi
         vartype="Number"
         return 0
     fi
 
     # --- CHECK C: Bool (true or false) ---
     if [[ "${varvalue}" =~ ^(true|false)$ ]]; then
-        #echo "✅ Valid: Bool (${varname})"
+        if $debug; then echo "✅ Valid: Bool (${varname})"; fi
         vartype="Bool"
         return 0
     fi
@@ -622,22 +629,22 @@ function validate_assignment {
     if [[ "${varvalue}" =~ ^(\".*\"|\'.*\')$ ]]; then
         # Ensure the quotes inside aren't broken/unbalanced
         if ! is_balanced "${varvalue}"; then
-            #echo "❌ Invalid String: Unbalanced quotes (${varname})"
+            if $debug; then echo "❌ Invalid String: Unbalanced quotes (${varname})"; fi
             return 1
         fi
-        #echo "✅ Valid: Quoted String (${varname})"
+        if $debug; then echo "✅ Valid: Quoted String (${varname})"; fi
         vartype="String"
         return 0
     fi
 
     # Case 2: Safe unquoted string (No spaces, no special chars)
     if [[ "${varvalue}" =~ ^[a-zA-Z0-9_./-]+$ ]]; then
-        #echo "✅ Valid: Simple String (${varname})"
+        if $debug; then echo "✅ Valid: Simple String (${varname})"; fi
         vartype="String"
         return 0
     fi
 
-    #echo "❌ Invalid Value: ${varvalue} - Does not match Number, Safe Array, or String."
+    if $debug; then echo "❌ Invalid Value: ${varvalue} - Does not match Number, Safe Array, or String."; fi
     return 1
 }
 
@@ -666,7 +673,7 @@ function readconf {
     local sections
 
     sections=$(join_by \| "${@:2}")
-    local debug=1
+    local debug=0
 
     if [[ ! -e $configfile ]]; then
         mecho0 "${RED}ERROR${NC}: Case configuration file: $configfile not exist. Have you run ${BROWN}setup_mpas-wofs.sh${NC}?"
@@ -738,7 +745,7 @@ function readconf {
                     [[ -v ${varname} ]] && mecho0 "*** ${LIGHT_PURPLE}WARNING${NC} *** Variable ${BROWN}${varname}${NC} value changed from ${YELLOW}${!varname}${NC} to ${WHITE}${varvalue}${NC}"
                     eval "${clean_part}"
                 else
-                    mecho0 "${LIGHT_RED}ERROR${NC}: ${YELLOW}${clean_part}${NC} ${YELLOW}Should not happen${NC}."
+                    mecho0 "${LIGHT_RED}ERROR${NC}: ${WHITE}${clean_part}${NC} Should not happen."
                     exit 1
                 fi
                 ((i++))
@@ -1024,6 +1031,48 @@ function split_graph {
     fi
 
     cd "${wrkdir}" || exit $?
+}
+########################################################################
+
+function array_contains {
+    declare -n array_ref="$1"
+    local target="$2"
+
+    local found=1
+
+    for item in "${array_ref[@]}"; do
+        if [[ "$item" == "$target" ]]; then
+            found=0
+            break
+        fi
+    done
+
+    # If the array elements don't contain spaces, users can sometimes do a quick string check,
+    # though it is less robust than a loop.
+    #if [[ " ${array_ref[*]} " =~ " ${target} " ]]; then
+    #    echo "Found using string matching"
+    #fi
+    return $found
+}
+
+########################################################################
+
+function array_keys_contains {
+    # Declare and populate an associative array
+    declare -m user_data="$1"
+
+    local target_key="$2"
+
+    local found=1
+    # Check if the key exists
+    if [[ -v user_data["$target_key"] ]]; then
+        #echo "Key '$target_key' exists!"
+        found=0
+    #else
+        #echo "Key not found."
+    fi
+
+    return $found
 }
 
 ########################################################################
