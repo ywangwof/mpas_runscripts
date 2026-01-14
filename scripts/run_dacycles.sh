@@ -110,7 +110,7 @@ function usage {
     echo "    WORKDIR  - Run Directory"
     echo "    CONFIG   - MPAS-WoFS runtime configuration file with full path."
     echo "               WORKDIR & DATETIME will be extracted from the CONFIG name unless they are given explicitly."
-    echo "    JOBS     - One or more jobs from [ioda_bufr,ioda_mrms_refl,getkf_observer,getkf_solver,update_bc,mpas,clean]"
+    echo "    JOBS     - One or more jobs from [ioda_bufr,ioda_mrms_refl,getkf_observer,getkf_solver,update_bc,mpas,clean,mpassit_mean]"
     echo "               Default all jobs in [ioda_bufr,ioda_mrms_refl,getkf_observer,getkf_solver,update_bc,mpas] for a DA cyle"
     echo " "
     echo "    OPTIONS:"

@@ -691,12 +691,11 @@ EOF
                   filename_interval="input_interval"
                   packages="limited_area"
                   input_interval="${EXTINVL_STR}" />
-
-<immutable_stream name="ugwp_oro_data_in"
-                  type="input"
-                  filename_template="${domname}.ugwp_oro_data.nc"
-                  input_interval="initial_only" />
 EOF
+#<immutable_stream name="ugwp_oro_data_in"
+#                  type="input"
+#                  filename_template="${domname}.ugwp_oro_data.nc"
+#                  input_interval="initial_only" />
         if [[ ${outpsfc} == true ]]; then
             cat << EOF >> streams.atmosphere
 <stream name="psfc"
@@ -745,7 +744,8 @@ EOF
         [JOBNAME]="mpas-${jobname}_${eventtime}"
         [CPUSPEC]="${claim_cpu_fcst}"
         [CLAIMTIME]="${claim_time_fcst}"
-        [RRFSDIR]="${rrfs_dir}"
+        [MPASDIR]="${MPAS_DIR}"
+        [MODULE]="${mpas_modulename}"
     )
     if [[ "${mach}" == "pbs" ]]; then
         jobParms[NNODES]="${nnodes_fcst}"

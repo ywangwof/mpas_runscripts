@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# This module plots DART output obs_seq.final in netCDF format
+# This module plots JEDI reflectivity file
 #
 #-----------------------------------------------------------------------
 #
@@ -135,6 +135,25 @@ def get_var_contours(varname,var2d,cntlevels):
         mycolors = ctables.colortables['NWSReflectivity']
         mycolors.insert(0,(1,1,1))
         color_map = mcolors.ListedColormap(mycolors)
+    elif varname.startswith('error'):
+        cmap_data = [#(255/255, 255/255, 255/255),    # White
+                     (224/255, 224/255, 224/255),    # Light Gray   5
+                     (128/255, 128/255, 128/255),    # Gray        10
+                     ( 64/255,  64/255,  64/255),    # Dark Gray   15
+                     (255/255,   0/255,   0/255),    # Red         20
+                     (255/255,  96/255, 208/255),    # Pink        25
+                     (160/255,  32/255, 255/255),    # Purple      30
+                     ( 80/255, 208/255, 255/255),    # Light Blue  35
+                     (  0/255,  32/255, 255/255),    # Blue        40
+                     ( 96/255, 255/255, 128/255),    # Yellow-Green 45
+                     (  0/255, 192/255,   0/255),    # Green        50
+                     (255/255, 224/255,  32/255),    # Yellow
+                     (255/255, 160/255,  16/255),    # Orange
+                     (160/255, 128/255,  96/255),    # Brown
+                     (255/255, 208/255, 160/255)]    # Pale Pink
+
+        color_map = mcolors.ListedColormap(cmap_data, 'error')
+
     elif varname.startswith('rain') or varname.startswith('prec_'):
         #clevs = [0, 1, 2.5, 5, 7.5, 10, 15, 20, 30, 40,
         #         50, 70, 100, 150, 200, 250, 300, 400, 500, 600, 750]
@@ -368,7 +387,7 @@ def parse_args():
                                      epilog="\n        ---- Yunheng Wang (2025-08-20)\n ",
                                      formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('obsfiles',
-                        help='DART obs_seq file, either in netCDF format or ASCII sequence file.')
+                        help='MRMS 3D Gridded reflectitivity file or IODA netCDF4 file.')
 
     parser.add_argument('-v', '--verbose',
                         help='Enable verbose output.\n ',
@@ -385,6 +404,10 @@ def parse_args():
     parser.add_argument('-g', '--gridfile',
                         help='Specify a model file that provides grid data.',
                         type=str, default=None)
+
+    parser.add_argument('-n', '--varname',
+                        help='Specify variable to be plotted, either "value" or "error".',
+                        type=str, default='value')
 
     parser.add_argument('-m', '--map',
                         help='Select a base map projection: latlon, stereo, or lambert.',
@@ -405,7 +428,8 @@ def parse_args():
 
     args = parser.parse_args()
 
-    parsed_args = {}
+    parsed_args = {'varname': args.varname }
+
     if args.map in ['latlon', 'lambert', 'stereo']:
         parsed_args['basmap'] = args.map
     else:
@@ -434,10 +458,9 @@ def parse_args():
         print(f"file name can only be one. Got \"{obsfiles}\"")
         sys.exit(0)
 
-    parsed_args['ncfmt'] = False
-    if parsed_args['obsfile'].endswith('.nc'):
-        parsed_args['ncfmt'] = True
-
+    parsed_args['ioda_file'] = False
+    if parsed_args['obsfile'].startswith('ioda_'):
+        parsed_args['ioda_file'] = True
 
     #-------------------------------------------------------------------
     # Map releated parameters
@@ -500,6 +523,41 @@ def parse_args():
 
 ########################################################################
 
+def load_ioda_ref(args):
+
+    var_obj = {}
+
+    if os.path.lexists(args.obsfile):
+
+        with Dataset(args.obsfile, 'r') as fh:
+            meta_group = fh.groups['MetaData']
+            obs_group  = fh.groups['ObsValue']
+            err_group  = fh.groups['ObsError']
+            varerr  = err_group.variables['equivalentReflectivityFactor'][:]
+            varobs  = obs_group.variables['equivalentReflectivityFactor'][:]
+            varlat  = meta_group.variables['latitude'][:]
+            varlon  = meta_group.variables['longitude'][:]
+            varhgt  = meta_group.variables['height'][:]
+            vartime = meta_group.variables['dateTime'][:]
+
+        nobs  = varobs.size
+
+    else:
+        print(f"ERROR: file {args.obsfile} not found")
+        sys.exit(1)
+
+    var_obj['nobs']     = nobs
+    var_obj['varlat']   = varlat
+    var_obj['varlon']   = varlon
+    var_obj['varhgt']   = varhgt
+    var_obj['varobs']   = varobs
+    var_obj['varerr']   = varerr
+    var_obj['vartime']  = vartime
+
+    return make_namespace(var_obj,level=1)
+
+########################################################################
+
 def load_gridded_ref(args):
 
     var_obj = {}
@@ -523,37 +581,7 @@ def load_gridded_ref(args):
     var_obj['varlon']   = varlon
     var_obj['varhgt']   = varhgt
     var_obj['varobs']   = varobs
-
-    return make_namespace(var_obj,level=1)
-
-########################################################################
-
-def load_ioda_ref(args):
-
-    var_obj = {}
-
-    if os.path.lexists(args.obsfile):
-
-        with Dataset(args.obsfile, 'r') as fh:
-            fh.groups['ObsValue']
-            varobs  = fh.groups['ObsValue'].variables['equivalentReflectivityFactor'][:]
-            varlat  = fh.groups['MetaData'].variables['latitude'][:]
-            varlon  = fh.groups['MetaData'].variables['longitude'][:]
-            varhgt  = fh.groups['MetaData'].variables['height'][:]
-            dtime = fh.groups['MetaData'].variables['dateTime'][:]
-
-        nobs  = varobs.size
-
-    else:
-        print(f"ERROR: file {args.obsfile} not found")
-        sys.exit(1)
-
-    var_obj['nobs']     = nobs
-    var_obj['varlat']   = varlat
-    var_obj['varlon']   = varlon
-    var_obj['varhgt']   = varhgt
-    var_obj['varobs']   = varobs
-    var_obj['vartime']  = dtime
+    var_obj['vartime']  = None
 
     return make_namespace(var_obj,level=1)
 
@@ -562,7 +590,7 @@ def load_ioda_ref(args):
 def retrieve_plotvar(varargs,varobj):
     """ Select observation index based on command line arguments"""
 
-    varmeta = {'varlabel': "Reflectivity", 'time': "", 'level_label': "Max"}
+    varmeta = {'level_label': "Max"}
 
     varshape = varobj.varobs.shape
     if len(varshape) == 3:
@@ -573,14 +601,23 @@ def retrieve_plotvar(varargs,varobj):
         if cmd_args.verbose: print(f"shape of varobs: {varobj.varobs.shape}, shape of vardat: {vardat.shape}.")
     else:
         horizontal_groups = defaultdict(list)
-        for x, y, val in zip(varobj.varlon, varobj.varlat, varobj.varobs):
-            horizontal_groups[(x,y)].append(val)
+        if varargs.varname == "value":
+            for x, y, val in zip(varobj.varlon, varobj.varlat, varobj.varobs):
+                horizontal_groups[(x,y)].append(val)
+            varmeta['varlabel']= "Reflectivity"
+        elif varargs.varname == "error":
+            for x, y, val in zip(varobj.varlon, varobj.varlat, varobj.varerr):
+                horizontal_groups[(x,y)].append(val)
+            varmeta['varlabel']= "ObsError"
 
         ldat   = []
         llons  = []
         llats  = []
         for key, data_list in horizontal_groups.items():
-            ldat.append(np.max(data_list))
+            if varargs.varname == "value":
+                ldat.append(np.max(data_list))
+            else:
+                ldat.append(data_list[0])
             llons.append(key[0])
             llats.append(key[1])
 
@@ -589,7 +626,7 @@ def retrieve_plotvar(varargs,varobj):
         vardat = np.array(ldat)
 
     if hasattr(varobj, 'vartime'):
-        varmeta['time']  = datetime.fromtimestamp(varobj.vartime[0]).strftime('%Y%m%d_%H:%M:%S')
+        varmeta['time']  = datetime.fromtimestamp(varobj.vartime[0]).strftime('%Y%m%d_%H%M')
 
     return make_namespace(varmeta), glons,glats,vardat
 
@@ -831,7 +868,8 @@ def make_plot(wargs,wobj):
     # '|'        Vline             # '_'        Hline
 
     alphaval = 1.0
-    varname = 'refl'
+    varname = "error"
+    if wargs.varname == "value": varname = 'refl'
 
     color_map, normc = get_var_contours(varname,vardata,wargs.cntlevel)
     #cntlevels = list(np.linspace(cmin,cmax,9))
@@ -897,7 +935,10 @@ if __name__ == "__main__":
     time1 = timeit.time()
 
     #obs_obj = load_variables(args)
-    obs_obj = load_ioda_ref(args)
+    if args.ioda_file:
+        obs_obj = load_ioda_ref(args)
+    else:
+        obs_obj = load_gridded_ref(args)
 
     if cmd_args.verbose: print("\n Elapsed time of load_variables is:  %f seconds" % (timeit.time() - time1))
 

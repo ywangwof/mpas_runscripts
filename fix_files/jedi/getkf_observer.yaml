@@ -141,7 +141,7 @@ observations:
         obsdataout:
           engine:
             type: H5File
-            obsfile: jdiag_CWB_rw.nc
+            obsfile: jdiag_radar_rw.nc
         simulated variables: [radialVelocity]
       obs error:
         covariance model: diagonal
