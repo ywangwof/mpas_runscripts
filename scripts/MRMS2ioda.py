@@ -17,7 +17,9 @@ import warnings
 warnings.simplefilter("ignore")
 import sys
 import math
-from scipy.spatial import cKDTree
+
+from scipy.spatial import cKDTree, ConvexHull, Delaunay
+from matplotlib.path import Path
 
 # These modules need the path to lib-python modules
 
@@ -32,8 +34,8 @@ locationKeyList = [
 meta_keys = [m_item[0] for m_item in locationKeyList]
 
 obsvars_units = ['dBZ']
-obserrlist = [50.0]
-obserrvalue = 5.0
+obserrlist = [5.0]
+#obserrvalue = 5.0
 
 AttrData = {
     'converter': os.path.basename(__file__),
@@ -116,6 +118,25 @@ def main(file_names, output_file, obstime):
     AttrData['sourceFiles'] = AttrData['sourceFiles'][2:]
     logging.debug("All source files: " + AttrData['sourceFiles'])
 
+    ##
+    ## Keep only observations within the MPAS domain - WYH
+    ##
+    ## Observations within the MPAS domain
+    #keep_idx = find_indices_kdtree(data['latitude'], data['longitude'], latvs, lonvs, tolerance=2e-2)
+
+    ##
+    ## Remove observations over the boundary zone - WYH
+    ##
+    #for bdymask in bdyMasks:
+    #    #print(bdyMask,': ',bdyLons[bdyMask].size,bdyLats[bdyMask].size)
+    #    idx = find_indices_kdtree(data['latitude'], data['longitude'], bdyLats[bdymask], bdyLons[bdymask], tolerance=1.6e-2)
+    #    remove_set = set(idx)
+    #    keep_idx = [i for i in keep_idx if i not in remove_set]
+
+    keep_idx = check_obs_within_domain(bdyLons[1],bdyLats[1],data['longitude'], data['latitude'], )
+
+    nlocs = len(keep_idx)
+
     DimDict = {'Location': nlocs}
 
     # Set coordinates and units of the ObsValues.
@@ -135,22 +156,14 @@ def main(file_names, output_file, obstime):
         if locationKeyList[meta_keys.index(key)][2]:
             varAttrs[(key, metaDataName)]['units'] = locationKeyList[meta_keys.index(key)][2]
         #varAttrs[(key, metaDataName)]['_FillValue'] = missing_vals[dtypestr]
-        obs_data[(key, metaDataName)] = np.array(data[key], dtype=dtypes[dtypestr])
+        obs_data[(key, metaDataName)] = np.array([data[key][i] for i in keep_idx], dtype=dtypes[dtypestr])
 
     obserr = np.full(nlocs, obserrlist[0], dtype=np.float32)
-    # Observations within the MPAS domain
-    idx = find_indices_kdtree(data['latitude'], data['longitude'], latvs, lonvs, tolerance=2e-2)
-    obserr[idx] = obserrvalue
-
-    # Observations over the boundary zone
-    for bdymask in bdyMasks:
-        #print(bdyMask,': ',bdyLons[bdyMask].size,bdyLats[bdyMask].size)
-        idx = find_indices_kdtree(data['latitude'], data['longitude'], bdyLats[bdymask], bdyLons[bdymask], tolerance=1.6e-2)
-        obserr[idx] = obserrvalue+bdymask*obserrvalue
+    #obserr[keep_idx] = obserrvalue
 
     # Transfer from the 1-D data vectors and ensure output data (obs_data) types using numpy.
     for n, iodavar in enumerate(obsvars):
-        obs_data[(iodavar, obsValName)] = np.array(data[iodavar], dtype=np.float32)
+        obs_data[(iodavar, obsValName)] = np.array([data[iodavar][i] for i in keep_idx], dtype=np.float32)
         obs_data[(iodavar, obsErrName)] = obserr                        #np.full(nlocs, obserrlist[n], dtype=np.float32)
         obs_data[(iodavar, qcName)] = np.full(nlocs, 2, dtype=np.int32)
         #varAttrs[(iodavar, obsValName)]['_FillValue'] = float_missing_value
@@ -296,6 +309,60 @@ def find_indices_kdtree(Lats, Lons, bdyLats, bdyLons, tolerance=1e-5):
 
 ########################################################################
 
+def define_mpas_inner_boundary_Path(domain_lons,domain_lats):
+    """Suppose the domain is roughly circular or rectangular and has no large indentations.
+    use Rubber Band method (Convex Hull)
+    domain_lons/domain_lats in 1D
+    """
+
+    #import numpy as np
+
+    # 1. Stack your arrays into (N, 2)
+    # format: [[lon, lat], [lon, lat], ...]
+    points = np.column_stack((domain_lons, domain_lats))
+
+    # 2. Compute the Convex Hull
+    hull = ConvexHull(points)
+
+    # 3. Get the boundary vertices in order
+    # hull.vertices gives indices of points that form the boundary
+    boundary_points = points[hull.vertices]
+
+    # 4. Create a Path for checking
+    polygon_path = Path(boundary_points)
+
+    return polygon_path
+
+########################################################################
+
+def check_obs_within_domain(boundary_lons, boundary_lats, obs_lons,obs_lats):
+    """Ray Casting Algorithm"""
+
+    # --- 1. Define the Polygon Boundary (The Domain) ---
+
+    # Create the Path object
+    polygon_path = define_mpas_inner_boundary_Path(boundary_lons,boundary_lats)
+
+
+    # --- 2. Define the Grid Points to Check ---
+    # Flatten the grid arrays to create a list of points (N, 2)
+    # We flatten because 'contains_points' expects a simple list of (x, y) pairs
+    points = np.column_stack((obs_lons, obs_lats))
+
+    # --- 3. Perform the Check ---
+    # returns a boolean array (True if inside, False if outside)
+    mask_points = polygon_path.contains_points(points)
+
+    print(f"Number of points inside MPAS domain: {np.sum(mask_points)}/{len(obs_lons)}")
+
+    # --- 4. Extract Indices ---
+    # You can now use the boolean mask to get the Indices
+
+    return np.where(mask_points)[0]
+
+
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
 if __name__ == "__main__":
 
     import argparse
@@ -338,7 +405,7 @@ if __name__ == "__main__":
     else:
         logging.basicConfig(level=logging.ERROR)
 
-    bdyMasks=(1,2,3,4,5,6,7)
+    bdyMasks=(1,)
     bdyLons, bdyLats, lonvs, latvs = get_mpas_boundaries(args.grid_file,bdyMasks)  # boundaries and boundary spec
 
     for file_name in args.file_names:

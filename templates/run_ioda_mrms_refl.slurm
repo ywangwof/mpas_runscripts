@@ -18,6 +18,7 @@ if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
     HOMErrfs="RRFSDIR"
     module use ${HOMErrfs}/sorc/RDASApp/modulefiles
     module load RDAS/jet.intel
+    module load py-matplotlib
     export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${HOMErrfs}/sorc/RDASApp/build/lib64
 else
     # shellcheck source=/dev/null
