@@ -2230,11 +2230,20 @@ function run_mpassit_mean {
                 fi
                 sleep 10
             done
-            cp ${org_file} ${filename}
+            {
+                echo -e "\nCopying the stage file:\n"
+                echo "cp ${org_file} ${filename}"
+                cp ${org_file} ${filename}
+            } &> merge_${stage}.log
+
             # Take background file, look for every variable except those listed in ${var_list},
             # and append them into the analysis file.
             mecho0 "Merging background datasets to ${CYAN}${filename}${NC} ..."
-            ${runcmd_str} ncks -A -C -x -v ${anlys_varstr} "${bkg_file}" "${filename}" >& merge_${stage}.log
+            {
+                echo -e "\nRunning NCO to merge background static datasets to the stage file:\n"
+                echo "${runcmd_str} ncks -A -C -x -v ${anlys_varstr} ${bkg_file} ${filename}"
+                ${runcmd_str} ncks -A -C -x -v ${anlys_varstr} "${bkg_file}" "${filename}"
+            } &>> merge_${stage}.log
         fi
 
         nmlfile="namelist.fcst_${stage}"
