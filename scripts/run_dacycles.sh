@@ -2067,8 +2067,7 @@ function dacycle_driver() {
         #------------------------------------------------------
 
         obs_string=""
-
-        if [[ ${icyc} -eq 0 && ${use_BUFR} == true ]]; then
+        if [[ ${eventtime} == ??00 && ${use_BUFR} == true ]]; then
             #obs_string="t120,t133,q120,q133,uv220,uv233"
             obs_string=$(read_convinfo_initial "${FIXDIR}/jedi/convinfo")
             #echo "obs_string=$obs_string"
