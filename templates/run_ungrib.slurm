@@ -13,7 +13,7 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
+if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules" || "MACHINE" == "Ursa" ]]; then
     module use ROOTDIR/modules
     module load MODULE
 else

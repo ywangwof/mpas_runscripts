@@ -1411,7 +1411,7 @@ function write_config {
 [dacycles]
     ENS_SIZE=36
     ADAPTIVE_INF=true
-    update_in_place=false               # update MPAS states in-place or
+    update_in_place=true                # update MPAS states in-place or
                                         # making a copy of the restart files
 
     use_BUFR=true                       # Whether we should wait for PrepBufr data file
@@ -1425,6 +1425,8 @@ function write_config {
     outwrf=false                        # Run MPASSIT after each data assimilation
 
     OBS_DIR="${OBS_DIR}"
+    OBS_REF_DIR="${OBS_DIR_REF}"
+    OBS_VEL_DIR="${OBS_DIR_VEL}"
 
     time_step=15
 
@@ -1861,7 +1863,7 @@ EXTHEAD="HRRRE"  #"GEFS"
 hrrrvtable="Vtable.HRRRE.2018"    #"Vtable.GEFS_withSpechum"
 hrrr_time_ics="${inittime}"
 hrrr_time_lbc="${lbctime}"
-hrrr_sub_ics="postprd_mem00"         # + 2-digit member string
+hrrr_sub_ics="mem"         # + 2-digit member string
 hrrr_sub_lbc="postprd_mem00"         # + 2-digit member string
 
 hrrrfile0="${hrrr_dir}/${eventdate}/${hrrr_time_ics}/${hrrr_sub_ics}01/wrfnat_hrrre_newse_mem0001_01.grib2"
@@ -1885,9 +1887,9 @@ if [[ " ${jobs[*]} " =~ [[:space:]]check(bg|obs)*[[:space:]]  ]]; then
     exit 0
 fi
 
-#if $dorun && [[ " ${jobs[*]} " != " clean " && " ${jobs[*]} " != " setup " ]] && ! check_hrrr_subdir; then
-#    exit $?
-#fi
+if $dorun && [[ " ${jobs[*]} " != " clean " && " ${jobs[*]} " != " setup " ]] && ! check_hrrr_subdir; then
+    exit $?
+fi
 
 starttime_str=$(date -u -d "${eventdate} ${eventtime}" +%Y-%m-%d_%H:%M:%S)
 

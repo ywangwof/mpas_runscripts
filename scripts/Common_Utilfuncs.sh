@@ -179,7 +179,7 @@ function submit_a_job {
     fi
 
     # shellcheck disable=SC2154
-    if [[ $dorun == true ]]; then mecho1n "Submitting ${myjobscript} .... "; fi
+    if [[ $dorun == true ]]; then mecho1n "Submitting ${BROWN}${myjobscript}${NC} .... "; fi
     # shellcheck disable=SC2154
     $runcmd ${myjoboption} "$myjobscript"
     if [[ $dorun == true && $? -eq 0 ]]; then touch ${mywrkdir}/queue.${myjobname}; fi
@@ -266,7 +266,7 @@ function check_job_status {
     # Check and wait for all members job status in ${runjobs} and
     # resubmit if necessary
     #-------------------------------------------------------------------
-    mecho1 "Waiting for ensemble jobs of ${WHITE}${jobname}${NC} in ${BROWN}${mywrkdir##"${WORKDIR}"/}${NC}"
+    mecho1 "Waiting for ensemble jobs of ${WHITE}${jobname}${NC} in ${LIGHT_BLUE}${mywrkdir##"${WORKDIR}"/}${NC}"
     donefile="$mywrkdir/done.${jobname}"
     numtry=0
     while [[ $numtry -le $numtries ]]; do

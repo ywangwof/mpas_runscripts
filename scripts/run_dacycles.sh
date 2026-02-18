@@ -110,8 +110,8 @@ function usage {
     echo "    WORKDIR  - Run Directory"
     echo "    CONFIG   - MPAS-WoFS runtime configuration file with full path."
     echo "               WORKDIR & DATETIME will be extracted from the CONFIG name unless they are given explicitly."
-    echo "    JOBS     - One or more jobs from [ioda_bufr,ioda_mrms_refl,getkf_observer,getkf_solver,update_bc,mpas,clean,mpassit_mean]"
-    echo "               Default all jobs in [ioda_bufr,ioda_mrms_refl,getkf_observer,getkf_solver,update_bc,mpas] for a DA cyle"
+    echo "    JOBS     - One or more jobs from [ioda_bufr,ioda_mrms_refl,jedi_observer,jedi_solver,update_bc,mpas,clean,mpassit_mean]"
+    echo "               Default all jobs in [ioda_bufr,ioda_mrms_refl,jedi_observer,jedi_solver,update_bc,mpas] for a DA cyle"
     echo " "
     echo "    OPTIONS:"
     echo "              -h                  Display this message"
@@ -237,7 +237,7 @@ function parse_args {
                 echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
                 usage 2
                 ;;
-            ioda* | getkf_* | update_* | mpas* | clean* )
+            ioda* | jedi_* | update_* | mpas* | clean* )
                 args["jobs"]="${key//,/ }"
                 ;;
             *)
@@ -279,11 +279,8 @@ function run_ioda {
     # Run ioda_bufr for all bufr observation files
     #------------------------------------------------------
 
-    obs_string=""
-
     if [[ ${anlys_min} == "00" && ${use_BUFR} == true ]]; then
         run_ioda_bufr ${wrkdir} ${iseconds}
-        obs_string="t120,t133,q120,q133,uv220,uv233"
     fi
 
     #------------------------------------------------------
@@ -291,13 +288,7 @@ function run_ioda {
     #------------------------------------------------------
     if [[ ${use_REF} == true ]]; then
         run_ioda_mrms_refl ${wrkdir} ${iseconds}
-        obs_string="${obs_string},refl10cm"
     fi
-
-    if [[ ${use_VR} == true ]]; then
-        obs_string="${obs_string},rw"
-    fi
-
 }
 
 ########################################################################
@@ -341,6 +332,7 @@ function run_ioda_bufr {
         [ROOTDIR]="${rootdir}"
         [GRIDFILE]="${rundir}/$domname/${domname}.grid.nc"
         [RRFSDIR]="${rrfs_dir}"
+        [MODULE]="${rrfs_modulename}"
     )
     if [[ "${mach}" == "pbs" ]]; then
         jobParms[NNODES]="1"
@@ -408,16 +400,16 @@ function run_ioda_mrms_refl {
         for l in -1 1; do
             curr_sec=$(( iseconds + l*j*60))
             curr_time=$(date -u -d @$curr_sec +%Y%m%d-%H%M)
-            mecho0 "Looking for data valid: ${curr_time}"
+            mecho0 "Looking for data valid: ${PURPLE}${curr_time}${NC}"
 
             mapfile -t fileslist < <(compgen -G "${OBSPATH_NSSLMOSIAC}/MergedReflectivityQC_*_${curr_time}??.${obs_appendix}" | sort -V)
             if [ ${#fileslist[@]} -ge 10 ] && [ ! -e filelist_mrms ]; then
-                mecho0 "Found ${YELLOW}${#fileslist[@]}${NC} GRIB-2 files: "
+                mecho0 "Found ${YELLOW}${#fileslist[@]}${NC} GRIB-2 files from ${CYAN}${OBSPATH_NSSLMOSIAC}${NC}"
                 for nsslfile in "${fileslist[@]}"; do
                     ${cpcmd}   "${nsslfile}" .
                     base_filename=$(basename "${nsslfile}")
                     echo "${base_filename}" >> filelist_mrms
-                    mecho0 "Copye MRMS files ${CYAN}${nsslfile}${NC} at ${PURPLE}${curr_time}${NC}"
+                    mecho0 "Copying MRMS files ${CYAN}${base_filename}${NC} ...."
                 done
                 break 2
             fi
@@ -503,6 +495,7 @@ EOF
         [CURRDATE]="${anlys_date}${anlys_min}"
         [ROOTDIR]="${rootdir}"
         [RRFSDIR]="${rrfs_dir}"
+        [MODULE]="${rrfs_modulename}"
     )
     if [[ "${mach}" == "pbs" ]]; then
         jobParms[NNODES]="1"
@@ -680,15 +673,27 @@ function create_streams {
     if [[ ${scheme} == "MPAS" ]]; then
         cat << EOF_MPAS > "${filename}"
 <streams>
+<immutable_stream name="invariant"
+                  type="input"
+                  filename_template="${domname}.invariant.nc"
+                  input_interval="initial_only" />
+
 <immutable_stream name="input"
                   type="input"
                   filename_template="${mpas_inputfile_template}"
                   input_interval="initial_only" />
 
-<immutable_stream name="invariant"
-                  type="input"
-                  filename_template="${domname}.invariant.nc"
-                  input_interval="initial_only" />
+<stream name="da_state"
+                  type="input;output"
+                  precision="single"
+                  clobber_mode="truncate"
+                  filename_template="${domname}_${memstr}.mpasout.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+                  packages="jedi_da"
+                  io_type="pnetcdf,cdf5"
+                  input_interval="initial_only"
+                  output_interval="${OUTINVL_STR}" >
+                  <file name="stream_list.atmosphere.da_state"/>
+</stream>
 
 <immutable_stream name="restart"
                   type="input;output"
@@ -740,13 +745,12 @@ function create_streams {
                   filename_interval="input_interval"
                   packages="limited_area"
                   input_interval="${icycle_extinvl_str}" />
+
+<immutable_stream name="ugwp_oro_data_in"
+                  type="input"
+                  filename_template="${domname}.ugwp_oro_data.nc"
+                  input_interval="initial_only" />
 EOF_MPAS
-#<immutable_stream name="ugwp_oro_data_in"
-#                  type="input"
-#                  filename_template="${domname}.ugwp_oro_data.nc"
-#                  input_interval="initial_only" />
-#</streams>
-#EOF
 
         echo "</streams>" >> "${filename}"
 
@@ -778,6 +782,7 @@ EOF_MPAS
         io_type="pnetcdf,cdf5"
         filename_template="foo2.nc"
         output_interval="none"
+        gattr_update="no"
         clobber_mode="overwrite">
         <file name="stream_list.atmosphere.analysis"/>
 </stream>
@@ -818,6 +823,50 @@ EOF_GETKF
         mecho1 "${RED}ERROR${NC}: Unsupported streams scheme, got ${PURPLE}${scheme}${NC}."
         exit 1
     fi
+}
+
+########################################################################
+
+function read_convinfo_initial {
+    local infile="$1"
+    local obs_list
+
+    #file_content=$(< "${FIXDIR}/jedi/convinfo") # read in all content
+    while read -r line; do
+        # remove leading whitespace from a string
+        aline=${line##+([[:space:]])}
+        # remove trailing whitespace from a string
+        aline=${aline%%+([[:space:]])}
+
+        found=false
+        if [[ $aline == "!"* ]]; then
+            :
+            #echo "${line}" >> "${outfile}"
+        else
+            read -ra fields <<< "${aline}"
+            if [[ ${#fields[@]} -ne 9 ]]; then
+                mecho1 "${YELLOW}WARNING${NC}: get_convinfo expected 9 fields in ${PURPLE}${line}${NC}"
+            fi
+
+            atype="${fields[0]}"
+            if [[ ${fields[1]} -ne 0 ]]; then
+                type=$(printf "%03d" ${fields[1]})
+                atype="${atype}${type}"
+            fi
+            if [[ ${fields[2]} -ne 0 ]]; then
+                type=$(printf "%03d" ${fields[2]})
+                atype="${atype}_${type}"
+            fi
+
+            iuse=${fields[3]}
+
+            if [[ $iuse -eq 1 ]]; then
+                obs_list+=("$atype")
+            fi
+        fi
+    done < "${infile}"
+
+    join_by , "${obs_list[@]}"
 }
 
 ########################################################################
@@ -878,7 +927,7 @@ function get_convinfo {
 
 ########################################################################
 
-function getkf_preparation {
+function jedi_preparation {
     # $1       $2      $3      $4
     # taskname wrkdir  icycle  iseconds
     local taskname=$1
@@ -920,8 +969,6 @@ function getkf_preparation {
         ln -sf "${FIXDIR}/${fn}" .
     done
 
-    #ln -snf "${FIXDIR}/${domname}.ugwp_oro_data.nc" ./ugwp_oro_data.nc
-
     ln -sf "${casedir}/init/${domname}.invariant.nc" ./invariant.nc
     ln -sf "${casedir}/${domname}/${domname}.ugwp_oro_data.nc" .
 
@@ -960,10 +1007,21 @@ function getkf_preparation {
                 input_file_="${casedir}/init/${domname}_${mem}.init.nc"
                 #mkdir -p ana
             else
-                input_file_="${parentdir}/${event_pre}/fcst_${mem}/${domname}_${mem}.restart.${currtime_fil}.nc"
+                input_file_="${parentdir}/${event_pre}/fcst_${mem}/${domname}_${mem}.mpasout.${currtime_fil}.nc"
             fi
 
             ( ${cpcmd} "${input_file_}" "ens/mem0${mem}.nc" ) &
+        done
+        wait
+    fi
+
+    if [[ "${taskname}" == "solver" && ${icycle} -gt 0 ]]; then
+        #
+        # Copy background file to analysis directory for overwritting with analysis
+        #
+        mecho0 "Copying ensemble members from ens to ana ..."
+        for mem in $(seq -w 001 "${ENS_SIZE}"); do
+            ( cp --dereference "ens/mem${mem}.nc" "ana/mem${mem}.nc" ) &
         done
         wait
     fi
@@ -999,7 +1057,7 @@ function getkf_preparation {
     fi
     ln -sf $casedir/$domname/$domname.graph.info.part.${npefilter} .
 
-    ln -snf "${FIXDIR}"/jedi/stream_list/* .
+    ln -s "${FIXDIR}"/jedi/stream_list/* .
 
     # Prepare convinfo file based on obsvations
 
@@ -1022,40 +1080,43 @@ function getkf_preparation {
     #  Generate the final YAML configuration file based on convinfo and available ioda files
     #
     [[ -s "${FIXDIR}/jedi/satinfo" ]] && cp "${FIXDIR}/jedi/satinfo" .
-    mecho0 "yaml_finalize - $(${rrfs_dir}/ush/yaml_finalize getkf.yaml)"        # manage output message
+    export GETKF_TYPE="${taskname}"
+    mecho0 "yaml_finalize - $(${rrfs_dir}/ush/yaml_finalize getkf.yaml 2>&1)"        # manage output message
 
 
     if [[ "${taskname}" == "post" ]]; then
         ## For post task, change a few yaml settings and remove "reduce obs space"
-        mecho0 "yaml_getkf_post - $(${rrfs_dir}/ush/yaml_getkf_post getkf.yaml)"
+        #mecho0 "yaml_getkf_post - $(${rrfs_dir}/ush/yaml_getkf_post getkf.yaml)"
         sed -i "/filename:/s/ens/ana/" getkf.yaml
     fi
 
     sed -i "/background:/,/nmembers:/{s/nmembers:.*$/nmembers: ${ENS_SIZE}/}" getkf.yaml
-    if [[ "${JEDI_DIR}" == *CADRE* ]]; then
-        #${scpdir}/process_yaml.py getkf.yaml -f CADRE -o "${obs_string}" -m ${ENS_SIZE} -v
-        sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: GETKF/}' getkf.yaml
-    else
-        #${scpdir}/process_yaml.py getkf.yaml -f RRFS  -o "${obs_string}" -m ${ENS_SIZE} -v
-        sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: Deterministic GETKF/}' getkf.yaml
-    fi
+    sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: Deterministic LETKF/}' getkf.yaml
+    #if [[ "${JEDI_DIR}" == *CADRE* ]]; then
+    #    #${scpdir}/process_yaml.py getkf.yaml -f CADRE -o "${obs_string}" -m ${ENS_SIZE} -v
+    #    #sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: GETKF/}' getkf.yaml
+    #    sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: LETKF/}' getkf.yaml
+    #else
+    #    #${scpdir}/process_yaml.py getkf.yaml -f RRFS  -o "${obs_string}" -m ${ENS_SIZE} -v
+    #    sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: Deterministic GETKF/}' getkf.yaml
+    #fi
 }
 
 ########################################################################
 
-function run_getkf_observer {
+function run_jedi_observer {
     # $1        $2      $3
     # wrkdir    icycle    iseconds
     local datimedir=$1
     local icycle=$2
     local iseconds=$3
 
-    local wrkdir="$datimedir/getkf_observer"
+    local wrkdir="$datimedir/jedi_observer"
 
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/running.observer || -f $wrkdir/done.observer || -f $wrkdir/queue.getkf_observer ]]; then
+    if [[ -f $wrkdir/running.observer || -f $wrkdir/done.observer || -f $wrkdir/queue.jedi_observer ]]; then
         return
     fi
 
@@ -1088,7 +1149,7 @@ function run_getkf_observer {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking ${WHITE}$cond${NC} ...."
+            mecho0 "Checking $cond ...."
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     mecho0 "Waiting for file: $cond"
@@ -1105,7 +1166,7 @@ function run_getkf_observer {
 
     taskname="observer"
 
-    getkf_preparation "${taskname}" "${wrkdir}" $2 $3
+    jedi_preparation "${taskname}" "${wrkdir}" $2 $3
 
     #
     # Copy ioda observation files
@@ -1179,24 +1240,24 @@ function run_getkf_observer {
         jobParms[NCORES]="${ncores_filter}"
     fi
 
-    submit_a_job "${wrkdir}" "getkf_${taskname}" "jobParms" "$TEMPDIR/$jobscript" "run_mpasjedi_${taskname}.${mach}" ""
+    submit_a_job "${wrkdir}" "jedi_${taskname}" "jobParms" "$TEMPDIR/$jobscript" "run_mpasjedi_${taskname}.${mach}" ""
 }
 
 ########################################################################
 
-function run_getkf_solver {
+function run_jedi_solver {
     # $1        $2      $3
     # wrkdir    icycle    iseconds
     local datimedir=$1
     local icycle=$2
     local iseconds=$3
 
-    local wrkdir="$datimedir/getkf_solver"
+    local wrkdir="$datimedir/jedi_solver"
 
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/running.solver || -f $wrkdir/done.solver || -f $wrkdir/queue.getkf_solver ]]; then
+    if [[ -f $wrkdir/running.solver || -f $wrkdir/done.solver || -f $wrkdir/queue.jedi_solver ]]; then
         return
     fi
 
@@ -1224,11 +1285,11 @@ function run_getkf_solver {
     # Waiting for job conditions
     #
     local -a conditions
-    conditions=("${datimedir}/getkf_observer/done.observer")
+    conditions=("${datimedir}/jedi_observer/done.observer")
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking ${WHITE}$cond${NC} ...."
+            mecho0 "Checking $cond...."
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     mecho0 "Waiting for file: $cond"
@@ -1244,17 +1305,17 @@ function run_getkf_solver {
     # DATA=wrkdir
     taskname="solver"
 
-    getkf_preparation "${taskname}" "${wrkdir}" $2 $3
-
-    #
-    # Copy ioda observation files
-
-    ln -snfr "${datimedir}"/getkf_observer/jdiag* jdiag/
+    jedi_preparation "${taskname}" "${wrkdir}" $2 $3
 
     #
     # enter the run directory again
     #
     cd "${wrkdir}" || exit 1
+
+    #
+    # Copy ioda observation files
+
+    ln -snfr "${datimedir}"/jedi_observer/jdiag* jdiag/
 
     #------------------------------------------------------
     # Run mpasjedi_enkf.x
@@ -1272,8 +1333,9 @@ function run_getkf_solver {
         [WRKDIR]="${wrkdir}"
         [TASKNAME]="${taskname}"
         [JEDIDIR]="${JEDI_DIR}"
-        [VARLIST]="${anlys_varstr}"
-        [ENS_SIZE]="${ENS_SIZE}"
+        [VARLIST]="${anlys_varstr}"         #  Special for Solver
+        [CYCLENO]="${icycle}"               #  Special for Solver
+        [ENS_SIZE]="${ENS_SIZE}"            #  Special for Solver
         [MODULE]="${jedi_modulename}"
     )
 
@@ -1282,19 +1344,19 @@ function run_getkf_solver {
         jobParms[NCORES]="${ncores_filter}"
     fi
 
-    submit_a_job "${wrkdir}" "getkf_${taskname}" "jobParms" "$TEMPDIR/run_mpasjedi.${mach}" "$jobscript" ""
+    submit_a_job "${wrkdir}" "jedi_${taskname}" "jobParms" "$TEMPDIR/run_mpasjedi.${mach}" "$jobscript" ""
 }
 
 ########################################################################
 
-function run_getkf_post {
+function run_jedi_post {
     # $1        $2      $3
     # wrkdir    icycle    iseconds
     local datimedir=$1
     local icycle=$2
     local iseconds=$3
 
-    local wrkdir="$datimedir/getkf_post"
+    local wrkdir="$datimedir/jedi_post"
 
     #
     # Return if is running or is done
@@ -1327,11 +1389,11 @@ function run_getkf_post {
     # Waiting for job conditions
     #
     local -a conditions
-    conditions=("${datimedir}/getkf_solver/done.solver")
+    conditions=("${datimedir}/jedi_solver/done.solver")
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking ${WHITE}$cond${NC} ...."
+            mecho0 "Checking $cond...."
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     mecho0 "Waiting for file: $cond"
@@ -1347,13 +1409,13 @@ function run_getkf_post {
     # DATA=wrkdir
     taskname="post"
 
-    getkf_preparation "${taskname}" "${wrkdir}" $2 $3
+    jedi_preparation "${taskname}" "${wrkdir}" $2 $3
 
     #
     # Copy ioda observation files
-    ln -snfr "${datimedir}"/getkf_solver/ana ana
+    ln -snfr "${datimedir}"/jedi_solver/ana ana
 
-    ln -snfr "${datimedir}"/getkf_observer/jdiag* jdiag/
+    ln -snfr "${datimedir}"/jedi_observer/jdiag* jdiag/
 
     #------------------------------------------------------
     # Run mpasjedi_enkf.x
@@ -1379,7 +1441,7 @@ function run_getkf_post {
         jobParms[NCORES]="${ncores_filter}"
     fi
 
-    submit_a_job "${wrkdir}" "getkf_${taskname}" "jobParms" "$TEMPDIR/run_mpasjedi.${mach}" "$jobscript" ""
+    submit_a_job "${wrkdir}" "jedi_${taskname}" "jobParms" "$TEMPDIR/run_mpasjedi.${mach}" "$jobscript" ""
 }
 
 ########################################################################
@@ -1436,7 +1498,7 @@ function run_add_noise {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking ${WHITE}$cond${NC} ...."
+            mecho0 "Checking $cond...."
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     mecho0 "Waiting for file: ${CYAN}$cond${NC}"
@@ -1490,7 +1552,7 @@ function run_add_noise {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking ${WHITE}$cond${NC} ...."
+            mecho0 "Checking $cond...."
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     mecho0 "Waiting for file: ${CYAN}$cond${NC}"
@@ -1587,7 +1649,7 @@ function run_update_bc {
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking ${WHITE}$cond${NC} ...."
+            mecho0 "Checking $cond...."
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     mecho0 "Waiting for file: $cond"
@@ -1726,11 +1788,11 @@ function run_mpas {
     # Waiting for job conditions
     #
     local -a conditions
-    [[ $icycle -gt 0 ]] && conditions=("./getkf_solver/done.solver")
+    [[ $icycle -gt 0 ]] && conditions=("./jedi_solver/done.solver")
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking ${WHITE}$cond${NC} ...."
+            mecho0 "Checking $cond...."
             if [[ "$cond" =~ (.+)"|"(.+) ]]; then
                 cond1=${BASH_REMATCH[1]}
                 cond2=${BASH_REMATCH[2]}
@@ -1791,10 +1853,10 @@ function run_mpas {
             mpas_inputfile_template="${domname}_${memstr}.init.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
             initfile="./${domname}_${memstr}.init.${currtime_fil}.nc"
         else
-            do_restart="true"
+            do_restart="false"
             do_dacyle="true"
             mpas_inputfile_template="${domname}_${memstr}.init.nc"
-            initfile="./${domname}_${memstr}.restart.${currtime_fil}.nc"
+            initfile="./${domname}_${memstr}.mpasout.${currtime_fil}.nc"
         fi
 
         local casedir="${rundir}"
@@ -1805,7 +1867,8 @@ function run_mpas {
         if [[ $icycle -eq 0 && ${init_da} == false ]]; then
             ln -sf "${casedir}/init/${domname}_${memstr}.init.nc" "${initfile}"
         else
-            ln -sf "../getkf_solver/ana/mem0${memstr}.nc" "${initfile}"
+            ln -sf "../jedi_solver/ana/mem0${memstr}.nc" "${initfile}"
+            #cp -f "../jedi_solver/ana/mem0${memstr}.nc" "${initfile}"
         fi
 
         if [[ $verb -eq 1 ]]; then
@@ -1827,7 +1890,7 @@ function run_mpas {
             diag_stream="stream_list.atmosphere.diagnostics_fcst"
         fi
 
-        streamlists=("${diag_stream}" stream_list.atmosphere.output stream_list.atmosphere.surface)
+        streamlists=("${diag_stream}" stream_list.atmosphere.output stream_list.atmosphere.surface stream_list.atmosphere.da_state)
         for fn in "${streamlists[@]}"; do
             cp -f ${FIXDIR}/$fn .
         done
@@ -1944,7 +2007,6 @@ function dacycle_driver() {
         num_resubmit=0               # Just check job status
     fi
 
-    obs_string="t120,t133,q120,q133,uv220,uv233,refl10cm,rw"
     anlys_varstr="pressure_p,rho,qv,qc,qr,qi,qs,qg,ni,nr,ng,nc,nifa,nwfa,volg,surface_pressure,theta,u,uReconstructZonal,uReconstructMeridional,refl10cm,w"
 
     local icyc=$(( (start_sec-init_sec)/intvl_sec ))
@@ -1999,38 +2061,62 @@ function dacycle_driver() {
 
         currtime_str=$(date -u -d @${isec} +%Y-%m-%d_%H:%M:%S)
         fcstmin_str=$(printf "%02d" "${intvl_min}")
+
+        #------------------------------------------------------
+        # 1. Retrieve observation string
+        #------------------------------------------------------
+
+        obs_string=""
+
+        if [[ ${icyc} -eq 0 && ${use_BUFR} == true ]]; then
+            #obs_string="t120,t133,q120,q133,uv220,uv233"
+            obs_string=$(read_convinfo_initial "${FIXDIR}/jedi/convinfo")
+            #echo "obs_string=$obs_string"
+            #exit 0
+        fi
+
+        DO_RADAR_REF="false"
+        if [[ ${use_REF} == true ]]; then
+            obs_string="${obs_string},refl10cm"
+            DO_RADAR_REF="true"
+        fi
+
+        if [[ ${use_VR} == true ]]; then
+            obs_string="${obs_string},rw"
+            DO_RADAR_REF="true"
+        fi
+        export DO_RADAR_REF
+
         #------------------------------------------------------
         # 1. Run ioda
         #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " ioda " ]]; then
-            if [[ $verb -eq 1 ]]; then echo "  Run ioda_bufr at $eventtime"; fi
+            if [[ $verb -eq 1 ]]; then echo "  Run ioda at $eventtime"; fi
             run_ioda $dawrkdir $isec
         fi
-
-        export DO_RADAR_REF=true
 
         #------------------------------------------------------
         # 2. Run observer
         #------------------------------------------------------
-        if [[ " ${jobs[*]} " =~ " getkf_observer " ]]; then
-            if [[ $verb -eq 1 ]]; then echo "  Run getkf_observer at $eventtime"; fi
-            run_getkf_observer $dawrkdir $icyc $isec
+        if [[ " ${jobs[*]} " =~ " jedi_observer " ]]; then
+            if [[ $verb -eq 1 ]]; then echo "  Run jedi_observer at $eventtime"; fi
+            run_jedi_observer $dawrkdir $icyc $isec
         fi
 
         #------------------------------------------------------
         # 3. Run solver
         #------------------------------------------------------
-        if [[ " ${jobs[*]} " =~ " getkf_solver " ]]; then
-            if [[ $verb -eq 1 ]]; then echo "  Run getkf_solver at $eventtime"; fi
-            run_getkf_solver $dawrkdir $icyc $isec
+        if [[ " ${jobs[*]} " =~ " jedi_solver " ]]; then
+            if [[ $verb -eq 1 ]]; then echo "  Run jedi_solver at $eventtime"; fi
+            run_jedi_solver $dawrkdir $icyc $isec
         fi
 
         #------------------------------------------------------
         # 4. Run post (if requested)
         #------------------------------------------------------
-        if [[ " ${jobs[*]} " =~ " getkf_post " ]]; then
-            if [[ $verb -eq 1 ]]; then echo "  Run getkf_post at $eventtime"; fi
-            run_getkf_post $dawrkdir $icyc $isec
+        if [[ " ${jobs[*]} " =~ " jedi_post " ]]; then
+            if [[ $verb -eq 1 ]]; then echo "  Run jedi_post at $eventtime"; fi
+            run_jedi_post $dawrkdir $icyc $isec
         fi
 
         #------------------------------------------------------
@@ -2139,11 +2225,11 @@ function run_mpassit_mean {
     # Waiting for job conditions
     #
     local -a conditions
-    conditions=("$(realpath -m --relative-to=. ${dawrkdir}/getkf_solver/done.solver)")
+    conditions=("$(realpath -m --relative-to=. ${dawrkdir}/jedi_solver/done.solver)")
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking ${WHITE}$cond${NC} ...."
+            mecho0 "Checking $cond...."
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
                     mecho0 "Waiting for file: $cond"
@@ -2196,9 +2282,9 @@ function run_mpassit_mean {
     fcst_lauch_time=$(date -u -d @${iseconds} +%H%M)
     fcst_time_str=$(date -u -d @$iseconds +%Y-%m-%d_%H.%M.%S)
 
-    prior_file="${dawrkdir}/getkf_solver/prior_mean.nc"
-    post_file="${dawrkdir}/getkf_solver/ana/mem000.nc"
-    bkg_file="${dawrkdir}/getkf_solver/ens/mem001.nc"
+    prior_file="${dawrkdir}/jedi_solver/prior_mean.nc"
+    post_file="${dawrkdir}/jedi_solver/ana/mem000.nc"
+    bkg_file="${dawrkdir}/jedi_solver/ens/mem001.nc"
 
     for stage in prior post; do
         #
@@ -2656,7 +2742,7 @@ init_da=true
 if [[ -v args["jobs"] ]]; then
     read -r -a jobs <<< "${args['jobs']}"
 else
-    jobs=(ioda getkf_observer getkf_solver getkf_post update_bc mpas clean)
+    jobs=(ioda jedi_observer jedi_solver jedi_post update_bc mpas clean)
 fi
 
 #-----------------------------------------------------------------------
@@ -2802,15 +2888,13 @@ echo    " "
 jobname="${eventdate:4:4}"
 
 RSTINVL=${intvl_sec}
+OUTINVL=${RSTINVL}
 if [[ ${outwrf} == true ]]; then
     jobs+=(mpassit)
-    OUTINVL=${RSTINVL}
-else
-    OUTINVL=$((2*RSTINVL))
 fi
 
 
-RSTINVL_STR=$(printf "00:%02d:00" $((RSTINVL/60)) )
+RSTINVL_STR="none"  #$(printf "00:%02d:00" $((RSTINVL/60)) )
 OUTINVL_STR=$(printf "00:%02d:00" $((OUTINVL/60)) )
 
 #
@@ -2819,7 +2903,7 @@ OUTINVL_STR=$(printf "00:%02d:00" $((OUTINVL/60)) )
 
 # $1    $2    $3
 # init start  end
-if [[ " ${jobs[*]} " =~ " "(ioda_|getkf_|mpas|update_).*" " ]]; then
+if [[ " ${jobs[*]} " =~ " "(ioda_|jedi_|mpas|update_).*" " ]]; then
     dacycle_driver $inittime_sec $starttime_sec $stoptime_sec
 elif [[ " ${jobs[*]} " =~ " clean " ]]; then
 

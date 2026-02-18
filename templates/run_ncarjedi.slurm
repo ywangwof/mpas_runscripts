@@ -12,7 +12,7 @@ EXCLSTR
 time1=$(date '+%s')
 printf "Job Started: %(%a %b %d %H:%M:%S %Z %Y)T. Job Id: %s\n\n" "$time1" "$SLURM_JOBID"
 
-if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
+if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules" || "MACHINE" == "Ursa" ]]; then
     source /etc/profile.d/modules.sh
     module purge
     module use JEDIDIR/modulefiles

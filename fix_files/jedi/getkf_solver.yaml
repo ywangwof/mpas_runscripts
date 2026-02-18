@@ -19,6 +19,8 @@ _member: &memberConfig
   - isltyp
   - snowh
   - vegetation_area_fraction
+  - air_temperature_at_2m
+  - water_vapor_mixing_ratio_wrt_moist_air_at_2m
   - eastward_wind_at_10m
   - northward_wind_at_10m
   - lai
@@ -55,7 +57,7 @@ geometry:
   streams_file: ./streams.atmosphere
   deallocate non-da fields: true
   interpolation type: unstructured
-  iterator dimension: 2
+  iterator dimension: 3
 
 background:
   members from template:
@@ -75,12 +77,8 @@ driver:
   do posterior observer: false
 
 local ensemble DA:
-  solver: Deterministic GETKF
-  use linear observer: true
-  vertical localization: # current settings use 12 modulated members
-    fraction of retained variance: 0.850
-    lengthscale: 0.50
-    lengthscale units: logp
+  solver: Deterministic LETKF
+  use linear observer: false
   inflation:
     rtps: 0.95
 observations:
@@ -174,6 +172,11 @@ observations:
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 15000
           max nobs: 1000
+        - localization method: Vertical localization
+          vertical lengthscale: 4000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
     - obs space:
         name: adpsfc_t181
         distribution:

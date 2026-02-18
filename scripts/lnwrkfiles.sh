@@ -389,7 +389,10 @@ for pkg in "${packages[@]}"; do
         fi
 
         ;;
+    #7. JEDI
     JEDI )
+        srcmodel=${srcdir-$srcmodeldir}
+
         #
         # MPAS programs
         #
@@ -406,7 +409,7 @@ for pkg in "${packages[@]}"; do
 
         jedi_exe=(bufr2ioda.x  bufr2netcdf.x  mpasjedi_enkf.x  process_NSSL_mosaic.exe)
         for prog in "${jedi_exe[@]}"; do
-            ln -sf "${srcmodel}/exec/${prog}" jedi/
+            ln -sf "${srcmodel}/exec/${prog}" "jedi/${prog}"
         done
 
         #
@@ -420,7 +423,7 @@ for pkg in "${packages[@]}"; do
                     prepbufr_adpupa.yaml  prepbufr_msonet.yaml  prepbufr_vadwnd.yaml  \
                     prepbufr_aircar.yaml  prepbufr_proflr.yaml  prepbufr_rassda.yaml  \
                     bufr2ioda_cris.yaml  bufr_atms_mapping.yaml  \
-                    streams.atmosphere.getkf namelist.atmosphere    )
+                    streams.atmosphere.getkf )
 
         for fn in "${parm_files[@]}"; do
             ln -sf "${srcmodel}/parm/$fn" .
@@ -444,7 +447,7 @@ for pkg in "${packages[@]}"; do
         #       cp "${srcmodel}/parm/$fn" .
         #    fi
         #done
-        ln -sf "${srcmodel}/sorc/RDASApp/rrfs-test/gsi_fix/convinfo" .
+        ln -sf "${srcmodel}/fix/jedi/convinfo.rrfs" convinfo
         #ln -sf getkf_solver.yaml getkf_post.yaml
 
         #
@@ -454,7 +457,8 @@ for pkg in "${packages[@]}"; do
         if [[ ! -d stream_list ]]; then
             mkdir -p stream_list
         fi
-        ln -sf "${srcmodel}/fix/stream_list/*" stream_list
+        ln -sf "${srcmodel}"/fix/stream_list/convection_permitting/* stream_list
+        ln -sf "${srcmodel}"/fix/stream_list/convection_permitting/stream_list.atmosphere.da_state "${desdir}/stream_list.atmosphere.da_state"
         ;;
     * )
         echo "Argument should be one of [${default_packages[*]}]. get \"${pkg}\"."

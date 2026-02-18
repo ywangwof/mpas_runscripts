@@ -153,7 +153,16 @@ if __name__ == "__main__":
                 dst.variables[name][:] = timeo
             elif name == 'xtime':
                 dstvar = dst.createVariable(name, variable.datatype, variable.dimensions)
-                dst.variables[name][:] = netCDF4.stringtochar(np.array([xtimeo.strftime('%Y-%m-%d_%H:%M:%S')], 'S64'))
+                date_strings = [xtimeo.strftime('%Y-%m-%d_%H:%M:%S').ljust(64),]
+                # 1. Ensure your strings are standard Python strings (not bytes)
+                # This list comprehension acts as a safety net
+                clean_strings = [str(s.decode('utf-8')) if isinstance(s, bytes) else str(s) for s in date_strings]
+
+                # 2. Create a 2D numpy array of single characters
+                # We specify 'S1' (1-byte character) as the dtype
+                char_array = np.array([list(s) for s in clean_strings], dtype='S1')
+                dst.variables[name][:] = char_array
+
             else:
                 var_type = variable.dtype
                 if var_type in ('float32', ):

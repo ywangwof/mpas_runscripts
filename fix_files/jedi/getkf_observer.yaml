@@ -21,6 +21,8 @@ _member: &memberConfig
   - vegetation_area_fraction
   - eastward_wind_at_10m
   - northward_wind_at_10m
+  - air_temperature_at_2m
+  - water_vapor_mixing_ratio_wrt_moist_air_at_2m
   - lai
   - smois
   - tslb
@@ -72,12 +74,8 @@ driver:
   update obs config with geometry info: false
 
 local ensemble DA:
-  solver: Deterministic GETKF
-  use linear observer: true
-  vertical localization: # current settings use 12 modulated members
-    fraction of retained variance: 0.850
-    lengthscale: 0.50
-    lengthscale units: logp
+  solver: Deterministic LETKF
+  use linear observer: false
   inflation:
     rtps: 0.95
 

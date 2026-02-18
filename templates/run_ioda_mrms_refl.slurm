@@ -13,13 +13,11 @@ time1=$(date '+%s')
 echo -e "Job Started: $(date). Job Id:  $SLURM_JOBID\n"
 
 # shellcheck disable=SC2050
-if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
+if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules" || "MACHINE" == "Ursa" ]]; then
     module purge
     HOMErrfs="RRFSDIR"
-    module use ${HOMErrfs}/sorc/RDASApp/modulefiles
-    module load RDAS/jet.intel
-    module load py-matplotlib
-    export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${HOMErrfs}/sorc/RDASApp/build/lib64
+    module use ${HOMErrfs}/modulefiles
+    module load MODULE
 else
     # shellcheck source=/dev/null
     source ROOTDIR/modules/MODULE
@@ -72,10 +70,15 @@ ulimit -s unlimited
         # Run ioda converter to generate radar reflectivity ioda file
         #
         #-----------------------------------------------------------------------
+	    exec 3> >(sed 's/^\++/DEBUG: /') # Send trace to a subshell that prefixes lines
+            BASH_XTRACEFD=3               # Tell Bash to use file descriptor 3 for xtrace
+
+	    set -x
             # pyioda libraries
             PYIODALIB=$(echo "${HOMErrfs}"/sorc/RDASApp/build/lib/python3.*)
             export PYTHONPATH=${PYIODALIB}:${PYTHONPATH}
             "ROOTDIR/scripts/MRMS2ioda.py" -i ./Gridded_ref.nc -c "${YYYY}-${MM}-${DD}T${HH}:${min}:00" -o "ioda_mrms_${YYYYMMDD}_${HH}${min}.nc4" -g grid.nc
+	    set +x
         fi
 
         # file count sanity check and copy to COMOUT

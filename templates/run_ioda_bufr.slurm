@@ -12,12 +12,11 @@ EXCLSTR
 time1=$(date '+%s')
 echo -e "Job Started: $(date). Job Id:  $SLURM_JOBID\n"
 
-if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
+if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules" || "MACHINE" == "Ursa" ]]; then
     module purge
     HOMErrfs="RRFSDIR"
-    module use ${HOMErrfs}/sorc/RDASApp/modulefiles
-    module load RDAS/jet.intel
-    module load py-jinja2 py-matplotlib py-cartopy py-netcdf4
+    module use ${HOMErrfs}/modulefiles
+    module load MODULE
     export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${HOMErrfs}/sorc/RDASApp/build/lib64
 else
     source ROOTDIR/modules/MODULE
@@ -63,7 +62,7 @@ ulimit -s unlimited
         "prepbufr_rassda.yaml"
         "prepbufr_sfcshp.yaml"
         "prepbufr_vadwnd.yaml"
-        "bufr2ioda_cris.yaml"
+        #"bufr2ioda_cris-fsr.yaml"
     )
 
     FIXrrfs=FIXDIR
@@ -108,6 +107,19 @@ ulimit -s unlimited
         RUNMPCMD EXEDIR/bufr2netcdf.x "$input_file" "$yaml" "$output_file"
     else
         echo "Input file $input_file does not exist."
+    fi
+
+    # --------------------------------------------------
+    # run  bufr2netcdf tool for cris-fsr bufr obs
+    # --------------------------------------------------
+    ${cpreq} "${PARMrrfs}/bufr2netcdf_cris-fsr.yaml" .
+    input_file="crisfsbufr"
+    output_file="ioda_crisf4_{splits/satId}.nc"
+    yaml="bufr2netcdf_cris-fsr.yaml"
+    if [[ -f "$input_file" ]]; then
+      ./bufr2netcdf.x "$input_file" "$yaml" "$output_file"
+    else
+      echo "Input file $input_file does not exist."
     fi
 
     # --------------------------------------------------
@@ -157,7 +169,7 @@ ulimit -s unlimited
         #if [[ "${ioda_file}" == *abi* || "${ioda_file}" == *atms* || "${ioda_file}" == *cris* ]]; then
         if [[ "${ioda_file}" == *abi* ]]; then
             echo " ${ioda_file} ioda file detected: running offline_domain_check_satrad.py"
-            ./offline_domain_check_satrad.py -o "${ioda_file}" -g "${grid_file}" -f -s 0.005
+            ./offline_domain_check_satrad.py -o "${ioda_file}" -g "${grid_file}" -s 0.005
             base_name=$(basename "$ioda_file" .nc)
             mv  "${base_name}_dc.nc" "${base_name}.nc"
         elif [[ "${ioda_file}" == *atms* || "${ioda_file}" == *cris* ]]; then

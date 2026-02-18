@@ -249,8 +249,8 @@ function run_ungrib {
                 gribfilename="gefs.$eventdate/${gribtime}/${hrrr_subdir}/gep${memstr}.t${gribtime}z.pgrb2a.0p50.f0${hstr}"
                 gribfilename2="gefs.$eventdate/${gribtime}/${hrrr_subdir/pgrb2ap5/pgrb2bp5}/gep${memstr}.t${gribtime}z.pgrb2b.0p50.f0${hstr}"
             else
-                #gribfilename="$hdate/${htime}/${hrrr_subdir}${memstr}/wrfnat_pert_hrrr_mem00${memstr}_${hstr}.grib2"
-                gribfilename="${gribtime}/${hrrr_subdir}${mem}/gep${memstr}.t${htime:0:2}z.pgrb2.0p50.f0${hstr}"
+                gribfilename="$hdate/${htime}/${hrrr_subdir}${memstr}/wrfnat_pert_hrrr_mem00${memstr}_${hstr}.grib2"
+                #gribfilename="${gribtime}/${hrrr_subdir}${mem}/gep${memstr}.t${htime:0:2}z.pgrb2.0p50.f0${hstr}"
             fi
             gribfile="${grib_dir}/${gribfilename}"
 

@@ -12,7 +12,7 @@ EXCLSTR
 time1=$(date '+%s')
 printf "Job Started: %(%a %b %d %H:%M:%S %Z %Y)T. Job Id: %s\n\n" $time1 $SLURM_JOBID
 
-if [[ "MACHINE" == "Jet" ]]; then
+if [[ "MACHINE" == "Jet" || "MACHINE" == "Ursa" ]]; then
     source /etc/profile.d/modules.sh
     module purge
     module use ROOTDIR/modules
@@ -79,7 +79,7 @@ else
     echo "MEM ${memstr}: Interpolating lbc ${lbc_filem} file from"
     echo "                     ${lbc_origs1} and"
     echo "                     ${lbc_origs2}"
-    source ROOTDIR/modules/env.python
+    machine=MACHINE source ROOTDIR/modules/env.python
     ROOTDIR/scripts/intrp_time.py -t "${time_mems}" "${lbc_origs1}" "${lbc_origs2}" "${lbc_filem}"
 fi
 
@@ -94,7 +94,7 @@ else
     echo "                     ${lbc_origs1} and"
     echo "                     ${lbc_origs2}"
     echo ""
-    source ROOTDIR/modules/env.python
+    machine=MACHINE source ROOTDIR/modules/env.python
     ROOTDIR/scripts/intrp_time.py -t "${time_next}" "${lbc_origs1}" "${lbc_origs2}" "${lbc_filen}"
 fi
 

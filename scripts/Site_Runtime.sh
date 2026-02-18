@@ -26,8 +26,8 @@ function setup_machine {
             machine="Hercules"
         elif [[ "${myhostname}" == cheyenne* || "${myhostname}" == derecho* ]]; then
             machine="Cheyenne"
-        else
-            machine="Jet"
+        elif [[ "${myhostname}" == ufe?? ]]; then
+            machine="Ursa"
         fi
     fi
 
@@ -44,6 +44,58 @@ function setup_machine {
     [[ $set_up == true ]] && echo -e "\nLoading working environment on ${LIGHT_RED}${machine}${NC} ...."
 
     case $machine in
+    Ursa )
+        modulename="build_ursa_Rocky9_intel_hpxmpi_smiol"
+
+        MPAS_DIR="/scratch3/NAGAPE/wof/ywang/GSL_JEDI/rrfs-workflow"
+        mpas_modulename="rrfs/ursa.intel"
+
+        rrfs_dir="/scratch3/NAGAPE/wof/ywang/GSL_JEDI/rrfs-workflow"
+        rrfs_modulename="rrfs/ursa.intel"
+
+        #JEDI_DIR="/scratch3/NAGAPE/wof/ywang/CADRE2/CADRE_JEDI_MODEL"
+        #jedi_modulename="ursa.intel"            # CADRE
+        JEDI_DIR="/scratch3/NAGAPE/wof/ywang/GSL_JEDI/rrfs-workflow/sorc/RDASApp"
+        jedi_modulename="RDAS/ursa.intel"      # RRFS
+
+        workdirDF="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/run_dirs"
+        post_dir="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/frdd-wofs-post"
+
+        if [[ ${set_up} == true ]]; then
+            source /etc/profile.d/modules.sh
+            module purge
+            module use "${root_dir}/modules"
+            module load ${modulename}
+            #module load wgrib2/2.0.8
+        fi
+        export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/home/Yunheng.Wang/local/lib
+
+        if [[ ${initialize} == true ]]; then
+            partition_wps="u1-compute"
+            partition_static="u1-compute"  ; claim_cpu_static="--cpus-per-task=12"
+            partition_create="u1-service"  ; claim_cpu_create="--mem-per-cpu=128G"
+
+            npestatic=96
+
+            mach="slurm"
+            job_exclusive_str="#SBATCH --exclusive"
+            job_account_str="#SBATCH -A ${hpcaccount-wof}"
+            job_runmpexe_str="srun"
+            job_runexe_str="srun"
+            runcmd_str=""
+
+            WPSGEOG_PATH="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/WPS_GEOG/"
+            wgrib2path="/apps/wgrib2/3.1.3/gnu_11.4.1/wmo/bin/wgrib2"
+            nckspath="/apps/spack-2024-12/linux-rocky9-x86_64/gcc-11.4.1/nco-5.2.4-h2xd52tl4efe2ga4ayd6rjr3t5elfe6v/bin/ncks"
+            gpmetis="/scratch3/NAGAPE/wof/ywang/tools/bin/gpmetis"
+
+            OBS_DIR="/scratch4/BMC/rtrr/RRFS2_RETRO_DATA/May2024"
+            OBS_DIR_REF="/scratch3/NAGAPE/wof/kknopfmeier/MRMS"
+            OBS_DIR_VEL="/scratch3/NAGAPE/wof/kknopfmeier/MRMS"
+
+            hrrr_dir="/scratch3/NAGAPE/wof/ywang/HRRRE"
+        fi
+        ;;
     Jet )
         modulename="build_jet_Rocky8_intel_smiol"
         #modulename="RDAS/jet.intel"
@@ -52,6 +104,8 @@ function setup_machine {
         mpas_modulename="rrfs/jet.intel"
 
         rrfs_dir="/lfs5/NAGAPE/hpc-wof1/ywang/GSL_JEDI/rrfs-workflow.new"
+        rrfs_modulename="rrfs/jet.intel"
+
         #JEDI_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/GSL_JEDI/rrfs-workflow.new/sorc/RDASApp"
         JEDI_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/CADRE2/CADRE_JEDI_MODEL"
         #JEDI_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/NCAR_JEDI"
@@ -90,6 +144,8 @@ function setup_machine {
             gpmetis="/home/Yunheng.Wang/local/bin/gpmetis"
 
             OBS_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS/run_dirs/OBS_SEQ.Reduced"
+            OBS_DIR_REF="/scratch4/BMC/rtrr/RRFS2_RETRO_DATA/May2024"
+            OBS_DIR_VEL="/scratch4/BMC/rtrr/RRFS2_RETRO_DATA/May2024"
 
             hrrr_dir="/lfs5/NAGAPE/hpc-wof1/ywang/HRRRE"
         fi
@@ -214,7 +270,9 @@ function setup_machine {
         echo -e "Activated Python environment ${YELLOW}${python_env}${NC} on ${LIGHT_RED}${machine}${NC} ..."
     fi
 
-    export machine mpas_modulename jedi_modulename runcmd workdirDF post_dir rrfs_dir JEDI_DIR MPAS_DIR
+    export machine runcmd workdirDF post_dir
+    export MPAS_DIR mpas_modulename rrfs_dir rrfs_modulename JEDI_DIR jedi_modulename
+
     if [[ ${initialize} == true ]]; then
         # Will be used by 'setup_mpas-wofs.sh' for static processing.
         # For other programs, the information is in the runtime configuration file and
@@ -226,7 +284,7 @@ function setup_machine {
         export job_exclusive_str job_account_str job_runmpexe_str job_runexe_str
         export partition_wps partition_static partition_create npestatic claim_cpu_static claim_cpu_create ncores_static
         export WPSGEOG_PATH wgrib2path nckspath gpmetis nclpath
-        export OBS_DIR hrrr_dir
+        export OBS_DIR OBS_DIR_REF OBS_DIR_VEL hrrr_dir
     fi
 }
 
@@ -270,6 +328,40 @@ function default_site_settings {
 
         npefcst=96     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
         npepost=48     ; nnodes_post=$(( npepost/ncores_post ))
+        ;;
+
+    "Ursa" )
+        mpas_wofs_python="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/wofs_new_noise"
+
+        # ICs
+        npeics=96; ncores_ics=2
+        partition_ics="u1-compute"
+        claim_cpu_ics="--cpus-per-task=2"
+        claim_cpu_ungrib="--cpus-per-task=96"   # --mem-per-cpu=10G"
+
+        # LBCs
+        npelbc=96;  ncores_lbc=2
+        partition_lbc="u1-compute"
+        claim_cpu_lbc="--cpus-per-task=2"
+
+        # DA cycles
+        ncores_dafcst=160;  ncores_filter=96
+        partition_dafcst="u1-compute"; claim_cpu_dafcst="--cpus-per-task=1"
+        partition_filter="u1-compute"; claim_cpu_filter="--cpus-per-task=1"
+                                       claim_cpu_ioda="--cpus-per-task=1 --mem-per-cpu=8G"
+                                       claim_cpu_ioda_refl="--cpus-per-task=2"
+        npedafcst=96         #; nnodes_fcst=$(( npefcst/ncores_fcst ))
+        npefilter=160        #; nnodes_filter=$(( npefilter/ncores_filter ))
+        nnodes_filter=$(( npefilter/ncores_filter ))
+        nnodes_dafcst=$(( npedafcst/ncores_dafcst ))
+
+        # FCST cycles
+        ncores_fcst=96;  ncores_post=96
+        partition_fcst="u1-compute";   claim_cpu_fcst="--cpus-per-task=2"
+        partition_post="u1-compute";   claim_cpu_post="--cpus-per-task=12"
+
+        npefcst=96     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
+        npepost=96     ; nnodes_post=$(( npepost/ncores_post ))
         ;;
 
     "Hercules" )

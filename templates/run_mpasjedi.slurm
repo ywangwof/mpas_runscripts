@@ -3,7 +3,7 @@
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
 #SBATCH -t 00:30:00
-#SBATCH --output=WRKDIR/getkf_TASKNAME_%j.log
+#SBATCH --output=WRKDIR/jedi_TASKNAME_%j.log
 ACCTSTR
 EXCLSTR
 
@@ -12,7 +12,7 @@ EXCLSTR
 time1=$(date '+%s')
 printf "Job Started: %(%a %b %d %H:%M:%S %Z %Y)T. Job Id: %s\n\n" $time1 $SLURM_JOBID
 
-if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
+if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules" || "MACHINE" == "Ursa" ]]; then
     HOMErrfs="JEDIDIR"
     source /etc/profile.d/modules.sh
     module purge
@@ -37,7 +37,7 @@ ulimit -s unlimited
 cd WRKDIR || exit $?
 
 touch running.${task}
-rm -rf error.${task} queue.getkf_${task}
+rm -rf error.${task} queue.jedi_${task}
 
 sed -i -e "/config_pio_num_iotasks/s/=.*/= $nnode/g;/config_pio_stride/s/=.*/= $ncores/" namelist.atmosphere
 
@@ -58,7 +58,6 @@ if [[ $istatus -eq 0 ]]; then
         ;;
     solver )
         # ncks increments to cold_start IC
-        var_list="VARLIST"
         # Take background file, look for every variable except those listed in ${var_list},
         # and append them into the analysis file.
         # -A	Append	Instead of overwriting the output file, this tells NCO to add the variables to the existing file.
@@ -68,25 +67,36 @@ if [[ $istatus -eq 0 ]]; then
         # -x	Exclude	This inverts the selection. Instead of saying "select these variables," it says "select everything except these variables."
         # -v	Variable	Specifies the variables to operate on.
         #
-        declare -a pids=()
-        for mem in $(seq -w 001 ENS_SIZE); do
-            srun --ntasks=1 --cpus-per-task=1 -N 1 ncks -A -C -x -v ${var_list} "ens/mem${mem}.nc" "ana/mem${mem}.nc" &
-            pids+=($!)
-            #istatus=$?
-            #if [[ $istatus -eq 0 ]]; then ((icount+=1)); fi
-        done
-        #wait
+        if [[ CYCLENO -eq 0 ]]; then
+            echo "Running ncks for cycle = CYCLENO to combine increments to the original background file ..."
+            var_list="VARLIST"
+            declare -a pids=()
+            for mem in $(seq -w 001 ENS_SIZE); do
+                srun --ntasks=1 --exclusive ncks -A -C -x -v ${var_list} "ens/mem${mem}.nc" "ana/mem${mem}.nc" &
+                pids+=($!)
+            done
 
-        icount=0
-        # Wait for all and check status
-        for pid in "${pids[@]}"; do
-            if wait "$pid"; then ((icount+=1)); fi
-        done
+            icount=0; ierr=0
+            # Wait for all and check status
+            for pid in "${pids[@]}"; do
+                wait "$pid";
+                if [ $? -eq 0 ]; then
+                    #echo "PID $pid exited successfully"
+                    ((icount+=1))
+                else
+                    #echo "PID $pid failed"
+                    ((ierr+=1))
+                fi
+            done
 
-        if [ "$icount" -eq ENS_SIZE ]; then
-            istatus=0
+            if [ "$icount" -eq ENS_SIZE ]; then
+                sleep 10   # file system may be slower than the job status in memory
+                istatus=0
+            else
+                istatus=1
+            fi
         else
-            istatus=1
+            echo "Skip ncks for cycle = CYCLENO to use mpasout files ..."
         fi
         ;;
     esac

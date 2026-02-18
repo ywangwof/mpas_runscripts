@@ -13,7 +13,7 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules"  ]]; then
+if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules" || "MACHINE" == "Ursa" ]]; then
     module purge
     module use ROOTDIR/modules
     module load MODULE
@@ -25,7 +25,7 @@ ulimit -s unlimited
 
 cd WRKDIR
 
-rm -f queue.project error.project
+rm -f queue.projectHexes error.project
 
 touch running.project
 
