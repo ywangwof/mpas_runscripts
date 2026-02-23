@@ -13,6 +13,14 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
+if [[ "MACHINE" == "Jet" ]]; then
+    module purge
+    module use ROOTDIR/modules
+    module load MODULE
+else
+    source ROOTDIR/modules/MODULE
+fi
+
 fhr=${SLURM_ARRAY_TASK_ID}
 hstr=$(printf "%02d" $fhr)
 time_str=$(date -d "EVENTDATE EVENTTIME:00 $fhr hours" +%Y-%m-%d_%H)
