@@ -22,7 +22,7 @@ if [[ "MACHINE" == "Jet" ]]; then
     module load gnu/13.2.0 wgrib2/3.1.1_wmo
 else
     # shellcheck source=/dev/null # to ignore source path error
-    source /scratch/ywang/MPAS/MODULE
+    source ROOTDIR/modules/MODULE
 fi
 module list
 
@@ -117,7 +117,7 @@ function grid_defn {
 
 cd WRKDIR
 
-wgrib2path="wgrib2"
+wgrib2path="WGRIB2"
 hrrrbase=GRIBFILE
 targetbase=TARGETFILE
 verb=VERBOSE

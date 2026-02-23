@@ -19,8 +19,8 @@ if [[ "MACHINE" == "Jet" ]]; then
     module purge
     module use ROOTDIR/modules
     module load MODULE
-#else
-#    source ROOTDIR/modules/MODULE
+else
+    source ROOTDIR/modules/MODULE
 fi
 
 ulimit -s unlimited

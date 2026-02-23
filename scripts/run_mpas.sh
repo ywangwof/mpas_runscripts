@@ -3,10 +3,10 @@
 # shellcheck disable=SC2329
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
-scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
-rootdir=$(realpath $(dirname $scpdir))
+scpdir="$(cd "$(dirname "$0")" && pwd)" # dir of script
+rootdir=$(realpath "$(dirname "${scpdir}")")
 
-mpasdir=$(dirname $rootdir)
+mpasdir="/scratch/wofs_mpas/run_dirs/varmesh"
 
 eventdateDF=$(date -u +%Y%m%d)
 
@@ -172,7 +172,7 @@ function usage {
     echo " "
     echo "                                     -- By Y. Wang (2023.01.25)"
     echo " "
-    exit $1
+    exit "$1"
 }
 
 ########################################################################
@@ -195,341 +195,205 @@ function parse_args {
         key="$1"
 
         case $key in
-            -h)
-                usage 0
-                ;;
-            -n)
-                args["runcmd"]="echo"
-                args["dorun"]=false
-                ;;
-            -v)
-                args["verb"]=1
-                ;;
-            -k)
-                if [[ $2 =~ [012] ]]; then
-                    args["overwrite"]=$2
-                    shift
-                else
-                    echo "ERROR: option for '-k' can only be [0-2], but got \"$2\"."
-                    usage 1
-                fi
-                ;;
-            -w)
-                args["jobwait"]=1
-                ;;
-            --template)
-                if [[ -d $2 ]]; then
-                    args["tempdir"]="$2"
-                else
-                    echo "ERROR: Template directory \"$2\" does not exist."
-                    usage 1
-                fi
+        -h)
+            usage 0
+            ;;
+        -n)
+            args["runcmd"]="echo"
+            args["dorun"]=false
+            ;;
+        -v)
+            args["verb"]=1
+            ;;
+        -k)
+            if [[ $2 =~ [012] ]]; then
+                args["overwrite"]=$2
                 shift
-                ;;
-            -m)
-                if [[ ${2^^} == "JET" ]]; then
-                    args["machine"]=Jet
-                elif [[ ${2^^} == "VECNA" ]]; then
-                    args["machine"]=Vecna
-                elif [[ ${2^^} == "CHEYENNE" ]]; then
-                    args["machine"]=Cheyenne
-                else
-                    echo "ERROR: Unsupported machine name, got \"$2\"."
-                    usage 1
-                fi
-                shift
-                ;;
-            -a)
-                args["hpcaccount"]="$2"
-                shift
-                ;;
-            -d)
-                case $2 in
-                wofs_big | wofs_small | wofs_conus | wofs_mpas | wofs_mpas_small | wofs_gsl)
-                    args["domname"]="$2"
-                    ;;
-                * )
-                    echo "ERROR: domain name \"$2\" not supported."
-                    usage 1
-                    ;;
-                esac
-                shift
-                ;;
-            -i)
-                case ${2,,} in
-                hrrr | gfs | rrfs | rrfsp | rrfsna)
-                    args["extdm"]="${2,,}"
-                    ;;
-                * )
-                    echo "ERROR: initialization model name \"$2\" not supported."
-                    usage 1
-                esac
-                shift
-                ;;
-            --init* )
-                if [[ "${key}" =~ ^--init(=(.*)?)$ ]]; then
-                    keydir="${BASH_REMATCH[2]}"
-                else
-                    keydir="$2"
-                    shift
-                fi
-
-                if [[ -d ${keydir} ]]; then        # use init & lbc from another run directory
-                    args["init_dir"]=${keydir}
-                    while [[ ! -d ${keydir}/init ]]; do
-                        echo "Waiting for ${keydir}/init"
-                        sleep 10
-                    done
-
-                    while [[ ! -d ${keydir}/lbc ]]; do
-                        echo "Waiting for ${keydir}/lbc"
-                        sleep 10
-                    done
-                else
-                    echo "ERROR: initialization directory  \"${keydir}\" not exists."
-                    usage 1
-                fi
-                ;;
-            -s )
-                if [[ "$2" =~ ^[0-9]+$ ]]; then
-                    args["starthour"]=$2
-                else
-                    echo "ERROR: Unsupported parameter to \"${key}\", got \"$2\"."
-                    usage 1
-                fi
-                shift
-                ;;
-            -e )
-                if [[ "$2" =~ ^[0-9]+$ ]]; then
-                    args["endhour"]=$2
-                else
-                    echo "ERROR: Unsupported parameter to \"${key}\", got \"$2\"."
-                    usage 1
-                fi
-                shift
-                ;;
-            -p)
-                if [[ ${2^^} == "NSSL" ]]; then
-                    args["mpscheme"]="mp_nssl2m"
-                elif [[ ${2^^} == "NSSL3M" ]]; then
-                    args["mpscheme"]="mp_nssl3m"
-                elif [[ ${2^^} == "THOMPSON" ]]; then
-                    args["mpscheme"]="Thompson"
-                elif [[ ${2^^} == "TEMPO" ]]; then
-                    args["mpscheme"]="mp_tempo"
-                else
-                    echo "ERROR: Unsupported MP scheme name, got \"$2\"."
-                    usage 1
-                fi
-                shift
-                ;;
-            -*)
-                echo "Unknown option: $key"
-                usage 2
-                ;;
-            static* | geogrid* | ungrib* | init* | lbc* | mpas* | upp* | clean* | pcp* | project* )
-                #jobs=(${key//,/ })
-                args["jobs"]="${key//,/ }"
+            else
+                echo "ERROR: option for '-k' can only be [0-2], but got \"$2\"."
+                usage 1
+            fi
+            ;;
+        -w)
+            args["jobwait"]=1
+            ;;
+        --template)
+            if [[ -d $2 ]]; then
+                args["tempdir"]="$2"
+            else
+                echo "ERROR: Template directory \"$2\" does not exist."
+                usage 1
+            fi
+            shift
+            ;;
+        -m)
+            if [[ ${2^^} == "JET" ]]; then
+                args["machine"]=Jet
+            elif [[ ${2^^} == "VECNA" ]]; then
+                args["machine"]=Vecna
+            elif [[ ${2^^} == "CHEYENNE" ]]; then
+                args["machine"]=Cheyenne
+            else
+                echo "ERROR: Unsupported machine name, got \"$2\"."
+                usage 1
+            fi
+            shift
+            ;;
+        -a)
+            args["hpcaccount"]="$2"
+            shift
+            ;;
+        -d)
+            case $2 in
+            wofs_big | wofs_small | wofs_conus | wofs_mpas | wofs_mpas_small | wofs_gsl)
+                args["domname"]="$2"
                 ;;
             *)
-                if [[ $key =~ ^[0-9]{8}$ ]]; then
-                    args["eventdate"]="$key"
-                elif [[ $key =~ ^[0-9]{10}$ ]]; then
-                    args["eventdate"]="${key:0:8}"
-                    args["eventtime"]="${key:8:2}"
-                elif [[ -d $key ]]; then
-                    WORKDIR=$key
-                    lastdir=$(basename $WORKDIR)
-                    if [[ " ${jobs[*]} " == *" $lastdir "* ]]; then
-                        eventstr=$(basename ${WORKDIR%%/"$lastdir"})
-                        WORKDIR=$(dirname ${WORKDIR%%/"$lastdir"})
-                        args["jobs"]="$lastdir"
-                        args["eventdate"]=${eventstr:0:8}
-                        args["eventtime"]=${eventstr:8:2}
-                        casestr=${eventstr:11}
-                    elif [[ $lastdir =~ ^[0-9]{10}_[A-Z]{2}$ ]]; then
-                        eventstr=${lastdir}
-                        WORKDIR=$(dirname ${WORKDIR})
-                        args["eventdate"]=${eventstr:0:8}
-                        args["eventtime"]=${eventstr:8:2}
-                        casestr=${eventstr:11}
-                    fi
-                    args["WORKDIR"]="${WORKDIR}"
-
-                    if [[ $casestr != "" ]]; then
-                        case ${casestr:0:1} in
-                        H )
-                            args["extdm"]="hrrr"
-                            ;;
-                        R )
-                            args["extdm"]="rrfs"
-                            ;;
-                        * )
-                            echo "Error: parsing argument: ${key}, got case string: ${casestr}"
-                            exit 0
-                            ;;
-                        esac
-
-                        case ${casestr:1:1} in
-                        T )
-                            args["mpscheme"]="Thompson"
-                            ;;
-                        N )
-                            args["mpscheme"]="mp_nssl2m"
-                            ;;
-                        * )
-                            echo "Error: parsing argument: ${key}, got case string: ${casestr}"
-                            exit 0
-                            ;;
-                        esac
-
-                    fi
-                    #echo $WORKDIR,${jobs[*]},$eventdate,$eventtime,$casestr,$mpscheme,$extdm
-                else
-                     echo ""
-                     echo "ERROR: unknown argument, get [$key]."
-                     usage 3
-                fi
+                echo "ERROR: domain name \"$2\" not supported."
+                usage 1
                 ;;
+            esac
+            shift
+            ;;
+        -i)
+            case ${2,,} in
+            hrrr | gfs | rrfs | rrfsp | rrfsna)
+                args["extdm"]="${2,,}"
+                ;;
+            *)
+                echo "ERROR: initialization model name \"$2\" not supported."
+                usage 1
+                ;;
+            esac
+            shift
+            ;;
+        --init*)
+            if [[ "${key}" =~ ^--init(=(.*)?)$ ]]; then
+                keydir="${BASH_REMATCH[2]}"
+            else
+                keydir="$2"
+                shift
+            fi
+
+            if [[ -d ${keydir} ]]; then # use init & lbc from another run directory
+                args["init_dir"]=${keydir}
+                while [[ ! -d ${keydir}/init ]]; do
+                    echo "Waiting for ${keydir}/init"
+                    sleep 10
+                done
+
+                while [[ ! -d ${keydir}/lbc ]]; do
+                    echo "Waiting for ${keydir}/lbc"
+                    sleep 10
+                done
+            else
+                echo "ERROR: initialization directory  \"${keydir}\" not exists."
+                usage 1
+            fi
+            ;;
+        -s)
+            if [[ "$2" =~ ^[0-9]+$ ]]; then
+                args["starthour"]=$2
+            else
+                echo "ERROR: Unsupported parameter to \"${key}\", got \"$2\"."
+                usage 1
+            fi
+            shift
+            ;;
+        -e)
+            if [[ "$2" =~ ^[0-9]+$ ]]; then
+                args["endhour"]=$2
+            else
+                echo "ERROR: Unsupported parameter to \"${key}\", got \"$2\"."
+                usage 1
+            fi
+            shift
+            ;;
+        -p)
+            if [[ ${2^^} == "NSSL" ]]; then
+                args["mpscheme"]="mp_nssl2m"
+            elif [[ ${2^^} == "NSSL3M" ]]; then
+                args["mpscheme"]="mp_nssl3m"
+            elif [[ ${2^^} == "THOMPSON" ]]; then
+                args["mpscheme"]="Thompson"
+            elif [[ ${2^^} == "TEMPO" ]]; then
+                args["mpscheme"]="mp_tempo"
+            else
+                echo "ERROR: Unsupported MP scheme name, got \"$2\"."
+                usage 1
+            fi
+            shift
+            ;;
+        -*)
+            echo "Unknown option: $key"
+            usage 2
+            ;;
+        static* | geogrid* | ungrib* | init* | lbc* | mpas* | upp* | clean* | pcp* | project*)
+            #jobs=(${key//,/ })
+            args["jobs"]="${key//,/ }"
+            ;;
+        *)
+            if [[ $key =~ ^[0-9]{8}$ ]]; then
+                args["eventdate"]="$key"
+            elif [[ $key =~ ^[0-9]{10}$ ]]; then
+                args["eventdate"]="${key:0:8}"
+                args["eventtime"]="${key:8:2}"
+            elif [[ -d $key ]]; then
+                WORKDIR=$key
+                lastdir=$(basename "$WORKDIR")
+                if [[ " ${jobs[*]} " == *" $lastdir "* ]]; then
+                    eventstr=$(basename "${WORKDIR%%/"$lastdir"}")
+                    WORKDIR=$(dirname "${WORKDIR%%/"$lastdir"}")
+                    args["jobs"]="$lastdir"
+                    args["eventdate"]=${eventstr:0:8}
+                    args["eventtime"]=${eventstr:8:2}
+                    casestr=${eventstr:11}
+                elif [[ $lastdir =~ ^[0-9]{10}_[A-Z]{2}$ ]]; then
+                    eventstr=${lastdir}
+                    WORKDIR=$(dirname "${WORKDIR}")
+                    args["eventdate"]=${eventstr:0:8}
+                    args["eventtime"]=${eventstr:8:2}
+                    casestr=${eventstr:11}
+                fi
+                args["WORKDIR"]="${WORKDIR}"
+
+                if [[ $casestr != "" ]]; then
+                    case ${casestr:0:1} in
+                    H)
+                        args["extdm"]="hrrr"
+                        ;;
+                    R)
+                        args["extdm"]="rrfs"
+                        ;;
+                    *)
+                        echo "Error: parsing argument: ${key}, got case string: ${casestr}"
+                        exit 0
+                        ;;
+                    esac
+
+                    case ${casestr:1:1} in
+                    T)
+                        args["mpscheme"]="Thompson"
+                        ;;
+                    N)
+                        args["mpscheme"]="mp_nssl2m"
+                        ;;
+                    *)
+                        echo "Error: parsing argument: ${key}, got case string: ${casestr}"
+                        exit 0
+                        ;;
+                    esac
+
+                fi
+                #echo $WORKDIR,${jobs[*]},$eventdate,$eventtime,$casestr,$mpscheme,$extdm
+            else
+                echo ""
+                echo "ERROR: unknown argument, get [$key]."
+                usage 3
+            fi
+            ;;
         esac
         shift # past argument or value
-    done
-}
-
-########################################################################
-
-function mkwrkdir {
-    # make a directory
-    # the second argument is the creating mode
-    # 0: Keep existing directory as is
-    # 1: Remove existing same name directory
-    # 2: Back up existing same name directory with appendix ".bakX"
-    #    X starts from 0, the less the number, the backup directory is the newer one.
-    #
-    if [[ $# -ne 2 ]]; then
-        echo "ERROR: argument in mkwrkdir, get \"$*\"."
-        exit 0
-    fi
-
-    mydir=$1
-    backup=$2
-
-    if [[ -d $mydir ]]; then
-        if [[ $backup -eq 1 ]]; then
-            rm -rf $mydir
-        elif [[ $backup -eq 2 ]]; then
-            basedir=$(dirname $mydir)
-            namedir=$(basename $mydir)
-            bakno=0
-            bakdir="$basedir/${namedir}.bak$bakno"
-            while [[ -d $bakdir ]]; do
-                (( bakno++ ))
-                bakdir="$basedir/${namedir}.bak$bakno"
-            done
-
-            for ((i=bakno;i>0;i--)); do
-                j=$((i-1))
-                olddir="$basedir/${namedir}.bak$j"
-                bakdir="$basedir/${namedir}.bak$i"
-                echo "Moving $olddir --> $bakdir ..."
-                mv $olddir $bakdir
-            done
-            bakdir="$basedir/${namedir}.bak0"
-            echo "Baking $mydir --> $bakdir ..."
-            mv $mydir $bakdir
-        fi
-    fi
-    mkdir -p $mydir
-}
-
-########################################################################
-
-function submit_a_jobscript {
-    # Arguments
-    #   1      2       3       4       5        6
-    # wrkdir jobname sedfile jobtemp jobscript joboption
-    #
-    # Use global variables: $verb, $dorun, $runcmd
-    #
-    # Purpose:
-    #
-    # 1. Create $myjobscript from $myjobtemp using SED based on scripts in $sedfile
-    # 2. Submit $myjobscript using global command $runcmd
-    # 3. Generate a queue file based on $myjobname in current working directory $mywrkdir
-    #    if the job script is submitted correctly
-    #
-    if [[ $# -ne 6 ]]; then
-        echo "No enough argument in \"submit_a_jobscript\", get: $*"
-        exit 0
-    fi
-
-    local mywrkdir=$1
-    local myjobname=$2
-    local sedscript=$3
-    local myjobtemp=$4
-    local myjobscript=$5
-    local myjoboption=$6
-
-    cd $mywrkdir || return
-
-    sed -f $sedscript $myjobtemp > $myjobscript
-    if [[ $verb -eq 1 ]]; then
-        echo "Generated job file \"$myjobscript\" from \"$myjobtemp\" with sed file \"$sedscript\""
-    else
-        rm -f $sedscript
-    fi
-
-    if [[ $dorun == true ]]; then echo -n "Submitting $myjobscript .... "; fi
-    $runcmd $myjoboption $myjobscript
-    if [[ $dorun == true && $? -eq 0 ]]; then touch $mywrkdir/queue.$myjobname; fi
-    echo " "
-}
-
-########################################################################
-
-function get_jobarray_str {
-    local jobschdler=$1
-    local subjobs=("${@:2}")
-    if [[ "${jobschdler,,}" == "slurm" ]]; then  # SLURM
-        local IFS=","
-        echo "--array=${subjobs[*]}"
-    else                                         # PBS
-        local minno=${subjobs[0]}
-        local maxno=${subjobs[-1]}
-
-        for i in "${subjobs[@]}"; do
-            (( i > maxno )) && maxno=$i
-            (( i < minno )) && minno=$i
-        done
-        echo "-J ${minno}-${maxno}:1"
-    fi
-}
-
-########################################################################
-
-function link_grib {
-    alpha=( A B C D E F G H I J K L M N O P Q R S T U V W X Y Z )
-    i1=0
-    i2=0
-    i3=0
-
-    rm -f GRIBFILE.??? >& /dev/null
-
-    for f in "$@"; do
-        ln -sf ${f} GRIBFILE.${alpha[$i3]}${alpha[$i2]}${alpha[$i1]}
-        (( i1++ ))
-
-        if [[ $i1 -ge 26 ]]; then
-            (( i1=0 ))
-            (( i2++ ))
-             if [[ $i2 -ge 26 ]]; then
-                (( i2=0 ))
-                (( i3++ ))
-                if [[ $i3 -ge 26 ]]; then
-                   echo "RAN OUT OF GRIB FILE SUFFIXES!"
-                fi
-            fi
-       fi
     done
 }
 
@@ -538,12 +402,12 @@ function link_grib {
 function run_geogrid {
 
     wrkdir=$1
-    mkwrkdir $wrkdir $overwrite
-    cd $wrkdir || return
+    mkwrkdir "$wrkdir" "$overwrite"
+    cd "$wrkdir" || return
 
-    ln -sf ${FIXDIR}/WRFV4.0/GEOGRID.TBL.ARW GEOGRID.TBL
+    ln -sf "${FIXDIR}"/WRFV4.0/GEOGRID.TBL.ARW GEOGRID.TBL
 
-    cat <<EOF > namelist.wps
+    cat <<EOF >namelist.wps
 &share
   wrf_core = 'ARW',
   max_dom = 1,
@@ -587,8 +451,8 @@ EOF
     geoname=${domname/*_/geo_}
     jobscript="run_geogrid.slurm"
 
-    sedfile=$(mktemp -t geogrid_${jobname}.sed_XXXX)
-    cat <<EOF > $sedfile
+    sedfile=$(mktemp -t geogrid_"${jobname}".sed_XXXX)
+    cat <<EOF >"$sedfile"
 s/PARTION/${partition_static}/
 s/NOPART/$npepost/
 s/JOBNAME/geogrid_${geoname}/
@@ -602,47 +466,48 @@ s/ACCTSTR/${job_account_str}/
 s^EXCLSTR^${job_exclusive_str}^
 s/RUNMPCMD/${job_runmpexe_str}/
 EOF
-    submit_a_jobscript $wrkdir "geogrid" $sedfile $TEMPDIR/$jobscript $jobscript ""
+    submit_a_jobscript "$wrkdir" "geogrid" "$sedfile" "$TEMPDIR"/"$jobscript" "$jobscript" ""
 }
 
 ########################################################################
 
 function run_projectHexes {
 
-    conditions=()
-    while [[ $# -gt 0 ]]; do
-        case $1 in
+    read -r -a conditions <<< "$1"
+    local -a new_conditions
+    for cond in  "${conditions[@]}"; do
+        case $cond in
         /*)
-            conditions+=("$1")
+            new_conditions+=("$cond")
             ;;
         *)
-            conditions+=("$rundir/$1")
+            new_conditions+=("$rundir/$cond")
             ;;
         esac
         shift
     done
 
     if [[ $dorun == true ]]; then
-        for cond in "${conditions[@]}"; do
-            mecho0 "Checking: ${CYAN}$cond${NC}"
+        for cond in "${new_conditions[@]}"; do
+            echo "$$: Checking: $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: ${CYAN}$cond${NC}"
+                    echo "Waiting for file: $cond"
                 fi
                 sleep 10
             done
         done
     fi
 
-    wrkdir="$1"
-    mkwrkdir $wrkdir 0
-    cd $wrkdir || return
+    wrkdir="${rundir}/${domname}"
+    mkwrkdir "$wrkdir" 0
+    cd "$wrkdir" || return
 
     if [[ -f done.project ]]; then
         mecho0 "Found file ${CYAN}done.project${NC}, skipping ${WHITE}${FUNCNAME[0]}${NC} ...."
         return
     elif [[ -f running.project || -f queue.project ]]; then
-        return                   # skip
+        return # skip
     fi
 
     ##local geofile wrfdomain wrfkey vals val keyval domelements
@@ -714,26 +579,26 @@ function run_projectHexes {
 
     # shellcheck disable=SC2153
     #cat <<EOF > namelist.projections
-#&mesh
-#  cell_spacing_km  =    3.0,
-#  mesh_length_x_km = 5340.00,
-#  mesh_length_y_km = 3120.00,
-#  earth_radius_km  = 6378.14,
-#/
-#&projection
-#  projection_type = "lambert_conformal",
-#/
-#&lambert_conformal
-#  reference_longitude_degrees = ${CEN_LON},
-#  reference_latitude_degrees  = ${CEN_LAT},
-#  standard_parallel_1_degrees = ${TRUELAT1},
-#  standard_parallel_2_degrees = ${TRUELAT2},
-#  standard_longitude_degrees  = ${STAND_LON},
-#/
-#EOF
+    #&mesh
+    #  cell_spacing_km  =    3.0,
+    #  mesh_length_x_km = 5340.00,
+    #  mesh_length_y_km = 3120.00,
+    #  earth_radius_km  = 6378.14,
+    #/
+    #&projection
+    #  projection_type = "lambert_conformal",
+    #/
+    #&lambert_conformal
+    #  reference_longitude_degrees = ${CEN_LON},
+    #  reference_latitude_degrees  = ${CEN_LAT},
+    #  standard_parallel_1_degrees = ${TRUELAT1},
+    #  standard_parallel_2_degrees = ${TRUELAT2},
+    #  standard_longitude_degrees  = ${STAND_LON},
+    #/
+    #EOF
 
     # David Dowell setting for HRRR-initialized cases
-    cat <<EOF > namelist.projections
+    cat <<EOF >namelist.projections
 &mesh
   cell_spacing_km  =    3.0,
   mesh_length_x_km = 5340.00,
@@ -757,8 +622,8 @@ EOF
     #
     jobscript="run_projectHexes.${mach}"
 
-    sedfile=$(mktemp -t project_${jobname}.sed_XXXX)
-    cat <<EOF > $sedfile
+    sedfile=$(mktemp -t project_"${jobname}".sed_XXXX)
+    cat <<EOF >"$sedfile"
 s/PARTION/${partition_static}/
 s/NOPART/$npepost/
 s/JOBNAME/project_${jobname}/
@@ -773,39 +638,38 @@ s^EXCLSTR^${job_exclusive_str}^
 s/RUNMPCMD/${job_runmpexe_str}/
 s/DOMNAME/${domname}/g
 EOF
-    submit_a_jobscript $wrkdir "projectHexes" $sedfile $TEMPDIR/$jobscript $jobscript ""
+    submit_a_jobscript "$wrkdir" "projectHexes" "$sedfile" "$TEMPDIR"/"$jobscript" "$jobscript" ""
 }
 
 ########################################################################
 
 function run_static {
-    wrkdir=$1
-    mkwrkdir $wrkdir $overwrite
-    cd $wrkdir || return
 
-    cp $FIXDIR/$domname.graph.info      .
-    cp $FIXDIR/$domname.grid.nc         .
+    wrkdir="${rundir}/${domname}"
+    mkwrkdir "$wrkdir" "$overwrite"
+    cd "$wrkdir" || return
 
-    if [[ ! -f $domname.graph.info.part.${npepost} ]]; then
-        if [[ $verb -eq 1 ]]; then
-            echo "Generating ${domname}.graph.info.part.${npepost} in $wrkdir using ${gpmetis}"
-        fi
-        ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npepost} > gpmetis.out$npepost
-        estatus=$?
-        if [[ ${estatus} -ne 0 ]]; then
-            echo "${estatus}: ${gpmetis} -minconn -contig -niter=200 ${domname}.graph.info ${npepost}"
-            exit ${estatus}
-        fi
+    if [[ ! -f "${FIXDIR}/${domname}_${eventdate}${eventtime}.grid.nc" || ! -f "${FIXDIR}/${domname}_${eventdate}${eventtime}.graph.info" ]]; then
+        mecho0 "${RED}ERROR${NC}: Please provide the static grid file for ${YELLOW}${eventdate}${eventtime}${NC}."
+        return
     fi
 
-    initfile="../$runname/ungrib/${EXTHEAD}:${inittime_str:0:13}"
+    cp "${FIXDIR}/${domname}_${eventdate}${eventtime}.graph.info" "${domname}.graph.info"
+    cp "${FIXDIR}/${domname}_${eventdate}${eventtime}.grid.nc" "${domname}.grid.nc"
+
+    if [[ ! -f ${domname}.graph.info.part.${npepost} ]]; then
+        # shellcheck disable=SC2154
+        split_graph "${gpmetis}" "${domname}.graph.info" "${npepost}" "$wrkdir" "$dorun" "$verb"
+    fi
+
+    initfile="../ungrib/${EXTHEAD}:${inittime_str:0:13}"
     if [[ ! -f $initfile ]]; then
         echo "Initial file (for extracting time): $initfile not found"
         exit 0
     fi
-    ln -sf $initfile .
+    ln -sf "$initfile" .
 
-    cat <<EOF > namelist.init_atmosphere
+    cat <<EOF >namelist.init_atmosphere
 &nhyd_model
     config_init_case = 7
     config_start_time = '${inittime_str}'
@@ -823,10 +687,10 @@ function run_static {
     config_nvegopt       = 2
 /
 &data_sources
-    config_geog_data_path = '${WPSGEOG_PATH}'
+    config_geog_data_path = '${WPSGEOG_PATH}/'
     config_met_prefix = '${EXTHEAD}'
     config_sfc_prefix = 'SST'
-    config_fg_interval = $((EXTINVL*3600))
+    config_fg_interval = $((EXTINVL * 3600))
     config_landuse_data = 'MODIFIED_IGBP_MODIS_NOAH_15s'
     config_soilcat_data = 'BNU'
     config_topo_data    = 'GMTED2010'
@@ -872,7 +736,7 @@ function run_static {
 /
 EOF
 
-    cat << EOF >  streams.init_atmosphere
+    cat <<EOF >streams.init_atmosphere
 <streams>
 <immutable_stream name="input"
                   type="input"
@@ -901,23 +765,23 @@ EOF
     #
     jobscript="run_static.${mach}"
 
-    sedfile=$(mktemp -t static_${jobname}.sed_XXXX)
-    cat <<EOF > $sedfile
+    sedfile=$(mktemp -t "static_${jobname}.sed_XXXX")
+    cat <<EOF >"$sedfile"
 s/PARTION/${partition_static}/
 s/NOPART/$npepost/
 s/JOBNAME/static_${jobname}/
 s/CPUSPEC/${static_cpu}/
 s/MODULE/${modulename}/
 s/MACHINE/${machine}/g
-s#ROOTDIR#$rootdir#g
-s#WRKDIR#$wrkdir#g
+s#ROOTDIR#${rootdir}#g
+s#WRKDIR#${wrkdir}#g
 s#EXEDIR#${exedir}#
 s/ACCTSTR/${job_account_str}/
 s^EXCLSTR^${job_exclusive_str}^
 s/RUNMPCMD/${job_runmpexe_str}/
 s/DOMNAME/${domname}/g
 EOF
-    submit_a_jobscript $wrkdir "static" $sedfile $TEMPDIR/$jobscript $jobscript ""
+    submit_a_jobscript "$wrkdir" "static" "$sedfile" "$TEMPDIR/$jobscript" "$jobscript" ""
 }
 
 ########################################################################
@@ -930,21 +794,22 @@ function run_ungrib_hrrr {
     hrrr_grib_dir=$1
 
     wrkdir=$rundir/ungrib
-    mkwrkdir $wrkdir 0
-    cd $wrkdir || return
+    mkwrkdir "$wrkdir" 0
+    cd "$wrkdir" || return
 
     julday=$(date -u -d "$eventdate ${eventtime}:00" +%y%j%H)
     hrrrbase="${julday}0000"
 
     if [[ -f running.ungrib${appendhour_str} || -f done.ungrib${appendhour_str} || -f queue.ungrib${appendhour_str} ]]; then
-        :                   # skip
+        : # skip
     else
-        myhrrrfiles=(); jobarrays=()
-        for ((h=starthour;h<=endhour;h+=EXTINVL)); do
+        myhrrrfiles=()
+        jobarrays=()
+        for ((h = starthour; h <= endhour; h += EXTINVL)); do
             [[ starthour -ne 0 && h -eq starthour ]] && continue
-            hstr=$(printf "%02d" $h)
+            hstr=$(printf "%02d" "$h")
             hrrrfile="$hrrr_grib_dir/${hrrrbase}$hstr"
-            basefn=$(basename $hrrrfile)
+            basefn=$(basename "$hrrrfile")
             basefn="NSSL_$basefn"
 
             if [[ $verb -eq 1 ]]; then echo "HRRR file: $hrrrfile"; fi
@@ -967,8 +832,8 @@ function run_ungrib_hrrr {
             jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
             jobscript="run_wgrib2_hrrr.${mach}"
 
-            sedfile=$(mktemp -t wgrib2_${jobname}.sed_XXXX)
-            cat <<EOF > $sedfile
+            sedfile=$(mktemp -t "wgrib2_${jobname}".sed_XXXX)
+            cat <<EOF >"$sedfile"
 s/PARTION/${partition}/
 s/JOBNAME/wgrib2_${jobname}/
 s#ROOTDIR#$rootdir#g
@@ -981,17 +846,18 @@ s#VERBOSE#$verb#g
 s/ACCTSTR/${job_account_str}/
 s^EXCLSTR^${job_exclusive_str}^
 s/RUNCMD/${job_runexe_str}/
+s#WGRIB2#${wgrib2path}#
 EOF
-            submit_a_jobscript $wrkdir "wgrib2" $sedfile $TEMPDIR/run_wgrib2_hrrr.${mach} $jobscript ${jobarraystr}
+            submit_a_jobscript "$wrkdir" "wgrib2" "$sedfile" "$TEMPDIR"/run_wgrib2_hrrr."${mach}" "$jobscript" "${jobarraystr}"
         fi
 
         if [[ $dorun == true ]]; then
-            for ((h=starthour;h<=endhour;h+=EXTINVL)); do
+            for ((h = starthour; h <= endhour; h += EXTINVL)); do
                 [[ starthour -ne 0 && h -eq starthour ]] && continue
-                hstr=$(printf "%02d" $h)
+                hstr=$(printf "%02d" "$h")
                 donefile="done.wgrib2_$hstr"
                 while [[ ! -e $donefile ]]; do
-                    [[ $verb -eq 1 ]]&& echo "Waiting for $donefile ......"
+                    [[ $verb -eq 1 ]] && echo "Waiting for $donefile ......"
                     sleep 10
                 done
             done
@@ -999,24 +865,25 @@ EOF
 
         #link_grib ${myhrrrfiles[@]}
 
-        i=0; jobarrays=()
-        for ((h=starthour;h<=endhour;h+=EXTINVL)); do
+        i=0
+        jobarrays=()
+        for ((h = starthour; h <= endhour; h += EXTINVL)); do
             [[ starthour -ne 0 && h -eq starthour ]] && continue
-            hstr=$(printf "%02d" $h)
+            hstr=$(printf "%02d" "$h")
 
             mywrkdir="$wrkdir/ungrib_$hstr"
             donefile="done.ungrib_$hstr"
             if [[ ! -f $donefile ]]; then
-                mkdir -p $mywrkdir
-                cd $mywrkdir || return
+                mkdir -p "$mywrkdir"
+                cd "$mywrkdir" || return
 
-                ln -sf ../${myhrrrfiles[$i]} GRIBFILE.AAA
-                ln -sf $FIXDIR/WRFV4.0/Vtable.raphrrr Vtable
+                ln -sf ../"${myhrrrfiles[$i]}" GRIBFILE.AAA
+                ln -sf "$FIXDIR"/WRFV4.0/Vtable.raphrrr Vtable
 
                 jobarrays+=("$h")
-                cd $wrkdir || return
+                cd "$wrkdir" || return
             fi
-            (( i=i+1 ))
+            ((i = i + 1))
         done
 
         #
@@ -1026,8 +893,8 @@ EOF
             jobscript="run_ungrib.${mach}"
             jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
-            sedfile=$(mktemp -t ungrib_hrrr_${jobname}.sed_XXXX)
-            cat <<EOF > $sedfile
+            sedfile=$(mktemp -t "ungrib_hrrr_${jobname}".sed_XXXX)
+            cat <<EOF >"$sedfile"
 s/PARTION/${partition}/
 s/JOBNAME/ungrb_hrrr_${jobname}/
 s#ROOTDIR#$rootdir#g
@@ -1042,15 +909,15 @@ s^EXCLSTR^${job_exclusive_str}^
 s/RUNCMD/${job_runexe_str}/
 s/APPENDIX/${appendhour_str}/g
 EOF
-            submit_a_jobscript $wrkdir "ungrib${appendhour_str}" $sedfile $TEMPDIR/run_ungrib_parallel.${mach} $jobscript ${jobarraystr}
+            submit_a_jobscript "$wrkdir" "ungrib${appendhour_str}" "$sedfile" "$TEMPDIR/run_ungrib_parallel.${mach}" "$jobscript" "${jobarraystr}"
         fi
     fi
 
     done=0
     if [[ $dorun == true ]]; then
-        for ((h=starthour;h<=endhour;h+=EXTINVL)); do
+        for ((h = starthour; h <= endhour; h += EXTINVL)); do
             [[ starthour -ne 0 && h -eq starthour ]] && continue
-            hstr=$(printf "%02d" $h)
+            hstr=$(printf "%02d" "$h")
             donefile="done.ungrib_$hstr"
             echo "$$: Checking: $wrkdir/$donefile"
             while [[ ! -e $wrkdir/$donefile ]]; do
@@ -1061,21 +928,21 @@ EOF
             done
             if [[ -f $donefile ]]; then
                 if [[ $verb -ne 1 ]]; then
-                    rm -rf $wrkdir/ungrib_$hstr
+                    rm -rf "$wrkdir/ungrib_$hstr"
                 fi
-                rm -f queue.ungrib${appendhour_str}
-                (( done=done+1 ))
-                [[ $h -eq 0 ]] && touch $wrkdir/done.ungrib_ics
+                rm -f "queue.ungrib${appendhour_str}"
+                ((done = done + 1))
+                [[ $h -eq 0 ]] && touch "$wrkdir/done.ungrib_ics"
             fi
         done
     else
-        touch $wrkdir/done.ungrib_ics
+        touch "$wrkdir/done.ungrib_ics"
     fi
 
-    if [[ $done -eq $((fcst_hours/EXTINVL+1)) ]]; then
-        touch $wrkdir/done.ungrib${appendhour_str}
+    if [[ $done -eq $((fcst_hours / EXTINVL + 1)) ]]; then
+        touch "$wrkdir/done.ungrib${appendhour_str}"
     fi
-    touch $wrkdir/done.ungrib_lbc${appendhour_str}
+    touch "$wrkdir/done.ungrib_lbc${appendhour_str}"
 }
 
 ########################################################################
@@ -1084,17 +951,17 @@ function run_ungrib_gfs {
     grib_dir=$1
 
     wrkdir=$rundir/ungrib
-    mkwrkdir $wrkdir 0
-    cd $wrkdir || return
+    mkwrkdir "$wrkdir" 0
+    cd "$wrkdir" || return
 
     julday=$(date -u -d "$eventdate ${eventtime}:00" +%y%j%H)
 
     if [[ -f running.ungrib || -f done.ungrib || -f queue.ungrib ]]; then
-        return 0                   # skip
+        return 0 # skip
     else
         gfsfiles=()
-        for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
-            hstr=$(printf "%02d" $h)
+        for ((h = 0; h <= fcst_hours; h += EXTINVL)); do
+            hstr=$(printf "%02d" "$h")
             gfsfiles+=("$grib_dir/${julday}0000$hstr")
         done
 
@@ -1110,15 +977,15 @@ function run_ungrib_gfs {
 
         link_grib "${gfsfiles[@]}"
 
-        ln -sf $FIXDIR/WRFV4.0/Vtable.GFS_full Vtable
+        ln -sf "$FIXDIR"/WRFV4.0/Vtable.GFS_full Vtable
 
-        cat << EOF > namelist.wps
+        cat <<EOF >namelist.wps
 &share
  wrf_core = 'ARW',
  max_dom = 1,
  start_date = '${starttime_str}',
  end_date = '${stoptime_str}',
- interval_seconds = $((EXTINVL*3600))
+ interval_seconds = $((EXTINVL * 3600))
  io_form_geogrid = 2,
 /
 &geogrid
@@ -1135,11 +1002,11 @@ EOF
         # Create job script and submit it
         #
         jobscript="run_ungrib.slurm"
-        sed    "s/PARTION/${partition}/;s/JOBNAME/ungrib_${jobname}/" $TEMPDIR/$jobscript > $jobscript
-        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-        sed -i "s/ACCTSTR/${job_account_str}/;s^EXCLSTR^${job_exclusive_str}^;s/RUNCMD/${job_runexe_str}/" $jobscript
+        sed "s/PARTION/${partition}/;s/JOBNAME/ungrib_${jobname}/" "$TEMPDIR"/"$jobscript" >"$jobscript"
+        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" "$jobscript"
+        sed -i "s/ACCTSTR/${job_account_str}/;s^EXCLSTR^${job_exclusive_str}^;s/RUNCMD/${job_runexe_str}/" "$jobscript"
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
-        $runcmd $jobscript
+        $runcmd "$jobscript"
         if [[ $dorun == true && $? -eq 0 ]]; then touch queue.ungrib; fi
     fi
 
@@ -1151,8 +1018,8 @@ EOF
             fi
             sleep 10
         done
-        touch $wrkdir/done.ungrib_ics
-        touch $wrkdir/done.ungrib_lbc
+        touch "$wrkdir"/done.ungrib_ics
+        touch "$wrkdir"/done.ungrib_lbc
     fi
 }
 
@@ -1166,13 +1033,13 @@ function run_ungrib_rrfsna {
     rrfs_grib_dir=$1
 
     wrkdir=$rundir/ungrib
-    mkwrkdir $wrkdir 0
-    cd $wrkdir || return
+    mkwrkdir "$wrkdir" 0
+    cd "$wrkdir" || return
 
     julday=$(date -u -d "$eventdate ${eventtime}:00" +%y%j%H)
 
     if [[ -f running.ungrib || -f done.ungrib || -f queue.ungrib ]]; then
-        :                   # skip
+        : # skip
     else
         currdate=$(date -u -d "$eventdate ${eventtime}:00" +%Y%m%d)
         currtime=$(date -u -d "$eventdate ${eventtime}:00" +%H)
@@ -1184,38 +1051,40 @@ function run_ungrib_rrfsna {
             download_aws=0
         fi
 
-        rrfsfiles=(); myrrfsfiles=(); jobarrays=()
-        for ((h=starthour;h<=endhour;h+=EXTINVL)); do
+        rrfsfiles=()
+        myrrfsfiles=()
+        jobarrays=()
+        for ((h = starthour; h <= endhour; h += EXTINVL)); do
             [[ starthour -ne 0 && h -eq starthour ]] && continue
-            hstr=$(printf "%03d" $h)
+            hstr=$(printf "%03d" "$h")
             if [[ $download_aws -eq 1 ]]; then
                 rrfsfile="rrfs.t${currtime}z.natlev.f${hstr}.grib2"
-                basefn=$(basename $rrfsfile)
+                basefn=$(basename "$rrfsfile")
                 basefn="HRRR_$basefn"
 
                 if [[ ! -f $rrfsfile && ! -f $basefn && $dorun == true ]]; then
                     if [[ $verb -eq 1 ]]; then echo "Downloading $rrfsfile ..."; fi
                     rrfsfidx="${rrfsfile}.idx"
-                    wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfidx
+                    wget -c -q --connect-timeout=120 --read-timeout=180 "$rrfs_url"/"$rrfsfidx"
                     estatus=$?
                     while [[ ${estatus} -ne 0 ]]; do
                         sleep 10
                         echo "wget -c $rrfs_url/$rrfsfidx"
-                        wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfidx
+                        wget -c -q --connect-timeout=120 --read-timeout=180 "$rrfs_url"/"$rrfsfidx"
                     done
-                    rm -f ${rrfsfidx}
+                    rm -f "${rrfsfidx}"
 
-                    wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfile
+                    wget -c -q --connect-timeout=120 --read-timeout=180 "$rrfs_url"/"$rrfsfile"
                     estatus=$?
                     while [[ ${estatus} -ne 0 ]]; do
                         sleep 10
                         echo "wget -c $rrfs_url/$rrfsfile"
-                        wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfile
+                        wget -c -q --connect-timeout=120 --read-timeout=180 "$rrfs_url"/"$rrfsfile"
                     done
                 fi
             else
                 rrfsfile=$rrfs_grib_dir/rrfs.t${currtime}z.natlev.f${hstr}.grib2
-                basefn=$(basename $rrfsfile)
+                basefn=$(basename "$rrfsfile")
                 basefn="HRRR_$basefn"
                 while [[ ! -f $rrfsfile && ! -f $basefn && $dorun == true ]]; do
                     if [[ $verb -eq 1 ]]; then
@@ -1241,12 +1110,12 @@ function run_ungrib_rrfsna {
             myrrfsfiles+=("$basefn")
         done
 
-       if [[ ${#jobarrays[@]} -gt 0 ]]; then
+        if [[ ${#jobarrays[@]} -gt 0 ]]; then
             jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
             jobscript="run_wgrib2_rrfsna.${mach}"
 
-            sedfile=$(mktemp -t wgrib2_${jobname}.sed_XXXX)
-            cat <<EOF > $sedfile
+            sedfile=$(mktemp -t wgrib2_"${jobname}".sed_XXXX)
+            cat <<EOF >"$sedfile"
 s/PARTION/${partition}/
 s/JOBNAME/wgrib2_${jobname}/
 s#ROOTDIR#$rootdir#g
@@ -1260,13 +1129,13 @@ s/ACCTSTR/${job_account_str}/
 s^EXCLSTR^${job_exclusive_str}^
 s/RUNCMD/${job_runexe_str}/
 EOF
-            submit_a_jobscript $wrkdir "wgrib2" $sedfile $TEMPDIR/run_wgrib2_rrfsna.${mach} $jobscript ${jobarraystr}
+            submit_a_jobscript "$wrkdir" "wgrib2" "$sedfile" "$TEMPDIR"/run_wgrib2_rrfsna."${mach}" "$jobscript" "${jobarraystr}"
         fi
 
         if [[ $dorun == true ]]; then
-            for ((h=starthour;h<=endhour;h+=EXTINVL)); do
+            for ((h = starthour; h <= endhour; h += EXTINVL)); do
                 [[ starthour -ne 0 && h -eq starthour ]] && continue
-                hstr=$(printf "%02d" $h)
+                hstr=$(printf "%02d" "$h")
                 donefile="done.wgrib2_$hstr"
                 while [[ ! -e $donefile ]]; do
                     if [[ $verb -eq 1 ]]; then
@@ -1279,25 +1148,26 @@ EOF
 
         #link_grib ${myrrfsfiles[@]}
 
-        i=0; jobarrays=()
-        for ((h=starthour;h<=endhour;h+=EXTINVL)); do
+        i=0
+        jobarrays=()
+        for ((h = starthour; h <= endhour; h += EXTINVL)); do
             [[ starthour -ne 0 && h -eq starthour ]] && continue
 
-            hstr=$(printf "%02d" $h)
+            hstr=$(printf "%02d" "$h")
 
             mywrkdir="$wrkdir/ungrib_$hstr"
             donefile="done.ungrib_$hstr"
             if [[ ! -f $donefile ]]; then
-                mkdir -p $mywrkdir
-                cd $mywrkdir || return
+                mkdir -p "$mywrkdir"
+                cd "$mywrkdir" || return
 
-                ln -sf ../${myrrfsfiles[$i]} GRIBFILE.AAA
-                ln -sf $FIXDIR/WRFV4.0/Vtable.RRFS Vtable
+                ln -sf ../"${myrrfsfiles[$i]}" GRIBFILE.AAA
+                ln -sf "$FIXDIR"/WRFV4.0/Vtable.RRFS Vtable
 
                 jobarrays+=("$h")
-                cd $wrkdir || return
+                cd "$wrkdir" || return
             fi
-            (( i=i+1 ))
+            ((i = i + 1))
         done
 
         #
@@ -1307,8 +1177,8 @@ EOF
             jobscript="run_ungrib.${mach}"
             jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
-            sedfile=$(mktemp -t ungrib_${jobname}.sed_XXXX)
-            cat <<EOF > $sedfile
+            sedfile=$(mktemp -t ungrib_"${jobname}".sed_XXXX)
+            cat <<EOF >"$sedfile"
 s/PARTION/${partition}/
 s/JOBNAME/ungrb_rrfs_${jobname}/
 s#ROOTDIR#$rootdir#g
@@ -1323,15 +1193,15 @@ s^EXCLSTR^${job_exclusive_str}^
 s/RUNCMD/${job_runexe_str}/
 s/APPENDIX/${appendhour_str}/g
 EOF
-            submit_a_jobscript $wrkdir "ungrib${appendhour_str}" $sedfile $TEMPDIR/run_ungrib_parallel.${mach} $jobscript ${jobarraystr}
+            submit_a_jobscript "$wrkdir" "ungrib${appendhour_str}" "$sedfile" "$TEMPDIR"/run_ungrib_parallel."${mach}" "$jobscript" "${jobarraystr}"
         fi
     fi
 
     done=0
     if [[ $dorun == true ]]; then
-        for ((h=starthour;h<=endhour;h+=EXTINVL)); do
+        for ((h = starthour; h <= endhour; h += EXTINVL)); do
             [[ starthour -ne 0 && h -eq starthour ]] && continue
-            hstr=$(printf "%02d" $h)
+            hstr=$(printf "%02d" "$h")
             donefile="done.ungrib_$hstr"
             echo "$$: Checking: $wrkdir/$donefile"
             while [[ ! -e $wrkdir/$donefile ]]; do
@@ -1342,21 +1212,21 @@ EOF
             done
             if [[ -f $donefile ]]; then
                 if [[ $verb -ne 1 ]]; then
-                    rm -rf $wrkdir/ungrib_$hstr
+                    rm -rf "$wrkdir"/ungrib_"$hstr"
                 fi
                 rm -f queue.ungrib
-                (( done=done+1 ))
-                [[ $h -eq 0 ]] && touch $wrkdir/done.ungrib_ics
+                ((done = done + 1))
+                [[ $h -eq 0 ]] && touch "$wrkdir"/done.ungrib_ics
             fi
         done
     else
-        touch $wrkdir/done.ungrib_ics
+        touch "$wrkdir"/done.ungrib_ics
     fi
 
-    if [[ $done -eq $((fcst_hours/EXTINVL+1)) ]]; then
-        touch $wrkdir/done.ungrib${appendhour_str}
+    if [[ $done -eq $((fcst_hours / EXTINVL + 1)) ]]; then
+        touch "$wrkdir"/done.ungrib"${appendhour_str}"
     fi
-    touch $wrkdir/done.ungrib_lbc${appendhour_str}
+    touch "$wrkdir"/done.ungrib_lbc"${appendhour_str}"
 }
 
 ########################################################################
@@ -1369,13 +1239,13 @@ function run_ungrib_rrfs {
     rrfs_grib_dir=$1
 
     wrkdir=$rundir/ungrib
-    mkwrkdir $wrkdir 0
-    cd $wrkdir || return
+    mkwrkdir "$wrkdir" 0
+    cd "$wrkdir" || return
 
     julday=$(date -u -d "$eventdate ${eventtime}:00" +%y%j%H)
 
     if [[ -f running.ungrib${appendhour_str} || -f done.ungrib${appendhour_str} || -f queue.ungrib${appendhour_str} ]]; then
-        :                   # skip
+        : # skip
     else
         currdate=$(date -u -d "$eventdate ${eventtime}:00" +%Y%m%d)
         currtime=$(date -u -d "$eventdate ${eventtime}:00" +%H)
@@ -1387,38 +1257,39 @@ function run_ungrib_rrfs {
             download_aws=0
         fi
 
-        rrfsfiles=(); myrrfsfiles=()
-        for ((h=starthour;h<=endhour;h+=EXTINVL)); do
+        rrfsfiles=()
+        myrrfsfiles=()
+        for ((h = starthour; h <= endhour; h += EXTINVL)); do
             [[ starthour -ne 0 && h -eq starthour ]] && continue
-            hstr=$(printf "%03d" $h)
+            hstr=$(printf "%03d" "$h")
             if [[ $download_aws -eq 1 ]]; then
                 rrfsfile="rrfs.t${currtime}z.natlev.f${hstr}.conus_3km.grib2"
-                basefn=$(basename $rrfsfile)
+                basefn=$(basename "$rrfsfile")
                 basefn="NSSL_$basefn"
 
                 if [[ ! -f $rrfsfile && ! -f $basefn && $dorun == true ]]; then
                     if [[ $verb -eq 1 ]]; then echo "Downloading $rrfsfile ..."; fi
                     rrfsfidx="${rrfsfile}.idx"
-                    wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfidx
+                    wget -c -q --connect-timeout=120 --read-timeout=180 "$rrfs_url"/"$rrfsfidx"
                     estatus=$?
                     while [[ ${estatus} -ne 0 ]]; do
                         sleep 10
                         echo "wget -c $rrfs_url/$rrfsfidx"
-                        wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfidx
+                        wget -c -q --connect-timeout=120 --read-timeout=180 "$rrfs_url"/"$rrfsfidx"
                     done
-                    rm -f ${rrfsfidx}
+                    rm -f "${rrfsfidx}"
 
-                    wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfile
+                    wget -c -q --connect-timeout=120 --read-timeout=180 "$rrfs_url"/"$rrfsfile"
                     estatus=$?
                     while [[ ${estatus} -ne 0 ]]; do
                         sleep 10
                         echo "wget -c $rrfs_url/$rrfsfile"
-                        wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfile
+                        wget -c -q --connect-timeout=120 --read-timeout=180 "$rrfs_url"/"$rrfsfile"
                     done
                 fi
             else
                 rrfsfile=$rrfs_grib_dir/RRFS_CONUS.t${currtime}z.bgrd3df${hstr}.tm00.grib2
-                basefn=$(basename $rrfsfile)
+                basefn=$(basename "$rrfsfile")
                 basefn="NSSL_$basefn"
                 while [[ ! -f $rrfsfile && ! -f $basefn && $dorun == true ]]; do
                     if [[ $verb -eq 1 ]]; then
@@ -1431,7 +1302,6 @@ function run_ungrib_rrfs {
             myrrfsfiles+=("$basefn")
         done
 
-
         for i in "${!rrfsfiles[@]}"; do
             fn=${rrfsfiles[$i]}
             basefn=${myrrfsfiles[$i]}
@@ -1441,7 +1311,7 @@ function run_ungrib_rrfs {
                 echo " "
 
                 # drop un-wanted records
-                fhrstr=$(echo $fn | grep -o -E 'f[0-9]{3}')
+                fhrstr=$(echo "$fn" | grep -o -E 'f[0-9]{3}')
                 fhr=${fhrstr//[!0-9]/}
                 fhr=$((10#$fhr))
 
@@ -1452,8 +1322,8 @@ function run_ungrib_rrfs {
                 fi
                 echo "RRFS file: $fn ($valtime)"
 
-                rrfs_records=$(mktemp -t RRFS_$fhrstr.XXX)
-                cat << EOF > ${rrfs_records}
+                rrfs_records=$(mktemp -t RRFS_"$fhrstr".XXX)
+                cat <<EOF >"${rrfs_records}"
 :PRES:[0-9]{1,2} hybrid level:${valtime}:
 :CLWMR:[0-9]{1,2} hybrid level:${valtime}:
 :ICMR:[0-9]{1,2} hybrid level:${valtime}:
@@ -1502,32 +1372,33 @@ EOF
                 echo "Generating working copy: $basefn ...."
                 grib2cmdstr="${wgrib2path} $fn | grep -Ef ${rrfs_records} | ${wgrib2path} -i $fn -GRIB $basefn"
                 if [[ $verb -eq 1 ]]; then echo "$grib2cmdstr"; fi
-                eval $grib2cmdstr >& /dev/null
+                eval "$grib2cmdstr" >&/dev/null
                 sleep 2
-                if [[ $verb -ne 1 ]]; then rm -f ${rrfs_records}; fi
+                if [[ $verb -ne 1 ]]; then rm -f "${rrfs_records}"; fi
             fi
         done
 
         #link_grib ${myrrfsfiles[@]}
 
-        i=0; jobarrays=()
-        for ((h=starthour;h<=endhour;h+=EXTINVL)); do
+        i=0
+        jobarrays=()
+        for ((h = starthour; h <= endhour; h += EXTINVL)); do
             [[ starthour -ne 0 && h -eq starthour ]] && continue
-            hstr=$(printf "%02d" $h)
+            hstr=$(printf "%02d" "$h")
 
             mywrkdir="$wrkdir/ungrib_$hstr"
             donefile="done.ungrib_$hstr"
             if [[ ! -f $donefile ]]; then
-                mkdir -p $mywrkdir
-                cd $mywrkdir || return
+                mkdir -p "$mywrkdir"
+                cd "$mywrkdir" || return
 
-                ln -sf ../${myrrfsfiles[$i]} GRIBFILE.AAA
-                ln -sf $FIXDIR/WRFV4.0/Vtable.RRFS Vtable
+                ln -sf ../"${myrrfsfiles[$i]}" GRIBFILE.AAA
+                ln -sf "$FIXDIR"/WRFV4.0/Vtable.RRFS Vtable
 
                 jobarrays+=("$h")
-                cd $wrkdir || return
+                cd "$wrkdir" || return
             fi
-            (( i=i+1 ))
+            ((i = i + 1))
         done
 
         #
@@ -1537,8 +1408,8 @@ EOF
             jobscript="run_ungrib.${mach}"
             jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
-            sedfile=$(mktemp -t ungrib_${jobname}.sed_XXXX)
-            cat <<EOF > $sedfile
+            sedfile=$(mktemp -t ungrib_"${jobname}".sed_XXXX)
+            cat <<EOF >"$sedfile"
 s/PARTION/${partition}/
 s/JOBNAME/ungrb_rrfs_${jobname}/
 s#ROOTDIR#$rootdir#g
@@ -1553,15 +1424,15 @@ s^EXCLSTR^${job_exclusive_str}^
 s/RUNCMD/${job_runexe_str}/
 s/APPENDIX/${appendhour_str}/g
 EOF
-            submit_a_jobscript $wrkdir "ungrib${appendhour_str}" $sedfile $TEMPDIR/run_ungrib_parallel.${mach} $jobscript ${jobarraystr}
+            submit_a_jobscript "$wrkdir" "ungrib${appendhour_str}" "$sedfile" "$TEMPDIR"/run_ungrib_parallel."${mach}" "$jobscript" "${jobarraystr}"
         fi
     fi
 
     done=0
     if [[ $dorun == true ]]; then
-        for ((h=starthour;h<=endhour;h+=EXTINVL)); do
+        for ((h = starthour; h <= endhour; h += EXTINVL)); do
             [[ starthour -ne 0 && h -eq starthour ]] && continue
-            hstr=$(printf "%02d" $h)
+            hstr=$(printf "%02d" "$h")
             donefile="done.ungrib_$hstr"
             echo "$$: Checking: $wrkdir/$donefile"
             while [[ ! -e $wrkdir/$donefile ]]; do
@@ -1572,21 +1443,21 @@ EOF
             done
             if [[ -f $donefile ]]; then
                 if [[ $verb -ne 1 ]]; then
-                    rm -rf $wrkdir/ungrib_$hstr
+                    rm -rf "$wrkdir"/ungrib_"$hstr"
                 fi
                 rm -f queue.ungrib
-                (( done=done+1 ))
-                [[ $h -eq 0 ]] && touch $wrkdir/done.ungrib_ics
+                ((done = done + 1))
+                [[ $h -eq 0 ]] && touch "$wrkdir"/done.ungrib_ics
             fi
         done
     else
-        touch $wrkdir/done.ungrib_ics
+        touch "$wrkdir"/done.ungrib_ics
     fi
 
-    if [[ $done -eq $((fcst_hours/EXTINVL+1)) ]]; then
-        touch $wrkdir/done.ungrib${appendhour_str}
+    if [[ $done -eq $((fcst_hours / EXTINVL + 1)) ]]; then
+        touch "$wrkdir"/done.ungrib"${appendhour_str}"
     fi
-    touch $wrkdir/done.ungrib_lbc${appendhour_str}
+    touch "$wrkdir"/done.ungrib_lbc"${appendhour_str}"
 }
 
 ########################################################################
@@ -1599,13 +1470,13 @@ function run_ungrib_rrfsp {
     rrfs_grib_dir=$1
 
     wrkdir=$rundir/ungrib_rrfs
-    mkwrkdir $wrkdir 0
-    cd $wrkdir || return
+    mkwrkdir "$wrkdir" 0
+    cd "$wrkdir" || return
 
     julday=$(date -u -d "$eventdate ${eventtime}:00" +%y%j%H)
 
     if [[ -f running.ungrib || -f done.ungrib || -f queue.ungrib ]]; then
-        :                   # skip
+        : # skip
     else
         currdate=$(date -u -d "$eventdate ${eventtime}:00" +%Y%m%d)
         currtime=$(date -u -d "$eventdate ${eventtime}:00" +%H)
@@ -1618,27 +1489,27 @@ function run_ungrib_rrfsp {
         fi
 
         rrfsfiles=()
-        for ((h=0;h<=fcst_hours;h+=EXTINVL)); do
-            hstr=$(printf "%03d" $h)
+        for ((h = 0; h <= fcst_hours; h += EXTINVL)); do
+            hstr=$(printf "%03d" "$h")
             if [[ $download_aws -eq 1 ]]; then
                 rrfsfile="rrfs.t${currtime}z.prslev.f${hstr}.conus_3km.grib2"
                 if [[ ! -f $rrfsfile ]]; then
                     rrfsfidx="${rrfsfile}.idx"
-                    wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfidx
+                    wget -c -q --connect-timeout=120 --read-timeout=180 "$rrfs_url"/"$rrfsfidx"
                     estatus=$?
                     while [[ ${estatus} -ne 0 ]]; do
                         sleep 10
                         echo "wget -c $rrfs_url/$rrfsfidx"
-                        wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfidx
+                        wget -c -q --connect-timeout=120 --read-timeout=180 "$rrfs_url"/"$rrfsfidx"
                     done
-                    rm -f ${rrfsfidx}
+                    rm -f "${rrfsfidx}"
 
-                    wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfile
+                    wget -c -q --connect-timeout=120 --read-timeout=180 "$rrfs_url"/"$rrfsfile"
                     estatus=$?
                     while [[ ${estatus} -ne 0 ]]; do
                         sleep 10
                         echo "wget -c $rrfs_url/$rrfsfile"
-                        wget -c -q --connect-timeout=120 --read-timeout=180 $rrfs_url/$rrfsfile
+                        wget -c -q --connect-timeout=120 --read-timeout=180 "$rrfs_url"/"$rrfsfile"
                     done
                 fi
             else
@@ -1656,15 +1527,15 @@ function run_ungrib_rrfsp {
 
         link_grib "${rrfsfiles[@]}"
 
-        ln -sf $FIXDIR/WRFV4.0/Vtable.RRFSP Vtable
+        ln -sf "$FIXDIR"/WRFV4.0/Vtable.RRFSP Vtable
 
-        cat << EOF > namelist.wps
+        cat <<EOF >namelist.wps
 &share
  wrf_core = 'ARW',
  max_dom = 1,
  start_date = '${starttime_str}',
  end_date = '${stoptime_str}',
- interval_seconds = $((EXTINVL*3600))
+ interval_seconds = $((EXTINVL * 3600))
  io_form_geogrid = 2,
 /
 &geogrid
@@ -1681,11 +1552,11 @@ EOF
         # Create job script and submit it
         #
         jobscript="run_ungrib.slurm"
-        sed    "s/PARTION/${partition}/;s/JOBNAME/ungrb_rrfs_${jobname}/" $TEMPDIR/$jobscript > $jobscript
-        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" $jobscript
-        sed -i "s/ACCTSTR/${job_account_str}/;s^EXCLSTR^${job_exclusive_str}^;s/RUNCMD/${job_runexe_str}/" $jobscript
+        sed "s/PARTION/${partition}/;s/JOBNAME/ungrb_rrfs_${jobname}/" "$TEMPDIR"/"$jobscript" >"$jobscript"
+        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s#EXEDIR#${exedir}#" "$jobscript"
+        sed -i "s/ACCTSTR/${job_account_str}/;s^EXCLSTR^${job_exclusive_str}^;s/RUNCMD/${job_runexe_str}/" "$jobscript"
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
-        $runcmd $jobscript
+        $runcmd "$jobscript"
         if [[ $dorun == true && $? -eq 0 ]]; then touch queue.ungrib; fi
     fi
 
@@ -1702,7 +1573,7 @@ EOF
         done
     fi
 
-    touch $wrkdir/done.ungrib_ics
+    touch "$wrkdir/done.ungrib_ics"
 
     if [[ $dorun == true ]]; then
         echo "$$: Checking: $wrkdir/done.ungrib"
@@ -1714,14 +1585,14 @@ EOF
         done
     fi
 
-    touch $wrkdir/done.ungrib_lbc
+    touch "$wrkdir/done.ungrib_lbc"
 }
 
 ########################################################################
 
 function run_init {
 
-    if [[ -d $init_dir ]]; then  # link it from somewhere
+    if [[ -d $init_dir ]]; then # link it from somewhere
 
         if [[ $dorun == true ]]; then
             donefile="$init_dir/init/done.ics"
@@ -1734,27 +1605,28 @@ function run_init {
             done
         fi
 
-        cd $rundir || return
-        ln -sf $init_dir/init .
+        cd "$rundir" || return
+        ln -sf "$init_dir/init" .
         return
     fi
 
     # Otherwise, run init normally
-    conditions=()
-    while [[ $# -gt 0 ]]; do
-        case $1 in
+    read -r -a conditions <<< "$1"
+    local -a new_conditions
+    for cond in  "${conditions[@]}"; do
+        case $cond in
         /*)
-            conditions+=("$1")
+            new_conditions+=("$cond")
             ;;
         *)
-            conditions+=("$rundir/$1")
+            new_conditions+=("$rundir/$cond")
             ;;
         esac
         shift
     done
 
     if [[ $dorun == true ]]; then
-        for cond in "${conditions[@]}"; do
+        for cond in "${new_conditions[@]}"; do
             echo "$$: Checking: $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
@@ -1767,16 +1639,21 @@ function run_init {
 
     wrkdir=$rundir/init
     if [[ -f $wrkdir/running.ics || -f $wrkdir/done.ics || -f $wrkdir/queue.ics ]]; then
-        :                   # skip
+        : # skip
     else
-        mkwrkdir $wrkdir $overwrite
-        cd $wrkdir || return
+        mkwrkdir "$wrkdir" "$overwrite"
+        cd "$wrkdir" || return
 
-        ln -sf $rundir/ungrib/${EXTHEAD}:${inittime_str:0:13} .
-        ln -sf $WORKDIR/$domname/$domname.static.nc .
-        ln -sf $FIXDIR/$domname.graph.info.part.${npeics} .
+        ln -sf "${rundir}/ungrib/${EXTHEAD}:${inittime_str:0:13}" .
+        ln -sf "${rundir}/${domname}/${domname}.static.nc" .
 
-        cat << EOF > namelist.init_atmosphere
+        if [[ ! -f ${rundir}/${domname}/${domname}.graph.info.part.${npeics} ]]; then
+            # shellcheck disable=SC2154
+            split_graph "${gpmetis}" "${domname}.graph.info" "${npeics}" "${rundir}/${domname}" "$dorun" "$verb"
+        fi
+        ln -sf "${rundir}/${domname}/${domname}.graph.info.part.${npeics}" .
+
+        cat <<EOF >namelist.init_atmosphere
 &nhyd_model
     config_init_case = 7
     config_start_time = '${inittime_str}'
@@ -1793,10 +1670,10 @@ function run_init {
     config_nvegopt       = 2
 /
 &data_sources
-    config_geog_data_path = '/lfs5/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/'
+    config_geog_data_path = '${WPSGEOG_PATH}/'
     config_met_prefix     = '${EXTHEAD}'
     config_sfc_prefix     = 'SST'
-    config_fg_interval  = $((EXTINVL*3600))
+    config_fg_interval  = $((EXTINVL * 3600))
     config_landuse_data = 'MODIFIED_IGBP_MODIS_NOAH_15s'
     config_soilcat_data = 'BNU'
     config_topo_data    = 'GMTED2010'
@@ -1840,7 +1717,7 @@ function run_init {
 /
 EOF
 
-        cat << EOF > streams.init_atmosphere
+        cat <<EOF >streams.init_atmosphere
 <streams>
 <immutable_stream name="input"
                   type="input"
@@ -1877,8 +1754,8 @@ EOF
         #
         jobscript="run_init.${mach}"
 
-        sedfile=$(mktemp -t init_${jobname}.sed_XXXX)
-        cat <<EOF > $sedfile
+        sedfile=$(mktemp -t init_"${jobname}".sed_XXXX)
+        cat <<EOF >"$sedfile"
 s/PARTION/${partition}/
 s/MACHINE/${machine}/g
 s/NOPART/$npeics/
@@ -1893,10 +1770,10 @@ s^EXCLSTR^${job_exclusive_str}^
 s/RUNMPCMD/${job_runmpexe_str}/
 EOF
         if [[ "${mach}" == "pbs" ]]; then
-            echo "s/NNODES/${nnodes_ics}/;s/NCORES/${ncores_ics}/" >> $sedfile
+            echo "s/NNODES/${nnodes_ics}/;s/NCORES/${ncores_ics}/" >>"$sedfile"
         fi
 
-        submit_a_jobscript $wrkdir "ics" $sedfile $TEMPDIR/$jobscript $jobscript ""
+        submit_a_jobscript "$wrkdir" "ics" "$sedfile" "$TEMPDIR"/"$jobscript" "$jobscript" ""
     fi
 }
 
@@ -1904,7 +1781,7 @@ EOF
 
 function run_lbc {
 
-    if [[ -d $init_dir ]]; then  # link it from somewhere
+    if [[ -d $init_dir ]]; then # link it from somewhere
 
         if [[ $dorun == true ]]; then
             donefile="$init_dir/lbc/done.lbc${appendhour_str}"
@@ -1917,28 +1794,28 @@ function run_lbc {
             done
         fi
 
-        cd $rundir || return
-        ln -sf $init_dir/lbc .
+        cd "$rundir" || return
+        ln -sf "$init_dir"/lbc .
         return
     fi
 
     # otherwise, run lbc normally
-
-    conditions=()
-    while [[ $# -gt 0 ]]; do
-        case $1 in
+    read -r -a conditions <<< "$1"
+    local -a new_conditions
+    for cond in  "${conditions[@]}"; do
+        case $cond in
         /*)
-            conditions+=("$1")
+            new_conditions+=("$cond")
             ;;
         *)
-            conditions+=("$rundir/$1")
+            new_conditions+=("$rundir/$cond")
             ;;
         esac
         shift
     done
 
     if [[ $dorun == true ]]; then
-        for cond in "${conditions[@]}"; do
+        for cond in "${new_conditions[@]}"; do
             echo "$$: Checking: $cond"
             while [[ ! -e $cond ]]; do
                 if [[ $verb -eq 1 ]]; then
@@ -1951,16 +1828,21 @@ function run_lbc {
 
     wrkdir=$rundir/lbc
     if [[ -f $wrkdir/running.lbc${appendhour_str} || -f $wrkdir/done.lbc${appendhour_str} || -f $wrkdir/queue.lbc${appendhour_str} ]]; then
-        :                   # skip
+        : # skip
     else
-        mkwrkdir $wrkdir $overwrite
-        cd $wrkdir || return
+        mkwrkdir "$wrkdir" "$overwrite"
+        cd "$wrkdir" || return
 
-        ln -sf $rundir/ungrib/${EXTHEAD}* .
-        ln -sf $rundir/init/$domname.init.nc .
-        ln -sf $FIXDIR/$domname.graph.info.part.${npeics} .
+        ln -sf "$rundir/ungrib/${EXTHEAD}"* .
+        ln -sf "$rundir/init/$domname.init.nc" .
+        if [[ ! -f ${rundir}/${domname}/${domname}.graph.info.part.${npeics} ]]; then
+            # shellcheck disable=SC2154
+            split_graph "${gpmetis}" "${domname}.graph.info" "${npeics}" "${rundir}/${domname}" "$dorun" "$verb"
+        fi
 
-        cat << EOF > namelist.init_atmosphere${appendhour_str}
+        ln -sf "${rundir}/${domname}/$domname.graph.info.part.${npeics}" .
+
+        cat <<EOF >"namelist.init_atmosphere${appendhour_str}"
 &nhyd_model
     config_init_case = 9
     config_start_time = '${starttime_str}'
@@ -1980,7 +1862,7 @@ function run_lbc {
     config_geog_data_path = '/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/'
     config_met_prefix = '${EXTHEAD}'
     config_sfc_prefix = 'SST'
-    config_fg_interval = $((EXTINVL*3600))
+    config_fg_interval = $((EXTINVL * 3600))
     config_landuse_data = 'MODIFIED_IGBP_MODIS_NOAH_15s'
     config_soilcat_data = 'BNU'
     config_topo_data    = 'GMTED2010'
@@ -2024,7 +1906,7 @@ function run_lbc {
 /
 EOF
 
-        cat << EOF > streams.init_atmosphere
+        cat <<EOF >streams.init_atmosphere
 <streams>
 <immutable_stream name="input"
                   type="input"
@@ -2061,8 +1943,8 @@ EOF
         #
         jobscript="run_lbc${appendhour_str}.${mach}"
 
-        sedfile=$(mktemp -t lbc_${jobname}.sed_XXXX)
-        cat <<EOF > $sedfile
+        sedfile=$(mktemp -t lbc_"${jobname}".sed_XXXX)
+        cat <<EOF >"$sedfile"
 s/PARTION/${partition}/
 s/MACHINE/${machine}/g
 s/NOPART/$npeics/
@@ -2079,10 +1961,10 @@ s/APPENDIX/${appendhour_str}/g
 EOF
 
         if [[ "${mach}" == "pbs" ]]; then
-            echo "s/NNODES/${nnodes_ics}/;s/NCORES/${ncores_ics}/" >> $sedfile
+            echo "s/NNODES/${nnodes_ics}/;s/NCORES/${ncores_ics}/" >>"$sedfile"
         fi
 
-        submit_a_jobscript $wrkdir "lbc${appendhour_str}" $sedfile $TEMPDIR/run_lbc.${mach} $jobscript ""
+        submit_a_jobscript "$wrkdir" "lbc${appendhour_str}" "$sedfile" "$TEMPDIR"/run_lbc."${mach}" "$jobscript" ""
     fi
 }
 
@@ -2120,18 +2002,18 @@ function run_mpas {
     #
     wrkdir=$rundir/fcst
     if [[ -f $wrkdir/running.fcst${appendhour_str} || -f $wrkdir/done.fcst${appendhour_str} || -f $wrkdir/queue.fcst${appendhour_str} ]]; then
-        :                   # skip
+        : # skip
     else
-        mkwrkdir $wrkdir $overwrite
-        cd $wrkdir || return
+        mkwrkdir "$wrkdir" "$overwrite"
+        cd "$wrkdir" || return
 
-        for ((h=starthour;h<=endhour;h+=EXTINVL)); do
+        for ((h = starthour; h <= endhour; h += EXTINVL)); do
             [[ starthour -ne 0 && h -eq starthour ]] && continue
             timestr=$(date -u -d "${eventdate} ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
-            ln -sf $rundir/lbc/${domname}.lbc.${timestr}.nc .
+            ln -sf "$rundir/lbc/${domname}.lbc.${timestr}.nc" .
         done
         if [[ starthour -eq 0 ]]; then
-        ln -sf $rundir/init/$domname.init.nc .
+            ln -sf "$rundir/init/$domname.init.nc" .
         else
             rst_time_str=$(date -u -d "$eventdate ${eventtime}:00 $starthour hours" +%Y-%m-%d_%H.%M.%S)
             rstfile="${domname}.restart.${rst_time_str}.nc"
@@ -2141,47 +2023,52 @@ function run_mpas {
                 sleep 10
             done
         fi
-        ln -sf $FIXDIR/$domname.graph.info.part.${npefcst} .
 
-        ln -sf ${WORKDIR}/${domname}/${domname}.ugwp_oro_data.nc .
+        if [[ ! -f ${rundir}/${domname}/${domname}.graph.info.part.${npefcst} ]]; then
+            # shellcheck disable=SC2154
+            split_graph "${gpmetis}" "${domname}.graph.info" "${npefcst}" "${rundir}/${domname}" "$dorun" "$verb"
+        fi
+        ln -sf "${rundir}/${domname}/${domname}.graph.info.part.${npefcst}" .
+
+        ln -sf "${WORKDIR}/${domname}/${domname}.ugwp_oro_data.nc" .
 
         streamlists=(stream_list.atmosphere.diagnostics stream_list.atmosphere.output stream_list.atmosphere.surface)
         for fn in "${streamlists[@]}"; do
-            cp -f ${FIXDIR}/$fn .
+            cp -f "${FIXDIR}/$fn" .
         done
 
-        datafiles=(  CAM_ABS_DATA.DBL  CAM_AEROPT_DATA.DBL GENPARM.TBL       LANDUSE.TBL    \
-                     OZONE_DAT.TBL     OZONE_LAT.TBL       OZONE_PLEV.TBL    RRTMG_LW_DATA  \
-                     RRTMG_LW_DATA.DBL RRTMG_SW_DATA       RRTMG_SW_DATA.DBL SOILPARM.TBL   \
-                     VEGPARM.TBL )
+        datafiles=(CAM_ABS_DATA.DBL CAM_AEROPT_DATA.DBL GENPARM.TBL LANDUSE.TBL
+            OZONE_DAT.TBL OZONE_LAT.TBL OZONE_PLEV.TBL RRTMG_LW_DATA
+            RRTMG_LW_DATA.DBL RRTMG_SW_DATA RRTMG_SW_DATA.DBL SOILPARM.TBL
+            VEGPARM.TBL)
 
         for fn in "${datafiles[@]}"; do
-            ln -sf ${FIXDIR}/$fn .
+            ln -sf "${FIXDIR}/$fn" .
         done
 
         if [[ "${mpscheme}" == "Thompson" ]]; then
-            thompson_tables=( MP_THOMPSON_QRacrQG_DATA.DBL   MP_THOMPSON_QRacrQS_DATA.DBL   \
-                              MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL   \
-                              CCN_ACTIVATE.BIN )
+            thompson_tables=(MP_THOMPSON_QRacrQG_DATA.DBL MP_THOMPSON_QRacrQS_DATA.DBL
+                MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL
+                CCN_ACTIVATE.BIN)
 
         elif [[ "${mpscheme}" == "mp_tempo" ]]; then
-            thompson_tables=( MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL MP_TEMPO_QRacrQS_DATA.DBL   \
-                              MP_TEMPO_freezeH2O_DATA.DBL         MP_TEMPO_QIautQS_DATA.DBL   CCN_ACTIVATE_DATA )
+            thompson_tables=(MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL MP_TEMPO_QRacrQS_DATA.DBL
+                MP_TEMPO_freezeH2O_DATA.DBL MP_TEMPO_QIautQS_DATA.DBL CCN_ACTIVATE_DATA)
 
         fi
 
-        if [[ -n ${thompson_tables} ]]; then
+        if [[ -n ${#thompson_tables[@]} ]]; then
             for fn in "${thompson_tables[@]}"; do
-                ln -sf ${FIXDIR}/$fn .
+                ln -sf "${FIXDIR}/$fn" .
             done
         fi
 
-        fcsthour_str=$(printf "%02d" $fcst_hours)
+        fcsthour_str=$(printf "%02d" "$fcst_hours")
 
         namelist_filename="namelist.atmosphere${appendhour_str}"
         stream_filename="streams.atmosphere${appendhour_str}"
 
-        cat << EOF > ${namelist_filename}
+        cat <<EOF >"${namelist_filename}"
 &nhyd_model
     config_time_integration_order   = 2
     config_dt                       = 20
@@ -2262,11 +2149,11 @@ function run_mpas {
 EOF
 
         if [[ ${mpscheme} =~ ^mp_nssl3m$ ]]; then
-            echo "    config_nssl_3moment        = .true." >> ${namelist_filename}
+            echo "    config_nssl_3moment        = .true." >>"${namelist_filename}"
         fi
 
         if [[ ${mpscheme} == "mp_tempo" ]]; then
-            cat << EOF >> ${namelist_filename}
+            cat <<EOF >>"${namelist_filename}"
     config_microp_scheme             = '${mpscheme}'
     config_physics_suite             = 'hrrrv5'
     config_tempo_hailaware           = .true.
@@ -2275,7 +2162,7 @@ EOF
     config_radt_cld_scheme           = 'cld_fraction_mynn'
 EOF
         elif [[ ${mpscheme} =~ ^mp_nssl[23]m$ ]]; then
-            cat << EOF >> ${namelist_filename}
+            cat <<EOF >>"${namelist_filename}"
     config_physics_suite             = 'convection_permitting'
     config_microp_scheme             = 'mp_nssl2m'
 /
@@ -2288,7 +2175,7 @@ EOF
 EOF
         fi
 
-        cat << EOF >> ${namelist_filename}
+        cat <<EOF >>"${namelist_filename}"
 /
 &soundings
     config_sounding_interval         = 'none'
@@ -2301,7 +2188,7 @@ EOF
 /
 EOF
 
-        cat << EOF > ${stream_filename}
+        cat <<EOF >"${stream_filename}"
 <streams>
 <immutable_stream name="input"
                   type="input"
@@ -2369,8 +2256,8 @@ EOF
         # Create job script and submit it
         #
         jobscript="run_mpas${appendhour_str}.${mach}"
-        sedfile=$(mktemp -t mpas_${jobname}.sed_XXXX)
-        cat <<EOF > $sedfile
+        sedfile=$(mktemp -t mpas_"${jobname}".sed_XXXX)
+        cat <<EOF >"$sedfile"
 s/PARTION/${partition}/
 s/NOPART/$npefcst/
 s/JOBNAME/mpas_${jobname}/
@@ -2386,10 +2273,10 @@ s/RUNMPCMD/${job_runmpexe_str}/
 s/APPENDIX/${appendhour_str}/g
 EOF
         if [[ "${mach}" == "pbs" ]]; then
-            echo "s/NNODES/${nnodes_ics}/;s/NCORES/${ncores_ics}/" >> $sedfile
+            echo "s/NNODES/${nnodes_ics}/;s/NCORES/${ncores_ics}/" >>"$sedfile"
         fi
 
-        submit_a_jobscript $wrkdir "fcst${appendhour_str}" $sedfile $TEMPDIR/run_mpas.${mach} $jobscript ""
+        submit_a_jobscript "$wrkdir" "fcst${appendhour_str}" "$sedfile" "$TEMPDIR"/run_mpas."${mach}" "$jobscript" ""
     fi
 }
 
@@ -2400,8 +2287,8 @@ function run_mpassit {
     # Build working directory
     #
     wrkdir=$rundir/mpassit
-    mkwrkdir $wrkdir 0
-    cd $wrkdir || return
+    mkwrkdir "$wrkdir" 0
+    cd "$wrkdir" || return
 
     if [[ "${mpscheme}" == "Thompson" || "${mpscheme}" == "mp_tempo" ]]; then
         fileappend="THOM"
@@ -2414,9 +2301,9 @@ function run_mpassit {
         if [[ ! -e $fn ]]; then
             if [[ $verb -eq 1 ]]; then echo "Linking $fn ..."; fi
             if [[ -e $FIXDIR/MPASSIT/${fn}.${fileappend} ]]; then
-                ln -sf $FIXDIR/MPASSIT/${fn}.${fileappend} $fn
+                ln -sf "$FIXDIR"/MPASSIT/"${fn}"."${fileappend}" "$fn"
             elif [[ -e $FIXDIR/MPASSIT/${fn} ]]; then
-                ln -sf $FIXDIR/MPASSIT/$fn .
+                ln -sf "$FIXDIR"/MPASSIT/"$fn" .
             else
                 echo "ERROR: file \"$FIXDIR/MPASSIT/${fn}\" not exist."
                 return
@@ -2424,28 +2311,28 @@ function run_mpassit {
         fi
     done
 
-    for ((h=starthour;h<=endhour;h+=OUTINVL)); do
+    for ((h = starthour; h <= endhour; h += OUTINVL)); do
         [[ starthour -ne 0 && h -eq starthour ]] && continue
-        hstr=$(printf "%02d" $h)
+        hstr=$(printf "%02d" "$h")
         fcst_time_str=$(date -u -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
 
         histfile="$rundir/fcst/${domname}.history.${fcst_time_str}.nc"
         diagfile="$rundir/fcst/${domname}.diag.${fcst_time_str}.nc"
 
         if [[ -f done.mpassit$hstr || -f running.mpassit$hstr || -f queue.mpassit$hstr || -f error.mpassit$hstr ]]; then
-            continue               # already done, is running or is in queue, skip this hour
+            continue # already done, is running or is in queue, skip this hour
         fi
 
         if [[ -f error.mpassit$hstr ]]; then
-            rm -f core.*           # Maybe core-dumped, resubmission will solves the problem if the machine is unstable.
+            rm -f core.* # Maybe core-dumped, resubmission will solves the problem if the machine is unstable.
         fi
 
         if [[ $dorun == true ]]; then
             for fn in $histfile $diagfile; do
                 echo "$$: Checking: $fn ..."
                 while [[ ! -f $fn ]]; do
-                    if [[ $jobwait -eq 0 ]]; then    # do not wait for it
-                        continue 3                   # go ahead to process next hour
+                    if [[ $jobwait -eq 0 ]]; then # do not wait for it
+                        continue 3                # go ahead to process next hour
                     fi
 
                     if [[ $verb -eq 1 ]]; then
@@ -2453,7 +2340,7 @@ function run_mpassit {
                     fi
                     sleep 10
                 done
-                fileage=$(( $(date +%s) - $(stat -c %Y -- "$fn") ))
+                fileage=$(($(date +%s) - $(stat -c %Y -- "$fn")))
                 if [[ $fileage -lt 30 ]]; then
                     sleep 30
                 fi
@@ -2461,7 +2348,7 @@ function run_mpassit {
         fi
 
         nmlfile="namelist.fcst_$hstr"
-        cat << EOF > $nmlfile
+        cat <<EOF >"$nmlfile"
 &config
     grid_file_input_grid = "$rundir/init/${domname}.init.nc"
     hist_file_input_grid = "$histfile"
@@ -2481,8 +2368,8 @@ EOF
         #
         jobscript="run_mpassit_$hstr.slurm"
 
-        sedfile=$(mktemp -t mpassit_${jobname}_$hstr.sed_XXXX)
-        cat <<EOF > $sedfile
+        sedfile=$(mktemp -t mpassit_"${jobname}"_"$hstr".sed_XXXX)
+        cat <<EOF >"$sedfile"
 s/PARTION/${partition}/
 s/NOPART/$npepost/
 s/MODULE/${modulename}/g
@@ -2497,7 +2384,7 @@ s/ACCTSTR/${job_account_str}/
 s^EXCLSTR^${job_exclusive_str}^
 s/RUNMPCMD/${job_runmpexe_str}/
 EOF
-        submit_a_jobscript $wrkdir "mpassit$hstr" $sedfile $TEMPDIR/run_mpassit.slurm $jobscript ""
+        submit_a_jobscript "$wrkdir" "mpassit$hstr" "$sedfile" "$TEMPDIR"/run_mpassit.slurm "$jobscript" ""
     done
 }
 
@@ -2508,33 +2395,33 @@ function run_upp {
     # Build working directory
     #
     wrkdir=$rundir/upp
-    mkwrkdir $wrkdir 0
-    cd $wrkdir || return
+    mkwrkdir "$wrkdir" 0
+    cd "$wrkdir" || return
 
     # shellcheck disable=SC2034
-    fixfiles_AerosolCoeff=( AerosolCoeff.bin )
+    fixfiles_AerosolCoeff=(AerosolCoeff.bin)
     # shellcheck disable=SC2034
-    fixfiles_CloudCoeff=( CloudCoeff.bin )
+    fixfiles_CloudCoeff=(CloudCoeff.bin)
     # shellcheck disable=SC2034
-    fixfiles_EmisCoeff=( EmisCoeff.bin )
+    fixfiles_EmisCoeff=(EmisCoeff.bin)
 
     # shellcheck disable=SC2034
-    fixfiles_SpcCoeff=( amsre_aqua.SpcCoeff.bin       imgr_g11.SpcCoeff.bin    \
-        imgr_g12.SpcCoeff.bin     imgr_g13.SpcCoeff.bin  imgr_g15.SpcCoeff.bin  \
-        imgr_insat3d.SpcCoeff.bin imgr_mt1r.SpcCoeff.bin imgr_mt2.SpcCoeff.bin  \
-        seviri_m10.SpcCoeff.bin   ssmi_f13.SpcCoeff.bin  ssmi_f14.SpcCoeff.bin  \
-        ssmi_f15.SpcCoeff.bin     ssmis_f16.SpcCoeff.bin ssmis_f17.SpcCoeff.bin \
-        ssmis_f18.SpcCoeff.bin    ssmis_f19.SpcCoeff.bin ssmis_f20.SpcCoeff.bin \
-        tmi_trmm.SpcCoeff.bin     v.seviri_m10.SpcCoeff.bin)
+    fixfiles_SpcCoeff=(amsre_aqua.SpcCoeff.bin imgr_g11.SpcCoeff.bin
+        imgr_g12.SpcCoeff.bin imgr_g13.SpcCoeff.bin imgr_g15.SpcCoeff.bin
+        imgr_insat3d.SpcCoeff.bin imgr_mt1r.SpcCoeff.bin imgr_mt2.SpcCoeff.bin
+        seviri_m10.SpcCoeff.bin ssmi_f13.SpcCoeff.bin ssmi_f14.SpcCoeff.bin
+        ssmi_f15.SpcCoeff.bin ssmis_f16.SpcCoeff.bin ssmis_f17.SpcCoeff.bin
+        ssmis_f18.SpcCoeff.bin ssmis_f19.SpcCoeff.bin ssmis_f20.SpcCoeff.bin
+        tmi_trmm.SpcCoeff.bin v.seviri_m10.SpcCoeff.bin)
 
     # shellcheck disable=SC2034
-    fixfiles_TauCoeff=( amsre_aqua.TauCoeff.bin       imgr_g11.TauCoeff.bin    \
-        imgr_g12.TauCoeff.bin     imgr_g13.TauCoeff.bin  imgr_g15.TauCoeff.bin  \
-        imgr_insat3d.TauCoeff.bin imgr_mt1r.TauCoeff.bin imgr_mt2.TauCoeff.bin  \
-        seviri_m10.TauCoeff.bin   ssmi_f13.TauCoeff.bin  ssmi_f14.TauCoeff.bin  \
-        ssmi_f15.TauCoeff.bin     ssmis_f16.TauCoeff.bin ssmis_f17.TauCoeff.bin \
-        ssmis_f18.TauCoeff.bin    ssmis_f19.TauCoeff.bin ssmis_f20.TauCoeff.bin \
-        tmi_trmm.TauCoeff.bin )
+    fixfiles_TauCoeff=(amsre_aqua.TauCoeff.bin imgr_g11.TauCoeff.bin
+        imgr_g12.TauCoeff.bin imgr_g13.TauCoeff.bin imgr_g15.TauCoeff.bin
+        imgr_insat3d.TauCoeff.bin imgr_mt1r.TauCoeff.bin imgr_mt2.TauCoeff.bin
+        seviri_m10.TauCoeff.bin ssmi_f13.TauCoeff.bin ssmi_f14.TauCoeff.bin
+        ssmi_f15.TauCoeff.bin ssmis_f16.TauCoeff.bin ssmis_f17.TauCoeff.bin
+        ssmis_f18.TauCoeff.bin ssmis_f19.TauCoeff.bin ssmis_f20.TauCoeff.bin
+        tmi_trmm.TauCoeff.bin)
 
     declare -A fixdirs
     #declare -A fixfiles fixdirs
@@ -2543,7 +2430,7 @@ function run_upp {
     #fixfiles[EmisCoeff]=fixfiles_EmisCoeff[@]
     #fixfiles[SpcCoeff]=fixfiles_SpcCoeff[@]
     #fixfiles[TauCoeff]=fixfiles_TauCoeff[@]
-    fixfiles=( AerosolCoeff CloudCoeff EmisCoeff SpcCoeff TauCoeff )
+    fixfiles=(AerosolCoeff CloudCoeff EmisCoeff SpcCoeff TauCoeff)
 
     fixdirs[AerosolCoeff]="$FIXDIR/UPP/crtm2_fix/AerosolCoeff/Big_Endian"
     fixdirs[CloudCoeff]="$FIXDIR/UPP/crtm2_fix/CloudCoeff/Big_Endian"
@@ -2551,26 +2438,26 @@ function run_upp {
     fixdirs[SpcCoeff]="$FIXDIR/UPP/crtm2_fix/SpcCoeff/Big_Endian"
     fixdirs[TauCoeff]="$FIXDIR/UPP/crtm2_fix/TauCoeff/ODPS/Big_Endian"
 
-    for ((h=starthour;h<=endhour;h+=OUTINVL)); do
+    for ((h = starthour; h <= endhour; h += OUTINVL)); do
         [[ starthour -ne 0 && h -eq starthour ]] && continue
-        hstr=$(printf "%02d" $h)
+        hstr=$(printf "%02d" "$h")
         fcst_time_str=$(date -u -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
 
-        if [[  -f $wrkdir/done.upp_$hstr || -f $wrkdir/queue.upp_$hstr ]]; then
-            continue      # already done, or is in queue, skip this hour
+        if [[ -f $wrkdir/done.upp_$hstr || -f $wrkdir/queue.upp_$hstr ]]; then
+            continue # already done, or is in queue, skip this hour
         fi
 
-        if [[  -f $wrkdir/running.upp_$hstr ]]; then
-            fileage=$(( $(date +%s) - $(stat -c %Y -- "$wrkdir/running.upp_$hstr") ))
+        if [[ -f $wrkdir/running.upp_$hstr ]]; then
+            fileage=$(($(date +%s) - $(stat -c %Y -- "$wrkdir/running.upp_$hstr")))
             if [[ $fileage -lt 300 ]]; then
-                continue                        # Job is running, skip
-            else                                # > 5 minutes, May be a time out issue
-                rm $wrkdir/running.upp_$hstr
+                continue # Job is running, skip
+            else         # > 5 minutes, May be a time out issue
+                rm "$wrkdir"/running.upp_"$hstr"
             fi
         fi
 
         #if [[  -f $wrkdir/error.upp_$hstr ]]; then
-            # resubmission may solve the problem
+        # resubmission may solve the problem
         #fi
 
         mpasfile="$rundir/mpassit/MPAS-A_out.${fcst_time_str}.nc"
@@ -2579,8 +2466,8 @@ function run_upp {
         if [[ $dorun == true ]]; then
             echo "$$: Checking: $donefile ...."
             while [[ ! -f $donefile ]]; do
-                if [[ $jobwait -eq 0 ]]; then     # do not wait
-                    continue 2                    # go ahread to process next forecast hour
+                if [[ $jobwait -eq 0 ]]; then # do not wait
+                    continue 2                # go ahread to process next forecast hour
                 fi
 
                 if [[ $verb -eq 1 ]]; then
@@ -2590,8 +2477,8 @@ function run_upp {
             done
         fi
 
-        mkwrkdir $wrkdir/post_$hstr 1
-        cd $wrkdir/post_$hstr || return
+        mkwrkdir "$wrkdir"/post_"$hstr" 1
+        cd "$wrkdir"/post_"$hstr" || return
 
         #for coeff in ${!fixfiles[@]}; do
         #    echo "$coeff"
@@ -2602,7 +2489,7 @@ function run_upp {
             #for fn in ${filearray[@]}; do
             for fn in "${!fixfilename}"; do
                 #echo "$coeff -> ${fixdirs[$coeff]}/$fn"
-                ln -sf ${fixdirs[$coeff]}/$fn .
+                ln -sf "${fixdirs[$coeff]}"/"$fn" .
             done
         done
 
@@ -2610,8 +2497,8 @@ function run_upp {
         #...Link microphysic's tables - code will use based on mp_physics option
         #   found in data
         #
-        ln -sf $FIXDIR/WRFV4.0/ETAMPNEW_DATA               nam_micro_lookup.dat
-        ln -sf $FIXDIR/WRFV4.0/ETAMPNEW_DATA.expanded_rain hires_micro_lookup.dat
+        ln -sf "$FIXDIR"/WRFV4.0/ETAMPNEW_DATA nam_micro_lookup.dat
+        ln -sf "$FIXDIR"/WRFV4.0/ETAMPNEW_DATA.expanded_rain hires_micro_lookup.dat
 
         #
         #...For GRIB2 the code uses postcntrl.xml to select variables for output
@@ -2621,13 +2508,13 @@ function run_upp {
         #   program directory - this is true for params_grib2_tbl_new also - a
         #   file which defines the GRIB2 table values
         #
-        parmfiles=(params_grib2_tbl_new post_avblflds.xml postcntrl.xml postxconfig-NT.txt )
+        parmfiles=(params_grib2_tbl_new post_avblflds.xml postcntrl.xml postxconfig-NT.txt)
         for fn in "${parmfiles[@]}"; do
-            ln -sf $FIXDIR/UPP/hrrr_$fn $fn
+            ln -sf "$FIXDIR"/UPP/hrrr_"$fn" "$fn"
         done
 
         nmlfile="itag"
-        cat << EOF > $nmlfile
+        cat <<EOF >"$nmlfile"
 $mpasfile
 netcdf
 grib2
@@ -2639,8 +2526,8 @@ EOF
         #
         jobscript="run_upp_$hstr.slurm"
 
-        sedfile=$(mktemp -t upp_${jobname}_$hstr.sed_XXXX)
-        cat <<EOF > $sedfile
+        sedfile=$(mktemp -t upp_"${jobname}"_"$hstr".sed_XXXX)
+        cat <<EOF >"$sedfile"
 s/PARTION/${partition_upp}/
 s/NOPART/$npepost/
 s/CPUSPEC/${claim_cpu}/
@@ -2656,7 +2543,7 @@ s^EXCLSTR^${job_exclusive_str}^
 s/RUNMPCMD/${job_runmpexe_str}/
 EOF
 
-        submit_a_jobscript $wrkdir "upp_$hstr" $sedfile $TEMPDIR/run_upp.slurm $jobscript ""
+        submit_a_jobscript "$wrkdir" "upp_$hstr" "$sedfile" "$TEMPDIR"/run_upp.slurm "$jobscript" ""
     done
 }
 
@@ -2671,14 +2558,14 @@ function run_pcp {
         echo "Directory: $wrkdir not exist."
         return
     fi
-    cd $wrkdir || return
+    cd "$wrkdir" || return
 
-    expectednum=$(( fcst_hours/OUTINVL +1))
+    expectednum=$((fcst_hours / OUTINVL + 1))
 
     donefiles=()
     pcpfiles=()
     while IFS='' read -r line; do donefiles+=("$line"); done < <(ls done.upp_??)
-    while IFS='' read -r line; do pcpfiles+=("$line");  done < <(ls MPAS-A_PCP_*)
+    while IFS='' read -r line; do pcpfiles+=("$line"); done < <(ls MPAS-A_PCP_*)
     #donefiles=($(ls done.upp_??))
     #pcpfiles=($(ls  MPAS-A_PCP_*))
 
@@ -2686,20 +2573,20 @@ function run_pcp {
         echo "WARNING: UPPs are still not all done. Skip run_pcp."
     elif [[ ${#pcpfiles[@]} -ge $expectednum ]]; then
         echo "run_pcp already done."
-    elif [[  -f $wrkdir/done.pcp || -f $wrkdir/queue.pcp || -f $wrkdir/running.pcp ]]; then
+    elif [[ -f $wrkdir/done.pcp || -f $wrkdir/queue.pcp || -f $wrkdir/running.pcp ]]; then
         echo "Founding working file for run_pcp. Skip"
     else
         #
         # Create job script and submit it
         #
         jobscript="run_pcp.slurm"
-        sed    "s/PARTION/${partition_upp}/;s/CPUSPEC/${claim_cpu}/" $TEMPDIR/run_pcp.slurm > $jobscript
-        sed -i "s/JOBNAME/pcp_${jobname}/;s/HHHSTR/${fcst_hours}/g;s/MODULE/${modulename}/g" $jobscript
-        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s/MACHINE/${machine}/g" $jobscript
-        sed -i "s/ACCTSTR/${job_account_str}/;s^EXCLSTR^${job_exclusive_str}^;s/RUNCMD/${job_runexe_str}/" $jobscript
+        sed "s/PARTION/${partition_upp}/;s/CPUSPEC/${claim_cpu}/" "$TEMPDIR"/run_pcp.slurm >"$jobscript"
+        sed -i "s/JOBNAME/pcp_${jobname}/;s/HHHSTR/${fcst_hours}/g;s/MODULE/${modulename}/g" "$jobscript"
+        sed -i "s#ROOTDIR#$rootdir#g;s#WRKDIR#$wrkdir#g;s/MACHINE/${machine}/g" "$jobscript"
+        sed -i "s/ACCTSTR/${job_account_str}/;s^EXCLSTR^${job_exclusive_str}^;s/RUNCMD/${job_runexe_str}/" "$jobscript"
         if [[ $dorun == true ]]; then echo -n "Submitting $jobscript .... "; fi
-        $runcmd $jobscript
-        if [[ $dorun == true ]]; then touch $wrkdir/queue.pcp; fi
+        $runcmd "$jobscript"
+        if [[ $dorun == true ]]; then touch "$wrkdir"/queue.pcp; fi
     fi
 }
 
@@ -2709,59 +2596,59 @@ function run_clean {
 
     for dirname in "$@"; do
         case $dirname in
-        ungrib )
+        ungrib)
             donelbc="$rundir/lbc/done.lbc${appendhour_str}"
             for dirsn in ungrib_gfs ungrib_hrrr ungrib_rrfs ungrib; do
                 if [[ -d $rundir/$dirsn && -e $donelbc ]]; then
-                    cd $rundir/$dirsn || return
+                    cd "$rundir"/"$dirsn" || return
                     rm -rf GFS:* HRRR:* RRFS:* PFILE:* RRFSGFS:* HRRRGFS:*
                     rm -rf RRFS_CONUS.*
                 fi
             done
             ;;
-        mpssit )
+        mpssit)
             wrkdir="$rundir/mpassit"
-            for ((h=starthour;h<=endhour;h+=OUTINVL)); do
-                hstr=$(printf "%02d" $h)
+            for ((h = starthour; h <= endhour; h += OUTINVL)); do
+                hstr=$(printf "%02d" "$h")
                 fcst_time_str=$(date -u -d "$eventdate ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
-                rm -rf $wrkdir/MPAS-A_out.${fcst_time_str}.nc
+                rm -rf "$wrkdir"/MPAS-A_out."${fcst_time_str}".nc
                 #rm -rf $wrkdir/done.mpassit$hstr $wrkdir/error.mpassit$hstr
             done
             ;;
-        upp )
+        upp)
             #
             # Clean UPP directory
             #
             wrkdir="$rundir/upp"
-            for ((h=starthour;h<=endhour;h+=OUTINVL)); do
-                hstr=$(printf "%02d" $h)
+            for ((h = starthour; h <= endhour; h += OUTINVL)); do
+                hstr=$(printf "%02d" "$h")
                 if [[ -f $wrkdir/done.upp_$hstr ]]; then
                     if [[ $verb -eq 1 ]]; then
                         echo "Cleaning $wrkdir/post_$hstr ......"
                     fi
-                    rm -rf $wrkdir/post_$hstr
+                    rm -rf "$wrkdir"/post_"$hstr"
                 fi
             done
 
             if [[ -f $wrkdir/done.pcp ]]; then
-               rm -rf $wrkdir/MPAS-A_${runname}f??.grib2
+                rm -rf "$wrkdir"/MPAS-A_"${runname}"f??.grib2
             fi
             ;;
-        post )
+        post)
             #
             # Clean MPASSIT & UPP as the post-processing is done for the forecast hour
             #
             mpassit_dir="$rundir/mpassit"
             upp_dir="$rundir/upp"
-            for ((h=starthour;h<=endhour;h+=OUTINVL)); do
-                hstr=$(printf "%02d" $h)
+            for ((h = starthour; h <= endhour; h += OUTINVL)); do
+                hstr=$(printf "%02d" "$h")
                 fcst_time_str=$(date -u -d "${eventdate} ${eventtime}:00 $h hours" +%Y-%m-%d_%H.%M.%S)
                 if [[ -f $upp_dir/done.upp_$hstr ]]; then
                     if [[ $verb -eq 1 ]]; then
                         echo "Cleaning $upp_dir/post_$hstr & $mpassit_dir ......"
                     fi
-                    rm -rf $upp_dir/post_$hstr
-                    rm -f  $mpassit_dir/MPAS-A_out.${fcst_time_str}.nc
+                    rm -rf "$upp_dir"/post_"$hstr"
+                    rm -f "$mpassit_dir"/MPAS-A_out."${fcst_time_str}".nc
                     #rm -f  $mpassit_dir/done.mpassit$hstr $mpassit_dir/error.mpassit$hstr
                 fi
             done
@@ -2779,6 +2666,9 @@ function run_clean {
 
 FIXDIR="${rootdir}/fix_files"
 
+# shellcheck source=/dev/null
+source "${scpdir}/Common_Utilfuncs.sh" || exit $?
+
 #-----------------------------------------------------------------------
 #
 # Handle command line arguments
@@ -2788,40 +2678,40 @@ FIXDIR="${rootdir}/fix_files"
 
 parse_args "$@"
 
-[[ -v args["verb"] ]]      && verb=${args["verb"]}           || verb=0
+[[ -v args["verb"] ]] && verb=${args["verb"]} || verb=0
 [[ -v args["overwrite"] ]] && overwrite=${args["overwrite"]} || overwrite=1
 
-[[ -v args["runcmd"] ]]    && runcmd=${args["runcmd"]}       || runcmd="sbatch"
-[[ -v args["dorun"] ]]     && dorun=${args["dorun"]}         || dorun=true
-[[ -v args["jobwait"] ]]   && jobwait=${args["jobwait"]}     || jobwait=0
+[[ -v args["runcmd"] ]] && runcmd=${args["runcmd"]} || runcmd="sbatch"
+[[ -v args["dorun"] ]] && dorun=${args["dorun"]} || dorun=true
+[[ -v args["jobwait"] ]] && jobwait=${args["jobwait"]} || jobwait=0
 
 [[ -v args["starthour"] ]] && starthour=${args["starthour"]} || starthour=0
-[[ -v args["endhour"] ]]   && endhour=${args["endhour"]}
+[[ -v args["endhour"] ]] && endhour=${args["endhour"]}
 
-[[ -v args["tempdir"] ]]   && TEMPDIR=${args["tempdir"]}     || TEMPDIR="${rootdir}/templates"
-[[ -v args["init_dir"] ]]  && init_dir=${args["init_dir"]}   || init_dir=false
-[[ -v args["WORKDIR"] ]]   && WORKDIR=${args["WORKDIR"]}     || WORKDIR="${mpasdir}/run_dirs"
+[[ -v args["tempdir"] ]] && TEMPDIR=${args["tempdir"]} || TEMPDIR="${rootdir}/templates"
+[[ -v args["init_dir"] ]] && init_dir=${args["init_dir"]} || init_dir=false
+[[ -v args["WORKDIR"] ]] && WORKDIR=${args["WORKDIR"]} || WORKDIR="${mpasdir}/run_dirs"
 
-[[ -v args["domname"] ]]   && domname=${args["domname"]}     || domname="wofs_mpas"
-[[ -v args["extdm"] ]]     && extdm=${args["extdm"]}         || extdm="hrrr"
-[[ -v args["mpscheme"] ]]  && mpscheme=${args["mpscheme"]}   || mpscheme="mp_nssl2m"
+[[ -v args["domname"] ]] && domname=${args["domname"]} || domname="wofs_mpas"
+[[ -v args["extdm"] ]] && extdm=${args["extdm"]} || extdm="hrrr"
+[[ -v args["mpscheme"] ]] && mpscheme=${args["mpscheme"]} || mpscheme="mp_nssl2m"
 
 [[ -v args["hpcaccount"] ]] && hpcaccount=${args["hpcaccount"]} || hpcaccount="hpc-wof1"
-[[ -v args["machine"] ]]    && machine=${args["machine"]}
+[[ -v args["machine"] ]] && machine=${args["machine"]}
 
-[[ -v args["jobs"] ]]       && read -r -a jobs <<< "${args['jobs']}" || jobs=(ungrib init lbc mpas mpassit upp clean)
+[[ -v args["jobs"] ]] && read -r -a jobs <<<"${args['jobs']}" || jobs=(ungrib static init lbc mpas)
 
 [[ -v args["eventdate"] ]] && eventdate=${args["eventdate"]} || eventdate="$eventdateDF"
 [[ -v args["eventtime"] ]] && eventtime=${args["eventtime"]} || eventtime="00"
 
 if [[ $init_dir != false ]]; then
-    jobs=( "${jobs[@]/ungrib}" )          # drop ungrib from the jobs list
+    jobs=("${jobs[@]/ungrib/}") # drop ungrib from the jobs list
 fi
 
 do_restart=false
 if [[ $starthour -gt 0 ]]; then
     do_restart=true
-    [[ $overwrite -eq 1 ]] && overwrite=0       # keep using existing subdirectory instead of deleting it
+    [[ $overwrite -eq 1 ]] && overwrite=0 # keep using existing subdirectory instead of deleting it
 fi
 
 if [[ ! -v machine ]]; then
@@ -2846,17 +2736,21 @@ mach="slurm"
 if [[ $machine == "Jet" ]]; then
     if [[ $hpcaccount == "rtwrfruc" ]]; then
         #ncores_ics=5; ncores_fcst=6; ncores_post=6
-        partition="kjet"; claim_cpu="--cpus-per-task=2"
-                                              claim_cpu_ics="--cpus-per-task=2"
-        partition_static="${partition}"     ; static_cpu="--cpus-per-task=12"
+        partition="kjet"
+        claim_cpu="--cpus-per-task=2"
+        claim_cpu_ics="--cpus-per-task=2"
+        partition_static="${partition}"
+        static_cpu="--cpus-per-task=12"
         partition_upp="kjet"
         job_account_str="#SBATCH -A rtwrfruc"
         job_exclusive_str="#SBATCH --exclusive\n#SBATCH -q rth\n#SBATCH --reservation=rrfsens"
     else
         #ncores_ics=5; ncores_fcst=6; ncores_post=6
-        partition="xjet,vjet,kjet"; claim_cpu="--cpus-per-task=2"
-                                              claim_cpu_ics="--cpus-per-task=2"
-        partition_static="${partition}"     ; static_cpu="--cpus-per-task=12"
+        partition="xjet,vjet,kjet"
+        claim_cpu="--cpus-per-task=2"
+        claim_cpu_ics="--cpus-per-task=2"
+        partition_static="${partition}"
+        static_cpu="--cpus-per-task=12"
         partition_upp="kjet,xjet,vjet"
         job_exclusive_str="#SBATCH --exclusive"
         job_account_str="#SBATCH -A ${hpcaccount-wof}"
@@ -2870,15 +2764,16 @@ if [[ $machine == "Jet" ]]; then
     job_runmpexe_str="srun"
     job_runexe_str="srun"
 
-    WPSGEOG_PATH="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
+    WPSGEOG_PATH="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG"
 
     wgrib2path="/apps/wgrib2/3.1.1/gnu_13.2.0/wmo/bin/wgrib2"
     gpmetis="/lfs5/NAGAPE/hpc-wof1/ywang/bin/gpmetis"
 
     modulename="build_jet_Rocky8_intel_smiol"
+    # shellcheck source=/dev/null
     source /etc/profile.d/modules.sh
     module purge
-    module use ${rootdir}/modules
+    module use "${rootdir}"/modules
     module load $modulename
     module load gnu/13.2.0 wgrib2/3.1.1_wmo
 
@@ -2887,14 +2782,20 @@ elif [[ $machine == "Cheyenne" ]]; then
     if [[ $dorun == true ]]; then
         runcmd="qsub"
     fi
-    ncores_ics=32; ncores_fcst=32; ncores_post=32
-    partition="regular"        ; claim_cpu="ncpus=${ncores_fcst}"; claim_cpu_ics="ncpus=${ncores_ics}"
-    partition_static="regular" ; static_cpu="ncpus=${ncores_post}"
+    ncores_ics=32
+    ncores_fcst=32
+    ncores_post=32
+    partition="regular"
+    claim_cpu="ncpus=${ncores_fcst}"
+    claim_cpu_ics="ncpus=${ncores_ics}"
+    partition_static="regular"
+    static_cpu="ncpus=${ncores_post}"
     partition_upp="regular"
 
-    npeics=768   ; nnodes_ics=$((  npeics/ncores_ics   ))
-    npefcst=1152 ; #nnodes_fcst=$(( npefcst/ncores_fcst ))
-    npepost=72   ; #nnodes_post=$(( npepost/ncores_post ))
+    npeics=768
+    nnodes_ics=$((npeics / ncores_ics))
+    npefcst=1152 #nnodes_fcst=$(( npefcst/ncores_fcst ))
+    npepost=72   #nnodes_post=$(( npepost/ncores_post ))
 
     mach="pbs"
     job_exclusive_str=""
@@ -2906,29 +2807,35 @@ elif [[ $machine == "Cheyenne" ]]; then
     WPSGEOG_PATH="/glade/work/ywang/WPS_GEOG/"
     wgrib2path="wgrib2_not_found"
 
-else    # Vecna at NSSL
+else # Vecna at NSSL
 
-    ncores_ics=96; ncores_fcst=96; ncores_post=24
-    partition="batch"           ; claim_cpu="--ntasks-per-node=${ncores_fcst} --mem-per-cpu=4G";
-                                  claim_cpu_ics="--ntasks-per-node=${ncores_ics} --mem-per-cpu=4G"
-    partition_static="batch"    ; static_cpu=""
+    ncores_ics=96
+    ncores_fcst=96
+    ncores_post=24
+    partition="batch"
+    claim_cpu="--ntasks-per-node=${ncores_fcst} --mem-per-cpu=4G"
+    claim_cpu_ics="--ntasks-per-node=${ncores_ics} --mem-per-cpu=4G"
+    partition_static="batch"
+    static_cpu=""
     partition_upp="batch"
 
-    npeics=768   #; nnodes_ics=$((  npeics/ncores_ics   ))
-    npefcst=1152 #; nnodes_fcst=$(( npefcst/ncores_fcst ))
-    npepost=72   #; nnodes_post=$(( npepost/ncores_post ))
+    npeics=40   #; nnodes_ics=$((  npeics/ncores_ics   ))
+    npefcst=384 #; nnodes_fcst=$(( npefcst/ncores_fcst ))
+    npepost=72  #; nnodes_post=$(( npepost/ncores_post ))
 
     mach="slurm"
-    job_exclusive_str=""
+    job_exclusive_str="#SBATCH --exclusive"
     job_account_str=""
-    job_runmpexe_str="srun --mpi=pmi2"
+    job_runmpexe_str="srun"
     job_runexe_str="srun"
 
     modulename="env.mpas_smiol"
-    source ${modulename}
-    WPSGEOG_PATH="/scratch/ywang/MPAS/WPS_GEOG/"
-    wgrib2path="/scratch/ywang/tools/hpc-stack/intel-2021.8.0/wgrib2/2.0.8/bin/wgrib2"
-    gpmetis="/scratch/ywang/tools/bin/gpmetis"
+
+    # shellcheck source=/dev/null
+    source "${rootdir}/modules/${modulename}"
+    WPSGEOG_PATH="/scratch/wofs_mpas/WPS_GEOG"
+    wgrib2path="/home/yunheng.wang/tools/intel/hpc-stack/intel-2021.10.0/wgrib2/2.0.8/bin/wgrib2"
+    gpmetis="/home/yunheng.wang/tools/bin/gpmetis"
 fi
 
 MPASLSM='sf_ruc'
@@ -2950,43 +2857,43 @@ echo "     Domain name: $domname;  MP scheme: ${mpscheme};  IC/LBCs model: ${ext
 echo " "
 
 case $extdm in
-    gfs)
-        EXTHEAD="GFS0p25"
-        EXTNFGL=57
-        EXTNFLS=4
-        initname="GFS"
-        end_hour=48
-        ;;
-    hrrr)
-        EXTHEAD="HRRR"
-        EXTNFGL=51
-        EXTNFLS=9
-        initname="H"
-        end_hour=48
-        #domname="mpas_hrrr"
-        ;;
-    rrfsp)
-        EXTHEAD="RRFSP"
-        EXTNFGL=46
-        EXTNFLS=9
-        initname="RP"
-        end_hour=60
-        ;;
-    rrfs | rrfsna )
-        EXTHEAD="RRFS"
-        EXTNFGL=66
-        EXTNFLS=9
-        initname="R"
-        end_hour=60
-        #domname="mpas_rrfs"
-        ;;
-    *)
-        echo "ERROR: unsupported initializaiton model name \"$extdm\"."
-        usage 5
-        ;;
+gfs)
+    EXTHEAD="GFS0p25"
+    EXTNFGL=57
+    EXTNFLS=4
+    initname="GFS"
+    end_hour=48
+    ;;
+hrrr)
+    EXTHEAD="HRRR"
+    EXTNFGL=51
+    EXTNFLS=9
+    initname="H"
+    end_hour=48
+    #domname="mpas_hrrr"
+    ;;
+rrfsp)
+    EXTHEAD="RRFSP"
+    EXTNFGL=46
+    EXTNFLS=9
+    initname="RP"
+    end_hour=60
+    ;;
+rrfs | rrfsna)
+    EXTHEAD="RRFS"
+    EXTNFGL=66
+    EXTNFLS=9
+    initname="R"
+    end_hour=60
+    #domname="mpas_rrfs"
+    ;;
+*)
+    echo "ERROR: unsupported initializaiton model name \"$extdm\"."
+    usage 5
+    ;;
 esac
 [[ ! -v endhour ]] && endhour=${end_hour}
-fcst_hours=$((endhour-starthour))
+fcst_hours=$((endhour - starthour))
 
 if [[ "${mpscheme}" == "Thompson" ]]; then
     mpname="T"
@@ -2998,47 +2905,47 @@ else
     mpname="N"
 fi
 
-inittime_str=$(date -u -d "$eventdate ${eventtime}:00"                     +%Y-%m-%d_%H:%M:%S)
+inittime_str=$(date -u -d "$eventdate ${eventtime}:00" +%Y-%m-%d_%H:%M:%S)
 starttime_str=$(date -u -d "$eventdate ${eventtime}:00 ${starthour} hours" +%Y-%m-%d_%H:%M:%S)
-stoptime_str=$(date -u -d "$eventdate  ${eventtime}:00 ${endhour} hours"   +%Y-%m-%d_%H:%M:%S)
+stoptime_str=$(date -u -d "$eventdate  ${eventtime}:00 ${endhour} hours" +%Y-%m-%d_%H:%M:%S)
 
-starthour_str=$(printf "%02d" $starthour)
-endhour_str=$(printf "%02d" $endhour)
+starthour_str=$(printf "%02d" "$starthour")
+endhour_str=$(printf "%02d" "$endhour")
 
 appendhour_str="_${starthour_str}-${endhour_str}"
 #[[ endhour -eq end_hour && starthour -eq 0 ]] && appendhour_str=""
 
-RSTINVL=$((end_hour+1))
+RSTINVL=$((end_hour + 1))
 [[ endhour -lt end_hour ]] && RSTINVL=$fcst_hours
-[[ starthour -gt 0 ]]      && jobs=( "${jobs[@]/init}" )
+[[ starthour -gt 0 ]] && jobs=("${jobs[@]/init/}")
 RSTINVL_STR="${RSTINVL}:00:00"
 
 runname="${eventdate}${eventtime}_${initname}${mpname}"
 rundir="$WORKDIR/${runname}"
 
 if [[ ! -d $rundir ]]; then
-    mkdir -p $rundir
+    mkdir -p "$rundir"
 fi
 
 jobname="${eventdate:4:4}"
 
 exedir="$rootdir/exec"
 
-declare -A jobargs=([static]=$WORKDIR/$domname                                 \
-                    [geogrid]=$WORKDIR/${domname/*_/geo_}                      \
-                    [projectHexes]="$WORKDIR/$domname $WORKDIR/geo_${domname##*_}/done.geogrid"  \
-                    #[ungrib_hrrr]="/public/data/grids/hrrr/conus/wrfnat/grib2" \
-                    [ungrib_hrrr]="/lfs5/NAGAPE/hpc-wof1/ywang/HRRR/20240508/00Z" \
-                    [ungrib_rrfs]="https://noaa-rrfs-pds.s3.amazonaws.com"     \
-                    [ungrib_rrfsna]="/lfs5/NAGAPE/wof/grib_files/RRFS-A"       \
-                    [ungrib_rrfsp]="https://noaa-rrfs-pds.s3.amazonaws.com"    \
-                    [ungrib_gfs]="/public/data/grids/gfs/0p25deg/grib2"           \
-                    [init]="ungrib/done.ungrib_ics $WORKDIR/$domname/done.static" \
-                    [lbc]="init/done.ics ungrib/done.ungrib_lbc${appendhour_str}" \
-                    [mpas]="lbc/done.lbc${appendhour_str}"                        \
-                    [upp]=""                                            \
-                    [pcp]=""                                            \
-                    [clean]="post ungrib" )
+declare -A jobargs=([static]=""
+    [geogrid]=$WORKDIR/${domname/*_/geo_}
+    [projectHexes]="$WORKDIR/$domname $WORKDIR/geo_${domname##*_}/done.geogrid"
+    #[ungrib_hrrr]="/public/data/grids/hrrr/conus/wrfnat/grib2"
+    [ungrib_hrrr]="/scratch/wofs_mpas/run_dirs/varmesh/HRRR/12Z"
+    [ungrib_rrfs]="https://noaa-rrfs-pds.s3.amazonaws.com"
+    [ungrib_rrfsna]="/lfs5/NAGAPE/wof/grib_files/RRFS-A"
+    [ungrib_rrfsp]="https://noaa-rrfs-pds.s3.amazonaws.com"
+    [ungrib_gfs]="/public/data/grids/gfs/0p25deg/grib2"
+    [init]="ungrib/done.ungrib_ics ${domname}/done.static"
+    [lbc]="init/done.ics ungrib/done.ungrib_lbc${appendhour_str}"
+    [mpas]="lbc/done.lbc${appendhour_str}"
+    [upp]=""
+    [pcp]=""
+    [clean]="post ungrib")
 
 #[ungrib_rrfs]="/mnt/lfs4/BMC/rtwbl/mhu/wcoss/emc/rrfs /public/data/grids/gfs/0p25deg/grib2  rrfs_a" \
 #[ungrib_rrfsp]="/mnt/lfs4/BMC/rtwbl/mhu/wcoss/emc/rrfs /public/data/grids/gfs/0p25deg/grib2 rrfs_a" \
@@ -3054,9 +2961,9 @@ for job in "${jobs[@]}"; do
 
     if [[ "$job" == "ungrib" ]]; then
         jobfull="${job}_${extdm}"
-        run_${jobfull} ${jobargs[${jobfull}]}
+        run_"${jobfull}" "${jobargs[${jobfull}]}"
     else
-        run_$job ${jobargs[$job]}
+        run_"$job" "${jobargs[$job]}"
     fi
 done
 

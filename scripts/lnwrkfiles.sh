@@ -5,15 +5,15 @@ rootdir=$(realpath "$(dirname "${scpdir}")")
 
 myhost=$(hostname)
 if [[ "${myhost}" == "ln"* ]]; then
-    srcroot="/scratch/ywang/MPAS"
-    tool_dir="/scratch/ywang/tools"
+    srcroot="/home/yunheng.wang/MPAS"
+    tool_dir="/home/yunheng.wang/tools"
 
-    srcmpassitdir=${srcroot}/gnu/MPASSIT
-    srcuppdir=${srcroot}/gnu/UPP_KATE_kjet
-    srcmodeldir=${srcroot}/gnu/frdd-MPAS-Model
-    srcwpsdir=${srcroot}/gnu/WPS_SRC
-    srcwrfdir=${srcroot}/gnu/WRFV4.0
-    srcdartdir=${srcroot}/gnu/frdd-DART
+    srcmpassitdir=${srcroot}/intel/MPASSIT
+    srcuppdir=${srcroot}/intel/UPP_KATE_kjet
+    srcmodeldir=${srcroot}/intel/frdd-MPAS-Model
+    srcwpsdir=${srcroot}/intel/WPS_SRC
+    srcwrfdir=${srcroot}/intel/WRFV4.0
+    srcdartdir=${srcroot}/intel/frdd-DART
 elif [[ "${myhost}" == "cheyenne"* || ${myhost} == "derecho"* ]]; then
     rootdir="/glade/work/ywang/mpas_runscripts"
     scpdir="/glade/work/ywang/mpas_runscripts/scripts"
@@ -28,7 +28,7 @@ elif [[ "${myhost}" == "cheyenne"* || ${myhost} == "derecho"* ]]; then
     srcdartdir=${srcroot}/DART
 else
     srcroot="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS"
-    tool_dir="/home/Yunheng.Wang/local" 
+    tool_dir="/home/Yunheng.Wang/local"
     srcmpassitdir=${srcroot}/MPASSIT
     srcuppdir=${srcroot}/UPP_KATE_kjet
     srcmodeldir=${srcroot}/MPAS-Model.gsl
