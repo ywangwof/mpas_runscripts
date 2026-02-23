@@ -6,7 +6,7 @@
 scpdir="$(cd "$(dirname "$0")" && pwd)" # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
 
-mpasdir="/scratch/wofs_mpas/run_dirs/varmesh"
+mpasdir="/scratch/wofs_mpas"
 
 eventdateDF=$(date -u +%Y%m%d)
 
@@ -908,6 +908,7 @@ s/ACCTSTR/${job_account_str}/
 s^EXCLSTR^${job_exclusive_str}^
 s/RUNCMD/${job_runexe_str}/
 s/APPENDIX/${appendhour_str}/g
+s/MODULE/${modulename}/
 EOF
             submit_a_jobscript "$wrkdir" "ungrib${appendhour_str}" "$sedfile" "$TEMPDIR/run_ungrib_parallel.${mach}" "$jobscript" "${jobarraystr}"
         fi
@@ -2690,7 +2691,7 @@ parse_args "$@"
 
 [[ -v args["tempdir"] ]] && TEMPDIR=${args["tempdir"]} || TEMPDIR="${rootdir}/templates"
 [[ -v args["init_dir"] ]] && init_dir=${args["init_dir"]} || init_dir=false
-[[ -v args["WORKDIR"] ]] && WORKDIR=${args["WORKDIR"]} || WORKDIR="${mpasdir}/run_dirs"
+[[ -v args["WORKDIR"] ]] && WORKDIR=${args["WORKDIR"]} || WORKDIR="${mpasdir}/run_dirs/varmesh"
 
 [[ -v args["domname"] ]] && domname=${args["domname"]} || domname="wofs_mpas"
 [[ -v args["extdm"] ]] && extdm=${args["extdm"]} || extdm="hrrr"
@@ -2932,7 +2933,7 @@ jobname="${eventdate:4:4}"
 exedir="$rootdir/exec"
 
 declare -A jobargs=([static]=""
-    [geogrid]=$WORKDIR/${domname/*_/geo_}
+    [geogrid]="$WORKDIR/${domname/*_/geo_}"
     [projectHexes]="$WORKDIR/$domname $WORKDIR/geo_${domname##*_}/done.geogrid"
     #[ungrib_hrrr]="/public/data/grids/hrrr/conus/wrfnat/grib2"
     [ungrib_hrrr]="/scratch/wofs_mpas/run_dirs/varmesh/HRRR/12Z"
