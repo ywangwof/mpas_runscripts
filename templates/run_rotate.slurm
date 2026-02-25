@@ -28,7 +28,7 @@ rm -f queue.rotate error.rotate
 
 touch running.rotate
 
-RUNCMD -n 1 EXEDIR/grid_rotate DOMNAME_scaled.nc DOMNAME.grid.nc
+RUNCMD -n 1 EXEDIR/grid_rotate DOMNAME_scaled.grid.nc DOMNAME.grid.nc
 
 if [[ $? -eq 0 ]]; then
     touch done.rotate

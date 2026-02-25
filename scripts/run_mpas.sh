@@ -6,7 +6,7 @@
 scpdir="$(cd "$(dirname "$0")" && pwd)" # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
 
-mpasdir="/scratch/wofs_mpas"
+mpasdir="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS"
 
 eventdateDF=$(date -u +%Y%m%d)
 
@@ -670,7 +670,7 @@ function run_rotate {
     wait_for_conditions "$1"
 
     wrkdir="$rundir/$domname"
-    mkwrkdir "$wrkdir" "$overwrite"
+    mkwrkdir "$wrkdir" 0
     cd "$wrkdir" || return
 
     if [[ -f done.rotate ]]; then
@@ -692,7 +692,7 @@ function run_rotate {
         exit 0
     fi
 
-    ln -sf "${orig_gridfile}" "${domname}_scaled.nc"
+    ln -sf "${orig_gridfile}" "${domname}_scaled.grid.nc"
     ln -sf "${orig_graphfile}" "${domname}.graph.info"
 
     cat <<EOF > namelist.input
@@ -727,7 +727,7 @@ function run_static {
     wait_for_conditions "$1"
 
     wrkdir="${rundir}/${domname}"
-    mkwrkdir "$wrkdir" "$overwrite"
+    mkwrkdir "$wrkdir" 0
     cd "$wrkdir" || return
 
     if [[ ! -f ${domname}.graph.info.part.${npepost} ]]; then
@@ -2146,7 +2146,7 @@ function run_mpas {
         cat <<EOF >"${namelist_filename}"
 &nhyd_model
     config_time_integration_order   = 2
-    config_dt                       = 2
+    config_dt                       = 20
     config_start_time               = '${starttime_str}'
     config_run_duration             = '${fcsthour_str}:00:00'
     config_split_dynamics_transport = true
@@ -2846,6 +2846,9 @@ if [[ $machine == "Jet" ]]; then
         job_account_str="#SBATCH -A ${hpcaccount-wof}"
     fi
 
+    partition_static="xjet,vjet,kjet"; partition_create="xjet,vjet,kjet"
+    claim_cpu_static="--cpus-per-task=2";      claim_cpu_create="--cpus-per-task=2";
+
     npeics=768   #; nnodes_ics=$((  npeics/ncores_ics   ))
     npefcst=1200 #; nnodes_fcst=$(( npefcst/ncores_fcst ))
     npepost=72   #; nnodes_post=$(( npepost/ncores_post ))
@@ -3026,7 +3029,7 @@ declare -A jobargs=([static]="${domname}/done.rotate"
     [geogrid]="$WORKDIR/${domname/*_/geo_}"
     [projectHexes]="$WORKDIR/$domname $WORKDIR/geo_${domname##*_}/done.geogrid"
     #[ungrib_hrrr]="/public/data/grids/hrrr/conus/wrfnat/grib2"
-    [ungrib_hrrr]="/scratch/wofs_mpas/run_dirs/varmesh/HRRR/12Z"
+    [ungrib_hrrr]="/lfs5/NAGAPE/hpc-wof1/ywang/HRRR/2024050812Z"
     [ungrib_rrfs]="https://noaa-rrfs-pds.s3.amazonaws.com"
     [ungrib_rrfsna]="/lfs5/NAGAPE/wof/grib_files/RRFS-A"
     [ungrib_rrfsp]="https://noaa-rrfs-pds.s3.amazonaws.com"
