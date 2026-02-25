@@ -159,6 +159,7 @@ function usage {
     echo "              --template DIR  Template directory for runtime files"
     echo "              --init init_dir Directory name from which init & lbc subdirectories are used to initialize this run"
     echo "                              which avoids runing duplicated preprocessing jobs (ungrib, init/lbc) again. default: false"
+    echo "              -c | --center= lat,lon     Domain central lat/lon, for example, 43.33296,-84.24593. Program \"rotate\" requires them."
     echo "              -s  hour        Start hour relative to the initialization time. Default: 0"
     echo "              -e  hour        End hour relative to the initialization time. Default: 60"
     echo "              -p  nssl        MP scheme, [nssl, nssl3m, thompson, tempo], default: nssl"
@@ -244,15 +245,7 @@ function parse_args {
             shift
             ;;
         -d)
-            case $2 in
-            wofs_big | wofs_small | wofs_conus | wofs_mpas | wofs_mpas_small | wofs_gsl)
-                args["domname"]="$2"
-                ;;
-            *)
-                echo "ERROR: domain name \"$2\" not supported."
-                usage 1
-                ;;
-            esac
+            args["domname"]="$2"
             shift
             ;;
         -i)
@@ -324,11 +317,25 @@ function parse_args {
             fi
             shift
             ;;
+        -c | --center* )
+            if [[ "${key}" =~ ^--center=([0-9.]+,[0-9.-]+)$ ]]; then
+                IFS="," read -r -a latlons <<< "${BASH_REMATCH[1]}"
+            elif [[ $2 =~ ^[0-9.]+,[0-9.-]+$ ]]; then
+                IFS="," read -r -a latlons <<< "$2"
+                shift
+            else
+                echo -e "${RED}ERROR${NC}: Domain center is required as ${BLUE}-c lat,lon${NC}, get: ${PURPLE}$2${NC}."
+                usage 1
+            fi
+            args["cen_lat"]=${latlons[0]}
+            args["cen_lon"]=${latlons[1]}
+            ;;
+
         -*)
             echo "Unknown option: $key"
             usage 2
             ;;
-        static* | geogrid* | ungrib* | init* | lbc* | mpas* | upp* | clean* | pcp* | project*)
+        static* | geogrid* | ungrib* | init* | lbc* | mpas* | clean* | project* | create* | rotate*)
             #jobs=(${key//,/ })
             args["jobs"]="${key//,/ }"
             ;;
@@ -473,31 +480,7 @@ EOF
 
 function run_projectHexes {
 
-    read -r -a conditions <<< "$1"
-    local -a new_conditions
-    for cond in  "${conditions[@]}"; do
-        case $cond in
-        /*)
-            new_conditions+=("$cond")
-            ;;
-        *)
-            new_conditions+=("$rundir/$cond")
-            ;;
-        esac
-        shift
-    done
-
-    if [[ $dorun == true ]]; then
-        for cond in "${new_conditions[@]}"; do
-            echo "$$: Checking: $cond"
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    echo "Waiting for file: $cond"
-                fi
-                sleep 10
-            done
-        done
-    fi
+    wait_for_conditions "$1"
 
     wrkdir="${rundir}/${domname}"
     mkwrkdir "$wrkdir" 0
@@ -643,19 +626,109 @@ EOF
 
 ########################################################################
 
+function run_create_varmesh {
+
+    wait_for_conditions "$1"
+
+    wrkdir="$rundir/$domname"
+    mkwrkdir "$wrkdir" "$overwrite"
+    cd "$wrkdir" || return
+
+    if [[ -f done.create ]]; then
+        mecho0 "Found file ${CYAN}done.create${NC}, skipping ${WHITE}${FUNCNAME[0]}${NC} ...."
+        return
+    elif [[ -f running.create || -f queue.create ]]; then
+        return                   # skip
+    fi
+
+    # Check x20.835586.grid.nc, global 60-3 km mesh grid
+    if [[ ! -f $FIXDIR/x20.835586.grid.nc ]]; then
+        mecho0 "File ${CYAN}x20.835586.grid.nc${NC} not found in ${BLUE}$FIXDIR${NC}."
+        exit 0
+    fi
+    ln -sf "$FIXDIR/x20.835586.grid.nc" .
+
+    #
+    # Create job script and submit it
+    #
+    jobscript="run_create_varmesh.slurm"
+
+    declare -A jobParms=(
+        [PARTION]="${partition_create}"
+        [CPUSPEC]="${claim_cpu_create}"
+        [JOBNAME]="run_create_varmesh"
+        [MESHRADIUS]="${mesh_radius}"
+        [SCALEFACTOR]="${scale_factor}"
+    )
+    submit_a_job "$wrkdir" "create" jobParms "$TEMPDIR/$jobscript" "$jobscript" ""
+}
+
+########################################################################
+
+function run_rotate {
+
+    wait_for_conditions "$1"
+
+    wrkdir="$rundir/$domname"
+    mkwrkdir "$wrkdir" "$overwrite"
+    cd "$wrkdir" || return
+
+    if [[ -f done.rotate ]]; then
+        mecho0 "Found file ${CYAN}done.rotate${NC}, skipping ${WHITE}${FUNCNAME[0]}${NC} ...."
+        return
+    elif [[ -f running.rotate || -f queue.rotate ]]; then
+        return                   # skip
+    fi
+
+    if [[ -f mesh${mesh_radius}km_scaled_${scale_factor}.grid.nc ]]; then
+        orig_gridfile="mesh${mesh_radius}km_scaled_${scale_factor}.grid.nc"
+        orig_graphfile="mesh${mesh_radius}km_scaled_${scale_factor}.graph.info"
+    elif [[ -f ${FIXDIR}/mesh${mesh_radius}km_scaled_${scale_factor}.grid.nc ]]; then
+        orig_gridfile="${FIXDIR}/mesh${mesh_radius}km_scaled_${scale_factor}.grid.nc"
+        orig_graphfile="${FIXDIR}/mesh${mesh_radius}km_scaled_${scale_factor}.graph.info"
+    else
+        mecho0 "${RED}ERROR${NC}: the original MPAS grid file not found:"
+        mecho0 "      either ${LIGHT_BLUE}mesh${mesh_radius}km_scaled_${scale_factor}.grid.nc${NC} or ${LIGTH_BLUE}${FIXDIR}/mesh${mesh_radius}km_scaled_${scale_factor}.grid.nc${NC}"
+        exit 0
+    fi
+
+    ln -sf "${orig_gridfile}" "${domname}_scaled.nc"
+    ln -sf "${orig_graphfile}" "${domname}.graph.info"
+
+    cat <<EOF > namelist.input
+&input
+   config_original_latitude_degrees =   0.0
+   config_original_longitude_degrees =  0.0
+
+   config_new_latitude_degrees =   $cen_lat
+   config_new_longitude_degrees =  $cen_lon
+   config_birdseye_rotation_counter_clockwise_degrees = 0.
+/
+EOF
+
+    #
+    # Create job script and submit it
+    #
+    jobscript="run_rotate.slurm"
+
+    declare -A jobParms=(
+        [PARTION]="${partition_create}"
+        [CPUSPEC]="${claim_cpu_create}"
+        [JOBNAME]="grid_rotate"
+        [DOMNAME]="${domname}"
+    )
+    submit_a_job "$wrkdir" "rotate" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
+}
+
+########################################################################
+
 function run_static {
+
+    wait_for_conditions "$1"
 
     wrkdir="${rundir}/${domname}"
     mkwrkdir "$wrkdir" "$overwrite"
     cd "$wrkdir" || return
-
-    if [[ ! -f "${FIXDIR}/${domname}_${eventdate}${eventtime}.grid.nc" || ! -f "${FIXDIR}/${domname}_${eventdate}${eventtime}.graph.info" ]]; then
-        mecho0 "${RED}ERROR${NC}: Please provide the static grid file for ${YELLOW}${eventdate}${eventtime}${NC}."
-        return
-    fi
-
-    cp "${FIXDIR}/${domname}_${eventdate}${eventtime}.graph.info" "${domname}.graph.info"
-    cp "${FIXDIR}/${domname}_${eventdate}${eventtime}.grid.nc" "${domname}.grid.nc"
 
     if [[ ! -f ${domname}.graph.info.part.${npepost} ]]; then
         # shellcheck disable=SC2154
@@ -698,9 +771,10 @@ function run_static {
     config_albedo_data  = 'MODIS'
     config_maxsnowalbedo_data     = 'MODIS'
     config_lai_data               = 'MODIS'
-    config_supersample_factor     = 3
-    config_30s_supersample_factor = 1
     config_use_spechumd           = false
+    config_supersample_factor     = 9
+    config_lu_supersample_factor  = 3
+    config_30s_supersample_factor = 3
 /
 &vertical_grid
     config_ztop = 25878.712
@@ -2031,7 +2105,7 @@ function run_mpas {
         fi
         ln -sf "${rundir}/${domname}/${domname}.graph.info.part.${npefcst}" .
 
-        ln -sf "${WORKDIR}/${domname}/${domname}.ugwp_oro_data.nc" .
+        ln -sf "${rundir}/${domname}/${domname}.ugwp_oro_data.nc" .
 
         streamlists=(stream_list.atmosphere.diagnostics stream_list.atmosphere.output stream_list.atmosphere.surface)
         for fn in "${streamlists[@]}"; do
@@ -2072,7 +2146,7 @@ function run_mpas {
         cat <<EOF >"${namelist_filename}"
 &nhyd_model
     config_time_integration_order   = 2
-    config_dt                       = 20
+    config_dt                       = 2
     config_start_time               = '${starttime_str}'
     config_run_duration             = '${fcsthour_str}:00:00'
     config_split_dynamics_transport = true
@@ -2705,6 +2779,9 @@ parse_args "$@"
 [[ -v args["eventdate"] ]] && eventdate=${args["eventdate"]} || eventdate="$eventdateDF"
 [[ -v args["eventtime"] ]] && eventtime=${args["eventtime"]} || eventtime="00"
 
+[[ -v args["cen_lat"] ]]   && cen_lat="${args['cen_lat']}"   || cen_lat=""
+[[ -v args["cen_lon"] ]]   && cen_lon="${args['cen_lon']}"   || cen_lon=""
+
 if [[ $init_dir != false ]]; then
     jobs=("${jobs[@]/ungrib/}") # drop ungrib from the jobs list
 fi
@@ -2724,6 +2801,18 @@ if [[ ! -v machine ]]; then
         machine="Jet"
     fi
 fi
+
+if [[ " ${jobs[*]} " =~ " rotate " ]]; then
+    if [[ -z ${cen_lat} || -z ${cen_lon} ]]; then
+        mecho0 "${RED}ERROR${NC}: ${YELLOW}cen_lat${NC} or ${YELLOW}cen_lon${NC} is not provided as command line arguments.\n"
+        usage 1
+    fi
+fi
+
+mesh_radius=2000    # Meters 2,000 km
+scale_factor=2.5
+
+relative_path=false
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
@@ -2810,17 +2899,18 @@ elif [[ $machine == "Cheyenne" ]]; then
 
 else # Vecna at NSSL
 
-    ncores_ics=96
+    ncores_ics=48
     ncores_fcst=96
     ncores_post=24
     partition="batch"
     claim_cpu="--ntasks-per-node=${ncores_fcst} --mem-per-cpu=4G"
     claim_cpu_ics="--ntasks-per-node=${ncores_ics} --mem-per-cpu=4G"
-    partition_static="batch"
+    partition_static="batch"; partition_create="batch"
+    claim_cpu_static="";      claim_cpu_create="";
     static_cpu=""
     partition_upp="batch"
 
-    npeics=40   #; nnodes_ics=$((  npeics/ncores_ics   ))
+    npeics=384  #; nnodes_ics=$((  npeics/ncores_ics   ))
     npefcst=384 #; nnodes_fcst=$(( npefcst/ncores_fcst ))
     npepost=72  #; nnodes_post=$(( npepost/ncores_post ))
 
@@ -2932,7 +3022,7 @@ jobname="${eventdate:4:4}"
 
 exedir="$rootdir/exec"
 
-declare -A jobargs=([static]=""
+declare -A jobargs=([static]="${domname}/done.rotate"
     [geogrid]="$WORKDIR/${domname/*_/geo_}"
     [projectHexes]="$WORKDIR/$domname $WORKDIR/geo_${domname##*_}/done.geogrid"
     #[ungrib_hrrr]="/public/data/grids/hrrr/conus/wrfnat/grib2"
