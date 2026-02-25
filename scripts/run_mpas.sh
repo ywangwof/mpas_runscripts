@@ -6,7 +6,7 @@
 scpdir="$(cd "$(dirname "$0")" && pwd)" # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
 
-mpasdir="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS"
+mpasdir="/scratch/wofs_mpas"
 
 eventdateDF=$(date -u +%Y%m%d)
 
@@ -656,7 +656,7 @@ function run_create_varmesh {
     declare -A jobParms=(
         [PARTION]="${partition_create}"
         [CPUSPEC]="${claim_cpu_create}"
-        [JOBNAME]="run_create_varmesh"
+        [JOBNAME]="create_varmesh"
         [MESHRADIUS]="${mesh_radius}"
         [SCALEFACTOR]="${scale_factor}"
     )
@@ -2146,7 +2146,7 @@ function run_mpas {
         cat <<EOF >"${namelist_filename}"
 &nhyd_model
     config_time_integration_order   = 2
-    config_dt                       = 20
+    config_dt                       = 2
     config_start_time               = '${starttime_str}'
     config_run_duration             = '${fcsthour_str}:00:00'
     config_split_dynamics_transport = true
@@ -3029,7 +3029,7 @@ declare -A jobargs=([static]="${domname}/done.rotate"
     [geogrid]="$WORKDIR/${domname/*_/geo_}"
     [projectHexes]="$WORKDIR/$domname $WORKDIR/geo_${domname##*_}/done.geogrid"
     #[ungrib_hrrr]="/public/data/grids/hrrr/conus/wrfnat/grib2"
-    [ungrib_hrrr]="/lfs5/NAGAPE/hpc-wof1/ywang/HRRR/2024050812Z"
+    [ungrib_hrrr]="/scratch/wofs_mpas/run_dirs/varmesh/HRRR/12Z"
     [ungrib_rrfs]="https://noaa-rrfs-pds.s3.amazonaws.com"
     [ungrib_rrfsna]="/lfs5/NAGAPE/wof/grib_files/RRFS-A"
     [ungrib_rrfsp]="https://noaa-rrfs-pds.s3.amazonaws.com"
