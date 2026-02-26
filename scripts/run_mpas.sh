@@ -414,6 +414,8 @@ function run_geogrid {
 
     ln -sf "${FIXDIR}"/WRFV4.0/GEOGRID.TBL.ARW GEOGRID.TBL
 
+    local nx=$((width_wrf/dx_wrf+1))
+
     cat <<EOF >namelist.wps
 &share
   wrf_core = 'ARW',
@@ -430,14 +432,14 @@ function run_geogrid {
   parent_grid_ratio = 1,
   i_parent_start = 1,
   j_parent_start = 1,
-  e_we = 1601,
-  e_sn = 961,
+  e_we = $nx,
+  e_sn = $nx,
   geog_data_res = '30s',
-  dx = 3000.0,
-  dy = 3000.0,
+  dx = ${dx_wrf}.0,
+  dy = ${dx_wrf}.0,
   map_proj = 'lambert',
-  ref_lat = 38.5,
-  ref_lon = -97.5,
+  ref_lat = ${cen_lat},
+  ref_lon = ${cen_lon},
   truelat1 = 38.5,
   truelat2 = 38.5,
   stand_lon = -97.5
@@ -2159,7 +2161,7 @@ function run_mpas {
     config_h_theta_eddy_visc4       = 0.0
     config_v_theta_eddy_visc2       = 0.0
     config_horiz_mixing             = '2d_smagorinsky'
-    config_len_disp                 = 3000.0
+    config_len_disp                 = 1000.0
     config_visc4_2dsmag             = 0.05
     config_w_adv_order              = 3
     config_theta_adv_order          = 3
@@ -2428,7 +2430,7 @@ function run_mpassit {
     grid_file_input_grid = "$rundir/init/${domname}.init.nc"
     hist_file_input_grid = "$histfile"
     diag_file_input_grid = "$diagfile"
-    file_target_grid     = "$WORKDIR/${domname/*_/geo_}/geo_em.d01.nc"
+    file_target_grid     = "$rundir/${domname/*_/geo_}/geo_em.d01.nc"
     target_grid_type     = "file"
     output_file          = "$wrkdir/MPAS-A_out.${fcst_time_str}.nc"
     interp_diag          = .true.
@@ -2802,15 +2804,18 @@ if [[ ! -v machine ]]; then
     fi
 fi
 
-if [[ " ${jobs[*]} " =~ " rotate " ]]; then
+if [[ " ${jobs[*]} " =~ " rotate " || " ${jobs[*]} " =~ " geogrid " ]]; then
     if [[ -z ${cen_lat} || -z ${cen_lon} ]]; then
         mecho0 "${RED}ERROR${NC}: ${YELLOW}cen_lat${NC} or ${YELLOW}cen_lon${NC} is not provided as command line arguments.\n"
         usage 1
     fi
 fi
 
-mesh_radius=2000    # Meters 2,000 km
+mesh_radius=2000    # KM 2,000 km
 scale_factor=2.5
+
+dx_wrf=2000         # Meters
+width_wrf=1800000   # Meters
 
 relative_path=false
 
@@ -3026,7 +3031,7 @@ jobname="${eventdate:4:4}"
 exedir="$rootdir/exec"
 
 declare -A jobargs=([static]="${domname}/done.rotate"
-    [geogrid]="$WORKDIR/${domname/*_/geo_}"
+    [geogrid]="${rundir}/${domname/*_/geo_}"
     [projectHexes]="$WORKDIR/$domname $WORKDIR/geo_${domname##*_}/done.geogrid"
     #[ungrib_hrrr]="/public/data/grids/hrrr/conus/wrfnat/grib2"
     [ungrib_hrrr]="/scratch/wofs_mpas/run_dirs/varmesh/HRRR/12Z"
