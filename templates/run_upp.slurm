@@ -28,7 +28,7 @@ if [[ "MACHINE" == "Jet" ]]; then
     wgrib2path="/apps/wgrib2/3.1.1/gnu_13.2.0/wmo/bin/wgrib2"
 else
     # shellcheck source=/dev/null # to ignore source path error
-    source /scratch/ywang/MPAS/mpas_runscripts/MODULE
+    source ROOTDIR/modules/MODULE
 fi
 module list
 

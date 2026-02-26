@@ -1,10 +1,31 @@
-  Version History
+# Version History
+
+02/26/2026 Branch `develop_varmesh`
+
+### Steps:
+
+0. Prepare directories: _fix_files_, _exec_ etc.
+1. scripts/run_mpas.sh YYYYMMDDHH create_varmesh
+2. scripts/run_mpas.sh YYYYMMDDHH rotate -c cenlat,cenlon
+3. scripts/run_mpas.sh YYYYMMDDHH static
+4. scripts/run_mpas.sh YYYYMMDDHH init
+5. scripts/run_mpas.sh YYYYMMDDHH lbc -e hh
+6. scripts/run_mpas.sh YYYYMMDDHH mpas -e hh
+7. scripts/run_mpas.sh YYYYMMDDHH geogrid -e hh
+8. scripts/run_mpas.sh YYYYMMDDHH mpassit -e hh
+
+### Note:
+* If you save files _mesh2000km.grid.nc_ and _mesh2000km.graph.info_ to _fix_files_,
+you can skip step 1 for all other runs.
+* option `-h` to _scripts/run_mpas.sh_ shows a brief instruction.
+
+## Old Histories
 
 07/31/2025 Version 3.9
    1. Upgraded MPAS to hash # ea97011a2 from https://github.com/MicroTed/MPAS-Model.git
        which is based on GSL version v8.2.2-3.11, suggested by David Dowwell on July 21st.
    2.  Added capability to run the workflow with several segmentations with options "-s" & "-e"
-       using the MPAS restart configuration. 
+       using the MPAS restart configuration.
    3. lai12m multiply a factor of 0.1. (v8.3.0 will fix this bug).
    4. HRRR grib2 Vtable fixed CNWAT and add VEG, VEGMIN, VEGMAX.
    5. RRFS grib2 Vtable fixed CNWAT and add QN[CIR], QNWFA/QNIFA, VEG(VEGFRA), VEGMIN(SHDMIN), VEGMAX(SHDMAX).
@@ -17,7 +38,7 @@
 07/01/2024
    Changed in magnitude of smoothing for MPAS UH from uh_smooth = 0.25 to uh_smooth = 0.1
    to reduce the amount of smoothing for somewhat higher UH magnitude.
-   
+
 03/21/2024 Version 3.7
     1. Upgraded to Rocky linux OS on Jet
     2. Note that "atmosphere_model.single" is renamed as "atmosphere_model"
@@ -29,7 +50,7 @@
 11/14/2023 Version 3.5
 
     1. Added support for reservation rtwrfruc on Jet.
-    2. Upgraded fix file SOILPARM.TBL with latest WRF pacakge, especially for RUC LSM 
+    2. Upgraded fix file SOILPARM.TBL with latest WRF pacakge, especially for RUC LSM
        with soil type 9.
 
 11/01/2023 Version 3.4

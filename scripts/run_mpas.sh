@@ -335,7 +335,7 @@ function parse_args {
             echo "Unknown option: $key"
             usage 2
             ;;
-        static* | geogrid* | ungrib* | init* | lbc* | mpas* | clean* | project* | create* | rotate*)
+        static* | geogrid* | ungrib* | init* | lbc* | mpas* | clean* | project* | create* | rotate* | upp*)
             #jobs=(${key//,/ })
             args["jobs"]="${key//,/ }"
             ;;
