@@ -32,6 +32,7 @@
 # o sortnumarrayuniq         # Sort a number array by removing duplicates and get a string
 # o nums2range               # Condense a number array into a string with comma separated number and dash denotes range
 # o expand_range             # Get a number array string from the condensed number string
+# o parallel_copy_verify     # Copy multiple files parallel, use GNU Parallel
 
 ########################################################################
 
@@ -178,10 +179,15 @@ function submit_a_job {
         rm -f ${sedfile}
     fi
 
+    local -a commandlist=("${runcmd}")
+    [[ -n ${myjoboption} ]] && commandlist+=("${myjoboption}")
+    [[ -f ${rootdir}/bad_nodes.txt ]] && commandlist+=("--exclude=$(paste -sd "," ${rootdir}/bad_nodes.txt)")
+    commandlist+=("${myjobscript}")
+
     # shellcheck disable=SC2154
     if [[ $dorun == true ]]; then mecho1n "Submitting ${BROWN}${myjobscript}${NC} .... "; fi
     # shellcheck disable=SC2154
-    $runcmd ${myjoboption} "$myjobscript"
+    "${commandlist[@]}"
     if [[ $dorun == true && $? -eq 0 ]]; then touch ${mywrkdir}/queue.${myjobname}; fi
     echo " "
 }
@@ -369,6 +375,155 @@ function check_job_status {
     if [[ $done -lt $donenum ]]; then
         if $checkonly; then return; else exit 9; fi
     fi
+}
+
+#######################################################################
+
+parallel_copy_verify() {
+    if [ "$#" -lt 2 ]; then
+        echo "Usage: parallel_copy_verify <dest_dir> <file1> <file2> ..."
+        return 1
+    fi
+
+    local DEST="${1%/}"
+    shift
+    local FILES=("$@")
+    local VERBOSE=true
+    local MAX_THREADS=8
+
+    local FILE_COUNT=${#FILES[@]}
+    local THREADS=$(( FILE_COUNT < MAX_THREADS ? FILE_COUNT : MAX_THREADS ))
+
+    # Helper function for conditional output
+    log_msg() { [[ "$VERBOSE" == true ]] && mecho1 "$1"; }
+
+    # --- Pre-check: Detect Filename Collisions ---
+    local DUPLICATES=$(printf "%s\n" "${FILES[@]}" | xargs -n 1 basename | sort | uniq -d)
+    if [[ -n "$DUPLICATES" ]]; then
+        mecho0 "❌ ERROR: Duplicate filenames detected! Flattening will cause overwrites:"
+        mecho0 "$DUPLICATES"
+        return 1
+    fi
+
+    log_msg "--- Phase 1: Parallel Copy (Flattened) ---"
+    # -L resolves symlinks, -p preserves timestamps
+    printf "%s\n" "${FILES[@]}" | parallel -j "$THREADS" cp -Lp {} "$DEST/"
+
+    log_msg "--- Phase 2: Metadata Verification (Size + MTime) ---"
+
+    local FAILED_FILES=()
+    local SUCCESS_COUNT=0
+
+    for FILE in "${FILES[@]}"; do
+        local FILENAME=$(basename "$FILE")
+        local DST_PATH="$DEST/$FILENAME"
+
+        # Check existence
+        if [[ ! -e "$DST_PATH" ]]; then
+            log_msg "❌ Missing File: $FILENAME"
+            FAILED_FILES+=("$FILE")
+            continue
+        fi
+
+        # Compare Size and Modification Time
+        local SRC_META=$(stat -L -c "%s %Y" "$FILE" 2>/dev/null)
+        local DST_META=$(stat -c "%s %Y" "$DST_PATH" 2>/dev/null)
+
+        if [[ "$SRC_META" != "$DST_META" ]]; then
+            log_msg "❌ Mismatch: $FILENAME"
+            FAILED_FILES+=("$FILE")
+        else
+            ((SUCCESS_COUNT++))
+        fi
+    done
+
+    # --- Phase 3: Parallel Retry ---
+    if [ ${#FAILED_FILES[@]} -gt 0 ]; then
+        log_msg "⚠️  ${#FAILED_FILES[@]} issues detected. Retrying in parallel..."
+
+        local RETRY_THREADS=$(( ${#FAILED_FILES[@]} < MAX_THREADS ? ${#FAILED_FILES[@]} : MAX_THREADS ))
+        printf "%s\n" "${FAILED_FILES[@]}" | parallel -j "$RETRY_THREADS" cp -Lp {} "$DEST/"
+
+        # Recalculate final success count
+        SUCCESS_COUNT=0
+        for FILE in "${FILES[@]}"; do
+            local FILENAME=$(basename "$FILE")
+            [[ -e "$DEST/$(basename "$FILE")" ]] && ((SUCCESS_COUNT++))
+        done
+    fi
+
+    # --- Final Summary ---
+    log_msg "--- Final Summary ---"
+    log_msg "Expected Files: $FILE_COUNT"
+    log_msg "Verified Files: $SUCCESS_COUNT"
+
+    if [[ "$SUCCESS_COUNT" -eq "$FILE_COUNT" ]]; then
+        log_msg "✅ ALL MATCHED: Copying session successful."
+    else
+        mecho0 "❌ ERROR: Count mismatch! Only $SUCCESS_COUNT of $FILE_COUNT files are present in $DEST."
+        return 1
+    fi
+}
+
+parallel_copy_verify_md5sum() {
+    if [ "$#" -lt 2 ]; then
+        echo "Usage: parallel_copy_verify <dest_dir> <file1> <file2> ..."
+        return 1
+    fi
+
+    local DEST="$1"
+    shift
+    local FILES=("$@")
+
+    local VERBOSE=true # Set to false for silent operation
+
+    # 1. Dynamically set threads based on the number of files
+    local THREADS=${#FILES[@]}
+
+    local HASH_FILE
+    HASH_FILE=$(mktemp /tmp/hashes.XXXXXX)
+
+    # Helper function for conditional echo
+    log_msg() { [[ "$VERBOSE" == true ]] && mecho1 "$1"; }
+
+    log_msg "--- Phase 1: Parallel Copy (Threads: $THREADS) ---"
+
+    # Copy files in parallel
+    printf "%s\n" "${FILES[@]}" | parallel -j "$THREADS" cp -L {} "$DEST"
+
+    log_msg "--- Phase 2: Generating Source Checksums ---"
+    printf "%s\n" "${FILES[@]}" | parallel -j "$THREADS" md5sum {} > "$HASH_FILE"
+
+    log_msg "--- Phase 3: Verifying Integrity ---"
+
+    local FAILED_FILES
+    # sed ensures we only strip the exact ': FAILED' suffix added by md5sum
+    mapfile -t FAILED_FILES < <(md5sum -c "$HASH_FILE" 2>&1 | grep "FAILED" | sed 's/: FAILED//')
+
+    if [ ${#FAILED_FILES[@]} -eq 0 ]; then
+        log_msg "✅ Success! All files match the source."
+    else
+        # 2. Dynamically set retry threads based on failed count
+        local RETRY_THREADS=${#FAILED_FILES[@]}
+        log_msg "⚠️  Verification failed for $RETRY_THREADS files. Retrying in parallel..."
+
+        # Log failed filenames regardless of verbosity for audit purposes
+        #printf "%s\n" "${FAILED_FILES[@]}"
+
+        # Parallelize the retry
+        printf "%s\n" "${FAILED_FILES[@]}" | parallel -j "$RETRY_THREADS" cp -L {} "$DEST"
+
+        # Final check pass
+        log_msg "--- Phase 4: Final Verification Pass ---"
+        if md5sum -c "$HASH_FILE" > /dev/null 2>&1; then
+            log_msg "✅ All files verified successfully after parallel retry."
+        else
+            mecho0 "❌ CRITICAL: Verification still failing after 2 tries."
+            md5sum -c "$HASH_FILE"
+        fi
+    fi
+
+    rm "$HASH_FILE"
 }
 
 ########################################################################

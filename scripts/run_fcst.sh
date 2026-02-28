@@ -334,7 +334,7 @@ function run_mpas {
     #
     # Waiting for job conditions
     #
-    conditions=("${rundir}/lbc/done.${domname}" "${dawrkdir}/done.update_bc")
+    conditions=("${rundir}/lbc/done.${domname}" "${dawrkdir}/jedi_solver/done.solver")
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
@@ -414,11 +414,15 @@ function run_mpas {
         if [[ ${fcstmode} == "restart" ]]; then
             do_restart="true"
             do_dacyle="true"
+        else
+            do_restart="false"
+            do_dacyle="true"
         fi
 
-        initfile="${dadir}/fcst_${memstr}/${domname}_${memstr}.${damode}.${currtime_fil}.nc"
-        ln -sf ${initfile} .
-        ln -sf ${casedir}/init/${domname}.invariant.nc .
+        initfile="${dadir}/jedi_solver/ana/mem0${memstr}.nc"
+        ln -sf "${initfile}" "${domname}_${memstr}.${damode}.${currtime_fil}.nc"
+        ln -sf "${casedir}/init/${domname}.invariant.nc" .
+        ln -sf "${casedir}/${domname}/${domname}.ugwp_oro_data.nc" .
 
         if [[ $verb -eq 1 ]]; then
             mecho0 "Member: $iens init file: ${initfile}";
@@ -469,7 +473,7 @@ function run_mpas {
         ln -sf ${casedir}/${domname}/$domname.graph.info.part.${npefcst} .
         ln -sf ${casedir}/${domname}/${domname}.ugwp_oro_data.nc .
 
-        streamlists=(stream_list.atmosphere.diagnostics_fcst stream_list.atmosphere.output stream_list.atmosphere.surface)
+        streamlists=(stream_list.atmosphere.diagnostics_fcst stream_list.atmosphere.output stream_list.atmosphere.surface stream_list.atmosphere.da_state)
         for fn in "${streamlists[@]}"; do
             cp -f ${FIXDIR}/$fn .
         done
@@ -622,10 +626,7 @@ EOF
     config_sounding_interval         = 'none'
 /
 &assimilation
-    config_jedi_da                   = false
-/
-&development
-    config_halo_exch_method          = 'mpas_halo'
+    config_jedi_da                   = true
 /
 EOF
 
@@ -648,6 +649,17 @@ EOF
                   input_interval="initial_only"
                   clobber_mode="replace_files"
                   output_interval="${RSTINVL_STR}" />
+
+<stream name="da_state"
+                  type="input"
+                  precision="single"
+                  clobber_mode="truncate"
+                  filename_template="${domname}_${memstr}.mpasout.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+                  packages="jedi_da"
+                  io_type="pnetcdf,cdf5"
+                  input_interval="initial_only" >
+                  <file name="stream_list.atmosphere.da_state"/>
+</stream>
 
 <stream name="output"
                   type="output"
@@ -691,6 +703,11 @@ EOF
                   filename_interval="input_interval"
                   packages="limited_area"
                   input_interval="${EXTINVL_STR}" />
+
+<immutable_stream name="ugwp_oro_data_in"
+                  type="input"
+                  filename_template="${domname}.ugwp_oro_data.nc"
+                  input_interval="initial_only" />
 EOF
 #<immutable_stream name="ugwp_oro_data_in"
 #                  type="input"
@@ -918,7 +935,7 @@ function run_mpassit_onetime {
             [PARTION]="${partition_post}"
             [NOPART]="${npepost}"
             [JOBNAME]="mpassit${minstr}_${eventtime}"
-            [CPUSPEC]="${claim_cpu_post}"
+            [CPUSPEC]="${claim_cpu_fcst}"
             [CLAIMTIME]="${claim_time_mpassit_onetime}"
             [HHMINSTR]="$minstr"
             [FCST_START]="${i}"
@@ -981,7 +998,7 @@ function run_mpassit_alltimes {
             [PARTION]="${partition_post}"
             [NOPART]="$npepost"
             [JOBNAME]="mpassit_${eventtime}"
-            [CPUSPEC]="${claim_cpu_post}"
+            [CPUSPEC]="${claim_cpu_fcst}"
             [CLAIMTIME]="${claim_time_mpassit_alltimes}"
             [HHMINSTR]=""
             [FCST_START]="${minsec}"
@@ -1690,7 +1707,7 @@ readconf ${config_file} COMMON MPAS_OPTIONS fcst || exit $?
 #
 # Check configurations reading in
 #
-if [[ "${fcstmode}" == "restart" ]]; then
+if [[ "${fcstmode}" == "restart" || "${fcstmode}" == "mpasout" ]]; then
     diag_start=${OUTINVL}
 elif [[ "${fcstmode}" == "init" ]]; then
     diag_start=0

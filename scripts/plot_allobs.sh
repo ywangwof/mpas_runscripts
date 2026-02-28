@@ -8,8 +8,8 @@ eventdateDF=$(date -u +%Y%m%d)
 
 host="$(hostname)"
 
-outdir1="obs_diag.new"
-outdir2="1600"
+outdir1="obs_diag"
+outdir2="1500"
 
 #-----------------------------------------------------------------------
 
@@ -146,12 +146,12 @@ parse_args "$@"
 [[ -v args["show"] ]]     && show=${args["show"]}         || show=""
 
 [[ -v args["machine"] ]]  && machine=${args["machine"]}   || machine="wof-epyc"
-if [[ ! "$host" =~ ^${machine}.*$ ]]; then
-    echo " "
-    echo -e "${RED}ERROR${NC}: Please run $0 on ${machine} only".
-    echo " "
-    exit 1
-fi
+#if [[ ! "$host" =~ ^${machine}.*$ ]]; then
+#    echo " "
+#    echo -e "${RED}ERROR${NC}: Please run $0 on ${machine} only".
+#    echo " "
+#    exit 1
+#fi
 
 setup_machine "${machine}" "$rootdir" true false false
 
@@ -160,7 +160,7 @@ setup_machine "${machine}" "$rootdir" true false false
 [[ -v args["starttime"] ]]   && starttime=${args["starttime"]}     || starttime="1500"
 [[ -v args["endtime"] ]]     && endtime=${args["endtime"]}         || endtime="0300"
 
-[[ -v args["obsvalues"] ]]   && read -r -a obsvalues <<< "${args['obsvalues']}" || obsvalues=()
+[[ -v args["obsvalues"] ]]   && read -r -a obsvalues <<< "${args['obsvalues']}" || obsvalues=('refl')
 
 if [[ -v args["config_file"] ]]; then
     config_file=${args["config_file"]}
@@ -249,10 +249,9 @@ grid_file="${run_dir}/${eventdate}/wofs_mpas/wofs_mpas.grid.nc"
 
 for ((s=start_s;s<=end_s;s+=900)); do
     timestr=$(date -u -d @$s +%H%M)
-    datestr=$(date -u -d @$s +%Y%m%d%H%M)
+    datestr=$(date -u -d @$s +%Y%m%d)
 
-    seq_file="${run_dir}/${eventdate}/${dadir}/${timestr}/obs_seq.final.${datestr}.nc"
-    donefile="${run_dir}/${eventdate}/${dadir}/${timestr}/done.filter"
+    donefile="${run_dir}/${eventdate}/${dadir}/${timestr}/jedi_solver/done.solver"
 
     if [[ ! -f ${donefile} ]]; then
         echo "Waiting for ${donefile} ...."
@@ -261,12 +260,13 @@ for ((s=start_s;s<=end_s;s+=900)); do
         done
     fi
 
+    ioda_file="${run_dir}/${eventdate}/${dadir}/${timestr}/ioda_mrms_refl/ioda_mrms_${datestr}_${timestr}.nc4"
+
     if [[ ! -e "done.${timestr}" ]]; then
 
         for ovalue in "${obsvalues[@]}"; do
             echo -e "\nPlotting ${ovalue} at ${timestr} ..."
-            xtype="${obstypes[$ovalue]},0"
-            ${show} "${rootdir}/python/plot_dartobs.py" -p "${xtype}"  -g "${grid_file}" -r 300 -latlon "${seq_file}" 2>/dev/null
+            ${show} "${rootdir}/python/plot_ioda.py" -g "${grid_file}" -r 300 -m latlon "${ioda_file}" 2>/dev/null
             # shellcheck disable=SC2181
             if [[ $? -eq 0 ]]; then
                 ${show} touch "done.${timestr}"
@@ -278,39 +278,50 @@ for ((s=start_s;s<=end_s;s+=900)); do
     fi
 done
 
+# Locate the block that previously ran plot_dartzig.py
 if [[ ! -e done.zigzag ]]; then
-    ${show} "${rootdir}/python/plot_dartzig.py" "${eventdate}" -s "${startdatetime}" -e "${enddatetime}" -d "${run_dir}/${eventdate}/${dadir}" -r 300 -u -v 2>/dev/null
+    echo -e "${CYAN}Generating JEDI Sawtooth plots...${NC}"
+
+    # Call the improved script with shell variables
+    # The affix variable is derived automatically earlier in your shell script
+    ${show} python3 "${rootdir}/python/plot_sawtooth_jedi.py" \
+        "${eventdate}" \
+        -s "${startdatetime}" \
+        -e "${enddatetime}" \
+        -d "${run_dir}" \
+        -o "radar_rw" "mrms_refl" \
+        -m 36 \
+        -c 15 \
+        -x "${affix}" \
+        --type "all"
 
     imagedir="${run_dir}/image_files"
 
     if [[ -z ${show} ]]; then
         cd "${run_dir}/${eventdate}/${dadir}/${outdir1}" || exit 1
-
         image_destdir="${imagedir}/${eventdate}${affix}/${outdir2}"
-        if [[ ! -d ${image_destdir} ]]; then
-            mkdir -p "${image_destdir}"
-        fi
+        [[ ! -d ${image_destdir} ]] && mkdir -p "${image_destdir}"
 
+        # Standard post-processing (resize/trim)
         if [[ $verb -eq 1 ]]; then
             echo "Convert to 1100x1100 and Trim for the web visualization."
         fi
 
         estatus=0
-        for fn in rms_*.png ratio_*.png number_*.png; do
-            destfn="${fn%_*}_f360.png"
+        for fn in sawtooth_*.png; do
+            destfn="${fn}_f360.png"
             convert "$fn" -resize 1100x1100 -trim "${image_destdir}/${destfn}"
             (( estatus+=$? ))
         done
 
         if [[ ${estatus} -eq 0 ]]; then
-            #cp "${post_dir}/json/wofs_run_metadata_obsdiag.json" "${image_destdir}/wofs_run_metadata.json"
             "${script_dir}/process_da_json.py" "${post_dir}/json/wofs_run_metadata_obsdiag.json" \
                                             "${image_destdir}/wofs_run_metadata.json"
-            ${show} touch "done.zigzag"
+            touch "done.zigzag"
         fi
     fi
 else
-    echo "Found $(pwd)/done.zigzag. Skipping ...."
+    echo "Found $(pwd)/done.zigzag. Skipping sawtooth generation."
 fi
 
 exit 0

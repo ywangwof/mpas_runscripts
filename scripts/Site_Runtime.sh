@@ -266,7 +266,7 @@ function setup_machine {
 
     # Load Python Enviroment if necessary
     if [[ ${use_python} == true ]]; then
-        source ${root_dir}/modules/env.python  || exit $?
+        source "${root_dir}/modules/env.python"  || exit $?
         echo -e "Activated Python environment ${YELLOW}${python_env}${NC} on ${LIGHT_RED}${machine}${NC} ..."
     fi
 
@@ -345,23 +345,23 @@ function default_site_settings {
         claim_cpu_lbc="--cpus-per-task=2"
 
         # DA cycles
-        ncores_dafcst=160;  ncores_filter=96
+        ncores_dafcst=96;  ncores_filter=96
         partition_dafcst="u1-compute"; claim_cpu_dafcst="--cpus-per-task=1"
         partition_filter="u1-compute"; claim_cpu_filter="--cpus-per-task=1"
-                                       claim_cpu_ioda="--cpus-per-task=1 --mem-per-cpu=8G"
+                                       claim_cpu_ioda="--cpus-per-task=1"
                                        claim_cpu_ioda_refl="--cpus-per-task=2"
         npedafcst=96         #; nnodes_fcst=$(( npefcst/ncores_fcst ))
-        npefilter=160        #; nnodes_filter=$(( npefilter/ncores_filter ))
+        npefilter=96         #; nnodes_filter=$(( npefilter/ncores_filter ))
         nnodes_filter=$(( npefilter/ncores_filter ))
         nnodes_dafcst=$(( npedafcst/ncores_dafcst ))
 
         # FCST cycles
-        ncores_fcst=96;  ncores_post=96
+        ncores_fcst=96;  ncores_post=80
         partition_fcst="u1-compute";   claim_cpu_fcst="--cpus-per-task=2"
-        partition_post="u1-compute";   claim_cpu_post="--cpus-per-task=12"
+        partition_post="u1-compute";   claim_cpu_post="--ntasks-per-node=${ncores_post}"
 
         npefcst=96     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
-        npepost=96     ; nnodes_post=$(( npepost/ncores_post ))
+        npepost=160    ; nnodes_post=$(( npepost/ncores_post ))
         ;;
 
     "Hercules" )

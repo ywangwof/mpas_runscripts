@@ -1439,9 +1439,12 @@ function write_config {
     claim_cpu_filter="${claim_cpu_filter}"
     claim_cpu_ioda="${claim_cpu_ioda}"
     claim_cpu_ioda_refl="${claim_cpu_ioda_refl}"
-    claim_time_fcst="00:40:00"
 
-    npepost="${npepost}"; claim_cpu_post=""; claim_time_mpassit_alltimes="00:30:00"
+    claim_time_fcst="00:40:00"
+    claim_time_mpassit_alltimes="00:30:00"
+
+    npepost=${npepost}; ncores_post=${ncores_post}; nnodes_post=${nnodes_post}
+    claim_cpu_post="${claim_cpu_post}";
 
     job_exclusive_str=""
 [fcst]

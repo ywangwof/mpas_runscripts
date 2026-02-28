@@ -14,8 +14,9 @@ echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
 if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules" || "MACHINE" == "Ursa" ]]; then
-    module use ROOTDIR/modules
-    module load MPASSIT/build.jet.intel
+    module purge
+    module use ROOTDIR/modules/MPASSIT
+    module load build.MACHINE.intel
 else
     source ROOTDIR/modules/MODULE
 fi

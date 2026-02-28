@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2034
+# shellcheck disable=SC2034,SC1091
 
 script_dir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${script_dir}")")
@@ -20,8 +20,9 @@ default_fcsttime="1700"
 
 #-----------------------------------------------------------------------
 
-source "$script_dir/Common_Colors.sh"
+source "${script_dir}/Common_Colors.sh" || exit $?
 source "${script_dir}/Site_Runtime.sh" || exit $?
+source "${script_dir}/Common_Utilfuncs.sh" || exit $?
 
 ########################################################################
 
@@ -56,7 +57,7 @@ function usage {
     echo    " "
     echo    "   DEFAULTS:"
     echo -e "              EVENTDATE  = ${DIR_CLR}${eventdateDF:0:8}$NC"
-    echo -e "              WORKDIR    = ${LIGHT_BLUE}\${workdirDF}${NC}"
+    echo -e "              WORKDIR    = ${LIGHT_BLUE}\${workdirDF}${NC}   # from scripts/Site_Runtime.sh"
     echo    "              rootdir    = ${rootdir}"
     echo    "              script_dir = ${script_dir}"
     echo    "              post_dir   = \${post_dir}"
@@ -160,8 +161,13 @@ parse_args "$@"
 [[ -v args["verb"] ]]     && verb=${args["verb"]}         || verb=false
 [[ -v args["show"] ]]     && show=${args["show"]}         || show=""
 
-[[ -v args["post_machine"] ]] && post_machine=${args["post_machine"]^} || post_machine="fe"
+[[ -v args["post_machine"] ]] && post_machine=${args["post_machine"]^} || post_machine="Ursa"
 setup_machine "${post_machine}" "$rootdir" false false false
+
+support_interactive_job=true
+if [[ ${post_machine} =~ ^(Ursa|Jet)$ ]]; then
+    support_interactive_job=false
+fi
 
 [[ -v args["taskopt"] ]]  && taskopt=${args["taskopt"]}   || taskopt=""
 [[ -v args["task"] ]]     && task=${args["task"]}         || task=""
@@ -210,10 +216,21 @@ else
 fi
 
 if [[ -f ${config_file} ]]; then
-    fcstlength=$(grep '^ *fcst_length_seconds=' "${config_file}" | cut -d'=' -f2 | cut -d' ' -f1 | tr -d '(')
-    fcstoutinvl=$(grep '^ *OUTINVL=' "${config_file}" | cut -d'=' -f2)
-    level_file=$(grep '^ *vertLevel_file='      "${config_file}" | cut -d'=' -f2 | tr -d '"')
-    domain_name=$(grep '^ *domname='      "${config_file}" | cut -d'=' -f2 | tr -d '"')
+    #fcstlength=$(grep        '^ *fcst_length_seconds='  "${config_file}" | cut -d'=' -f2 | cut -d' ' -f1 | tr -d '(')
+    #fcstoutinvl=$(grep       '^ *OUTINVL='              "${config_file}" | cut -d'=' -f2)
+    #level_file=$(grep        '^ *vertLevel_file='       "${config_file}" | cut -d'=' -f2 | tr -d '"')
+    #domain_name=$(grep       '^ *domname='              "${config_file}" | cut -d'=' -f2 | tr -d '"')
+    #job_account_str=$(grep   '^ *job_account_str='      "${config_file}" | cut -d'=' -f2 | tr -d '"')
+    #job_exclusive_str=$(grep '^ *job_exclusive_str='    "${config_file}" | cut -d'=' -f2 | tr -d '"')
+    #relative_path=$(grep     '^ *relative_path='        "${config_file}" | cut -d'=' -f2 | tr -d '"')
+    #partition_post=$(grep    '^ *partition_post='       "${config_file}" | cut -d'=' -f2 | tr -d '"')
+    #claim_cpu_post=$(grep    '^ *claim_cpu_post='       "${config_file}" | cut -d'=' -f2 | tr -d '"')
+    readconf "${config_file}" COMMON fcst || exit $?
+
+    # shellcheck disable=SC2154
+    fcstlength="${fcst_length_seconds}"
+    fcstoutinvl="${OUTINVL}"
+    # shellcheck disable=SC2154
     wof_domain_name="geo_${domain_name##*_}"
 else
     echo " "
@@ -428,12 +445,13 @@ fcst )
     [[ "${starttime}" != "${default_fcsttime}" ]] && cmds+=(-s "${startdatetime}")
     [[ "${endtime}"   != "${default_endtime}"  ]] && cmds+=(-e "${enddatetime}")
     [[ -n "${taskopt}" ]] && cmds+=("${taskopt}")
-    cmds+=("-r" "-w")
+    cmds+=("-w")  # "-r"
     ;;
 
 #3. post
 post )
 
+    echo "${donepost}"
     if [[ ! -e ${donepost} ]]; then
 
         #damode=$(grep '^ *damode=' "${config_file}" | cut -d'=' -f2 | tr -d '"')
@@ -450,11 +468,28 @@ post )
             ${show} "${cmds[@]}"
         fi
 
-        cd "${post_script_dir}" || exit 1
-        cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${post_config}")
+        if [[ ${support_interactive_job} == true ]]; then               # run interactively
+            cd "${post_script_dir}" || exit 1
+            cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${post_config}")
+        else                                                            # submit a job to the compute nodes
+            jobscript="${run_dir}/summary_files/run_${task}_${eventdate}${affix}.slurm"
+
+            wrkdir="${post_script_dir}"
+            declare -A jobParms=(
+                [PARTION]="${partition_post}"
+                [NOPART]="1"
+                [JOBNAME]="${task}_${eventdate}${affix}"
+                [CPUSPEC]="${claim_cpu_post}"
+                [MACHINE]="${machine}"
+                [LOGDIR]="${run_dir}/summary_files"
+                [PYTHONSCRIPT]="./wofs_${task}_summary_files_MPAS.py"
+                [CONFIGFILE]="${post_config}"
+            )
+            submit_a_job "$wrkdir" "${task}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" ""
+        fi
     else
         echo -e "${DARK}File ${CYAN}$donepost${NC} exist"
-        echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${config_file} ${eventdate} post${NC} before reprocessing."
+        echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${config_file} ${eventdate} ${task}${NC} before reprocessing."
         exit 1
     fi
     ;;
@@ -467,27 +502,63 @@ plot )
             sleep 10
         done
 
-        cd "${post_script_dir}" || exit 1
-        cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${post_config}")
+        if [[ ${support_interactive_job} == true ]]; then               # run interactively
+            cd "${post_script_dir}" || exit 1
+            cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${post_config}")
+        else                                                            # submit a job to the compute nodes
+            jobscript="${run_dir}/summary_files/run_${task}_${eventdate}${affix}.slurm"
+
+            wrkdir="${post_script_dir}"
+            declare -A jobParms=(
+                [PARTION]="${partition_post}"
+                [NOPART]="1"
+                [JOBNAME]="${task}_${eventdate}${affix}"
+                [CPUSPEC]="${claim_cpu_post}"
+                [MACHINE]="${machine}"
+                [LOGDIR]="${run_dir}/summary_files"
+                [PYTHONSCRIPT]="./wofs_${task}_summary_files_MPAS.py"
+                [CONFIGFILE]="${post_config}"
+            )
+            submit_a_job "$wrkdir" "${task}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" ""
+        fi
+
     else
         echo -e "${DARK}File ${CYAN}$doneplot${NC} exist"
-        echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} post${NC} before reprocessing."
+        echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} ${task}${NC} before reprocessing."
         exit 2
     fi
     ;;
 #5. verif
 verif )
     if [[ ! -e ${doneverif} ]]; then
-        echo -e "${DARK}Waiting for ${donepost} ...."
+        echo -e "Waiting for ${DARK}${donepost}${NC} ...."
         while [[ ! -e "${donepost}" ]]; do
             sleep 10
         done
 
-        cd "${post_script_dir}" || exit 1
-        cmds=(time "./wofs_plot_verification_MPAS.py" "${post_config}")
+        if [[ ${support_interactive_job} == true ]]; then               # run interactively
+            cd "${post_script_dir}" || exit 1
+            cmds=(time "./wofs_plot_verification_MPAS.py" "${post_config}")
+        else                                                            # submit a job to the compute nodes
+            jobscript="${run_dir}/summary_files/run_${task}_${eventdate}${affix}.slurm"
+
+            wrkdir="${post_script_dir}"
+            declare -A jobParms=(
+                [PARTION]="${partition_post}"
+                [NOPART]="1"
+                [JOBNAME]="${task}_${eventdate}${affix}"
+                [CPUSPEC]="${claim_cpu_post}"
+                [MACHINE]="${machine}"
+                [LOGDIR]="${run_dir}/summary_files"
+                [PYTHONSCRIPT]="./wofs_plot_verification_MPAS.py"
+                [CONFIGFILE]="${post_config}"
+            )
+            submit_a_job "$wrkdir" "${task}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" ""
+        fi
+
     else
         echo -e "${DARK}File ${CYAN}$doneverif${NC} exist"
-        echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} post${NC} before reprocessing."
+        echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} ${task}${NC} before reprocessing."
         exit 2
     fi
     ;;
@@ -499,11 +570,29 @@ snd )
             sleep 10
         done
 
-        cd "${post_script_dir}" || exit 1
-        cmds=(time "./wofs_plot_sounding_MPAS.py" "${post_config}")
+        if [[ ${support_interactive_job} == true ]]; then               # run interactively
+            cd "${post_script_dir}" || exit 1
+            cmds=(time "./wofs_plot_sounding_MPAS.py" "${post_config}")
+        else                                                            # submit a job to the compute nodes
+            jobscript="${run_dir}/summary_files/run_${task}_${eventdate}${affix}.slurm"
+
+            wrkdir="${post_script_dir}"
+            declare -A jobParms=(
+                [PARTION]="${partition_post}"
+                [NOPART]="1"
+                [JOBNAME]="${task}_${eventdate}${affix}"
+                [CPUSPEC]="${claim_cpu_post}"
+                [MACHINE]="${machine}"
+                [LOGDIR]="${run_dir}/summary_files"
+                [PYTHONSCRIPT]="./wofs_plot_sounding_MPAS.py"
+                [CONFIGFILE]="${post_config}"
+            )
+            submit_a_job "$wrkdir" "${task}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" ""
+        fi
+
     else
         echo -e "${DARK}File ${CYAN}$donesnd${NC} exist"
-        echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} post${NC} before reprocessing."
+        echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} ${task}${NC} before reprocessing."
         exit 2
     fi
     ;;
@@ -515,16 +604,42 @@ diag )
     [[ "${starttime}" != "${default_fcsttime}" ]] && cmds+=(-s "${startdatetime}")
     [[ "${endtime}"   != "${default_endtime}"  ]] && cmds+=(-e "${enddatetime}")
     if [[ -n "${taskopt}" ]]; then cmds+=("${taskopt}");  fi
+
+    if [[ ${support_interactive_job} == false ]]; then               # run interactively
+        wrkdir="${run_dir}/${eventdate}/dacycles${affix}/obs_diag"
+        mkdir -p "${wrkdir}"
+
+        cmds+=(-m "${post_machine}")
+
+        jobscript="${wrkdir}/run_${task}.slurm"
+        declare -A jobParms=(
+            [PARTION]="${partition_post}"
+            [NOPART]="1"
+            [JOBNAME]="${task}_${eventdate}${affix}"
+            [CPUSPEC]="${claim_cpu_post}"
+            [MACHINE]="${machine}"
+            [LOGDIR]="${wrkdir}"
+            [PYTHONSCRIPT]="${cmds[*]}"
+            [CONFIGFILE]=""
+        )
+        submit_a_job "${wrkdir}" "${task}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" ""
+
+        cmds=()
+    fi
     ;;
 
 #8. atpost
 atpost )
     #echo "$host, $post_machine"
-    if [[ "${host}" == ${post_machine}* ]]; then
-        #cd "${script_dir}" || exit $?
-        ${show} eval "${atjobstr}"
+    if [[ $support_interactive_job == true ]]; then
+        if [[ "${host}" == ${post_machine}* ]]; then
+            #cd "${script_dir}" || exit $?
+            ${show} eval "${atjobstr}"
+        else
+            ${show} ssh ${post_machine} -t "${atjobstr}"
+        fi
     else
-        ${show} ssh ${post_machine} -t "${atjobstr}"
+        mecho0 "${YELLOW}INFO${NC}: Cannot run ${BROWN}atpost${NC} on ${PURPLE}${post_machine}${NC}.\n"
     fi
     exit 0
    ;;
@@ -535,13 +650,15 @@ atpost )
 esac
 
 if [ -t 1 ]; then # "interactive"
-    echo -e "\n${PURPLE}$(date +'%Y%m%d_%H:%M:%S (%Z)')${NC} - ${DARK}Interactivly running: ${BROWN}${task}${NC} from ${YELLOW}$(pwd)${NC}\n"
+    : #echo -e "\n${PURPLE}$(date +'%Y%m%d_%H:%M:%S (%Z)')${NC} - ${DARK}Interactivly running: ${BROWN}${task}${NC} from ${YELLOW}$(pwd)${NC}\n"
 else
     echo -e "\n${PURPLE}$(date +'%Y%m%d %H:%M:%S (%Z)')${NC} - ${DARK}Background running: ${BROWN}${task}${NC} from ${BLYELLOWUE}$(pwd)${NC}\n"
 fi
 
-if [[ -z ${show} ]]; then echo -e "${GREEN}${cmds[*]}${NC}"; fi
-${show} "${cmds[@]}"
-echo " "
+if [[ ${#cmds[@]} -gt 0 ]]; then
+    if [[ -z ${show} ]]; then echo -e "${GREEN}${cmds[*]}${NC}"; fi
+    ${show} "${cmds[@]}"
+    echo " "
+fi
 
 exit 0

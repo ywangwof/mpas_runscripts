@@ -700,7 +700,7 @@ function create_streams {
                   filename_template="${domname}_${memstr}.restart.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
                   io_type="${OUTIOTYPE}"
                   input_interval="initial_only"
-                  clobber_mode="replace_files"
+                  clobber_mode="replace_files" >
                   output_interval="${RSTINVL_STR}" />
 
 <stream name="output"
@@ -1020,10 +1020,13 @@ function jedi_preparation {
         # Copy background file to analysis directory for overwritting with analysis
         #
         mecho0 "Copying ensemble members from ens to ana ..."
+        local -a mem_filelist
         for mem in $(seq -w 001 "${ENS_SIZE}"); do
-            ( cp --dereference "ens/mem${mem}.nc" "ana/mem${mem}.nc" ) &
+            #( cp --dereference "ens/mem${mem}.nc" "ana/mem${mem}.nc" ) &
+            mem_filelist+=("ens/mem${mem}.nc")
         done
-        wait
+        #wait
+        parallel_copy_verify "ana" "${mem_filelist[@]}"
     fi
 
     #
@@ -1052,12 +1055,19 @@ function jedi_preparation {
         casedir=$(realpath -m --relative-to=${wrkdir} ${rundir})
     fi
 
-    if [[ ! -f $casedir/$domname/$domname.graph.info.part.${npefilter} ]]; then
-        split_graph "${gpmetis}" "${domname}.graph.info" "${npefilter}" "$rundir/$domname" "$dorun" "$verb"
+    local num_processors
+    if [[ "${taskname}" == "post" ]]; then
+        num_processors=${npepost}
+    else
+        num_processors=${npefilter}
     fi
-    ln -sf $casedir/$domname/$domname.graph.info.part.${npefilter} .
 
-    ln -s "${FIXDIR}"/jedi/stream_list/* .
+    if [[ ! -f $casedir/$domname/$domname.graph.info.part.${num_processors} ]]; then
+        split_graph "${gpmetis}" "${domname}.graph.info" "${num_processors}" "$rundir/$domname" "$dorun" "$verb"
+    fi
+    ln -sf $casedir/$domname/$domname.graph.info.part.${num_processors} .
+
+    ln -sf "${FIXDIR}"/jedi/stream_list/* .
 
     # Prepare convinfo file based on obsvations
 
@@ -1424,11 +1434,11 @@ function run_jedi_post {
     jobscript="run_mpasjedi_post.${mach}"
 
     declare -A jobParms=(
-        [PARTION]="${partition_filter}"
-        [NOPART]="${npefilter}"
-        [NNODES]="${nnodes_filter}"
+        [PARTION]="${partition_post}"
+        [NOPART]="${npepost}"
+        [NNODES]="${nnodes_post}"
         [JOBNAME]="${taskname}-${jobname}_${eventtime}"
-        [CPUSPEC]="${claim_cpu_filter}"
+        [CPUSPEC]="${claim_cpu_post}"
         [EXEDIR]="${EXEDIR}/jedi"
         [WRKDIR]="${wrkdir}"
         [TASKNAME]="${taskname}"
@@ -1437,8 +1447,8 @@ function run_jedi_post {
     )
 
     if [[ "${mach}" == "pbs" ]]; then
-        jobParms[NNODES]="${nnodes_filter}"
-        jobParms[NCORES]="${ncores_filter}"
+        jobParms[NNODES]="${nnodes_post}"
+        jobParms[NCORES]="${ncores_post}"
     fi
 
     submit_a_job "${wrkdir}" "jedi_${taskname}" "jobParms" "$TEMPDIR/run_mpasjedi.${mach}" "$jobscript" ""
@@ -1852,11 +1862,16 @@ function run_mpas {
             do_dacyle="false"
             mpas_inputfile_template="${domname}_${memstr}.init.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
             initfile="./${domname}_${memstr}.init.${currtime_fil}.nc"
-        else
+        elif [[ ${damode} == "mpasout" ]]; then
             do_restart="false"
             do_dacyle="true"
             mpas_inputfile_template="${domname}_${memstr}.init.nc"
             initfile="./${domname}_${memstr}.mpasout.${currtime_fil}.nc"
+        else
+            do_restart="true"
+            do_dacyle="true"
+            mpas_inputfile_template="${domname}_${memstr}.init.nc"
+            initfile="./${domname}_${memstr}.restart.${currtime_fil}.nc"
         fi
 
         local casedir="${rundir}"
@@ -2805,7 +2820,7 @@ readconf ${config_file} COMMON MPAS_OPTIONS dacycles || exit $?
 #
 # Check configurations reading in
 #
-if [[ "${damode}" == "restart" || "${damode}" == "init" ]]; then
+if [[ "${damode}" =~ ^(init|restart|mpasout)$ ]]; then
     :
 else
     echo -e "${RED}ERROR${NC}: damode=${damode} is not supported."

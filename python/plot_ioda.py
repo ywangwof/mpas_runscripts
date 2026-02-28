@@ -459,7 +459,8 @@ def parse_args():
         sys.exit(0)
 
     parsed_args['ioda_file'] = False
-    if parsed_args['obsfile'].startswith('ioda_'):
+    obs_filename = os.path.basename(parsed_args['obsfile'])
+    if obs_filename.startswith('ioda_'):
         parsed_args['ioda_file'] = True
 
     #-------------------------------------------------------------------

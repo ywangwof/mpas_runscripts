@@ -109,6 +109,11 @@ observations:
         interpolation method: linear
         observation alias file: obsop_name_map.yaml
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 4000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 15000
       obs filters:
@@ -220,6 +225,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -499,6 +509,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -773,6 +788,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -1054,6 +1074,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -1333,6 +1358,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -1608,6 +1638,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -1883,6 +1918,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -2154,6 +2194,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -2436,6 +2481,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -2756,6 +2806,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -3075,6 +3130,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -3393,6 +3453,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -3670,6 +3735,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -3947,6 +4017,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -4225,6 +4300,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -4496,6 +4576,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -4774,6 +4859,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -5087,6 +5177,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -5399,6 +5494,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -5676,6 +5776,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -5955,6 +6060,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -6267,6 +6377,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -6544,6 +6659,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -6821,6 +6941,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -7098,6 +7223,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -7375,6 +7505,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -7654,6 +7789,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -7967,6 +8107,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -8280,6 +8425,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -8593,6 +8743,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -8900,6 +9055,11 @@ observations:
         covariance model: diagonal
 
       obs localizations: # for LETKF
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3
 
@@ -9008,6 +9168,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -9285,6 +9450,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -9556,6 +9726,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -9837,6 +10012,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -10488,6 +10668,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -10845,6 +11030,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -11120,6 +11310,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -11397,6 +11592,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -11675,6 +11875,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -11952,6 +12157,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -12230,6 +12440,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -12509,6 +12724,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -12780,6 +13000,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -13070,6 +13295,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -13436,6 +13666,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -13756,6 +13991,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -14075,6 +14315,11 @@ observations:
         covariance model: diagonal
 
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -14427,6 +14672,11 @@ observations:
         linear obs operator:
           Absorbers: [H2O, O3]
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
       obs bias:
@@ -14781,6 +15031,11 @@ observations:
         linear obs operator:
           Absorbers: [H2O, O3]
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
       obs bias:
@@ -15335,6 +15590,11 @@ observations:
         linear obs operator:
           Absorbers: [H2O, O3]
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
@@ -15896,6 +16156,11 @@ observations:
         linear obs operator:
           Absorbers: [H2O, O3]
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
       # Observation Bias Correction (VarBC)
@@ -16391,6 +16656,11 @@ observations:
         linear obs operator:
           Absorbers: [H2O, O3]
       obs localizations:
+        - localization method: Vertical localization
+          vertical lengthscale: 6000
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
+          localization function: Gaspari Cohn
         - localization method: Horizontal Gaspari-Cohn
           lengthscale: 200e3 # orig
 
