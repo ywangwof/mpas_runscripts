@@ -145,7 +145,7 @@ parse_args "$@"
 [[ -v args["verb"] ]]     && verb=${args["verb"]}         || verb=false
 [[ -v args["show"] ]]     && show=${args["show"]}         || show=""
 
-[[ -v args["machine"] ]]  && machine=${args["machine"]}   || machine="wof-epyc"
+[[ -v args["machine"] ]]  && machine=${args["machine"]}   || machine="Ursa"
 #if [[ ! "$host" =~ ^${machine}.*$ ]]; then
 #    echo " "
 #    echo -e "${RED}ERROR${NC}: Please run $0 on ${machine} only".
@@ -284,17 +284,25 @@ if [[ ! -e done.zigzag ]]; then
 
     # Call the improved script with shell variables
     # The affix variable is derived automatically earlier in your shell script
-    ${show} python3 "${rootdir}/python/plot_sawtooth_jedi.py" \
-        "${eventdate}" \
-        -s "${startdatetime}" \
-        -e "${enddatetime}" \
-        -d "${run_dir}" \
-        -o "radar_rw" "mrms_refl" \
-        -m 36 \
-        -c 15 \
-        -x "${affix}" \
-        --type "all"
+    # "adpupa_t120" "adpupa_q120" "adpupa_uv220"
+    cmds=("${rootdir}/python/plot_sawtooth_jedi.py"
+        "${eventdate}"
+        -s "${startdatetime}"
+        -e "${enddatetime}"
+        -d "${run_dir}"
+        -o "radar_rw" "mrms_refl"  "aircar_t133" "aircar_q133" "aircar_uv233"
+        -m 36
+        -c 15
+        --type "all")
 
+    [[ -n ${affix} ]] && cmds+=("${affix}")
+    [[ ${verb} == true ]] && cmds+=(-v)
+
+    ${show} "${cmds[@]}"
+
+    if [[ $machine == Ursa ]]; then
+        module load imagemagick
+    fi
     imagedir="${run_dir}/image_files"
 
     if [[ -z ${show} ]]; then
@@ -303,7 +311,7 @@ if [[ ! -e done.zigzag ]]; then
         [[ ! -d ${image_destdir} ]] && mkdir -p "${image_destdir}"
 
         # Standard post-processing (resize/trim)
-        if [[ $verb -eq 1 ]]; then
+        if [[ $verb == true ]]; then
             echo "Convert to 1100x1100 and Trim for the web visualization."
         fi
 

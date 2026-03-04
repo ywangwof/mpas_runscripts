@@ -230,6 +230,7 @@ if [[ -f ${config_file} ]]; then
     # shellcheck disable=SC2154
     fcstlength="${fcst_length_seconds}"
     fcstoutinvl="${OUTINVL}"
+    level_file="${vertLevel_file}"
     # shellcheck disable=SC2154
     wof_domain_name="geo_${domain_name##*_}"
 else
@@ -451,7 +452,6 @@ fcst )
 #3. post
 post )
 
-    echo "${donepost}"
     if [[ ! -e ${donepost} ]]; then
 
         #damode=$(grep '^ *damode=' "${config_file}" | cut -d'=' -f2 | tr -d '"')

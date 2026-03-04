@@ -205,7 +205,7 @@ else               # ensemble tasks
         hour=${hour//[$'\t\r\n ']}
         # remove trailing whitespace from a string
         #sec=${sec%%+([[:space:]])}
-        sec=${sec//[$'\t\r\n ']}
+        sec=${sec//[$'\t\r\n. ']}
 
         echo "memeber $nm: ${taskname} run time: ${hour}:${min}:${sec}"
 
