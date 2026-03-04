@@ -1086,6 +1086,42 @@ function jedi_preparation {
 
     sed -e "s/@analysisDate@/${analysisDate}/;s/@beginDate@/${beginDate}/;s/@lenWin@/${lenwind}/" \
            "${FIXDIR}/jedi/getkf_${taskname}.yaml" > getkf.yaml
+
+    # ---- MP-dependent state / increment variables ----
+    local _mp_state_file
+    _mp_state_file=$(mktemp)
+    local _mp_incr
+    case "${mpscheme}" in
+    mp_nssl2m)
+        cat > "$_mp_state_file" << 'MPEOF'
+  - hail
+  - cloud_droplet_number_concentration
+  - snow_number_concentration
+  - graupel_number_concentration
+  - hail_number_concentration
+  - rain_number_concentration
+MPEOF
+        _mp_incr="hail, cloud_droplet_number_concentration, snow_number_concentration, graupel_number_concentration, hail_number_concentration, rain_number_concentration"
+        ;;
+    mp_tempo)
+        cat > "$_mp_state_file" << 'MPEOF'
+  - cloud_droplet_number_concentration
+  - graupel_number_concentration
+  - rain_number_concentration
+MPEOF
+        _mp_incr="cloud_droplet_number_concentration, graupel_number_concentration, rain_number_concentration"
+        ;;
+    *)
+        cat > "$_mp_state_file" << 'MPEOF'
+  - rain_number_concentration
+MPEOF
+        _mp_incr="rain_number_concentration"
+        ;;
+    esac
+    sed -i -e "/@MP_STATE_VARS@/r ${_mp_state_file}" -e "/@MP_STATE_VARS@/d" getkf.yaml
+    sed -i "s/@MP_INCREMENT_VARS@/${_mp_incr}/" getkf.yaml
+    rm -f "$_mp_state_file"
+
     #
     #  Generate the final YAML configuration file based on convinfo and available ioda files
     #
@@ -2022,7 +2058,24 @@ function dacycle_driver() {
         num_resubmit=0               # Just check job status
     fi
 
-    anlys_varstr="pressure_p,rho,qv,qc,qr,qi,qs,qg,ni,nr,ng,nc,nifa,nwfa,volg,surface_pressure,theta,u,uReconstructZonal,uReconstructMeridional,refl10cm,w"
+    # Variables written by the solver (analysis stream) that should NOT be
+    # overwritten by ncks from the background.  MP-dependent because different
+    # microphysics schemes carry different number-concentration / volume fields.
+    local anlys_varstr_base="pressure_p,rho,qv,qc,qr,qi,qs,qg,surface_pressure,theta,u,uReconstructZonal,uReconstructMeridional,refl10cm,w"
+    case "${mpscheme}" in
+    mp_nssl2m)
+        anlys_varstr="${anlys_varstr_base},ni,nr,ns,ng,nh,nc,nccn,nifa,nwfa,qh,volg,volh"
+        ;;
+    mp_thompson)
+        anlys_varstr="${anlys_varstr_base},ni,nr,nc,nifa,nwfa"
+        ;;
+    mp_thompson_aers|mp_tempo)
+        anlys_varstr="${anlys_varstr_base},ni,nr,ng,nc,nifa,nwfa,volg"
+        ;;
+    *)
+        anlys_varstr="${anlys_varstr_base},ni,nr,ng,nc,nifa,nwfa,volg"
+        ;;
+    esac
 
     local icyc=$(( (start_sec-init_sec)/intvl_sec ))
     for isec in $(seq $start_sec $intvl_sec $end_sec ); do
