@@ -45,6 +45,5 @@ fix_files/jedi/geovars.yaml
 fix_files/jedi/ioda_empty.nc
 fix_files/jedi/keptvars.yaml
 fix_files/jedi/obsop_name_map.yaml
-fix_files/jedi/convinfo
 modules/env.mpas_smiol
 run_dirs

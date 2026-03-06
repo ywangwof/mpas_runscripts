@@ -1088,39 +1088,35 @@ function jedi_preparation {
            "${FIXDIR}/jedi/getkf_${taskname}.yaml" > getkf.yaml
 
     # ---- MP-dependent state / increment variables ----
-    local _mp_state_file
-    _mp_state_file=$(mktemp)
+    local _mp_state_block
     local _mp_incr
+
     case "${mpscheme}" in
     mp_nssl2m)
-        cat > "$_mp_state_file" << 'MPEOF'
+        _mp_state_block="  - rain_number_concentration
   - hail
   - cloud_droplet_number_concentration
   - snow_number_concentration
   - graupel_number_concentration
-  - hail_number_concentration
-  - rain_number_concentration
-MPEOF
+  - hail_number_concentration"
         _mp_incr="hail, cloud_droplet_number_concentration, snow_number_concentration, graupel_number_concentration, hail_number_concentration, rain_number_concentration"
         ;;
-    mp_tempo)
-        cat > "$_mp_state_file" << 'MPEOF'
+    mp_tempo | mp_thompson)
+        _mp_state_block="  - rain_number_concentration
   - cloud_droplet_number_concentration
-  - graupel_number_concentration
-  - rain_number_concentration
-MPEOF
+  - graupel_number_concentration"
         _mp_incr="cloud_droplet_number_concentration, graupel_number_concentration, rain_number_concentration"
         ;;
     *)
-        cat > "$_mp_state_file" << 'MPEOF'
-  - rain_number_concentration
-MPEOF
+        _mp_state_block="  - rain_number_concentration"
         _mp_incr="rain_number_concentration"
         ;;
     esac
-    sed -i -e "/@MP_STATE_VARS@/r ${_mp_state_file}" -e "/@MP_STATE_VARS@/d" getkf.yaml
+
+    # Replace placeholders directly in the file
+    # We use '|' as a delimiter in sed to avoid issues with slashes (though not strictly needed here)
+    sed -i "s/@MP_STATE_VARS@/${_mp_state_block//$'\n'/\\n}/" getkf.yaml
     sed -i "s/@MP_INCREMENT_VARS@/${_mp_incr}/" getkf.yaml
-    rm -f "$_mp_state_file"
 
     #
     #  Generate the final YAML configuration file based on convinfo and available ioda files
@@ -2063,17 +2059,18 @@ function dacycle_driver() {
     # microphysics schemes carry different number-concentration / volume fields.
     local anlys_varstr_base="pressure_p,rho,qv,qc,qr,qi,qs,qg,surface_pressure,theta,u,uReconstructZonal,uReconstructMeridional,refl10cm,w"
     case "${mpscheme}" in
-    mp_nssl2m)
+    mp_nssl2m )
         anlys_varstr="${anlys_varstr_base},ni,nr,ns,ng,nh,nc,nccn,nifa,nwfa,qh,volg,volh"
         ;;
-    mp_thompson)
+    mp_thompson )
         anlys_varstr="${anlys_varstr_base},ni,nr,nc,nifa,nwfa"
         ;;
-    mp_thompson_aers|mp_tempo)
+    mp_thompson_aers|mp_tempo )
         anlys_varstr="${anlys_varstr_base},ni,nr,ng,nc,nifa,nwfa,volg"
         ;;
     *)
-        anlys_varstr="${anlys_varstr_base},ni,nr,ng,nc,nifa,nwfa,volg"
+        mecho0 "${RED}ERROR${NC}: mpscheme=${PURPLE}${mpscheme}${NC} is not supported."
+        usage 1
         ;;
     esac
 
@@ -2349,7 +2346,9 @@ function run_mpassit_mean {
     fcst_lauch_time=$(date -u -d @${iseconds} +%H%M)
     fcst_time_str=$(date -u -d @$iseconds +%Y-%m-%d_%H.%M.%S)
 
+    # shellcheck disable=SC2034
     prior_file="${dawrkdir}/jedi_solver/prior_mean.nc"
+    # shellcheck disable=SC2034
     post_file="${dawrkdir}/jedi_solver/ana/mem000.nc"
     bkg_file="${dawrkdir}/jedi_solver/ens/mem001.nc"
 

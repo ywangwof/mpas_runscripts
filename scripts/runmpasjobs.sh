@@ -190,6 +190,7 @@ fi
 
 [[ -v args["endtime"] ]]   && endtime=${args["endtime"]}     || endtime="${default_endtime}"
 [[ -v args["starttime"] ]] && starttime=${args["starttime"]}
+# shellcheck disable=SC2154
 [[ -v args["run_dir"] ]]   && run_dir=${args["run_dir"]}     || run_dir="${workdirDF}"
 
 if [[ -v args["config_file"] ]]; then
@@ -216,23 +217,7 @@ else
 fi
 
 if [[ -f ${config_file} ]]; then
-    #fcstlength=$(grep        '^ *fcst_length_seconds='  "${config_file}" | cut -d'=' -f2 | cut -d' ' -f1 | tr -d '(')
-    #fcstoutinvl=$(grep       '^ *OUTINVL='              "${config_file}" | cut -d'=' -f2)
-    #level_file=$(grep        '^ *vertLevel_file='       "${config_file}" | cut -d'=' -f2 | tr -d '"')
-    #domain_name=$(grep       '^ *domname='              "${config_file}" | cut -d'=' -f2 | tr -d '"')
-    #job_account_str=$(grep   '^ *job_account_str='      "${config_file}" | cut -d'=' -f2 | tr -d '"')
-    #job_exclusive_str=$(grep '^ *job_exclusive_str='    "${config_file}" | cut -d'=' -f2 | tr -d '"')
-    #relative_path=$(grep     '^ *relative_path='        "${config_file}" | cut -d'=' -f2 | tr -d '"')
-    #partition_post=$(grep    '^ *partition_post='       "${config_file}" | cut -d'=' -f2 | tr -d '"')
-    #claim_cpu_post=$(grep    '^ *claim_cpu_post='       "${config_file}" | cut -d'=' -f2 | tr -d '"')
     readconf "${config_file}" COMMON fcst || exit $?
-
-    # shellcheck disable=SC2154
-    fcstlength="${fcst_length_seconds}"
-    fcstoutinvl="${OUTINVL}"
-    level_file="${vertLevel_file}"
-    # shellcheck disable=SC2154
-    wof_domain_name="geo_${domain_name##*_}"
 else
     echo " "
     echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not exist."
@@ -313,12 +298,14 @@ post | plot | diag | verif | snd )
     doneverif="${run_dir}/image_files/flags/${eventdate}${affix}/wofs_plotwwa_${endtime}_finished"
     donesnd="${run_dir}/image_files/flags/${eventdate}${affix}/wofs_postsnd_${endtime}_finished"
 
+    # shellcheck disable=SC2154
     post_script_dir="${post_dir}/wofs/scripts"
     post_config_orig="${post_dir}/conf/WOFS_MPAS_config.yaml"
 
-    dt=$(( fcstoutinvl/60 ))
-    nt=$(( fcstlength/fcstoutinvl ))
-    case ${fcstlength} in
+    dt=$(( OUTINVL/60 ))
+    # shellcheck disable=SC2154
+    nt=$(( fcst_length_seconds/OUTINVL ))
+    case ${fcst_length_seconds} in
     21600 )
         qpe_mode_string="['qpe_15m', 'qpe_1hr', 'qpe_3hr', 'qpe_6hr']"
         ;;
@@ -326,13 +313,16 @@ post | plot | diag | verif | snd )
         qpe_mode_string="['qpe_15m', 'qpe_1hr', 'qpe_3hr']"
         ;;
     * )
-        echo -e "${RED}ERROR${NC}: fcstlength = ${PURPLE}${fcstlength}${NC} is not supported."
+        echo -e "${RED}ERROR${NC}: fcstlength = ${PURPLE}${fcst_length_seconds}${NC} is not supported."
         exit 1
         ;;
     esac
 
     post_config="${run_dir}/summary_files/WOFS_MPAS_config_${eventdate}${affix}.yaml"
     #rm -f "${post_config}"
+
+    # shellcheck disable=SC2154
+    wof_domain_name="geo_${domname##*_}"
 
     if [[ ! -f "${post_config}" ]]; then
         fbeg_s=$(date -u -d "${startdatetime:0:8} ${startdatetime:8:4}" +%s)
@@ -344,15 +334,13 @@ post | plot | diag | verif | snd )
             fcst_times+=" '${fcst_time}',"
         done
 
-        if [[ ! -f "${level_file}" ]]; then
-            level_file="/scratch/${level_file}"
-        fi
-        if [[ ! -f "${level_file}" ]]; then
-            echo -e "${RED}ERROR${NC}: Vertical level file - ${CYAN}${level_file}${NC} not exist."
+        # shellcheck disable=SC2154
+        if [[ ! -f "${vertLevel_file}" ]]; then
+            echo -e "${RED}ERROR${NC}: Vertical level file - ${CYAN}${vertLevel_file}${NC} not exist."
             exit 1
         fi
 
-        num_levels=$(wc -l "${level_file}"| cut -d' ' -f1)
+        num_levels=$(wc -l "${vertLevel_file}"| cut -d' ' -f1)
         (( num_levels -= 1 ))
 
         # modify the configuration file
@@ -392,7 +380,7 @@ EOF
     ;;
 
 atpost )
-    myname="$(realpath $0)"
+    myname="$(realpath "$0")"
     if [[ "${host}" != ${post_machine}* ]]; then
         myname="/scratch${myname}"
     fi
@@ -475,6 +463,7 @@ post )
             jobscript="${run_dir}/summary_files/run_${task}_${eventdate}${affix}.slurm"
 
             wrkdir="${post_script_dir}"
+            # shellcheck disable=SC2154
             declare -A jobParms=(
                 [PARTION]="${partition_post}"
                 [NOPART]="1"
@@ -636,7 +625,7 @@ atpost )
             #cd "${script_dir}" || exit $?
             ${show} eval "${atjobstr}"
         else
-            ${show} ssh ${post_machine} -t "${atjobstr}"
+            ${show} ssh "${post_machine}" -t "${atjobstr}"
         fi
     else
         mecho0 "${YELLOW}INFO${NC}: Cannot run ${BROWN}atpost${NC} on ${PURPLE}${post_machine}${NC}.\n"
