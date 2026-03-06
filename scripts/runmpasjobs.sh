@@ -360,6 +360,9 @@ post | plot | diag | verif | snd )
 /^wrfinputpath: /s#: .*#: ${run_dir}/#
 /^imagepath: /s#: .*#: ${run_dir}/image_files/#
 /^jsonpath: /s#: .*#: ${post_dir}/json/#
+/^mrmspath: /s# .*#: ${RT_OBSDIR}/MRMS/#
+/^asospath: /s# .*#: ${RT_OBSDIR}/ASOS/#
+/^lsrwwapath: /s# .*#: ${RT_OBSDIR}/LSR_WWA/#
 EOF
         if [[ ! -f "${post_config_orig}" ]]; then
             echo " "
