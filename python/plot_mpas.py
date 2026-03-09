@@ -8,13 +8,29 @@ import argparse
 import numpy as np
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-from metpy.plots import ctables  # Required for NWS Reflectivity tables
+from metpy.plots import ctables
 from pathlib import Path
 import sys
 import time
 import os
+import re
+import traceback
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
 
-# Try to import psutil for memory tracking
+# UI Libraries
+try:
+    from tqdm import tqdm
+except ImportError:
+    tqdm = None
+
+try:
+    from rich.console import Console
+    from rich.table import Table
+except ImportError:
+    Console = None
+
+# Memory tracking
 try:
     import psutil
 except ImportError:
@@ -22,208 +38,162 @@ except ImportError:
 
 ################################################################################
 def get_memory_usage():
-    """Returns current memory usage in MB."""
     if psutil:
         process = psutil.Process(os.getpid())
         return process.memory_info().rss / (1024 * 1024)
-    return 0
+    return 0.0
+
+def decode_filename_time(filename):
+    pattern = r"(\d{4}-\d{2}-\d{2}_\d{2}[\.:]\d{2}[\.:]\d{2})"
+    match = re.search(pattern, filename)
+    if match:
+        return match.group(1).replace('.', ':')
+    return None
+
+def log_error(msg):
+    with open("error_log.txt", "a") as f:
+        f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {msg}\n")
 
 ################################################################################
 def get_args():
-    """Handles command line argument parsing."""
-    parser = argparse.ArgumentParser(
-        description="Plot MPAS data with specialized MetPy colormaps and high DPI."
-    )
-    # Changed fieldname to reflect it can be a comma-separated list
+    parser = argparse.ArgumentParser(description="Parallel MPAS Plotter (Multi-Grid Support)")
     parser.add_argument("data_file", help="Path to the MPAS netCDF file")
-    parser.add_argument("fieldnames", help="Comma-separated list of fields (e.g., 'refl,rain_tot,ter')")
-
-    # Optional arguments
-    parser.add_argument("-g", "--grid_file", help="Optional separate MPAS grid/static file")
-    parser.add_argument("-l", "--level", type=int, default=0, help="Vertical level index (default: 0)")
-    parser.add_argument("-t", "--time", type=int, default=0, help="Time index (default: 0)")
-    parser.add_argument("--min", type=float, help="Contour minimum override")
-    parser.add_argument("--max", type=float, help="Contour maximum override")
-    parser.add_argument("--inc", type=float, help="Contour increment override")
-    parser.add_argument("-o", "--output", type=str, help="Custom output prefix (optional)")
-    parser.add_argument("--global_view", action="store_true", help="Force global view")
-
+    parser.add_argument("fieldnames", help="Comma-separated fields")
+    parser.add_argument("-g", "--grid_file", help="Optional grid file")
+    parser.add_argument("-l", "--levels", default="0", help="Comma-separated levels (e.g. '0,5,10')")
+    parser.add_argument("-t", "--time", type=int, default=0, help="Time index")
+    parser.add_argument("--min", type=float, help="Min override")
+    parser.add_argument("--max", type=float, help="Max override")
+    parser.add_argument("--inc", type=float, help="Inc override")
+    parser.add_argument("-o", "--output", type=str, help="Output prefix")
+    parser.add_argument("--dpi", type=int, default=600, help="DPI")
+    parser.add_argument("-n", "--nproc", type=int, help="Processors")
     return parser.parse_args()
 
 ################################################################################
 def get_plot_settings(fieldname, cmin=None, cmax=None, cinc=None):
-    """Determines colormap and normalization based on field name."""
     cmap = "turbo"
     norm = None
-
-    # 1. Reflectivity Logic (starts with 'refl')
     if fieldname.startswith("refl"):
         cmap = ctables.registry.get_colortable("NWSReflectivity")
-        # Standard NWS bins: 0 to 75 with step 5 (16 levels = 15 bins)
         if all(v is None for v in [cmin, cmax, cinc]):
             levels = np.arange(0, 80, 5.0)
             norm = mcolors.BoundaryNorm(levels, cmap.N)
         elif cmin is not None and cmax is not None:
-            # Respect user override if provided
             step = cinc if cinc is not None else (cmax - cmin) / 10
             levels = np.arange(cmin, cmax + step, step)
-            if len(levels) - 1 > cmap.N:
-                cmap = cmap.resampled(len(levels) - 1)
-            norm = mcolors.BoundaryNorm(levels, cmap.N)
-
-    # 2. Precipitation Logic (starts with 'rain' or 'prec_')
-    elif fieldname.startswith("rain") or fieldname.startswith("prec_"):
-        cmap = plt.get_cmap("YlGnBu") # Distinctive precip-style map
-        precip_levels = [0, 1, 2.5, 5, 7.5, 10, 15, 20, 30, 40, 50, 70, 100, 150, 200, 250, 300, 400, 500, 600, 750]
-
+            norm = mcolors.BoundaryNorm(levels, cmap.resampled(int(len(levels)-1)).N if len(levels)-1 > cmap.N else cmap.N)
+    elif fieldname.startswith(("rain", "prec_")):
+        cmap = plt.get_cmap("YlGnBu")
         if all(v is None for v in [cmin, cmax, cinc]):
-            norm = mcolors.BoundaryNorm(precip_levels, cmap.N)
+            prec_levels = [0, 1, 2.5, 5, 7.5, 10, 15, 20, 30, 40, 50, 70, 100, 150, 200, 250, 300, 400, 500, 600, 750]
+            norm = mcolors.BoundaryNorm(prec_levels, cmap.N)
         elif cmin is not None and cmax is not None:
             step = cinc if cinc is not None else (cmax - cmin) / 10
             levels = np.arange(cmin, cmax + step, step)
             norm = mcolors.BoundaryNorm(levels, cmap.N)
+    elif "soil" in fieldname.lower() or "t_so" in fieldname.lower():
+        cmap = plt.get_cmap("terrain") # Good for soil fields
 
-    # 3. All other fields
-    else:
-        if cmin is not None and cmax is not None:
+    if norm is None and cmin is not None and cmax is not None:
+        if cinc is not None:
+            levels = np.arange(cmin, cmax + cinc, cinc)
+            norm = mcolors.BoundaryNorm(levels, 256)
+        else:
             norm = mcolors.Normalize(vmin=cmin, vmax=cmax)
-
     return cmap, norm
 
 ################################################################################
-def plot_mpas_field(uxds, fieldname, level=0, time_idx=0, cmin=None, cmax=None, cinc=None, output_file=None, global_view=False):
-    """Renders a single MPAS field with high DPI and artifact suppression."""
-    start_time_proc = time.time()
-    mem_start = get_memory_usage()
+def plot_mpas_worker(task_info):
+    fieldname, level, grid_source, data_file, args_dict, file_timestamp = task_info
+    t_start = time.time()
+    try:
+        uxds = ux.open_dataset(grid_source, data_file, engine="netcdf4")
+        data_var = uxds[fieldname]
 
-    if fieldname not in uxds.data_vars:
-        print(f"Warning: Field '{fieldname}' not found in dataset. Skipping.")
-        return
+        # --- Robust Vertical Dimension Detection ---
+        v_dim = None
+        known_v_dims = ["nVertLevels", "nVertLevelsP1", "nSoilLevels"]
+        for dim in known_v_dims:
+            if dim in data_var.dims:
+                v_dim = dim
+                break
 
-    # 1. Extract and Slice Data
-    data_var = uxds[fieldname]
+        selectors = {d: (args_dict['time'] if d == "Time" else level) for d in data_var.dims if d in (["Time"] + known_v_dims)}
+        plot_data = data_var.isel(selectors).values.squeeze()
 
-    # 2. Determine if T/L tags are needed based on actual dimensions
-    has_multiple_times = "Time" in data_var.dims and data_var.sizes["Time"] > 1
-    is_3d_field = "nVertLevels" in data_var.dims
+        faces = np.asarray(uxds.uxgrid.face_node_connectivity.values, dtype=np.int64)
+        nodes_lon, nodes_lat = uxds.uxgrid.node_lon.values, uxds.uxgrid.node_lat.values
+        if np.abs(nodes_lat).max() <= (np.pi + 0.1):
+            nodes_lon, nodes_lat = np.rad2deg(nodes_lon), np.rad2deg(nodes_lat)
+        nodes_lon = (nodes_lon + 180) % 360 - 180
 
-    # 3. Slice the Data
-    selectors = {}
-    if "Time" in data_var.dims:
-        selectors["Time"] = time_idx
-    if "nVertLevels" in data_var.dims:
-        selectors["nVertLevels"] = level
+        lon_sent = np.append(nodes_lon, np.nan); lat_sent = np.append(nodes_lat, np.nan)
+        faces[faces < 0] = len(nodes_lon)
+        f_lons = np.take(lon_sent, faces); f_lats = np.take(lat_sent, faces)
+        verts = [np.column_stack((l[~np.isnan(l)], t[~np.isnan(t)])) for l, t in zip(f_lons, f_lats)]
 
-    plot_data = data_var.isel(selectors).values.squeeze()
+        cmap, norm = get_plot_settings(fieldname, args_dict['min'], args_dict['max'], args_dict['inc'])
+        fig = plt.figure(figsize=(14, 10))
+        ax = plt.axes(projection=ccrs.PlateCarree())
+        ax.add_feature(cfeature.COASTLINE, linewidth=0.8); ax.add_feature(cfeature.STATES.with_scale('50m'), alpha=0.3)
 
-    # 4. Extract Mesh Geometry
-    # MPAS uses Voronoi cells where each face is a polygon defined by nodes
+        coll = mcoll.PolyCollection(verts, array=plot_data, cmap=cmap, norm=norm, edgecolors='none', antialiaseds=True)
+        ax.add_collection(coll)
+        ax.set_extent([np.min(nodes_lon)-0.5, np.max(nodes_lon)+0.5, np.min(nodes_lat)-0.5, np.max(nodes_lat)+0.5], crs=ccrs.PlateCarree())
+        plt.colorbar(coll, ax=ax, shrink=0.7, pad=0.03, label=getattr(data_var, 'units', ''))
 
-    faces = uxds.uxgrid.face_node_connectivity.values
-    nodes_lon = uxds.uxgrid.node_lon.values
-    nodes_lat = uxds.uxgrid.node_lat.values
+        display_time = file_timestamp if file_timestamp else f"T{args_dict['time']}"
+        ax.set_title(f"MPAS-{display_time} {fieldname}" + (f" | L{level}" if v_dim else ""))
 
-    # Coordinate conversion
-    if np.abs(nodes_lat).max() <= (np.pi + 0.1):
-        nodes_lon, nodes_lat = np.rad2deg(nodes_lon), np.rad2deg(nodes_lat)
+        out_name = f"{Path(data_file).stem}_{fieldname}" + (f"_T{args_dict['time']}" if "Time" in data_var.dims else "") + (f"_L{level}" if v_dim else "")
+        output_file = f"{args_dict['output']}_{fieldname}_L{level}.png" if args_dict['output'] else f"{out_name}.png"
+        plt.savefig(output_file, dpi=args_dict['dpi'], bbox_inches='tight')
+        plt.close(fig)
 
-    nodes_lon = (nodes_lon + 180) % 360 - 180
-
-    # 5. Build Polygon Vertices
-    polygon_vertices = [np.column_stack((nodes_lon[f[f >= 0]], nodes_lat[f[f >= 0]])) for f in faces]
-
-    # 6. Setup Plot and Colormapping
-    cmap, norm = get_plot_settings(fieldname, cmin, cmax, cinc)
-
-    fig = plt.figure(figsize=(14, 10))
-    ax = plt.axes(projection=ccrs.PlateCarree())
-    ax.add_feature(cfeature.COASTLINE, linewidth=0.8)
-    ax.add_feature(cfeature.STATES.with_scale('50m'), linewidth=0.5, edgecolor='black', alpha=0.3)
-
-    # 7. Create Collection
-    coll = mcoll.PolyCollection(
-        polygon_vertices,
-        array=plot_data,
-        cmap=cmap,
-        norm=norm,
-        edgecolors='none',
-        antialiaseds=True,
-        snap=True
-    )
-    ax.add_collection(coll)
-
-    if not global_view:
-        ax.set_extent([np.min(nodes_lon)-0.5, np.max(nodes_lon)+0.5,
-                       np.min(nodes_lat)-0.5, np.max(nodes_lat)+0.5], crs=ccrs.PlateCarree())
-
-    cb = plt.colorbar(coll, ax=ax, shrink=0.7, pad=0.03)
-    cb.set_label(getattr(data_var, 'units', ''))
-
-    # 8. Dynamic Title
-    title_str = f"MPAS: {fieldname}"
-    if has_multiple_times: title_str += f" (T{time_idx})"
-    if is_3d_field: title_str += f" (L{level})"
-    ax.set_title(title_str)
-
-    ax.gridlines(draw_labels=True, alpha=0.1)
-
-    # 9. Save with 600 DPI to eliminate artifacts
-    plt.savefig(output_file, dpi=600, bbox_inches='tight')
-    plt.close(fig)
-
-    # 10. Metrics Reporting
-    end_time = time.time()
-    mem_end = get_memory_usage()
-
-    print("#" * 80)
-    print(f"SUCCESS: Image saved to {output_file}")
-    print(f"Run Time:       {end_time - start_time_proc:.2f} seconds")
-    if psutil: print(f"Peak Memory:    {mem_end:.2f} MB")
-    print("#" * 80)
+        return {"field": fieldname, "level": level, "status": "Success", "time": time.time()-t_start, "memory": get_memory_usage(), "file": output_file}
+    except Exception as e:
+        err_msg = f"Error plotting {fieldname} L{level}:\n{traceback.format_exc()}"
+        log_error(err_msg)
+        return {"field": fieldname, "level": level, "status": "Failed (see log)", "time": time.time()-t_start, "memory": get_memory_usage(), "file": "N/A"}
 
 ################################################################################
 def main():
     args = get_args()
-
     grid_source = args.grid_file if args.grid_file else args.data_file
-    try:
-        uxds = ux.open_dataset(grid_source, args.data_file)
-    except Exception as e:
-        print(f"Error: {e}")
-        sys.exit(1)
+    file_timestamp = decode_filename_time(Path(args.data_file).name)
+    fields = [f.strip() for f in args.fieldnames.split(',')]
+    levels = [int(l.strip()) for l in args.levels.split(',')]
 
-    # Split the comma-separated string into a list of fields
-    fields_to_plot = [f.strip() for f in args.fieldnames.split(',')]
+    tasks = [(f, l, grid_source, args.data_file, vars(args), file_timestamp) for f in fields for l in levels]
+    n_cores = args.nproc if args.nproc else multiprocessing.cpu_count()
+    n_workers = min(n_cores, len(tasks))
 
-    for field in fields_to_plot:
-        # Generate individual output name for each field in the loop
-        data_var = uxds[field]
-        base_name = Path(args.data_file).stem
-        out_name = f"{base_name}_{field}"
+    if os.path.exists("error_log.txt"): os.remove("error_log.txt")
+    print(f"Submitting {len(tasks)} tasks to {n_workers} processors...")
 
-        # Only add T tag if more than 1 time level exists in the file
-        if "Time" in data_var.dims and data_var.sizes["Time"] > 1:
-            out_name += f"_T{args.time}"
-        if "nVertLevels" in data_var.dims:
-            out_name += f"_L{args.level}"
+    results = []
+    if n_workers > 1:
+        with ProcessPoolExecutor(max_workers=n_workers) as executor:
+            if tqdm:
+                results = list(tqdm(executor.map(plot_mpas_worker, tasks), total=len(tasks), desc="Plotting MPAS"))
+            else:
+                results = list(executor.map(plot_mpas_worker, tasks))
+    else:
+        for t in tasks:
+            results.append(plot_mpas_worker(t))
 
-        final_output_path = out_name + ".png" if not args.output else f"{args.output}_{field}.png"
+    if Console:
+        console = Console()
+        table = Table(title="MPAS Plotting Job Summary", header_style="bold magenta")
+        table.add_column("Field"); table.add_column("Level"); table.add_column("Status");
+        table.add_column("Time (s)"); table.add_column("Mem (MB)"); table.add_column("Output File")
+        for r in results:
+            color = "green" if "Success" in r['status'] else "red"
+            table.add_row(r['field'], str(r['level']), f"[{color}]{r['status']}[/{color}]", f"{r['time']:.2f}", f"{r['memory']:.1f}", r['file'])
+        console.print(table)
+    if os.path.exists("error_log.txt"):
+        print("\n[!] Some tasks failed. Detailed errors saved to: error_log.txt")
 
-        try:
-            plot_mpas_field(
-                uxds, field,
-                level=args.level,
-                time_idx=args.time,
-                cmin=args.min,
-                cmax=args.max,
-                cinc=args.inc,
-                output_file=final_output_path,
-                global_view=args.global_view
-            )
-        except Exception as e:
-            print(f"Error: {e}")
-            sys.exit(1)
-
-################################################################################
 if __name__ == "__main__":
     main()
