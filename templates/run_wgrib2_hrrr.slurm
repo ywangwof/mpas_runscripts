@@ -13,13 +13,13 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-if [[ "MACHINE" == "Jet" ]]; then
+if [[ "MACHINE" == "Ursa" ]]; then
     # shellcheck source=/dev/null # to ignore source path error
     source /etc/profile.d/modules.sh
     module purge
     module use ROOTDIR/modules
     module load MODULE
-    module load gnu/13.2.0 wgrib2/3.1.1_wmo
+    module load wgrib2/3.1.3_wmo
 else
     # shellcheck source=/dev/null # to ignore source path error
     source ROOTDIR/modules/MODULE

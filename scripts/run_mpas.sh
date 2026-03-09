@@ -6,8 +6,6 @@
 scpdir="$(cd "$(dirname "$0")" && pwd)" # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
 
-mpasdir="/scratch/wofs_mpas"
-
 eventdateDF=$(date -u +%Y%m%d)
 
 #-----------------------------------------------------------------------
@@ -106,7 +104,7 @@ eventdateDF=$(date -u +%Y%m%d)
 #    4.2 lnwrkfiles.sh
 #    4.3 cron.txt
 #
-# 5. /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG
+# 5. /scratch3/NAGAPE/wof/ywang/MPAS/WPS_GEOG
 #
 #    NOTE: It can be anywhere, but should modify "run_geogrid"
 #          and "run_static" below whenever the directory is changed.
@@ -167,7 +165,6 @@ function usage {
     echo "   DEFAULTS:"
     echo "              eventdt = $eventdateDF"
     echo "              rootdir = $rootdir"
-    echo "              WORKDIR = $mpasdir/run_dirs"
     echo "              TEMPDIR = $rootdir/templates"
     echo "              FIXDIR  = $rootdir/fix_files"
     echo " "
@@ -1936,7 +1933,7 @@ function run_lbc {
     config_nvegopt       = 2
 /
 &data_sources
-    config_geog_data_path = '/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/'
+    config_geog_data_path = '/scratch3/NAGAPE/wof/ywang/MPAS/WPS_GEOG/'
     config_met_prefix = '${EXTHEAD}'
     config_sfc_prefix = 'SST'
     config_fg_interval = $((EXTINVL * 3600))
@@ -2606,8 +2603,8 @@ EOF
         sedfile=$(mktemp -t upp_"${jobname}"_"$hstr".sed_XXXX)
         cat <<EOF >"$sedfile"
 s/PARTION/${partition_upp}/
-s/NOPART/$npepost/
-s/CPUSPEC/${claim_cpu}/
+s/NOPART/${npepost}/
+s/CPUSPEC/${claim_cpu_upp}/
 s/JOBNAME/upp_${jobname}_$hstr/
 s/HHHSTR/$hstr/g
 s/MODULE/${modulename}/g
@@ -2767,13 +2764,12 @@ parse_args "$@"
 
 [[ -v args["tempdir"] ]] && TEMPDIR=${args["tempdir"]} || TEMPDIR="${rootdir}/templates"
 [[ -v args["init_dir"] ]] && init_dir=${args["init_dir"]} || init_dir=false
-[[ -v args["WORKDIR"] ]] && WORKDIR=${args["WORKDIR"]} || WORKDIR="${mpasdir}/run_dirs/varmesh"
 
 [[ -v args["domname"] ]] && domname=${args["domname"]} || domname="wofs_mpas"
 [[ -v args["extdm"] ]] && extdm=${args["extdm"]} || extdm="hrrr"
 [[ -v args["mpscheme"] ]] && mpscheme=${args["mpscheme"]} || mpscheme="mp_nssl2m"
 
-[[ -v args["hpcaccount"] ]] && hpcaccount=${args["hpcaccount"]} || hpcaccount="hpc-wof1"
+[[ -v args["hpcaccount"] ]] && hpcaccount=${args["hpcaccount"]} || hpcaccount="wof"
 [[ -v args["machine"] ]] && machine=${args["machine"]}
 
 [[ -v args["jobs"] ]] && read -r -a jobs <<<"${args['jobs']}" || jobs=(ungrib static init lbc mpas)
@@ -2800,7 +2796,7 @@ if [[ ! -v machine ]]; then
     elif [[ "$(hostname)" == cheyenne* ]]; then
         machine="Cheyenne"
     else
-        machine="Jet"
+        machine="Ursa"
     fi
 fi
 
@@ -2828,10 +2824,10 @@ relative_path=false
 
 mach="slurm"
 
-if [[ $machine == "Jet" ]]; then
+if [[ $machine == "Ursa" ]]; then
     if [[ $hpcaccount == "rtwrfruc" ]]; then
         #ncores_ics=5; ncores_fcst=6; ncores_post=6
-        partition="kjet"
+        partition="u1-compute"
         claim_cpu="--cpus-per-task=2"
         claim_cpu_ics="--cpus-per-task=2"
         partition_static="${partition}"
@@ -2841,39 +2837,45 @@ if [[ $machine == "Jet" ]]; then
         job_exclusive_str="#SBATCH --exclusive\n#SBATCH -q rth\n#SBATCH --reservation=rrfsens"
     else
         #ncores_ics=5; ncores_fcst=6; ncores_post=6
-        partition="xjet,vjet,kjet"
-        claim_cpu="--cpus-per-task=2"
-        claim_cpu_ics="--cpus-per-task=2"
+        partition="u1-compute"
+        claim_cpu="--ntasks-per-node=96"
+        claim_cpu_ics="--ntasks-per-node=48"
         partition_static="${partition}"
-        static_cpu="--cpus-per-task=12"
-        partition_upp="kjet,xjet,vjet"
+        static_cpu="--cpus-per-task=48"
+        partition_upp="u1-compute"
         job_exclusive_str="#SBATCH --exclusive"
         job_account_str="#SBATCH -A ${hpcaccount-wof}"
     fi
 
-    partition_static="xjet,vjet,kjet"; partition_create="xjet,vjet,kjet"
-    claim_cpu_static="--cpus-per-task=2";      claim_cpu_create="--cpus-per-task=2";
+    partition_static="u1-compute";             partition_create="u1-compute"
+    claim_cpu_static="--ntasks-per-node=2";    claim_cpu_create="--ntasks-per-node=1";
 
-    npeics=768   #; nnodes_ics=$((  npeics/ncores_ics   ))
-    npefcst=1200 #; nnodes_fcst=$(( npefcst/ncores_fcst ))
-    npepost=72   #; nnodes_post=$(( npepost/ncores_post ))
+    npepost=24   #; nnodes_post=$(( npepost/ncores_post ))
+    claim_cpu_upp="--ntasks-per-node=${npepost}"
+
+    npeics=192   #; nnodes_ics=$((  npeics/ncores_ics   ))
+    npefcst=384 #; nnodes_fcst=$(( npefcst/ncores_fcst ))
 
     mach="slurm"
     job_runmpexe_str="srun"
     job_runexe_str="srun"
 
-    WPSGEOG_PATH="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG"
+    WPSGEOG_PATH="/scratch3/NAGAPE/wof/ywang/MPAS/WPS_GEOG"
 
-    wgrib2path="/apps/wgrib2/3.1.1/gnu_13.2.0/wmo/bin/wgrib2"
-    gpmetis="/lfs5/NAGAPE/hpc-wof1/ywang/bin/gpmetis"
+    wgrib2path="/apps/wgrib2/3.1.3/gnu_11.4.1/wmo/bin/wgrib2"
+    gpmetis="/scratch3/NAGAPE/wof/ywang/tools/bin/gpmetis"
 
-    modulename="build_jet_Rocky8_intel_smiol"
+    modulename="build_ursa_Rocky9_intel_hpxmpi_smiol"
     # shellcheck source=/dev/null
     source /etc/profile.d/modules.sh
     module purge
+    module load gcc/12.4.0
     module use "${rootdir}"/modules
     module load $modulename
-    module load gnu/13.2.0 wgrib2/3.1.1_wmo
+    module load wgrib2/3.1.3_wmo
+
+    mpasdir="/scratch3/NAGAPE/wof/ywang/MPAS"
+    hrrr_dir="/scratch3/NAGAPE/wof/ywang/HRRR/12Z"
 
 elif [[ $machine == "Cheyenne" ]]; then
 
@@ -2935,7 +2937,12 @@ else # Vecna at NSSL
     WPSGEOG_PATH="/scratch/wofs_mpas/WPS_GEOG"
     wgrib2path="/home/yunheng.wang/tools/intel/hpc-stack/intel-2021.10.0/wgrib2/2.0.8/bin/wgrib2"
     gpmetis="/home/yunheng.wang/tools/bin/gpmetis"
+
+    mpasdir="/scratch/wofs_mpas"
+    hrrr_dir="/scratch/wofs_mpas/run_dirs/varmesh/HRRR/12Z"
 fi
+
+[[ -v args["WORKDIR"] ]] && WORKDIR=${args["WORKDIR"]} || WORKDIR="${mpasdir}/run_dirs/varmesh"
 
 MPASLSM='sf_ruc'
 MPASNFLS=9
@@ -3034,7 +3041,7 @@ declare -A jobargs=([static]="${domname}/done.rotate"
     [geogrid]="${rundir}/${domname/*_/geo_}"
     [projectHexes]="$WORKDIR/$domname $WORKDIR/geo_${domname##*_}/done.geogrid"
     #[ungrib_hrrr]="/public/data/grids/hrrr/conus/wrfnat/grib2"
-    [ungrib_hrrr]="/scratch/wofs_mpas/run_dirs/varmesh/HRRR/12Z"
+    [ungrib_hrrr]="${hrrr_dir}"
     [ungrib_rrfs]="https://noaa-rrfs-pds.s3.amazonaws.com"
     [ungrib_rrfsna]="/lfs5/NAGAPE/wof/grib_files/RRFS-A"
     [ungrib_rrfsp]="https://noaa-rrfs-pds.s3.amazonaws.com"

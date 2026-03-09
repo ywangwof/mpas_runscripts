@@ -1,0 +1,81 @@
+# Programs in `exec/`
+
+Built from MPAS package, HEAD of branch **v8merge** from https://github.com/NOAA-National-Severe-Storms-Laboratory/frdd-MPAS-Model.git
+
+    - atmosphere_model.single/atmosphere_model        # Version 3.6 and earlier uses name atmosphere_model.single
+    - init_atmosphere_model
+    - init_atmosphere_model.static                    # Just *init_atmosphere_model* only needed if regenerating the domain static file
+                                                      # should be built in double precision
+    # DEPENDENCY:
+        1. netCDF4/HDF5
+        2. PNETCDF
+
+Built from WPS_SRC, HEAD of branch **master** from https://github.com/wrf-model/WPS
+
+    - ungrib.exe
+    - geogrid.exe
+
+Built from MPASSIT, HEAD of branch **develop** from https://github.com/ywangwof/MPASSIT
+
+    - mpassit
+
+    DEPENDENCY:
+        1. ESMF
+
+Built from UPP_KATE_kjet, HEAD of branch **master** from https://github.com/ywangwof/UPP_KATE_kjet.git
+
+    - unipost.exe
+
+Built from METIS
+
+    - gpmetis                                       # Only needed if repartiting the MPAS program MPI setting
+
+    DEPENDENCY:
+        1. GKlib
+
+> On Jet, all of the above mentioned packages can be retreived directly from */lfs4/NAGAPE/hpc-wof1/ywang/MPAS*.
+
+---
+
+# Steps to build the programs and integrate them into the workflow
+
+1. Install all of the depended libraries, mainly
+    - ZLIB/HDF5/netCDF4
+    - PNETCDF
+    - ESMF
+    - PNG/JASPER    # WPS-only
+2. Create a new module file based on *modules/build_jet_intel18_1.11_smiol*
+    For example, *modules/build_jetRocky8_intel_smiol*
+
+3. Use the same module to build programs from the above packages
+
+    ```
+    $> source /etc/profile.d/modules.sh
+    $> module purge
+    $> module use ${rootdir}/modules
+    $> module load $modulename
+    ```
+    where *rootdir* is the workflow directory, for example, */lfs1/NAGAPE/wof/mpas/mpas_scripts*, and
+    *modulename* is just *build_jetRocky8_intel_smiol* you created above.
+
+    Then build each package by following their individually compiling steps.
+
+4. Modify the run-time environment by change `modulename="build_jet_intel18_1.11_smiol"` to
+   `modulename="build_jetRocky8_intel_smiol"` in *scripts/run_mpas.sh*.
+
+5. Link the built executables to the workflow using *scripts/lnwrkfiles.sh*
+    - Please check the directory specifications for each package at the very top of the script *scripts/lnwrkfiles.sh*
+    - Run this command `$> scripts/lnwrkfiles.sh`
+    - Check the executables `$> ls -l exec` and you should get something similar
+
+    ```
+      lrwxrwxrwx 1 Yunheng.Wang hpc-wof1   67 Feb 10 00:11 atmosphere_model.single -> /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MPAS-Model.smiol2/atmosphere_model
+      lrwxrwxrwx 1 Yunheng.Wang hpc-wof1   72 Feb 10 00:11 init_atmosphere_model -> /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MPAS-Model.smiol2/init_atmosphere_model
+    * lrwxrwxrwx 1 Yunheng.Wang hpc-wof1   83 Jun 28  2023 init_atmosphere_model.static -> /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MPAS-Model.smiol2/init_atmosphere_model.dbl_static
+    * lrwxrwxrwx 1 Yunheng.Wang hpc-wof1   64 Feb  8  2023 geogrid.exe -> /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_SRC/geogrid/src/geogrid.exe
+    * lrwxrwxrwx 1 Yunheng.Wang hpc-wof1   17 May 24  2023 gpmetis -> ../../bin/gpmetis
+      lrwxrwxrwx 1 Yunheng.Wang hpc-wof1   52 Feb  7  2023 mpassit -> /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/MPASSIT/bin/mpassit
+      lrwxrwxrwx 1 Yunheng.Wang hpc-wof1   62 Oct 20  2022 unipost.exe -> /lfs4/NAGAPE/hpc-wof1/ywang/MPAS/UPP_KATE_kjet/bin/unipost.exe
+    ```
+    > *: Will not be needed just for system upgrading to Rocky8.
+6. Finally, you can run the workflow normally.

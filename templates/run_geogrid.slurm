@@ -13,9 +13,13 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-module use ROOTDIR/modules
-module load build_jet_intel
-#source /home/yunheng.wang/.wrfenv
+if [[ "MACHINE" == "Ursa" ]]; then
+    module purge
+    module use ROOTDIR/modules
+    module load MODULE
+else
+    source ROOTDIR/modules/MODULE
+fi
 
 ulimit -s unlimited
 

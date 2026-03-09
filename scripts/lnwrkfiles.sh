@@ -27,15 +27,14 @@ elif [[ "${myhost}" == "cheyenne"* || ${myhost} == "derecho"* ]]; then
     srcwrfdir=${srcroot}/WRFV4.0
     srcdartdir=${srcroot}/DART
 else
-    srcroot="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS"
-    tool_dir="/home/Yunheng.Wang/local"
+    srcroot="/scratch3/NAGAPE/wof/ywang/MPAS"
+    tool_dir="/scratch3/NAGAPE/wof/ywang/tools"
     srcmpassitdir=${srcroot}/MPASSIT
     srcuppdir=${srcroot}/UPP_KATE_kjet
     srcmodeldir=${srcroot}/MPAS-Model.gsl
     srcwpsdir=${srcroot}/WPS_SRC
     srcwrfdir=${srcroot}/WRFV4.0
     srcdartdir=${srcroot}/frdd-DART
-    srcmpasregion=${srcroot}/MPAS-Limited-Area
 fi
 
 default_packages=(mpas MPASSIT UPP WRF DART mpasregion)
@@ -305,12 +304,16 @@ for pkg in "${packages[@]}"; do
         ;;
     #5. MPASREGION
     "MPASREGION" )
+
         if [[ $realrun == false ]]; then
             cd "$(dirname" ${desdir}")" || exit 1
-            echo "---  ${cmdnote} ${srcmpasregion}/MPAS-Limited-Area"
+            echo "---  ${cmdnote} ${srcroot}/MPAS-Limited-Area"
             echo "     CWD: $(dirname "$desdir")"
 
-            run_cmd "${runcmd}" "${srcmpasregion}" MPAS-Limited-Area
+            run_cmd "${runcmd}" "${srcroot}/MPAS-Limited-Area" limited_area
+            run_cmd "${runcmd}" "${srcroot}/MPAS-Limited-Area" create_region
+            run_cmd "${runcmd}" "${srcroot}/scale_region" scale_region.py
+            run_cmd "${runcmd}" "${srcroot}/MPAS-Tools/mesh_tools/grid_rotate" grid_rotate
         fi
         ;;
 

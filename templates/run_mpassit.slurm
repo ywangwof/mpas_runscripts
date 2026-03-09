@@ -13,11 +13,11 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-if [[ "MACHINE" == "Jet" ]]; then
+if [[ "MACHINE" == "Ursa" ]]; then
     module purge
     module reset
-    module use /lfs5/NAGAPE/hpc-wof1/ywang/MPAS/MPASSIT.vecna/modulefiles
-    module load build.jet.intel
+    module use ROOTDIR/modules/MPASSIT
+    module load build.MACHINE.intel
 
 else
     source ROOTDIR/modules/MODULE

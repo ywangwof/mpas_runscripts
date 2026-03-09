@@ -1,0 +1,36 @@
+#%Module
+
+proc ModulesHelp { } {
+   puts stderr "This module loads libraries for building MPAS on"
+   puts stderr "the NOAA RDHPC machine JET using Intel-2023.2.0"
+}
+
+module-whatis "Loads libraries needed for building MPAS on JET running Rocky Linux 8"
+
+module purge
+
+module load cmake/3.30.2
+
+module load intel-oneapi-compilers/2023.2.0
+module load hpcx-mpi/2.18.1
+module load parallel-netcdf/1.12.3
+
+module load hdf5/1.14.3
+module load netcdf-c/4.9.2
+module load netcdf-fortran/4.6.1
+
+module load jasper
+
+setenv NETCDF /apps/spack-2024-12/linux-rocky9-x86_64/oneapi-2023.2.0/netcdf-fortran-4.6.1-vacw62x7vusrk7wnbvmtbomebxpwakyn
+
+setenv PNETCDF /apps/spack-2024-12/linux-rocky9-x86_64/oneapi-2023.2.0/parallel-netcdf-1.12.3-7oe7abjv36ljblmtxq3v2gjo6jhynkue
+
+prepend-path LD_LIBRARY_PATH /scratch3/NAGAPE/wof/ywang/tools/lib:/apps/spack-2024-12/linux-rocky9-x86_64/oneapi-2023.2.0/hdf5-1.14.3-md5xflscbklytw3quhlxwrwmuptyurs6/lib #contains the grib2 libraries that are needed for the WPS compile
+
+# the Jasper environment settings for WPS
+setenv JASPERLIB /apps/spack-2024-12/linux-rocky9-x86_64/gcc-11.4.1/jasper-2.0.32-ti3pzbhcmtzczjmisaaqn724zvjdm4td/lib64
+setenv JASPERINC /apps/spack-2024-12/linux-rocky9-x86_64/gcc-11.4.1/jasper-2.0.32-ti3pzbhcmtzczjmisaaqn724zvjdm4td/include/jasper
+
+setenv CMAKE_C_COMPILER mpicc
+setenv CMAKE_CXX_COMPILER mpicxx
+setenv CMAKE_Fortran_COMPILER mpif90

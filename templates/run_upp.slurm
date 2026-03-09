@@ -2,7 +2,7 @@
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
-#SBATCH -t 00:05:00
+#SBATCH -t 00:55:00
 #SBATCH --output=WRKDIR/upp_HHHSTR_%j.log
 ACCTSTR
 EXCLSTR
@@ -17,15 +17,14 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-if [[ "MACHINE" == "Jet" ]]; then
+if [[ "MACHINE" == "Ursa" ]]; then
     # shellcheck source=/dev/null # to ignore source path error
     source /etc/profile.d/modules.sh
     module purge
     module use ROOTDIR/modules
     module load MODULE
-    module load gnu/13.2.0 wgrib2/3.1.1_wmo
-    export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/lfs5/NAGAPE/hpc-wof1/ywang/tools/micromamba/envs/wofs_an/lib
-    wgrib2path="/apps/wgrib2/3.1.1/gnu_13.2.0/wmo/bin/wgrib2"
+    module load wgrib2/3.1.3_wmo
+    wgrib2path="/apps/wgrib2/3.1.3/gnu_11.4.1/wmo/bin/wgrib2"
 else
     # shellcheck source=/dev/null # to ignore source path error
     source ROOTDIR/modules/MODULE
@@ -35,7 +34,7 @@ module list
 ulimit -s unlimited
 
 wrkdir=WRKDIR
-cd $wrkdir
+cd $wrkdir || exit $?
 
 rm -rf ../error.upp_HHHSTR ../queue.upp_HHHSTR
 
@@ -43,27 +42,28 @@ touch ../running.upp_HHHSTR
 
 rm -rf fort.* core.*
 
-RUNMPCMD EXEDIR/unipost.exe
+RUNMPCMD -n NOPART EXEDIR/unipost.exe
 
 if [[ $? -eq 0 ]]; then
     dtstr=(${wrkdir//\// })
 
-    grid_specs_hrrr="lambert:-97.5:38.5 -122.719528:1799:3000.0 21.138123:1059:3000.0"
+    #grid_specs_hrrr="lambert:-97.5:38.5 -122.719528:1799:3000.0 21.138123:1059:3000.0"
 
     infile=$(compgen -G WRFPRS.GrbF??)
     tmpfile=tmpGrbFHHHSTR.grib2
     outfile=../MPAS-A_${dtstr[-3]}fHHHSTR.grib2
 
-    ${wgrib2path} ${infile} -set_bitmap 1 -set_grib_type c3 -new_grid_winds grid \
-           -new_grid_vectors "UGRD:VGRD:USTM:VSTM:VUCSH:VVCSH" \
-           -new_grid_interpolation neighbor \
-           -new_grid ${grid_specs_hrrr} ${tmpfile}
+    #${wgrib2path} ${infile} -set_bitmap 1 -set_grib_type c3 -new_grid_winds grid \
+    #       -new_grid_vectors "UGRD:VGRD:USTM:VSTM:VUCSH:VVCSH" \
+    #       -new_grid_interpolation neighbor \
+    #       -new_grid ${grid_specs_hrrr} ${tmpfile}
 
     # Merge vector field records
-    ${wgrib2path} ${tmpfile} -new_grid_vectors "UGRD:VGRD:USTM:VSTM:VUCSH:VVCSH" -submsg_uv ${outfile}
+    #${wgrib2path} ${tmpfile} -new_grid_vectors "UGRD:VGRD:USTM:VSTM:VUCSH:VVCSH" -submsg_uv ${outfile}
+    ${wgrib2path} "${infile}" -new_grid_vectors "UGRD:VGRD:USTM:VSTM:VUCSH:VVCSH" -submsg_uv "${outfile}"
 
     # Remove temporary file
-    rm ${tmpfile} ${infile}
+    rm ${tmpfile} "${infile}"
 
     #mv WRFPRS.GrbFHHHSTR ../MPAS-A_${dtstr[-3]}fHHHSTR.grib2
 
@@ -76,13 +76,6 @@ rm -rf ../running.upp_HHHSTR
 
 time2=$(date '+%s')
 
-let diff=time2-time1
-let hour=diff/3600
-let diff=diff%3600
-let min=diff/60
-let sec=diff%60
+diff=$((time2-time1))
 
-echo -n "Job   Ended: $(date). "
-printf 'Job run time:  %02d:%02d:%02d' $hour $min $sec
-echo " "
-
+printf "\nJob   Ended: %(%a %b %d %H:%M:%S %Z %Y)T. Job run time: %s.\n" "${time2}" "$(date -d@$diff -u +%H:%M:%S)"
