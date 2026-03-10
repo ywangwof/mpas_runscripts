@@ -26,6 +26,31 @@ def run_script(cmd):
     print (cmd + "  is finished....")
     return
 
+# -------------------------------------------------------------------------------
+# Read in command line arguments
+
+parser = OptionParser()
+parser.add_option("-w", dest="wdir", type="string", default=None,
+                        help="wofs input directory of efss files")
+parser.add_option("-m", dest="mdir", type="string", default=None,
+                        help="MRMS base directory")
+parser.add_option("-o", dest="odir", type="string",
+                        help="output directory of plots")
+parser.add_option("-x", dest="affix", type="string",
+                        help="output directory of plots")
+
+(options, args) = parser.parse_args()
+
+if ((options.wdir == None) or (options.mdir == None) or (options.odir == None)):
+    print()
+    parser.print_help()
+    print()
+    sys.exit(1)
+else:
+    mrms_base = options.mdir
+    wofs_base = options.wdir
+    out_dir   = options.odir
+    affix = options.affix if options.affix is not None else ""
 
 #################################### User-Defined Variables:  #####################################################
 
@@ -33,21 +58,26 @@ pool = Pool(processes=(18))              # set up a queue to run
 
 ############################ Find WRFOUT files to process: #################################
 
-case_ids = ['20240506', '20240507', '20240508', '20240516', '20240521']
+case_ids = ['20240508',]
 
 times = ['1900', '2000', '2100', '2200', '2300', '0000', '0100', '0200', '0300']
 
 var = 'compdz'
 
-mrms_base = '/work/rt_obs/MRMS/RAD_AZS_MSH/2024'
-wofs_base = '/scratch/wofs_mpas/run_dirs/summary_files'
-out_dir   = '/scratch/wofs_mpas/run_dirs/VERIF/FSS/mpas-wofs'
+#mrms_base = '/work/rt_obs/MRMS/RAD_AZS_MSH/2024'
+#wofs_base = '/scratch/wofs_mpas/run_dirs/summary_files'
+#out_dir   = '/scratch/wofs_mpas/run_dirs/VERIF/FSS/mpas-wofs'
+
+#mrms_base = '/scratch3/NAGAPE/wof/ywang/rt_obs/MRMS//RAD_AZS_MSH/2024'
+#wofs_base = '/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/run_dirs/summary_files_Z_tempo'
+##out_dir   = '/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/run_dirs/VERIF/FSS/mpas-wofs'
+#out_dir   = '/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/run_dirs/VERIF/FSS/Z_tempo'
 
 for c, case in enumerate(case_ids):
     for t, time in enumerate(times):
         temp_case = case + '/'
-        mrmsdir = os.path.join(mrms_base,case)
-        indir   = os.path.join(wofs_base,f"{case}_V822Reduced",time)
+        mrmsdir = os.path.join(mrms_base,f"{case}{affix}")
+        indir   = os.path.join(wofs_base,case,time)
         outdir  = os.path.join(out_dir,case,time)
 
         if os.path.exists(indir):

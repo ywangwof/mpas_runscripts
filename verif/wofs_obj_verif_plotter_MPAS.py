@@ -6,8 +6,6 @@ Created on Tue Jan  2 15:08:32 2024
 @author: asdf
 """
 
-# In[0]:
-
 import re
 import matplotlib
 import matplotlib.pyplot as plt

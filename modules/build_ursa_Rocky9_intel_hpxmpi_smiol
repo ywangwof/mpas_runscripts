@@ -21,7 +21,7 @@ module load netcdf-fortran/4.6.1
 
 module load jasper
 
-setenv NETCDF /apps/spack-2024-12/linux-rocky9-x86_64/gcc-11.4.1/netcdf-c-4.9.2-dzmdg3ly7avioysvapk37klgegbsq3js
+setenv NETCDF /apps/spack-2024-12/linux-rocky9-x86_64/oneapi-2023.2.0/netcdf-fortran-4.6.1-vacw62x7vusrk7wnbvmtbomebxpwakyn
 
 setenv PNETCDF /apps/spack-2024-12/linux-rocky9-x86_64/oneapi-2023.2.0/parallel-netcdf-1.12.3-7oe7abjv36ljblmtxq3v2gjo6jhynkue
 

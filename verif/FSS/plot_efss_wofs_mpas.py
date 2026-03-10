@@ -9,6 +9,8 @@ import numpy as np
 from optparse import OptionParser
 import netCDF4
 
+from pathlib import Path
+
 from efss_plot_functions_wofs_mpas import heatmap_width_inten_diff_mpas, time_series_efss_mpas
 
 # -------------------------------------------------------------------------------
@@ -34,11 +36,15 @@ else:
     rdir = options.rdir
     outdir = options.outdir
 
+namew=Path(wdir).name
+namer=Path(rdir).name
+
 # -------------------------------------------------------------------------------
 # Options for filtering
 
+# Output: apache2
 years = np.array([2024])
-exper = "cb-WoFSvsMPAS-WoFS"
+exper = f"{namew}vs{namer}"
 year1 = years[0]
 year2 = years[-1]
 
@@ -53,16 +59,12 @@ year2 = years[-1]
 #                  '20240521' : ['1700', '1800', '1900', '2000', '2100', '2200', '2300', '0000', '0100', '0200', '0300']
 #                 }
 
-case_time_dict = {'20240506' : ['1900', '2000', '2100', '2200', '2300', '0000', '0100', '0200', '0300'],
-                  '20240507' : ['1900', '2000', '2100', '2200', '2300', '0000', '0100', '0200', '0300'],
-                  '20240508' : ['1900', '2000', '2100', '2200', '2300', '0000'],
-                  '20240516' : ['1900', '2000', '2100', '2200', '2300', '0000', '0100', '0200', '0300'],
-                  '20240521' : ['1900', '2000', '2100', '2200', '2300', '0000', '0100', '0200', '0300']
+case_time_dict = {'20240508' : ['1900', '2000', '2100', '2200', '2300', '0000', '0100','0200','0300'],
                  }
 
 file_dates      = []
 fcst_files_wofs = []
-fcst_files_mpas = []
+fcst_files_ref = []
 for case,times in case_time_dict.items():
     for time in times:
         if time < '1200':
@@ -82,7 +84,7 @@ for case,times in case_time_dict.items():
 
         rfile = os.path.join(rdir, case, time, efss_file)
         if os.path.lexists(rfile):
-            fcst_files_mpas.append(rfile)
+            fcst_files_ref.append(rfile)
         else:
             print(f"ERROR: file {rfile} not exist.")
             sys.exit(1)
@@ -109,7 +111,7 @@ for yr in range(0, ny):
     # fcst_files.sort()
 
     nf = len(fcst_files_wofs)
-    print(f"Reading {nf} cb-WoFS files ....")
+    print(f"Reading {nf} {namew} files ....")
     for ft in range(0, nf):
         try:
             fin = netCDF4.Dataset(fcst_files_wofs[ft], "r")
@@ -214,14 +216,14 @@ for yr in range(0, ny):
     # indv_files.sort()
 
 
-    nf = len(fcst_files_mpas)
-    print(f"Reading {nf} mpas-WoFS files ....")
+    nf = len(fcst_files_ref)
+    print(f"Reading {nf} {namer} files ....")
     for ft in range(0, nf):
         try:
-            fin = netCDF4.Dataset(fcst_files_mpas[ft], "r")
-            print("Opening %s " % fcst_files_mpas[ft])
+            fin = netCDF4.Dataset(fcst_files_ref[ft], "r")
+            print("Opening %s " % fcst_files_ref[ft])
         except:
-            print("%s does not exist! \n" % fcst_files_mpas[ft])
+            print("%s does not exist! \n" % fcst_files_ref[ft])
             sys.exit(1)
 
         if (yr == 0) and (ft == 0):
@@ -336,7 +338,7 @@ pmthd = 0
 
 if ((pmthd == 0) or (pmthd == 1)):
 
-    heatmap_width_inten_diff_mpas(outdir, wefbs, wefbsr, mefbs,mefbsr,wscales[0,0,:],wmrms_thlds[0,0,0,:],exper,year1,year2)
+    heatmap_width_inten_diff_mpas(outdir, wefbs, wefbsr, mefbs,mefbsr,wscales[0,0,:],wmrms_thlds[0,0,0,:],exper,namew,namer)
 
 # -------------------------------------------------------------------------------
 #
@@ -349,4 +351,4 @@ if ((pmthd == 0) or (pmthd == 2)):
     th = 3
 
     time_series_efss_mpas(outdir, wefbs[:, :, :,wd,th], wefbsr[:,:,:,wd,th], wfbs[:,:,:,:,wd,th], wfbsr[:,:,:,:,wd,th],
-            mefbs[:, :, :, wd,th], mefbsr[:,:,:,wd,th], mfbs[:,:,:,:,wd,th], mfbsr[:,:,:,:,wd,th], wscales[0,0,wd], wmrms_thlds[0,0,0,th], exper, year1, year2)
+            mefbs[:, :, :, wd,th], mefbsr[:,:,:,wd,th], mfbs[:,:,:,:,wd,th], mfbsr[:,:,:,:,wd,th], wscales[0,0,wd], wmrms_thlds[0,0,0,th], exper, namew, namer)

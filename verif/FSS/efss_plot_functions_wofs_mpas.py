@@ -94,7 +94,7 @@ def aggr_fss(fbs,fbsr):
     return fss
 
 
-def heatmap_width_inten_diff_mpas(outdir,efbs,efbsr,mefbs,mefbsr,scales,thlds,exper,year1,year2):
+def heatmap_width_inten_diff_mpas(outdir,efbs,efbsr,mefbs,mefbsr,scales,thlds,exper,ename,mname):
 
     wofsefss = bin_efss_data(efbs,efbsr,scales,thlds)
     mpasefss = bin_efss_data(mefbs,mefbsr,scales,thlds)
@@ -132,18 +132,18 @@ def heatmap_width_inten_diff_mpas(outdir,efbs,efbsr,mefbs,mefbsr,scales,thlds,ex
     ax.set_xticklabels(xticklabels,fontsize=15)
     ax.set_yticks(yticks)
     ax.set_yticklabels(yticklabels,fontsize=15)
-    ax.set_title('eFSS Difference (cb-WoFS - MPAS-WoFS)', fontsize=20)
+    ax.set_title(f'eFSS Difference ({ename} - {mname})', fontsize=20)
 
     ax.set_aspect(1.0, adjustable='box')
 
     cbar1 = plt.colorbar(cs1,shrink=0.5,ticks=np.linspace(-0.3,0.3,13))
     cbar1.set_label('eFSS Difference', fontsize=15)
-    outfile=os.path.join(outdir,'efss_heatmap_{}_vs_{}_{}-{}_{}.png'.format(xname,yname,year1,year2,exper))
+    outfile=os.path.join(outdir,'efss_heatmap_{}_vs_{}_{}-{}.png'.format(xname,yname,ename,mname))
     print(f"Saving {outfile} ....")
     plt.savefig(outfile, dpi=300, bbox_inches='tight')
 
 
-def time_series_efss_mpas(outdir,wefbs, wefbsr, wfbs, wfbsr, mefbs, mefbsr, mfbs, mfbsr, nsize, thld, exper, year1, year2):
+def time_series_efss_mpas(outdir,wefbs, wefbsr, wfbs, wfbsr, mefbs, mefbsr, mfbs, mfbsr, nsize, thld, exper, wname, mname):
 
     fig1 = plt.figure(figsize=(10,5))
     ax1 = fig1.add_axes([0.08, 0.1, .88, .86])
@@ -175,7 +175,7 @@ def time_series_efss_mpas(outdir,wefbs, wefbsr, wfbs, wfbsr, mefbs, mefbsr, mfbs
 
     ax1.set_xlabel('Forecast Lead Time (min)', fontsize=14)
     ax1.set_ylabel('eFSS and FSS', fontsize=14)
-    ax1.set_title('{} eFSS and FSS: {} dBZ, {} km'.format(year1,thld,nsize), fontsize=20)
+    ax1.set_title('{} eFSS and FSS: {} dBZ, {} km'.format(wname,thld,nsize), fontsize=20)
 
     plt.xticks(x_ticks, x_labels, fontsize=14, alpha=1.0)
     plt.yticks(y_ticks, y_labels, fontsize=14, alpha=1.0)
@@ -204,10 +204,10 @@ def time_series_efss_mpas(outdir,wefbs, wefbsr, wfbs, wfbsr, mefbs, mefbsr, mfbs
           temp_color = cb_colors.purple8
        ax1.plot(mfss[n,:], color=temp_color, linestyle='--', linewidth=1., alpha=0.5)
 
-    ax1.plot(wefss, color=cb_colors.green9, linewidth=2., alpha=0.8, label="cb-WoFS")
-    ax1.plot(mefss, color=cb_colors.purple9, linestyle='--', linewidth=2., alpha=0.8, label="MPAS-WoFS")
+    ax1.plot(wefss, color=cb_colors.green9, linewidth=2., alpha=0.8, label=wname)
+    ax1.plot(mefss, color=cb_colors.purple9, linestyle='--', linewidth=2., alpha=0.8, label=mname)
 
     ax1.legend(loc='upper right', fontsize=14)
-    outfile = os.path.join(outdir,'efss_timeseries_{}_{}-{}_{}_{}.png'.format(exper,year1,year2,nsize,thld))
+    outfile = os.path.join(outdir,'efss_timeseries_{}-{}_{}_{}.png'.format(wname,mname,nsize,thld))
     print(f"Saving {outfile} ....")
     plt.savefig(outfile, format='png', dpi=300, bbox_inches='tight')
