@@ -77,7 +77,7 @@ ulimit -s unlimited
             # pyioda libraries
             PYIODALIB=$(echo "${HOMErrfs}"/sorc/RDASApp/build/lib/python3.*)
             export PYTHONPATH=${PYIODALIB}:${PYTHONPATH}
-            "ROOTDIR/scripts/MRMS2ioda.py" -i ./Gridded_ref.nc -c "${YYYY}-${MM}-${DD}T${HH}:${min}:00" -o "ioda_mrms_${YYYYMMDD}_${HH}${min}.nc4" -g grid.nc
+            "ROOTDIR/observations/MRMS2ioda.py" -i ./Gridded_ref.nc -c "${YYYY}-${MM}-${DD}T${HH}:${min}:00" -o "ioda_mrms_${YYYYMMDD}_${HH}${min}.nc4" -g grid.nc
 	    set +x
         fi
 

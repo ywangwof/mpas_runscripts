@@ -591,7 +591,7 @@ function run_ioda_cwp {
     PYIODALIB=$(echo "${rrfs_dir}"/sorc/RDASApp/build/lib/python3.*)
     export PYTHONPATH=${PYIODALIB}:${PYTHONPATH}
 
-    ${scpdir}/GOESCWP2ioda.py -d ${anlys_eventtime} ${cwpfile}
+    ${rootdir}/observations/GOESCWP2ioda.py -d ${anlys_eventtime} ${cwpfile}
     )
 
     local istatus=$?
@@ -606,7 +606,7 @@ function run_ioda_cwp {
             fi
         done
     else
-        mecho0 "${RED}ERROR${NC}: ${BROWN}${scpdir}/GOESCWP2ioda.py${NC} failed."
+        mecho0 "${RED}ERROR${NC}: ${BROWN}${rootdir}/observations/GOESCWP2ioda.py${NC} failed."
         touch error.ioda_cwp
         exit "${istatus}"
     fi
