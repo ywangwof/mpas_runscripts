@@ -23,6 +23,7 @@
 # o clean_mem_runfiles       # Clean the runtime files of an ensemble task
 # o wait_for_file_size       # Hold the task until the file size exceeds the give number of bytes
 # o wait_for_file_age        # Hold the task until the file age is older than the give number of seconds
+# o wait_for_conditions
 # o num_pending_jobs_greater_than       # Check number of jobs in the queue before submit a new job to avoid job flooding
 # o mecho/mecho0/mecho1/mecho2    # Print text with function name prefix
 # o split_graph              # Split graph.info file for the corresponding MPI processes
@@ -1051,6 +1052,25 @@ function wait_for_file_size {
     done
 
     return 0
+}
+
+########################################################################
+
+wait_for_conditions () {
+    local conditions
+    read -r -a conditions <<< "$1"
+
+    if [[ $dorun == true ]]; then
+        for cond in "${conditions[@]}"; do
+            mecho1 "Checking $cond ...."
+            while [[ ! -e $cond ]]; do
+                if [[ $verb -eq 1 ]]; then
+                    mecho1 "Waiting for file: $cond"
+                fi
+                sleep 10
+            done
+        done
+    fi
 }
 
 ########################################################################

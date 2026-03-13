@@ -93,6 +93,7 @@ function setup_machine {
             OBS_DIR="/scratch4/BMC/rtrr/RRFS2_RETRO_DATA/May2024"
             OBS_DIR_REF="/scratch3/NAGAPE/wof/kknopfmeier/MRMS"
             OBS_DIR_VEL="/scratch3/NAGAPE/wof/kknopfmeier/MRMS"
+            OBS_DIR_CWP="/scratch3/NAGAPE/wof/ywang/rt_obs/CWP"
 
             hrrr_dir="/scratch3/NAGAPE/wof/ywang/HRRRE"
         fi
@@ -288,7 +289,7 @@ function setup_machine {
         export job_exclusive_str job_account_str job_runmpexe_str job_runexe_str
         export partition_wps partition_static partition_create npestatic claim_cpu_static claim_cpu_create ncores_static
         export WPSGEOG_PATH wgrib2path nckspath gpmetis nclpath
-        export OBS_DIR OBS_DIR_REF OBS_DIR_VEL hrrr_dir
+        export OBS_DIR OBS_DIR_REF OBS_DIR_VEL OBS_DIR_CWP hrrr_dir
     fi
 }
 
@@ -349,9 +350,9 @@ function default_site_settings {
         claim_cpu_lbc="--cpus-per-task=2"
 
         # DA cycles
-        ncores_dafcst=96;  ncores_filter=96
+        ncores_dafcst=96;  ncores_filter=48
         partition_dafcst="u1-compute"; claim_cpu_dafcst="--cpus-per-task=1"
-        partition_filter="u1-compute"; claim_cpu_filter="--cpus-per-task=1"
+        partition_filter="u1-compute"; claim_cpu_filter="--ntasks-per-node=${ncores_filter}"
                                        claim_cpu_ioda="--cpus-per-task=1"
                                        claim_cpu_ioda_refl="--cpus-per-task=2"
         npedafcst=96         #; nnodes_fcst=$(( npefcst/ncores_fcst ))
@@ -360,7 +361,7 @@ function default_site_settings {
         nnodes_dafcst=$(( npedafcst/ncores_dafcst ))
 
         # FCST cycles
-        ncores_fcst=96;  ncores_post=80
+        ncores_fcst=96;  ncores_post=48
         partition_fcst="u1-compute";   claim_cpu_fcst="--cpus-per-task=2"
         partition_post="u1-compute";   claim_cpu_post="--ntasks-per-node=${ncores_post}"
 

@@ -1417,6 +1417,7 @@ function write_config {
     use_BUFR=true                       # Whether we should wait for PrepBufr data file
     use_REF=true
     use_VR=true
+    use_CWP=true
 
     run_addnoise=false                  # run WoFS add_noise facility (Python)
     WOFSAN_PATH="${mpas_wofs_python}"
@@ -1427,13 +1428,15 @@ function write_config {
     OBS_DIR="${OBS_DIR}"
     OBS_REF_DIR="${OBS_DIR_REF}"
     OBS_VEL_DIR="${OBS_DIR_VEL}"
+    OBS_CWP_DIR="${OBS_DIR_CWP}"
 
     time_step=15
 
     partition_fcst="${partition_dafcst}";
-    partition_filter="${partition_filter}"
+    partition_filter="${partition_filter}";  partition_post="${partition_post}"
     npefcst="${npedafcst}";   ncores_fcst="${ncores_dafcst}";   nnodes_fcst="${nnodes_dafcst}"
     npefilter="${npefilter}"; ncores_filter="${ncores_filter}"; nnodes_filter="${nnodes_filter}"
+    npepost="${npepost}"
 
     claim_cpu_fcst="${claim_cpu_dafcst}"
     claim_cpu_filter="${claim_cpu_filter}"

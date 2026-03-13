@@ -110,8 +110,8 @@ function usage {
     echo "    WORKDIR  - Run Directory"
     echo "    CONFIG   - MPAS-WoFS runtime configuration file with full path."
     echo "               WORKDIR & DATETIME will be extracted from the CONFIG name unless they are given explicitly."
-    echo "    JOBS     - One or more jobs from [ioda_bufr,ioda_mrms_refl,jedi_observer,jedi_solver,update_bc,mpas,clean,mpassit_mean]"
-    echo "               Default all jobs in [ioda_bufr,ioda_mrms_refl,jedi_observer,jedi_solver,update_bc,mpas] for a DA cyle"
+    echo "    JOBS     - One or more jobs from [ioda,jedi_observer,jedi_solver,update_bc,mpas,clean,mpassit_mean]"
+    echo "               Default all jobs in [ioda,jedi_observer,jedi_solver,update_bc,mpas] for a DA cyle"
     echo " "
     echo "    OPTIONS:"
     echo "              -h                  Display this message"
@@ -289,6 +289,18 @@ function run_ioda {
     if [[ ${use_REF} == true ]]; then
         run_ioda_mrms_refl ${wrkdir} ${iseconds}
     fi
+
+    if [[ ${use_VR} == true ]]; then
+        obs_string="${obs_string},rw"
+    fi
+
+    #------------------------------------------------------
+    # Run ioda_cwp for GOESCloudWaterPath
+    #------------------------------------------------------
+    if [[ ${use_CWP} == true ]]; then
+        run_ioda_cwp ${wrkdir} ${iseconds}
+    fi
+
 }
 
 ########################################################################
@@ -351,13 +363,6 @@ function run_ioda_mrms_refl {
     local wrkdir=$1               # DA directory for this cycle
     local iseconds=$2
 
-    #
-    # Return if is running or is done
-    #
-    if [[ -f $wrkdir/ioda_mrms_refl/running.ioda_mrms_refl || -f $wrkdir/ioda_mrms_refl/done.ioda_mrms_refl || -f $wrkdir/ioda_mrms_refl/queue.ioda_refl ]]; then
-        return
-    fi
-
     #------------------------------------------------------
     # Run ioda_mrms_refl for MRMS observation files
     #------------------------------------------------------
@@ -366,6 +371,16 @@ function run_ioda_mrms_refl {
                                      # 1: Remove existing same name directory
     cd $wrkdir/ioda_mrms_refl || exit $?
 
+    obs_string="${obs_string},refl10cm"
+
+    #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/ioda_mrms_refl/running.ioda_mrms_refl \
+       || -f $wrkdir/ioda_mrms_refl/done.ioda_mrms_refl    \
+       || -f $wrkdir/ioda_mrms_refl/queue.ioda_refl ]]; then
+        return
+    fi
     #
     #-----------------------------------------------------------------------
     #
@@ -503,6 +518,98 @@ EOF
     fi
 
     submit_a_job $wrkdir/ioda_mrms_refl "ioda_refl" jobParms $TEMPDIR/$jobscript $jobscript ""
+}
+
+########################################################################
+
+function run_ioda_cwp {
+    # $1        $2
+    # wrkdir    iseconds
+
+    local wrkdir=$1               # DA directory for this cycle
+    local iseconds=$2
+
+    if [[ $icyc -le 0 ]]; then return; fi
+
+    #------------------------------------------------------
+    # Run ioda_cwp for MRMS observation files
+    #------------------------------------------------------
+
+    mkwrkdir $wrkdir/ioda_cwp 1      # 0: Keep existing directory as is
+                                     # 1: Remove existing same name directory
+    cd $wrkdir/ioda_cwp || exit $?
+
+    anlys_year=$(date -u -d @$iseconds  +%Y)
+    anlys_eventtime=$(date -u -d @$iseconds  +%Y%m%d%H%M)
+
+    #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/ioda_cwp/done.ioda_cwp ]]; then
+        for cwpobs in "${cwp_obses[@]}"; do
+            filename="ioda_${cwpobs}_obs.nc"
+            if [[ -s ${filename} ]]; then
+                mecho0 "Using CWP observations ${YELLOW}${cwpobs}${NC}"
+                obs_string="${obs_string},${cwpobs}"
+            fi
+        done
+
+        return
+    fi
+
+    #
+    #-----------------------------------------------------------------------
+    #
+    # link/copy observation files to working directory
+    #
+    #-----------------------------------------------------------------------
+    #
+    cwpfile="${OBS_CWP_DIR}/${anlys_year}/${anlys_eventtime}_GOES16_CWP_OBS.nc"
+
+    if [[ -f ${cwpfile} ]]; then
+        mecho0 "Using CWP file ${CYAN}${cwpfile}${NC}"
+    else
+        mecho0 "${YELLOW}INFO${NC}: CWP file ${CYAN}${cwpfile}${NC} not exist."
+        return
+    fi
+    #
+    #-----------------------------------------------------------------------
+    #
+    # Process the GOES CWP data file
+    #
+    # 0: CWP_ZERO - cwp; 1: LWP        2: IWP     3: CWP_ZERO_NIGHT
+    # 4: LWP_NIGHT; 5: IWP_NIGHT
+    #
+    #-----------------------------------------------------------------------
+    #
+    (
+    module purge
+    module use ${rrfs_dir}/modulefiles
+    module load rrfs/ursa.intel
+
+    # pyioda libraries
+    PYIODALIB=$(echo "${rrfs_dir}"/sorc/RDASApp/build/lib/python3.*)
+    export PYTHONPATH=${PYIODALIB}:${PYTHONPATH}
+
+    ${scpdir}/GOESCWP2ioda.py -d ${anlys_eventtime} ${cwpfile}
+    )
+
+    local istatus=$?
+    # shellcheck disable=SC2181
+    if [ $istatus -eq 0 ]; then
+        touch done.ioda_cwp
+        for cwpobs in "${cwp_obses[@]}"; do
+            filename="ioda_${cwpobs}_obs.nc"
+            if [[ -s ${filename} ]]; then
+                mecho0 "Using CWP observations ${YELLOW}${cwpobs}${NC}"
+                obs_string="${obs_string},${cwpobs}"
+            fi
+        done
+    else
+        mecho0 "${RED}ERROR${NC}: ${BROWN}${scpdir}/GOESCWP2ioda.py${NC} failed."
+        touch error.ioda_cwp
+        exit "${istatus}"
+    fi
 }
 
 ########################################################################
@@ -700,7 +807,7 @@ function create_streams {
                   filename_template="${domname}_${memstr}.restart.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
                   io_type="${OUTIOTYPE}"
                   input_interval="initial_only"
-                  clobber_mode="replace_files" >
+                  clobber_mode="replace_files"
                   output_interval="${RSTINVL_STR}" />
 
 <stream name="output"
@@ -937,11 +1044,16 @@ function jedi_preparation {
 
     cd $wrkdir || return
 
+    anlys_date=$(date -u -d @$iseconds  +%Y%m%d)
+    anlys_hour=$(date -u -d @$iseconds  +%H)
+    anlys_min=$(date -u -d @$iseconds   +%M)
+
     timesec_pre=$((iseconds-intvl_sec))
     event_pre=$(date -u -d @${timesec_pre}   +%H%M)
 
 
-    parentdir=$(dirname "$(dirname ${wrkdir})")
+    datetime_dir=$(dirname "${wrkdir}")
+    parentdir=$(dirname "${datetime_dir}")
     casedir="${rundir}"
     if $relative_path; then
         parentdir=$(realpath -m --relative-to=${wrkdir} ${parentdir})
@@ -949,39 +1061,90 @@ function jedi_preparation {
     fi
 
     #------------------------------------------------------
-    # Prepare runtime files
+    # 1. Handle observation string
+    # Fix observation string in case run_ioda was not executed
+    #------------------------------------------------------
+
+    if [[ ${use_REF} == true ]]; then
+        radar_reffile="${datetime_dir}/ioda_mrms_refl/ioda_mrms_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
+        if [[ -s ${radar_reffile} ]]; then
+            if [[ "${obs_string}" == *"refl10cm"* ]]; then
+                :
+            else
+                obs_string="${obs_string},refl10cm"
+            fi
+        fi
+    fi
+
+    if [[ ${use_VR} == true ]]; then
+        radar_vrfile="${OBS_VEL_DIR}/${anlys_date}/ioda_VR_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
+        if [[ -s ${radar_vrfile} ]]; then
+            if [[ "${obs_string}" == *"rw"* ]]; then
+                :
+            else
+                obs_string="${obs_string},rw"
+            fi
+        fi
+    fi
+
+    if [[ ${use_CWP} == true ]]; then
+        if [[ "${obs_string}" == *"cwp"* ]]; then
+            :
+        else
+            for cwpobs in "${cwp_obses[@]}"; do
+                filename="${datetime_dir}/ioda_cwp/ioda_${cwpobs}_obs.nc"
+                if [[ -s ${filename} ]]; then
+                    obs_string="${obs_string},${cwpobs}"
+                fi
+            done
+        fi
+    fi
+
+    #------------------------------------------------------
+    # 2. Prepare MPAS/JEDI runtime files
     #------------------------------------------------------
     # DATA=wrkdir
-    physics_convection_permitting=( CAM_ABS_DATA.DBL CAM_AEROPT_DATA.DBL CCN_ACTIVATE_DATA   \
-                                    GENPARM.TBL      LANDUSE.TBL                             \
-                                    MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL MP_TEMPO_QIautQS_DATA.DBL \
-                                    MP_TEMPO_QRacrQG_DATA.DBL           MP_TEMPO_QRacrQS_DATA.DBL \
-                                    MP_TEMPO_freezeH2O_DATA.DBL         MP_THOMPSON_QIautQS_DATA.DBL \
-                                    MP_THOMPSON_QRacrQG_DATA.DBL        MP_THOMPSON_QRacrQS_DATA.DBL \
-                                    MP_THOMPSON_freezeH2O_DATA.DBL      \
-                                    OZONE_DAT.TBL    OZONE_LAT.TBL      OZONE_PLEV.TBL \
-                                    QNWFA_QNIFA_SIGMA_MONTHLY.dat       \
-                                    RRTMG_LW_DATA RRTMG_LW_DATA.DBL     \
-                                    RRTMG_SW_DATA RRTMG_SW_DATA.DBL     \
-                                    SOILPARM.TBL VEGPARM.TBL )
+    if [[ -n ${obs_string} ]]; then
+        physics_convection_permitting=( CAM_ABS_DATA.DBL CAM_AEROPT_DATA.DBL CCN_ACTIVATE_DATA   \
+                                        GENPARM.TBL      LANDUSE.TBL                             \
+                                        OZONE_DAT.TBL    OZONE_LAT.TBL      OZONE_PLEV.TBL \
+                                        QNWFA_QNIFA_SIGMA_MONTHLY.dat       \
+                                        RRTMG_LW_DATA RRTMG_LW_DATA.DBL     \
+                                        RRTMG_SW_DATA RRTMG_SW_DATA.DBL     \
+                                        SOILPARM.TBL VEGPARM.TBL )
 
-    for fn in "${physics_convection_permitting[@]}"; do
-        ln -sf "${FIXDIR}/${fn}" .
-    done
+        for fn in "${physics_convection_permitting[@]}"; do
+            ln -sf "${FIXDIR}/${fn}" .
+        done
 
-    ln -sf "${casedir}/init/${domname}.invariant.nc" ./invariant.nc
-    ln -sf "${casedir}/${domname}/${domname}.ugwp_oro_data.nc" .
+        physics_mp_tempo=( MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL MP_TEMPO_QIautQS_DATA.DBL \
+                           MP_TEMPO_QRacrQG_DATA.DBL           MP_TEMPO_QRacrQS_DATA.DBL \
+                           MP_TEMPO_freezeH2O_DATA.DBL        )
 
-    #mkdir -p graphinfo stream_list
-    #ln -snf "${FIXrrfs}"/graphinfo/* graphinfo/
-    #ln -snf "${FIXrrfs}/stream_list/${PHYSICS_SUITE}"/* stream_list/
-    ${cpcmd} "${FIXDIR}"/jedi/obsop_name_map.yaml .
-    ${cpcmd} "${FIXDIR}"/jedi/keptvars.yaml .
-    ${cpcmd} "${FIXDIR}"/jedi/geovars.yaml .
+        physics_mp_thompson=( MP_THOMPSON_QIautQS_DATA.DBL   MP_THOMPSON_QRacrQG_DATA.DBL   \
+                           MP_THOMPSON_QRacrQS_DATA.DBL   MP_THOMPSON_freezeH2O_DATA.DBL      )
 
-    #
-    # create data directory
-    #
+        if [[ "${mpscheme}" =~ ^(mp_tempo|mp_thompson)$ ]]; then
+            declare -n mp_target="physics_${mpscheme}"
+            for fn in "${mp_target[@]}"; do
+                ln -sf "${FIXDIR}/${fn}" .
+            done
+        fi
+
+        ln -sf "${casedir}/init/${domname}.invariant.nc" ./invariant.nc
+        ln -sf "${casedir}/${domname}/${domname}.ugwp_oro_data.nc" .
+
+        #mkdir -p graphinfo stream_list
+        #ln -snf "${FIXrrfs}"/graphinfo/* graphinfo/
+        #ln -snf "${FIXrrfs}/stream_list/${PHYSICS_SUITE}"/* stream_list/
+        ${cpcmd} "${FIXDIR}"/jedi/obsop_name_map.yaml .
+        ${cpcmd} "${FIXDIR}"/jedi/keptvars.yaml .
+        ${cpcmd} "${FIXDIR}"/jedi/geovars.yaml .
+    fi
+
+    #------------------------------------------------------
+    # 3. create data directory and copy/link background files
+    #------------------------------------------------------
 
     case ${taskname} in
     observer )
@@ -1015,133 +1178,147 @@ function jedi_preparation {
         wait
     fi
 
-    if [[ "${taskname}" == "solver" && ${icycle} -gt 0 ]]; then
+    #if [[ "${taskname}" == "solver" && ${icycle} -gt 0 ]]; then
+    #    #
+    #    # Copy background file to analysis directory for overwritting with analysis
+    #    #
+    #    mecho0 "Copying ensemble members from ens to ana ..."
+    #    local -a mem_filelist
+    #    for mem in $(seq -w 001 "${ENS_SIZE}"); do
+    #        #( cp --dereference "ens/mem${mem}.nc" "ana/mem${mem}.nc" ) &
+    #        mem_filelist+=("ens/mem${mem}.nc")
+    #    done
+    #    #wait
+    #    parallel_copy_verify "ana" "${mem_filelist[@]}"
+    #fi
+
+    #------------------------------------------------------
+    # 4. MPAS runtime files
+    #------------------------------------------------------
+
+    if [[ -n ${obs_string} ]]; then
         #
-        # Copy background file to analysis directory for overwritting with analysis
-        #
-        mecho0 "Copying ensemble members from ens to ana ..."
-        local -a mem_filelist
-        for mem in $(seq -w 001 "${ENS_SIZE}"); do
-            #( cp --dereference "ens/mem${mem}.nc" "ana/mem${mem}.nc" ) &
-            mem_filelist+=("ens/mem${mem}.nc")
-        done
-        #wait
-        parallel_copy_verify "ana" "${mem_filelist[@]}"
-    fi
+        # generate namelist, streams, and getkf.yaml on the fly
+        #file_content=$(< "${FIXDIR}/jedi/namelist.atmosphere") # read in all content
+        #dt=${time_step}
+        #start_time="${currtime_str}"
+        #run_duration="00:${fcstmin_str}:00"
+        #substeps=4
+        #pio_num_iotasks=4
+        #pio_stride=20
+        #MESH_NAME="${domname}"
+        #do_DAcycling='false'
+        #radt="05"
+        #jedi_da="true"
+        #eval "echo \"${file_content}\"" > namelist.atmosphere
+        do_restart="false"
+        do_dacyle="false"
+        pblscheme="bl_mynnedmf"
+        sfcscheme="sf_mynn"
+        create_namelist "namelist.atmosphere"
+        #cp "${FIXDIR}/jedi/streams.atmosphere.getkf" streams.atmosphere
+        create_streams "GETKF" "streams.atmosphere"
 
-    #
-    # generate namelist, streams, and getkf.yaml on the fly
-    #file_content=$(< "${FIXDIR}/jedi/namelist.atmosphere") # read in all content
-    #dt=${time_step}
-    #start_time="${currtime_str}"
-    #run_duration="00:${fcstmin_str}:00"
-    #substeps=4
-    #pio_num_iotasks=4
-    #pio_stride=20
-    #MESH_NAME="${domname}"
-    #do_DAcycling='false'
-    #radt="05"
-    #jedi_da="true"
-    #eval "echo \"${file_content}\"" > namelist.atmosphere
-    do_restart="false"
-    do_dacyle="false"
-    pblscheme="bl_mynnedmf"
-    sfcscheme="sf_mynn"
-    create_namelist "namelist.atmosphere"
-    #cp "${FIXDIR}/jedi/streams.atmosphere.getkf" streams.atmosphere
-    create_streams "GETKF" "streams.atmosphere"
+        if ${relative_path}; then
+            casedir=$(realpath -m --relative-to=${wrkdir} ${rundir})
+        fi
 
-    if ${relative_path}; then
-        casedir=$(realpath -m --relative-to=${wrkdir} ${rundir})
-    fi
+        local num_processors
+        if [[ "${taskname}" == "post" ]]; then
+            num_processors=${npepost}
+        else
+            num_processors=${npefilter}
+        fi
 
-    local num_processors
-    if [[ "${taskname}" == "post" ]]; then
-        num_processors=${npepost}
-    else
-        num_processors=${npefilter}
-    fi
+        if [[ ! -f $casedir/$domname/$domname.graph.info.part.${num_processors} ]]; then
+            split_graph "${gpmetis}" "${domname}.graph.info" "${num_processors}" "$rundir/$domname" "$dorun" "$verb"
+        fi
+        ln -sf $casedir/$domname/$domname.graph.info.part.${num_processors} .
 
-    if [[ ! -f $casedir/$domname/$domname.graph.info.part.${num_processors} ]]; then
-        split_graph "${gpmetis}" "${domname}.graph.info" "${num_processors}" "$rundir/$domname" "$dorun" "$verb"
-    fi
-    ln -sf $casedir/$domname/$domname.graph.info.part.${num_processors} .
+        ln -sf "${FIXDIR}"/jedi/stream_list/* .
 
-    ln -sf "${FIXDIR}"/jedi/stream_list/* .
+    #------------------------------------------------------
+    # 5. Prepare JEDI yaml file
+    #------------------------------------------------------
 
-    # Prepare convinfo file based on obsvations
+        # Prepare convinfo file based on obsvations
 
-    mecho0 "task = ${taskname}, obs_string = ${obs_string#,}"
-    get_convinfo "${FIXDIR}/jedi/convinfo" ./convinfo "${obs_string}"
+        mecho0 "task = ${taskname}, obs_string = ${obs_string#,}"
+        get_convinfo "${FIXDIR}/jedi/convinfo" ./convinfo "${obs_string}"
 
-    # generate getkf.yaml based on how YAML_GEN_METHOD is set
-    local analysisDate bseconds beginDate lenwind
-    analysisDate="$(date -u -d @${iseconds} +%Y-%m-%dT%H:%M:%SZ)"
-    bseconds=$((iseconds - 600))
-    beginDate="$(date -u -d @${bseconds} +%Y-%m-%dT%H:%M:%SZ)"
-    lenwind="PT15M"
+        # generate getkf.yaml based on how YAML_GEN_METHOD is set
+        local analysisDate bseconds beginDate lenwind
+        analysisDate="$(date -u -d @${iseconds} +%Y-%m-%dT%H:%M:%SZ)"
+        bseconds=$((iseconds - 600))
+        beginDate="$(date -u -d @${bseconds} +%Y-%m-%dT%H:%M:%SZ)"
+        lenwind="PT15M"
 
-    # generate the JEDI yaml files using templates from the parm/ directory
-    #source "${USHrrfs}"/yaml_from_parm.sh "getkf"
+        # generate the JEDI yaml files using templates from the parm/ directory
+        #source "${USHrrfs}"/yaml_from_parm.sh "getkf"
 
-    sed -e "s/@analysisDate@/${analysisDate}/;s/@beginDate@/${beginDate}/;s/@lenWin@/${lenwind}/" \
-           "${FIXDIR}/jedi/getkf_${taskname}.yaml" > getkf.yaml
+        sed -e "s/@analysisDate@/${analysisDate}/;s/@beginDate@/${beginDate}/;s/@lenWin@/${lenwind}/" \
+               "${FIXDIR}/jedi/getkf_${taskname}.yaml" > getkf.yaml
 
-    # ---- MP-dependent state / increment variables ----
-    local _mp_state_block
-    local _mp_incr
+        # ---- MP-dependent state / increment variables ----
+        local _mp_state_block
+        local _mp_incr
 
-    case "${mpscheme}" in
-    mp_nssl2m)
-        _mp_state_block="  - rain_number_concentration
+        local cwp_hail="false"
+
+        case "${mpscheme}" in
+        mp_nssl2m )
+            _mp_state_block="  - rain_number_concentration
   - hail
   - cloud_droplet_number_concentration
   - snow_number_concentration
   - graupel_number_concentration
   - hail_number_concentration"
-        _mp_incr="hail, cloud_droplet_number_concentration, snow_number_concentration, graupel_number_concentration, hail_number_concentration, rain_number_concentration"
-        ;;
-    mp_tempo | mp_thompson)
-        _mp_state_block="  - rain_number_concentration
+            _mp_incr="hail, cloud_droplet_number_concentration, snow_number_concentration, graupel_number_concentration, hail_number_concentration, rain_number_concentration"
+            cwp_hail="true"
+            ;;
+        mp_tempo | mp_thompson )
+            _mp_state_block="  - rain_number_concentration
   - cloud_droplet_number_concentration
   - graupel_number_concentration"
-        _mp_incr="cloud_droplet_number_concentration, graupel_number_concentration, rain_number_concentration"
+            _mp_incr="cloud_droplet_number_concentration, graupel_number_concentration, rain_number_concentration"
         ;;
-    *)
-        _mp_state_block="  - rain_number_concentration"
-        _mp_incr="rain_number_concentration"
-        ;;
-    esac
+        * )
+            _mp_state_block="  - rain_number_concentration"
+            _mp_incr="rain_number_concentration"
+            ;;
+        esac
 
-    # Replace placeholders directly in the file
-    # We use '|' as a delimiter in sed to avoid issues with slashes (though not strictly needed here)
-    sed -i "s/@MP_STATE_VARS@/${_mp_state_block//$'\n'/\\n}/" getkf.yaml
-    sed -i "s/@MP_INCREMENT_VARS@/${_mp_incr}/" getkf.yaml
+        # Replace placeholders directly in the file
+        # We use '|' as a delimiter in sed to avoid issues with slashes (though not strictly needed here)
+        sed -i "s/@MP_STATE_VARS@/${_mp_state_block//$'\n'/\\n}/" getkf.yaml
+        sed -i "s/@MP_INCREMENT_VARS@/${_mp_incr}/" getkf.yaml
+        sed -i "/add hail mixing ratio:/s/:.*/: ${cwp_hail}/" getkf.yaml
 
-    #
-    #  Generate the final YAML configuration file based on convinfo and available ioda files
-    #
-    [[ -s "${FIXDIR}/jedi/satinfo" ]] && cp "${FIXDIR}/jedi/satinfo" .
-    export GETKF_TYPE="${taskname}"
-    mecho0 "yaml_finalize - $(${rrfs_dir}/ush/yaml_finalize getkf.yaml 2>&1)"        # manage output message
+        #
+        #  Generate the final YAML configuration file based on convinfo and available ioda files
+        #
+        [[ -s "${FIXDIR}/jedi/satinfo" ]] && cp "${FIXDIR}/jedi/satinfo" .
+        export GETKF_TYPE="${taskname}"
+        mecho0 "yaml_finalize - $(${rrfs_dir}/ush/yaml_finalize getkf.yaml 2>&1)"        # manage output message
 
 
-    if [[ "${taskname}" == "post" ]]; then
-        ## For post task, change a few yaml settings and remove "reduce obs space"
-        #mecho0 "yaml_getkf_post - $(${rrfs_dir}/ush/yaml_getkf_post getkf.yaml)"
-        sed -i "/filename:/s/ens/ana/" getkf.yaml
+        if [[ "${taskname}" == "post" ]]; then
+            ## For post task, change a few yaml settings and remove "reduce obs space"
+            #mecho0 "yaml_getkf_post - $(${rrfs_dir}/ush/yaml_getkf_post getkf.yaml)"
+            sed -i "/filename:/s/ens/ana/" getkf.yaml
+        fi
+
+        sed -i "/background:/,/nmembers:/{s/nmembers:.*$/nmembers: ${ENS_SIZE}/}" getkf.yaml
+        sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: Deterministic LETKF/}' getkf.yaml
+        #if [[ "${JEDI_DIR}" == *CADRE* ]]; then
+        #    #${scpdir}/process_yaml.py getkf.yaml -f CADRE -o "${obs_string}" -m ${ENS_SIZE} -v
+        #    #sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: GETKF/}' getkf.yaml
+        #    sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: LETKF/}' getkf.yaml
+        #else
+        #    #${scpdir}/process_yaml.py getkf.yaml -f RRFS  -o "${obs_string}" -m ${ENS_SIZE} -v
+        #    sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: Deterministic GETKF/}' getkf.yaml
+        #fi
     fi
-
-    sed -i "/background:/,/nmembers:/{s/nmembers:.*$/nmembers: ${ENS_SIZE}/}" getkf.yaml
-    sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: Deterministic LETKF/}' getkf.yaml
-    #if [[ "${JEDI_DIR}" == *CADRE* ]]; then
-    #    #${scpdir}/process_yaml.py getkf.yaml -f CADRE -o "${obs_string}" -m ${ENS_SIZE} -v
-    #    #sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: GETKF/}' getkf.yaml
-    #    sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: LETKF/}' getkf.yaml
-    #else
-    #    #${scpdir}/process_yaml.py getkf.yaml -f RRFS  -o "${obs_string}" -m ${ENS_SIZE} -v
-    #    sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: Deterministic GETKF/}' getkf.yaml
-    #fi
 }
 
 ########################################################################
@@ -1167,9 +1344,6 @@ function run_jedi_observer {
     #         intvl_sec, ncores_filter
     # RETURN: input_file_list, output_file_list
     #
-    anlys_date=$(date -u -d @$iseconds  +%Y%m%d)
-    anlys_hour=$(date -u -d @$iseconds  +%H)
-    anlys_min=$(date -u -d @$iseconds   +%M)
 
     #
     # Build working directory
@@ -1186,20 +1360,11 @@ function run_jedi_observer {
     # Waiting for job conditions
     #
     local -a conditions
-    [[ "${obs_string}" == *"refl10cm"* ]] && conditions=("${datimedir}/ioda_mrms_refl/done.ioda_mrms_refl")
-    [[ "${obs_string}" =~ .*[tquv]{1,2}[0-9]{3}.* ]] && conditions+=("${datimedir}/ioda_bufr/done.ioda_bufr")
+    [[ "${obs_string}" == *refl10cm* ]] && conditions=("${datimedir}/ioda_mrms_refl/done.ioda_mrms_refl")
+    [[ "${obs_string}" == *rw*       ]] && conditions+=("${datimedir}/ioda_bufr/done.ioda_bufr")
+    [[ "${obs_string}" == *cwp*      ]] && conditions+=("${datimedir}/ioda_cwp/done.ioda_cwp")
 
-    if [[ $dorun == true ]]; then
-        for cond in "${conditions[@]}"; do
-            mecho0 "Checking $cond ...."
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: $cond"
-                fi
-                sleep 10
-            done
-        done
-    fi
+    wait_for_conditions "${conditions[*]}"
 
     #------------------------------------------------------
     # Prepare runtime files
@@ -1210,12 +1375,15 @@ function run_jedi_observer {
 
     jedi_preparation "${taskname}" "${wrkdir}" $2 $3
 
+    if [[ -z ${obs_string} ]]; then
+        touch done.observer
+        return
+    fi
+
     #
     # Copy ioda observation files
 
     bufr_obspath="${datimedir}/ioda_bufr"
-    mrms_obspath="${datimedir}/ioda_mrms_refl"
-    radvr_obspath="${OBS_VEL_DIR}/${anlys_date}"
 
     declare -A mappings  # Declare an associative array
 
@@ -1231,17 +1399,29 @@ function run_jedi_observer {
                 ["ioda_vadwnd.nc"]="${bufr_obspath}/ioda_vadwnd.nc"          \
                 ["ioda_gnss_ztd.nc"]="${bufr_obspath}/ioda_gnss_ztd.nc"      \
                 # satellite observations
-                ["ioda_abi_g16.nc"]="${bufr_obspath}/ioda_abi_g16.nc"        \
-                ["ioda_abi_g18.nc"]="${bufr_obspath}/ioda_abi_g18.nc"        \
-                ["ioda_atms_npp.nc"]="${bufr_obspath}/ioda_atms_npp.nc"      \
-                ["ioda_atms_n20.nc"]="${bufr_obspath}/ioda_atms_n20.nc"      \
-                ["ioda_atms_n21.nc"]="${bufr_obspath}/ioda_atms_n21.nc"      \
-                ["ioda_crisf4_n20.nc"]="${bufr_obspath}/ioda_crisf4_n20.nc"  \
-                ["ioda_crisf4_n21.nc"]="${bufr_obspath}/ioda_crisf4_n21.nc"  \
-                # Radar observations
-                ["ioda_mrms_refl.nc"]="${mrms_obspath}/ioda_mrms_${anlys_date}_${anlys_hour}${anlys_min}.nc4" \
-                ["ioda_rw_obs.nc"]="${radvr_obspath}/ioda_VR_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
+                #["ioda_abi_g16.nc"]="${bufr_obspath}/ioda_abi_g16.nc"        \
+                #["ioda_abi_g18.nc"]="${bufr_obspath}/ioda_abi_g18.nc"        \
+                #["ioda_atms_npp.nc"]="${bufr_obspath}/ioda_atms_npp.nc"      \
+                #["ioda_atms_n20.nc"]="${bufr_obspath}/ioda_atms_n20.nc"      \
+                #["ioda_atms_n21.nc"]="${bufr_obspath}/ioda_atms_n21.nc"      \
+                #["ioda_crisf4_n20.nc"]="${bufr_obspath}/ioda_crisf4_n20.nc"  \
+                #["ioda_crisf4_n21.nc"]="${bufr_obspath}/ioda_crisf4_n21.nc"  \
             )
+
+    if [[ "${obs_string}" == *"refl10cm"* ]]; then
+        mappings["ioda_mrms_refl.nc"]="${radar_reffile}"
+    fi
+
+    if [[ "${obs_string}" == *"rw"* ]]; then
+        mappings["ioda_rw_obs.nc"]="${radar_vrfile}"
+    fi
+    if [[ "${obs_string}" =~ (cwp|lwp|iwp|cwp_night) ]]; then
+        for cwpobs in "${cwp_obses[@]}"; do
+            if [[ "${obs_string}" == *${cwpobs}* ]]; then
+                mappings["ioda_${cwpobs}_obs.nc"]="${datimedir}/ioda_cwp/ioda_${cwpobs}_obs.nc"
+            fi
+        done
+    fi
 
     # loop through and copy files
     for dst_file in "${!mappings[@]}"; do
@@ -1308,9 +1488,6 @@ function run_jedi_solver {
     #         intvl_sec, ncores_filter
     # RETURN: input_file_list, output_file_list
     #
-    anlys_date=$(date -u -d @$iseconds  +%Y%m%d)
-    anlys_hour=$(date -u -d @$iseconds  +%H)
-    anlys_min=$(date -u -d @$iseconds   +%M)
 
     #
     # Build working directory
@@ -1329,17 +1506,7 @@ function run_jedi_solver {
     local -a conditions
     conditions=("${datimedir}/jedi_observer/done.observer")
 
-    if [[ $dorun == true ]]; then
-        for cond in "${conditions[@]}"; do
-            mecho0 "Checking $cond...."
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: $cond"
-                fi
-                sleep 10
-            done
-        done
-    fi
+    wait_for_conditions "${conditions[*]}"
 
     #------------------------------------------------------
     # Prepare runtime files
@@ -1353,6 +1520,14 @@ function run_jedi_solver {
     # enter the run directory again
     #
     cd "${wrkdir}" || exit 1
+
+    if [[ -z $obs_string ]]; then
+        cd ana || exit $?
+        ln -sf ../ens/* .
+        cd .. || exit $?
+        touch done.solver
+        return
+    fi
 
     #
     # Copy ioda observation files
@@ -1412,9 +1587,6 @@ function run_jedi_post {
     #         intvl_sec, ncores_filter
     # RETURN: input_file_list, output_file_list
     #
-    anlys_date=$(date -u -d @$iseconds  +%Y%m%d)
-    anlys_hour=$(date -u -d @$iseconds  +%H)
-    anlys_min=$(date -u -d @$iseconds   +%M)
 
     #
     # Build working directory
@@ -1433,17 +1605,7 @@ function run_jedi_post {
     local -a conditions
     conditions=("${datimedir}/jedi_solver/done.solver")
 
-    if [[ $dorun == true ]]; then
-        for cond in "${conditions[@]}"; do
-            mecho0 "Checking $cond...."
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: $cond"
-                fi
-                sleep 10
-            done
-        done
-    fi
+    wait_for_conditions "${conditions[*]}"
 
     #------------------------------------------------------
     # Prepare runtime files
@@ -1458,6 +1620,11 @@ function run_jedi_post {
     ln -snfr "${datimedir}"/jedi_solver/ana ana
 
     ln -snfr "${datimedir}"/jedi_observer/jdiag* jdiag/
+
+    if [[ -z ${obs_string} ]]; then
+        touch done.post
+        return
+    fi
 
     #------------------------------------------------------
     # Run mpasjedi_enkf.x
@@ -2054,26 +2221,6 @@ function dacycle_driver() {
         num_resubmit=0               # Just check job status
     fi
 
-    # Variables written by the solver (analysis stream) that should NOT be
-    # overwritten by ncks from the background.  MP-dependent because different
-    # microphysics schemes carry different number-concentration / volume fields.
-    local anlys_varstr_base="pressure_p,rho,qv,qc,qr,qi,qs,qg,surface_pressure,theta,u,uReconstructZonal,uReconstructMeridional,refl10cm,w"
-    case "${mpscheme}" in
-    mp_nssl2m )
-        anlys_varstr="${anlys_varstr_base},ni,nr,ns,ng,nh,nc,nccn,nifa,nwfa,qh,volg,volh"
-        ;;
-    mp_thompson )
-        anlys_varstr="${anlys_varstr_base},ni,nr,nc,nifa,nwfa"
-        ;;
-    mp_thompson_aers|mp_tempo )
-        anlys_varstr="${anlys_varstr_base},ni,nr,ng,nc,nifa,nwfa,volg"
-        ;;
-    *)
-        mecho0 "${RED}ERROR${NC}: mpscheme=${PURPLE}${mpscheme}${NC} is not supported."
-        usage 1
-        ;;
-    esac
-
     local icyc=$(( (start_sec-init_sec)/intvl_sec ))
     for isec in $(seq $start_sec $intvl_sec $end_sec ); do
         timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
@@ -2139,16 +2286,10 @@ function dacycle_driver() {
             #exit 0
         fi
 
-        DO_RADAR_REF="false"
-        if [[ ${use_REF} == true ]]; then
-            obs_string="${obs_string},refl10cm"
-            DO_RADAR_REF="true"
-        fi
+        declare -a -g cwp_obses
+        cwp_obses=("cwp" "lwp" "iwp" "cwp_night")
 
-        if [[ ${use_VR} == true ]]; then
-            obs_string="${obs_string},rw"
-            DO_RADAR_REF="true"
-        fi
+        DO_RADAR_REF="true"   # To prevent yaml_finalize from changing the increment variables
         export DO_RADAR_REF
 
         #------------------------------------------------------
@@ -2879,12 +3020,25 @@ else
     usage 1
 fi
 
-if [[ "${mpscheme}" =~ ^(mp_nssl2m|mp_thompson|mp_tempo|mp_tcwa2)$ ]]; then
-    :
-else
-    echo -e "${RED}ERROR${NC}: mpscheme=${PURPLE}${mpscheme}${NC} is not supported."
+# Variables written by the solver (analysis stream) that should NOT be
+# overwritten by ncks from the background.  MP-dependent because different
+# microphysics schemes carry different number-concentration / volume fields.
+anlys_varstr_base="pressure_p,rho,qv,qc,qr,qi,qs,qg,surface_pressure,theta,u,uReconstructZonal,uReconstructMeridional,refl10cm,w"
+case "${mpscheme}" in
+mp_nssl2m )
+    anlys_varstr="${anlys_varstr_base},ni,nr,ns,ng,nh,nc,nccn,nifa,nwfa,qh,volg,volh"
+    ;;
+mp_thompson )
+    anlys_varstr="${anlys_varstr_base},ni,nr,nc,nifa,nwfa"
+    ;;
+mp_thompson_aers|mp_tempo )
+    anlys_varstr="${anlys_varstr_base},ni,nr,ng,nc,nifa,nwfa,volg"
+    ;;
+*)
+    mecho0 "${RED}ERROR${NC}: mpscheme=${PURPLE}${mpscheme}${NC} is not supported."
     usage 1
-fi
+    ;;
+esac
 
 if [[ $update_in_place == true ]]; then
     if ${relative_path}; then

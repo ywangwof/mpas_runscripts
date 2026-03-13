@@ -19,10 +19,10 @@ _member: &memberConfig
   - isltyp
   - snowh
   - vegetation_area_fraction
-  - eastward_wind_at_10m
-  - northward_wind_at_10m
   - air_temperature_at_2m
   - water_vapor_mixing_ratio_wrt_moist_air_at_2m
+  - eastward_wind_at_10m
+  - northward_wind_at_10m
   - lai
   - smois
   - tslb
@@ -170,6 +170,234 @@ observations:
           apply at iterations: 0,1
           filter variables:
           - name: radialVelocity
+          threshold: 4.0
+          actions:
+          - name: set
+            flag: gross_error_check
+            ignore: rejected observations
+          - name: reject
+
+        - filter: Domain Check
+          where:
+            - variable:
+                name: MetaData/latitude
+              minvalue: -90.0
+              maxvalue: 90.0
+            - variable:
+                name: MetaData/longitude
+              minvalue: -180.0
+              maxvalue: 180.0
+          action:
+            name: reduce obs space
+      obs localizations:
+        - localization method: Horizontal Gaspari-Cohn
+          lengthscale: 15000
+          max nobs: 1000
+    - obs space:
+        name: cwp
+        distribution:
+          name: RoundRobin
+        obsdatain:
+          engine:
+            type: H5File
+            obsfile: obs/ioda_cwp_obs.nc
+        obsdataout:
+          engine:
+            type: H5File
+            obsfile: jdiag_cwp.nc
+        simulated variables: [CloudWaterPath_Zero]
+      obs error:
+        covariance model: diagonal
+      obs operator:
+        name: GOESCloudWaterPath
+        goes obs type: CWP
+        add hail mixing ratio: true
+        set maximum hofx value: 6.0
+      get values:
+        nnearest: 3
+      obs filters:
+        # Step 1: define diagnostic flags
+        - filter: Create Diagnostic Flags
+          flags:
+          - name: gross_error_check
+            initial value: false
+        # Step 2: do gross error check and output to flag
+        - filter: Background Check
+          udescriptor: gross_error_check
+          apply at iterations: 0,1
+          filter variables:
+          - name: CloudWaterPath_Zero
+          threshold: 4.0
+          actions:
+          - name: set
+            flag: gross_error_check
+            ignore: rejected observations
+          - name: reject
+
+        - filter: Domain Check
+          where:
+            - variable:
+                name: MetaData/latitude
+              minvalue: -90.0
+              maxvalue: 90.0
+            - variable:
+                name: MetaData/longitude
+              minvalue: -180.0
+              maxvalue: 180.0
+          action:
+            name: reduce obs space
+      obs localizations:
+        - localization method: Horizontal Gaspari-Cohn
+          lengthscale: 15000
+          max nobs: 1000
+    - obs space:
+        name: cwp_night
+        distribution:
+          name: RoundRobin
+        obsdatain:
+          engine:
+            type: H5File
+            obsfile: obs/ioda_cwp_night_obs.nc
+        obsdataout:
+          engine:
+            type: H5File
+            obsfile: jdiag_cwp_night.nc
+        simulated variables: [CloudWaterPath_Zero_Night]
+      obs error:
+        covariance model: diagonal
+      obs operator:
+        name: GOESCloudWaterPath
+        goes obs type: CWP_NIGHT
+        add hail mixing ratio: true
+        set maximum hofx value: 6.0
+      get values:
+        nnearest: 3
+      obs filters:
+        # Step 1: define diagnostic flags
+        - filter: Create Diagnostic Flags
+          flags:
+          - name: gross_error_check
+            initial value: false
+        # Step 2: do gross error check and output to flag
+        - filter: Background Check
+          udescriptor: gross_error_check
+          apply at iterations: 0,1
+          filter variables:
+          - name: CloudWaterPath_Zero_Night
+          threshold: 4.0
+          actions:
+          - name: set
+            flag: gross_error_check
+            ignore: rejected observations
+          - name: reject
+
+        - filter: Domain Check
+          where:
+            - variable:
+                name: MetaData/latitude
+              minvalue: -90.0
+              maxvalue: 90.0
+            - variable:
+                name: MetaData/longitude
+              minvalue: -180.0
+              maxvalue: 180.0
+          action:
+            name: reduce obs space
+      obs localizations:
+        - localization method: Horizontal Gaspari-Cohn
+          lengthscale: 15000
+          max nobs: 1000
+    - obs space:
+        name: lwp
+        distribution:
+          name: RoundRobin
+        obsdatain:
+          engine:
+            type: H5File
+            obsfile: obs/ioda_lwp_obs.nc
+        obsdataout:
+          engine:
+            type: H5File
+            obsfile: jdiag_lwp.nc
+        simulated variables: [LiquidWaterPath]
+      obs error:
+        covariance model: diagonal
+      obs operator:
+        name: GOESCloudWaterPath
+        goes obs type: LWP
+        add hail mixing ratio: true
+        set maximum hofx value: 3.0
+      get values:
+        nnearest: 3
+      obs filters:
+        # Step 1: define diagnostic flags
+        - filter: Create Diagnostic Flags
+          flags:
+          - name: gross_error_check
+            initial value: false
+        # Step 2: do gross error check and output to flag
+        - filter: Background Check
+          udescriptor: gross_error_check
+          apply at iterations: 0,1
+          filter variables:
+          - name: LiquidWaterPath
+          threshold: 4.0
+          actions:
+          - name: set
+            flag: gross_error_check
+            ignore: rejected observations
+          - name: reject
+
+        - filter: Domain Check
+          where:
+            - variable:
+                name: MetaData/latitude
+              minvalue: -90.0
+              maxvalue: 90.0
+            - variable:
+                name: MetaData/longitude
+              minvalue: -180.0
+              maxvalue: 180.0
+          action:
+            name: reduce obs space
+      obs localizations:
+        - localization method: Horizontal Gaspari-Cohn
+          lengthscale: 15000
+          max nobs: 1000
+    - obs space:
+        name: iwp
+        distribution:
+          name: RoundRobin
+        obsdatain:
+          engine:
+            type: H5File
+            obsfile: obs/ioda_iwp_obs.nc
+        obsdataout:
+          engine:
+            type: H5File
+            obsfile: jdiag_iwp.nc
+        simulated variables: [IceWaterPath]
+      obs error:
+        covariance model: diagonal
+      obs operator:
+        name: GOESCloudWaterPath
+        goes obs type: IWP
+        add hail mixing ratio: true
+        set maximum hofx value: 6.0
+      get values:
+        nnearest: 3
+      obs filters:
+        # Step 1: define diagnostic flags
+        - filter: Create Diagnostic Flags
+          flags:
+          - name: gross_error_check
+            initial value: false
+        # Step 2: do gross error check and output to flag
+        - filter: Background Check
+          udescriptor: gross_error_check
+          apply at iterations: 0,1
+          filter variables:
+          - name: IceWaterPath
           threshold: 4.0
           actions:
           - name: set
