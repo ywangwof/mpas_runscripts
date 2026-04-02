@@ -47,8 +47,8 @@ function setup_machine {
     Ursa )
         modulename="build_ursa_Rocky9_intel_hpxmpi_smiol"
 
-        MPAS_DIR="${root_dir}/modules"
-        mpas_modulename="build_ursa_Rocky9_intel_hpxmpi_smiol"
+        MPAS_DIR="/scratch3/NAGAPE/wof/ywang/GSL_JEDI/rrfs-workflow/modulefiles"
+        mpas_modulename="rrfs/ursa.intel"
 
         rrfs_dir="/scratch3/NAGAPE/wof/ywang/GSL_JEDI/rrfs-workflow"
         rrfs_modulename="rrfs/ursa.intel"
