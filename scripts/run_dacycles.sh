@@ -539,9 +539,8 @@ function run_ioda_cwp {
                                      # 1: Remove existing same name directory
     cd $wrkdir/ioda_cwp || exit $?
 
-    anlys_year=$(date -u -d @$iseconds  +%Y)
+    anlys_dateonly=$(date -u -d @$iseconds  +%Y%m%d)
     anlys_eventtime=$(date -u -d @$iseconds  +%Y%m%d%H%M)
-
     #
     # Return if is running or is done
     #
@@ -564,12 +563,27 @@ function run_ioda_cwp {
     #
     #-----------------------------------------------------------------------
     #
-    cwpfile="${OBS_CWP_DIR}/${anlys_year}/${anlys_eventtime}_GOES16_CWP_OBS.nc"
+    for (( j=0; j < 5; $((j=j+1)) )); do
+        #for l in -1 1; do
+        l=-1            # looking back only
+            curr_sec=$(( iseconds + l*j*60))
+            curr_date=$(date -u -d @$curr_sec +%Y%m%d)
+            curr_datetime=$(date -u -d @$curr_sec +%Y%m%d%H%M)
+            if [[ $verb -eq 1 ]]; then mecho0 "Looking for CWP data valid: ${DARK}${curr_datetime}${NC}"; fi
 
-    if [[ -f ${cwpfile} ]]; then
-        mecho0 "Using CWP file ${CYAN}${cwpfile}${NC}"
-    else
-        mecho0 "${YELLOW}INFO${NC}: CWP file ${CYAN}${cwpfile}${NC} not exist."
+            cwpfile="${OBS_CWP_DIR}/${curr_date}/${curr_datetime}_GOES16_CWP_OBS.nc"
+            if [[ -s "${cwpfile}" ]]; then
+                mecho0 "Using CWP file ${CYAN}${cwpfile}${NC}"
+                #break 2
+                break
+            fi
+
+        #    [[ $j -eq 0 ]] && break
+        #done
+    done
+
+    if [[ ! -s ${cwpfile} ]]; then
+        mecho0 "${YELLOW}INFO${NC}: No CWP file between ${WHITE}${curr_datetime}${NC} and ${WHITE}${anlys_eventtime}${NC} not exist."
         return
     fi
     #
@@ -1997,7 +2011,7 @@ function run_mpas {
     # Waiting for job conditions
     #
     local -a conditions
-    [[ $icycle -gt 0 ]] && conditions=("./jedi_solver/done.solver")
+    [[ $icycle -gt 0 ]] && conditions=("$wrkdir/jedi_solver/done.solver")
 
     if [[ $dorun == true ]]; then
         for cond in "${conditions[@]}"; do
@@ -2279,7 +2293,7 @@ function dacycle_driver() {
         #------------------------------------------------------
 
         obs_string=""
-        if [[ ${eventtime} == ??00 && ${use_BUFR} == true ]]; then
+        if [[ ${eventtime} == ??00 && ${icyc} -gt 0 && ${use_BUFR} == true ]]; then
             #obs_string="t120,t133,q120,q133,uv220,uv233"
             obs_string=$(read_convinfo_initial "${FIXDIR}/jedi/convinfo")
             #echo "obs_string=$obs_string"
@@ -2295,7 +2309,7 @@ function dacycle_driver() {
         #------------------------------------------------------
         # 1. Run ioda
         #------------------------------------------------------
-        if [[ " ${jobs[*]} " =~ " ioda " ]]; then
+        if [[ " ${jobs[*]} " =~ " ioda" && ${icyc} -gt 0 ]]; then
             if [[ $verb -eq 1 ]]; then echo "  Run ioda at $eventtime"; fi
             run_ioda $dawrkdir $isec
         fi

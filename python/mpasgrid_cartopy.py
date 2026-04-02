@@ -703,7 +703,7 @@ if __name__ == "__main__":
                 data = []
                 with open(gfile,'r', encoding='ascii') as f:
                     for line in f:
-                        if line.lstrip().startswith('#'):
+                        if line.lstrip().startswith('//'):
                             continue
                         data.append(line.lstrip().rstrip())
 

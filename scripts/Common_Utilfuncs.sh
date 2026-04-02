@@ -182,7 +182,7 @@ function submit_a_job {
 
     local -a commandlist=("${runcmd}")
     [[ -n ${myjoboption} ]] && commandlist+=("${myjoboption}")
-    [[ -f ${rootdir}/bad_nodes.txt ]] && commandlist+=("--exclude=$(paste -sd "," ${rootdir}/bad_nodes.txt)")
+    #[[ -f ${EXEDIR}/bad_nodes.txt ]] && commandlist+=("--exclude=$(paste -sd "," ${EXEDIR}/bad_nodes.txt)")
     commandlist+=("${myjobscript}")
 
     # shellcheck disable=SC2154

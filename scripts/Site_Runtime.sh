@@ -47,8 +47,8 @@ function setup_machine {
     Ursa )
         modulename="build_ursa_Rocky9_intel_hpxmpi_smiol"
 
-        MPAS_DIR="/scratch3/NAGAPE/wof/ywang/GSL_JEDI/rrfs-workflow"
-        mpas_modulename="rrfs/ursa.intel"
+        MPAS_DIR="${root_dir}/modules"
+        mpas_modulename="build_ursa_Rocky9_intel_hpxmpi_smiol"
 
         rrfs_dir="/scratch3/NAGAPE/wof/ywang/GSL_JEDI/rrfs-workflow"
         rrfs_modulename="rrfs/ursa.intel"
@@ -90,12 +90,12 @@ function setup_machine {
             nckspath="/apps/spack-2024-12/linux-rocky9-x86_64/gcc-11.4.1/nco-5.2.4-h2xd52tl4efe2ga4ayd6rjr3t5elfe6v/bin/ncks"
             gpmetis="/scratch3/NAGAPE/wof/ywang/tools/bin/gpmetis"
 
-            OBS_DIR="/scratch4/BMC/rtrr/RRFS2_RETRO_DATA/May2024"
+            OBS_DIR="/scratch3/NAGAPE/wof/kknopfmeier/prepbufr"
             OBS_DIR_REF="/scratch3/NAGAPE/wof/kknopfmeier/MRMS"
             OBS_DIR_VEL="/scratch3/NAGAPE/wof/kknopfmeier/MRMS"
-            OBS_DIR_CWP="/scratch3/NAGAPE/wof/ywang/rt_obs/CWP"
+            OBS_DIR_CWP="/scratch3/NAGAPE/wof/kknopfmeier/CWP"
 
-            hrrr_dir="/scratch3/NAGAPE/wof/ywang/HRRRE"
+            hrrr_dir="/scratch3/NAGAPE/wof/kknopfmeier/HRRRE"
         fi
         ;;
     Jet )

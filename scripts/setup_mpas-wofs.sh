@@ -325,10 +325,13 @@ function parse_args {
 function ncattget {
     # shellcheck disable=SC2154
     if which ${nckspath} 2> /dev/null ; then
-        ${nckspath} -x -M "$1" | grep -E "(corner_lats|corner_lons|CEN_LAT|CEN_LON|TRUELAT[12]|STAND_LON|MOAD_CEN_LAT|DX|DY|[ij]_parent)"
+        if ! ${nckspath} -x -M "$1" | grep -E "(corner_lats|corner_lons|CEN_LAT|CEN_LON|TRUELAT[12]|STAND_LON|MOAD_CEN_LAT|DX|DY|[ij]_parent)"; then
+            mecho0 "${RED}ERROR${NC}: Command failed: ${BLUE}${nckspath} -x -M \"$1\" | grep${NC}"
+            exit 1
+        fi
     else
         mecho0 "${RED}ERROR${NC}: Program ${BLUE}${nckspath}${NC} not found."
-        exit $?
+        exit 2
     fi
 }
 
@@ -399,17 +402,17 @@ function run_geogrid {
 EOF
 
     cat <<EOF > ${domname}_output.json
-# ${domname} Output grid specification for \"mpasgrid_cartopy.py\" to plot it
+// ${domname} Output grid specification for \"mpasgrid_cartopy.py\" to plot it
 {
-    'ctrlat'  : ${cen_lat},
-    'ctrlon'  : ${cen_lon},
-    'stdlat1' : ${trulats[0]},
-    'stdlat2' : ${trulats[1]},
-    'stdlon'  : ${standlon},
-    'nx'      : $nx,
-    'ny'      : $ny,
-    'dx'      : $dx,
-    'dy'      : $dy
+    "ctrlat"  : ${cen_lat},
+    "ctrlon"  : ${cen_lon},
+    "stdlat1" : ${trulats[0]},
+    "stdlat2" : ${trulats[1]},
+    "stdlon"  : ${standlon},
+    "nx"      : $nx,
+    "ny"      : $ny,
+    "dx"      : $dx,
+    "dy"      : $dy
 }
 EOF
 
@@ -1332,7 +1335,7 @@ function write_config {
     MPASLSM='sf_ruc'
     MPASNFLS=9
 
-    mpscheme='mp_nssl2m'
+    mpscheme='mp_tempo'
     sfclayer_schemes=('sf_mynn' 'sf_mynn' 'sf_mynn')
     pbl_schemes=('bl_mynn' 'bl_mynn' 'bl_mynn')
 
@@ -1449,7 +1452,6 @@ function write_config {
     npepost=${npepost}; ncores_post=${ncores_post}; nnodes_post=${nnodes_post}
     claim_cpu_post="${claim_cpu_post}";
 
-    job_exclusive_str=""
 [fcst]
     fcstmode="${fcstmode}"
     ENS_SIZE=18
@@ -1472,8 +1474,6 @@ function write_config {
     claim_time_fcst="01:20:00"
     claim_time_mpassit_alltimes="03:30:00"
     claim_time_mpassit_onetime="00:50:00"
-
-    job_exclusive_str=""
 
 EOF
 
@@ -1869,7 +1869,7 @@ EXTHEAD="HRRRE"  #"GEFS"
 hrrrvtable="Vtable.HRRRE.2018"    #"Vtable.GEFS_withSpechum"
 hrrr_time_ics="${inittime}"
 hrrr_time_lbc="${lbctime}"
-hrrr_sub_ics="mem"         # + 2-digit member string
+hrrr_sub_ics="postprd_mem00"         # + 2-digit member string
 hrrr_sub_lbc="postprd_mem00"         # + 2-digit member string
 
 hrrrfile0="${hrrr_dir}/${eventdate}/${hrrr_time_ics}/${hrrr_sub_ics}01/wrfnat_hrrre_newse_mem0001_01.grib2"

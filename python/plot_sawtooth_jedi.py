@@ -26,6 +26,7 @@ def parse_args():
     parser.add_argument("--type", choices=['all', 'thresh'], default='all', help="Verification type")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose path debugging")
     parser.add_argument("-p", "--nprocs", type=int, default=8, help="Number of processes for parallel reading")
+    parser.add_argument("-n", "--number", action="store_true", help="Plot gross error check counts")
 
     return parser.parse_args()
 
@@ -104,6 +105,35 @@ def process_single_cycle(meta, obname, args):
         return [np.nan]*2, [np.nan]*2, [np.nan]*2, None
 
 ################################################################################
+def process_gross_error_cycle(meta, obname, args):
+    """Worker function to process gross error check data for a single cycle."""
+    path_b = os.path.join(meta['dir_b'], f'jdiag_{obname}.nc')
+
+    if not os.path.exists(path_b):
+        return np.nan, np.nan, np.nan
+
+    try:
+        with Dataset(path_b, 'r') as nc_b:
+            if 'DiagnosticFlags' not in nc_b.groups or 'gross_error_check' not in nc_b.groups['DiagnosticFlags'].groups:
+                return np.nan, np.nan, np.nan
+
+            vartype = list(nc_b.groups['DiagnosticFlags'].groups['gross_error_check'].variables.keys())[0]
+            if vartype not in nc_b.groups['DiagnosticFlags'].groups['gross_error_check'].variables:
+                return np.nan, np.nan, np.nan
+
+            var = nc_b.groups['DiagnosticFlags'].groups['gross_error_check'].variables[vartype]
+            var.set_auto_mask(False)
+            gec = var[:]
+            total = len(gec)
+            assimilated = np.sum(gec != 1)
+            rejected = np.sum(gec == 1)
+
+            return total, assimilated, rejected
+    except Exception as e:
+        if args.verbose: print(f"Error processing gross error {meta['hm_str']}: {e}")
+        return np.nan, np.nan, np.nan
+
+################################################################################
 def plot_ob_type(obname, cycle_meta, args):
     """Aggregates parallel results and generates the sawtooth plot with dynamic y-limits."""
 
@@ -158,7 +188,7 @@ def plot_ob_type(obname, cycle_meta, args):
         padding = (v_max - v_min) * 0.15 if v_max != v_min else 1.0
         ax.set_ylim([v_min - padding, v_max + padding])
 
-    ax.set_title(f"JEDI Sawtooth: {obname}", fontsize=14)
+    ax.set_title(f"JEDI Sawtooth: {args.eventdate} {obname}", fontsize=14)
     ax.set_xlabel("Time [HHMM]", fontsize=12)
     ax.set_ylabel(f"[{unit}]", fontsize=12)
     ax.set_xlim([min(raw_minutes), max(raw_minutes)])
@@ -169,9 +199,11 @@ def plot_ob_type(obname, cycle_meta, args):
     def formatter(x, p):
         m_val = int(round(x))
         lbl = label_map.get(m_val, "")
+        if len(lbl) == 4:
+            lbl = lbl[:2] + ':' + lbl[2:]
         if is_hourly:
-            return lbl if lbl.endswith('00') else ""
-        return lbl if lbl.endswith('00') or lbl.endswith('30') else ""
+            return lbl if lbl.endswith(':00') or lbl.endswith('00') else ""
+        return lbl if lbl.endswith(':00') or lbl.endswith(':30') or lbl.endswith('00') or lbl.endswith('30') else ""
 
     if is_hourly:
         hourly_ticks = [m for m in all_cycle_minutes if label_map[m].endswith('00')]
@@ -184,7 +216,77 @@ def plot_ob_type(obname, cycle_meta, args):
     ax.legend(loc='upper right', frameon=True, shadow=True)
     ax.grid(True, alpha=0.3)
 
-    out_name = f"sawtooth_{obname}.png"
+    out_name = f"{obname}_sawtooth_{args.eventdate}.png"
+    print(f"Saving plot to {out_name} ...")
+    plt.savefig(out_name, bbox_inches='tight', dpi=200)
+    plt.close()
+
+################################################################################
+def plot_gross_error(obname, cycle_meta, args):
+    """Aggregates parallel results and generates the gross error check plot."""
+
+    with ProcessPoolExecutor(max_workers=args.nprocs) as executor:
+        futures = [executor.submit(process_gross_error_cycle, meta, obname, args) for meta in cycle_meta]
+        results = [f.result() for f in futures]
+
+    raw_minutes, raw_labels = [], []
+    raw_total, raw_assim, raw_rej = [], [], []
+
+    for i, res in enumerate(results):
+        m = cycle_meta[i]
+        raw_minutes.append(m['elapsed'])
+        raw_labels.append(m['hm_str'])
+        raw_total.append(res[0])
+        raw_assim.append(res[1])
+        raw_rej.append(res[2])
+
+    valid_mask = [not np.isnan(v) for v in raw_total]
+    if not any(valid_mask):
+        if args.verbose: print(f"INFO: No valid gross error data for {obname}. Skipping.")
+        return
+
+    minutes = [raw_minutes[i] for i, v in enumerate(valid_mask) if v]
+    labels = [raw_labels[i] for i, v in enumerate(valid_mask) if v]
+    total = [raw_total[i] for i, v in enumerate(valid_mask) if v]
+    assim = [raw_assim[i] for i, v in enumerate(valid_mask) if v]
+    rej = [raw_rej[i] for i, v in enumerate(valid_mask) if v]
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(minutes, total, color='tab:blue', label='Total Observations', lw=2)
+    ax.plot(minutes, assim, color='tab:green', label='Assimilated', lw=2)
+    ax.plot(minutes, rej, color='tab:red', label='Rejected', lw=2)
+
+    # --- Dynamic Y-Axis Scaling ---
+    all_values = np.array(total + assim + rej)
+    all_values = all_values[~np.isnan(all_values)]
+
+    if len(all_values) > 0:
+        v_min, v_max = np.min(all_values), np.max(all_values)
+        padding = (v_max - v_min) * 0.15 if v_max != v_min else 1.0
+        ax.set_ylim([max(0, v_min - padding), v_max + padding])
+
+    ax.set_title(f"Gross Error Check: {args.eventdate} {obname}", fontsize=14)
+    ax.set_xlabel("Time [HHMM]", fontsize=12)
+    ax.set_ylabel("Count", fontsize=12)
+    ax.set_xlim([min(raw_minutes), max(raw_minutes)])
+
+    all_cycle_minutes = sorted(list(set(raw_minutes)))
+    label_map = {m['elapsed']: m['hm_str'] for m in cycle_meta}
+
+    def formatter(x, p):
+        m_val = int(round(x))
+        lbl = label_map.get(m_val, "")
+        if len(lbl) == 4:
+            lbl = lbl[:2] + ':' + lbl[2:]
+        return lbl
+
+    ax.xaxis.set_major_locator(ticker.FixedLocator(all_cycle_minutes))
+    ax.xaxis.set_major_formatter(ticker.FuncFormatter(formatter))
+    plt.setp(ax.get_xticklabels(), rotation=45)
+    ax.legend(loc='upper right', frameon=True, shadow=True)
+    ax.grid(True, alpha=0.3)
+
+    out_name = f"{obname}_count_{args.eventdate}.png"
     print(f"Saving plot to {out_name} ...")
     plt.savefig(out_name, bbox_inches='tight', dpi=200)
     plt.close()
@@ -196,3 +298,5 @@ if __name__ == "__main__":
 
     for ob in cli_args.obs:
         plot_ob_type(ob, meta_list, cli_args)
+        if cli_args.number:
+            plot_gross_error(ob, meta_list, cli_args)
