@@ -17,10 +17,10 @@ echo " "
 if [[ "MACHINE" == "Ursa" ]]; then
     source /etc/profile.d/modules.sh
     module purge
-    module use ROOTDIR/modules
-    module load MODULE
+    module use MPASDIR
+    module load MPASMODULE
 else
-    source ROOTDIR/modules/MODULE
+    source MPASDIR/MPASMODULE
 fi
 
 ulimit -s unlimited

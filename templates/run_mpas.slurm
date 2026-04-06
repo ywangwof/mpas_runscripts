@@ -15,15 +15,15 @@ echo " "
 
 if [[ "MACHINE" == "Ursa" ]]; then
     module purge
-    module use ROOTDIR/modules
-    module load MODULE
+    module use MPASDIR
+    module load MPASMODULE
 
     #ncores=NCORES
 
     #nnode=$(( NOPART/$SLURM_CPUS_ON_NODE ))
     #nnode=$SLURM_JOB_NUM_NODES
 else
-    source ROOTDIR/modules/MODULE
+    source MPASDIR/MPASMODULE
     #ncores=NCORES
 fi
 #nnode=$(( NOPART/ncores ))

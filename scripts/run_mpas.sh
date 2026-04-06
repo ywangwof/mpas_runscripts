@@ -1835,7 +1835,8 @@ s/MACHINE/${machine}/g
 s/NOPART/$npeics/
 s/CPUSPEC/${claim_cpu_ics}/
 s/JOBNAME/init_${jobname}/
-s/MODULE/${modulename}/g
+s/MPASDIR/${MPAS_DIR}/g
+s/MPASMODULE/${MPAS_MODULE}/g
 s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
 s#EXEDIR#${exedir}#
@@ -2024,7 +2025,8 @@ s/MACHINE/${machine}/g
 s/NOPART/$npeics/
 s/CPUSPEC/${claim_cpu_ics}/
 s/JOBNAME/lbc_${jobname}/
-s/MODULE/${modulename}/g
+s/MPASDIR/${MPAS_DIR}/g
+s/MPASMODULE/${MPAS_MODULE}/g
 s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
 s#EXEDIR#${exedir}#
@@ -2336,7 +2338,8 @@ s/PARTION/${partition}/
 s/NOPART/$npefcst/
 s/JOBNAME/mpas_${jobname}/
 s/CPUSPEC/${claim_cpu}/g
-s/MODULE/${modulename}/g
+s/MPASDIR/${MPAS_DIR}/g
+s/MPASMODULE/${MPAS_MODULE}/g
 s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
 s#EXEDIR#${exedir}#
@@ -2874,6 +2877,9 @@ if [[ $machine == "Ursa" ]]; then
     module load $modulename
     module load wgrib2/3.1.3_wmo
 
+    MPAS_DIR="/scratch3/NAGAPE/wof/ywang/GSL_JEDI/rrfs-workflow/modulefiles"
+    MPAS_MODULE="rrfs/ursa.intel"
+
     mpasdir="/scratch3/NAGAPE/wof/ywang/MPAS"
     hrrr_dir="/scratch3/NAGAPE/wof/ywang/HRRR/12Z"
 
@@ -2937,6 +2943,9 @@ else # Vecna at NSSL
     WPSGEOG_PATH="/scratch/wofs_mpas/WPS_GEOG"
     wgrib2path="/home/yunheng.wang/tools/intel/hpc-stack/intel-2021.10.0/wgrib2/2.0.8/bin/wgrib2"
     gpmetis="/home/yunheng.wang/tools/bin/gpmetis"
+
+    MPAS_DIR="${rootdir}/modules"
+    MPAS_MODULE="env.mpas_smiol"
 
     mpasdir="/scratch/wofs_mpas"
     hrrr_dir="/scratch/wofs_mpas/run_dirs/varmesh/HRRR/12Z"
