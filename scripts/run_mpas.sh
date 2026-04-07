@@ -844,7 +844,8 @@ s/PARTION/${partition_static}/
 s/NOPART/$npepost/
 s/JOBNAME/static_${jobname}/
 s/CPUSPEC/${static_cpu}/
-s/MODULE/${modulename}/
+s/MPASDIR/${MPAS_DIR}/g
+s/MPASMODULE/${MPAS_MODULE}/g
 s/MACHINE/${machine}/g
 s#ROOTDIR#${rootdir}#g
 s#WRKDIR#${wrkdir}#g
