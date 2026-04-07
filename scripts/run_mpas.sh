@@ -844,8 +844,8 @@ s/PARTION/${partition_static}/
 s/NOPART/$npepost/
 s/JOBNAME/static_${jobname}/
 s/CPUSPEC/${static_cpu}/
-s/MPASDIR/${MPAS_DIR}/g
-s/MPASMODULE/${MPAS_MODULE}/g
+s#MPASDIR#${MPAS_DIR}#g
+s#MPASMODULE#${MPAS_MODULE}#g
 s/MACHINE/${machine}/g
 s#ROOTDIR#${rootdir}#g
 s#WRKDIR#${wrkdir}#g
@@ -1836,8 +1836,8 @@ s/MACHINE/${machine}/g
 s/NOPART/$npeics/
 s/CPUSPEC/${claim_cpu_ics}/
 s/JOBNAME/init_${jobname}/
-s/MPASDIR/${MPAS_DIR}/g
-s/MPASMODULE/${MPAS_MODULE}/g
+s#MPASDIR#${MPAS_DIR}#g
+s#MPASMODULE#${MPAS_MODULE}#g
 s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
 s#EXEDIR#${exedir}#
@@ -2026,8 +2026,8 @@ s/MACHINE/${machine}/g
 s/NOPART/$npeics/
 s/CPUSPEC/${claim_cpu_ics}/
 s/JOBNAME/lbc_${jobname}/
-s/MPASDIR/${MPAS_DIR}/g
-s/MPASMODULE/${MPAS_MODULE}/g
+s#MPASDIR#${MPAS_DIR}#g
+s#MPASMODULE#${MPAS_MODULE}#g
 s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
 s#EXEDIR#${exedir}#
@@ -2339,8 +2339,8 @@ s/PARTION/${partition}/
 s/NOPART/$npefcst/
 s/JOBNAME/mpas_${jobname}/
 s/CPUSPEC/${claim_cpu}/g
-s/MPASDIR/${MPAS_DIR}/g
-s/MPASMODULE/${MPAS_MODULE}/g
+s#MPASDIR#${MPAS_DIR}#g
+s#MPASMODULE#${MPAS_MODULE}#g
 s#ROOTDIR#$rootdir#g
 s#WRKDIR#$wrkdir#g
 s#EXEDIR#${exedir}#
