@@ -70,6 +70,9 @@ class GOESConverter:
         ctp = ncd.variables['ctp'][mask_phase].astype(np.float32) * 100.
         cbp = ncd.variables['cbp'][mask_phase].astype(np.float32) * 100.
 
+        # Assign hgt depending pressure (from pyiodaconv/meteo_utils.py)
+        hgt = 44307.692 * (1.0 - ((prs/100.)/1013.25)**0.190)
+
         # Retrieve observed variables and errors
         cwp = ncd.variables['cwp'][mask_phase].astype(np.float32)
         cwp_err = ncd.variables['cwp_err'][mask_phase].astype(np.float32)
@@ -88,6 +91,7 @@ class GOESConverter:
         obs_data[('longitude', 'MetaData')] = lons[thin_mask]
         obs_data[('dateTime', 'MetaData')] = np.zeros(len(lons[thin_mask]), dtype=np.int64)
         obs_data[('pressure', 'MetaData')] = prs[thin_mask]
+        obs_data[('height', 'MetaData')] = hgt[thin_mask]
         obs_data[('satcbp', 'MetaData')] = cbp[thin_mask]
         obs_data[('satctp', 'MetaData')] = ctp[thin_mask]
 
