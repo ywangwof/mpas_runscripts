@@ -367,12 +367,6 @@ function run_ioda_mrms_refl {
     # Run ioda_mrms_refl for MRMS observation files
     #------------------------------------------------------
 
-    mkwrkdir $wrkdir/ioda_mrms_refl 1     # 0: Keep existing directory as is
-                                     # 1: Remove existing same name directory
-    cd $wrkdir/ioda_mrms_refl || exit $?
-
-    obs_string="${obs_string},refl10cm"
-
     #
     # Return if is running or is done
     #
@@ -381,6 +375,10 @@ function run_ioda_mrms_refl {
        || -f $wrkdir/ioda_mrms_refl/queue.ioda_refl ]]; then
         return
     fi
+
+    mkwrkdir $wrkdir/ioda_mrms_refl 1     # 0: Keep existing directory as is
+                                     # 1: Remove existing same name directory
+    cd $wrkdir/ioda_mrms_refl || exit $?
     #
     #-----------------------------------------------------------------------
     #
@@ -390,7 +388,7 @@ function run_ioda_mrms_refl {
     #
     gridfile="${rundir}/$domname/${domname}.grid.nc"
 
-    mecho0 "meshgrid file is ${CYAN}${gridfile}${NC}"
+    #mecho0 "meshgrid file is ${CYAN}${gridfile}${NC}"
     ln -sf "${gridfile}" grid.nc
 
     #
@@ -411,20 +409,22 @@ function run_ioda_mrms_refl {
     #
     if [ -f filelist_mrms ]; then rm -f filelist_mrms; fi
 
+    mecho0n "Looking for reflectivity data valid:"
     for (( j=0; j < 5; $((j=j+1)) )); do
         for l in -1 1; do
             curr_sec=$(( iseconds + l*j*60))
             curr_time=$(date -u -d @$curr_sec +%Y%m%d-%H%M)
-            mecho0 "Looking for data valid: ${PURPLE}${curr_time}${NC}"
+            echo -en " ${PURPLE}${curr_time}${NC},"
 
             mapfile -t fileslist < <(compgen -G "${OBSPATH_NSSLMOSIAC}/MergedReflectivityQC_*_${curr_time}??.${obs_appendix}" | sort -V)
             if [ ${#fileslist[@]} -ge 10 ] && [ ! -e filelist_mrms ]; then
+                echo ""
                 mecho0 "Found ${YELLOW}${#fileslist[@]}${NC} GRIB-2 files from ${CYAN}${OBSPATH_NSSLMOSIAC}${NC}"
                 for nsslfile in "${fileslist[@]}"; do
                     ${cpcmd}   "${nsslfile}" .
                     base_filename=$(basename "${nsslfile}")
                     echo "${base_filename}" >> filelist_mrms
-                    mecho0 "Copying MRMS files ${CYAN}${base_filename}${NC} ...."
+                    if [[ $verb -eq 1 ]]; then mecho0 "Copying MRMS files ${CYAN}${base_filename}${NC} ...."; fi
                 done
                 break 2
             fi
@@ -444,9 +444,12 @@ function run_ioda_mrms_refl {
         fi
 
         numgrib2=$(wc -l < filelist_mrms)
-        mecho0 "Using radar data from: ${LIGHT_BLUE}$(head -n 1 filelist_mrms | xargs dirname)${NC}"
-        mecho0 "NSSL grib2 file levels = ${YELLOW}$numgrib2${NC}"
+        #mecho0 "Using radar data from: ${LIGHT_BLUE}$(head -n 1 filelist_mrms | xargs dirname)${NC}"
+        #mecho0 "NSSL grib2 file levels = ${YELLOW}$numgrib2${NC}"
+
+        obs_string="${obs_string},refl10cm"
     else
+        echo ""
         mecho0 "${RED}ERROR${NC}: Not enough radar reflectivity files available for cycle ${anlys_date}${anlys_min}."
         exit 1
     fi
@@ -1090,7 +1093,7 @@ function jedi_preparation {
         fi
     fi
 
-    if [[ ${use_VR} == true ]]; then
+    if [[ ${use_VR} == true && $icycle -gt 0 ]]; then
         radar_vrfile="${OBS_VEL_DIR}/${anlys_date}/ioda_VR_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
         if [[ -s ${radar_vrfile} ]]; then
             if [[ "${obs_string}" == *"rw"* ]]; then
@@ -1375,7 +1378,7 @@ function run_jedi_observer {
     #
     local -a conditions
     [[ "${obs_string}" == *refl10cm* ]] && conditions=("${datimedir}/ioda_mrms_refl/done.ioda_mrms_refl")
-    [[ "${obs_string}" == *rw*       ]] && conditions+=("${datimedir}/ioda_bufr/done.ioda_bufr")
+    [[ "${obs_string}" == *t129*     ]] && conditions+=("${datimedir}/ioda_bufr/done.ioda_bufr")
     [[ "${obs_string}" == *cwp*      ]] && conditions+=("${datimedir}/ioda_cwp/done.ioda_cwp")
 
     wait_for_conditions "${conditions[*]}"
@@ -2347,14 +2350,12 @@ function dacycle_driver() {
         fi
 
         #------------------------------------------------------
-        # 6. Add noise (must run after update_states)
+        # 6. Add noise (must run after solver)
         #------------------------------------------------------
 
         if [[ $run_addnoise == true && $icyc -gt 0 ]]; then
-            # check and set update_states status
-            if [[ ! -e done.update_states ]]; then
-                #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-                check_job_status "update_states fcst_" $dawrkdir $ENS_SIZE run_update_states.${mach} ${num_resubmit}
+            if [[ ! -e jedi_solver/done.solver ]]; then
+                wait_for_conditions "jedi_solver/done.solver"
             fi
 
             if [[ $verb -eq 1 ]]; then echo "  Run add_noise at $eventtime"; fi
@@ -2369,7 +2370,7 @@ function dacycle_driver() {
             # check and set update_bc status
             if [[ ! -e done.update_bc ]]; then
                 #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-                check_job_status "update_bc fcst_" $dawrkdir $ENS_SIZE run_update_bc.${mach} ${num_resubmit}
+                check_job_status "update_bc fcst update_bc" $dawrkdir $ENS_SIZE run_update_bc.${mach} ${num_resubmit}
             fi
 
             if [[ $verb -eq 1 ]]; then echo "  Run advance model at $eventtime"; fi
@@ -2403,7 +2404,7 @@ function dacycle_driver() {
 
             run_mpassit $dawrkdir ${isec}
 
-            check_job_status "mpassit mem" $dawrkdir/mpassit $ENS_SIZE run_mpassit.${mach} ${num_resubmit}
+            check_job_status "mpassit mem mpasssit" $dawrkdir/mpassit $ENS_SIZE run_mpassit.${mach} ${num_resubmit}
         else
             # Clean not needed files in each member's forecast directory after
             # the MPAS forward forecast
@@ -2830,18 +2831,24 @@ function run_clean {
         declare -A cleanmsg=(
             [mpas]="all MPAS forecast files"
             [filter]="the whole DA cycle directory"
-            [update_states]="all update_states files"
             [update_bc]="all update_bc files"
         )
+
+        local options selected result
+        options=("NO" "YES")
+
         for job in "${jobs[@]}"; do
+
             mecho0  "${YELLOW}WARNING${NC}: Delete ${cleanmsg[$job]} from $(date -u -d @${start_sec} +%Y%m%d_%H:%M:%S) to $(date -u -d @${end_sec} +%Y%m%d_%H:%M:%S)"
             mecho0  "         in ${CYAN}${wrkdir}${NC}\n"
-            mecho0n "[${YELLOW}YES,NO${NC}]? "
-            read -r doit
-            if [[ ${doit^^} == "YES" ]]; then
+
+            select_option "Do it? " "${options[@]}"
+            selected=$?; result="${options[$selected]}"; result="${result^^}"
+
+            if [[ ${result} == "YES" ]]; then
                 mecho0 "${YELLOW}WARNING${NC}: ${cleanmsg[$job]} will be cleaned."
             else
-                mecho0 "Got ${PURPLE}${doit^^}${NC}, do nothing."
+                mecho0 "Got ${PURPLE}${result}${NC}, do nothing."
                 return
             fi
         done
@@ -2905,13 +2912,8 @@ function run_clean {
                             break
                         elif [[ "$coption" == "-d" ]]; then
                             ${show} rm -f ${domname}_??.analysis
-                            ${show} rm -f done.fcst done.filter done.update_bc done.update_states
+                            ${show} rm -f done.fcst done.filter done.update_bc
                         fi
-                    fi
-                    ;;
-                update_states )
-                    if [[ -e done.update_states ]]; then
-                        ${show} rm -f error.update_states update_states_*.log
                     fi
                     ;;
                 update_bc )
@@ -3142,7 +3144,7 @@ if [[ " ${jobs[*]} " =~ " "(ioda_|jedi_|mpas|update_).*" " ]]; then
 elif [[ " ${jobs[*]} " =~ " clean " ]]; then
 
     if [[ ${#cleanjobs[@]} -eq 0 ]]; then
-        cleanjobs=(mpas filter update_states update_bc)
+        cleanjobs=(mpas filter update_bc)
     fi
     run_clean "${starttime_sec}" "${stoptime_sec}" "${cleanoption}" "${cleanjobs[*]}"
 fi

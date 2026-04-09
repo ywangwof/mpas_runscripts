@@ -538,7 +538,7 @@ function run_lbc {
                 fi
 
                 # shellcheck disable=SC2154
-                check_job_status "ics ${domname}" $rundir/init $nensics
+                check_job_status "ics ${domname} ${domname}" $rundir/init $nensics
                 check_job_status "ungrib" $rundir/lbc/ungrib $nenslbc
                 sleep 10
             done

@@ -5,25 +5,23 @@
 #
 # o mkwrkdir
 # o submit_a_job             # Create a job script base on the template and submit the job script
-# o check_job_status
+# o check_job_status         # Check ensemble job status
 # o get_jobarray_str         # Retrieve job array option string based on job scheduler
 # o group_numbers_by_steps   # Group job numbers for PBS job array option "-J X-Y[:Z]%num"
 # o join_by                  # Join array into a string by a separator
 # o intersection             # Intersection of two arrays, pass in as two strings and pass out as one intersected string
 # o typeset2array            # Typeset output to an associative array
 # o string2array             # '_' separated string to an array
-# o is_balanced              # Quote character is balanced
-# o validate_assignment      # String is a valid Bash variable assignment statement (String, Number, Array, Bool)
+# o is_balanced              # Check whether quote character is balanced  (used in readconf)
+# o validate_assignment      # Check whether a string is a valid Bash variable assignment statement (String, Number, Array, Bool, used in readconf)
 # o readconf                 # Read config file, written from "setup_mpas-wofs.sh"
-# o convert2days             # Convert date/time strings to days/seconds since 1601-01-01
 # o convertS2days            # Convert epoch seconds to days/seconds since 1601-01-01
-# o convert2date             # Convert days/seconds since 1601-01-01 to date/time strings
 # o upnlevels                # get n level parent directory path
 # o get_3char_order          # Get 3-character letters from 0 for GRIB file processing
 # o clean_mem_runfiles       # Clean the runtime files of an ensemble task
 # o wait_for_file_size       # Hold the task until the file size exceeds the give number of bytes
 # o wait_for_file_age        # Hold the task until the file age is older than the give number of seconds
-# o wait_for_conditions
+# o wait_for_conditions      # Hold the process until files (conditions) appear
 # o num_pending_jobs_greater_than       # Check number of jobs in the queue before submit a new job to avoid job flooding
 # o mecho/mecho0/mecho1/mecho2    # Print text with function name prefix
 # o split_graph              # Split graph.info file for the corresponding MPI processes
@@ -33,7 +31,7 @@
 # o sortnumarrayuniq         # Sort a number array by removing duplicates and get a string
 # o nums2range               # Condense a number array into a string with comma separated number and dash denotes range
 # o expand_range             # Get a number array string from the condensed number string
-# o parallel_copy_verify     # Copy multiple files parallel, use GNU Parallel
+# o select_option            # A standard Linux shell implementation of the "look and feel" of a Node.js tool like Enquirer
 
 ########################################################################
 
@@ -74,8 +72,10 @@ function mkwrkdir {
         exit 0
     fi
 
-    mydir=$1
-    backup=$2
+    local mydir=$1
+    local backup=$2
+
+    local bakno bakdir
 
     if [[ -d $mydir ]]; then
         if [[ $backup -eq 1 ]]; then
@@ -240,10 +240,15 @@ function check_job_status {
 
     read -r -a jobnames <<< "$1"
     local jobname=${jobnames[0]}
-    if [[ ${#jobnames[@]} -eq 2 ]]; then     # if it is an array, the 2nd element denotes the member dirname
+    if [[ ${#jobnames[@]} -eq 3 ]]; then     # if it is an array, the 2nd element denotes the member dirname
         local memname=${jobnames[1]}
+        local stfile=${jobnames[2]}
+    elif [[ ${#jobnames[@]} -eq 1 ]]; then
+        local memname="${jobname}"
+        local stfile=${jobname}
     else
-        local memname="${jobname}_"
+        mech1 "${RED}FATAL${NC}: The first string to ${YELLOW}check_job_status${NC} can only contains 1 or 3 elements."
+        exit
     fi
 
     # global variables:
@@ -282,11 +287,11 @@ function check_job_status {
 
         for mem in "${runjobs[@]}"; do
             memstr=$(printf "%02d" $mem)
-            memdir="$mywrkdir/${memname}$memstr"
-            memdonefile="$memdir/done.${jobname}_$memstr"
-            memerrorfile="$memdir/error.${jobname}_$memstr"
+            memdir="$mywrkdir/${memname}_$memstr"
+            memdonefile="$memdir/done.${stfile}_$memstr"
+            memerrorfile="$memdir/error.${stfile}_$memstr"
 
-            if [[ $verb -eq 1 ]]; then mecho1 "Checking $memdonefile"; fi
+            if [[ $verb -eq 1 ]]; then mecho0 "Checking $memdonefile"; fi
             # 4 possiblilites
             #   1. done, do not enter the following loop
             #   2. queued or running, wait for the log file or error/done file
@@ -341,8 +346,8 @@ function check_job_status {
         (( numtry+=1 ))
 
         if [[ $done -eq $donenum ]]; then
-            touch $mywrkdir/done.${jobname}
-            rm -f $mywrkdir/queue.${jobname}
+            touch $mywrkdir/done.${stfile}
+            rm -f $mywrkdir/queue.${stfile}
             break                                                               # No further check needed
         elif [[ ${#abortjobarray[@]} -gt 0 && $numtry -lt $numtries ]]; then    # aborted jobs found
             mecho1 "${numtry}/${numtries} - Try these failed jobs again: ${PURPLE}${abortjobarray[*]}${NC}"
@@ -376,155 +381,6 @@ function check_job_status {
     if [[ $done -lt $donenum ]]; then
         if $checkonly; then return; else exit 9; fi
     fi
-}
-
-#######################################################################
-
-parallel_copy_verify() {
-    if [ "$#" -lt 2 ]; then
-        echo "Usage: parallel_copy_verify <dest_dir> <file1> <file2> ..."
-        return 1
-    fi
-
-    local DEST="${1%/}"
-    shift
-    local FILES=("$@")
-    local VERBOSE=true
-    local MAX_THREADS=8
-
-    local FILE_COUNT=${#FILES[@]}
-    local THREADS=$(( FILE_COUNT < MAX_THREADS ? FILE_COUNT : MAX_THREADS ))
-
-    # Helper function for conditional output
-    log_msg() { [[ "$VERBOSE" == true ]] && mecho1 "$1"; }
-
-    # --- Pre-check: Detect Filename Collisions ---
-    local DUPLICATES=$(printf "%s\n" "${FILES[@]}" | xargs -n 1 basename | sort | uniq -d)
-    if [[ -n "$DUPLICATES" ]]; then
-        mecho0 "❌ ERROR: Duplicate filenames detected! Flattening will cause overwrites:"
-        mecho0 "$DUPLICATES"
-        return 1
-    fi
-
-    log_msg "--- Phase 1: Parallel Copy (Flattened) ---"
-    # -L resolves symlinks, -p preserves timestamps
-    printf "%s\n" "${FILES[@]}" | parallel -j "$THREADS" cp -Lp {} "$DEST/"
-
-    log_msg "--- Phase 2: Metadata Verification (Size + MTime) ---"
-
-    local FAILED_FILES=()
-    local SUCCESS_COUNT=0
-
-    for FILE in "${FILES[@]}"; do
-        local FILENAME=$(basename "$FILE")
-        local DST_PATH="$DEST/$FILENAME"
-
-        # Check existence
-        if [[ ! -e "$DST_PATH" ]]; then
-            log_msg "❌ Missing File: $FILENAME"
-            FAILED_FILES+=("$FILE")
-            continue
-        fi
-
-        # Compare Size and Modification Time
-        local SRC_META=$(stat -L -c "%s %Y" "$FILE" 2>/dev/null)
-        local DST_META=$(stat -c "%s %Y" "$DST_PATH" 2>/dev/null)
-
-        if [[ "$SRC_META" != "$DST_META" ]]; then
-            log_msg "❌ Mismatch: $FILENAME"
-            FAILED_FILES+=("$FILE")
-        else
-            ((SUCCESS_COUNT++))
-        fi
-    done
-
-    # --- Phase 3: Parallel Retry ---
-    if [ ${#FAILED_FILES[@]} -gt 0 ]; then
-        log_msg "⚠️  ${#FAILED_FILES[@]} issues detected. Retrying in parallel..."
-
-        local RETRY_THREADS=$(( ${#FAILED_FILES[@]} < MAX_THREADS ? ${#FAILED_FILES[@]} : MAX_THREADS ))
-        printf "%s\n" "${FAILED_FILES[@]}" | parallel -j "$RETRY_THREADS" cp -Lp {} "$DEST/"
-
-        # Recalculate final success count
-        SUCCESS_COUNT=0
-        for FILE in "${FILES[@]}"; do
-            local FILENAME=$(basename "$FILE")
-            [[ -e "$DEST/$(basename "$FILE")" ]] && ((SUCCESS_COUNT++))
-        done
-    fi
-
-    # --- Final Summary ---
-    log_msg "--- Final Summary ---"
-    log_msg "Expected Files: $FILE_COUNT"
-    log_msg "Verified Files: $SUCCESS_COUNT"
-
-    if [[ "$SUCCESS_COUNT" -eq "$FILE_COUNT" ]]; then
-        log_msg "✅ ALL MATCHED: Copying session successful."
-    else
-        mecho0 "❌ ERROR: Count mismatch! Only $SUCCESS_COUNT of $FILE_COUNT files are present in $DEST."
-        return 1
-    fi
-}
-
-parallel_copy_verify_md5sum() {
-    if [ "$#" -lt 2 ]; then
-        echo "Usage: parallel_copy_verify <dest_dir> <file1> <file2> ..."
-        return 1
-    fi
-
-    local DEST="$1"
-    shift
-    local FILES=("$@")
-
-    local VERBOSE=true # Set to false for silent operation
-
-    # 1. Dynamically set threads based on the number of files
-    local THREADS=${#FILES[@]}
-
-    local HASH_FILE
-    HASH_FILE=$(mktemp /tmp/hashes.XXXXXX)
-
-    # Helper function for conditional echo
-    log_msg() { [[ "$VERBOSE" == true ]] && mecho1 "$1"; }
-
-    log_msg "--- Phase 1: Parallel Copy (Threads: $THREADS) ---"
-
-    # Copy files in parallel
-    printf "%s\n" "${FILES[@]}" | parallel -j "$THREADS" cp -L {} "$DEST"
-
-    log_msg "--- Phase 2: Generating Source Checksums ---"
-    printf "%s\n" "${FILES[@]}" | parallel -j "$THREADS" md5sum {} > "$HASH_FILE"
-
-    log_msg "--- Phase 3: Verifying Integrity ---"
-
-    local FAILED_FILES
-    # sed ensures we only strip the exact ': FAILED' suffix added by md5sum
-    mapfile -t FAILED_FILES < <(md5sum -c "$HASH_FILE" 2>&1 | grep "FAILED" | sed 's/: FAILED//')
-
-    if [ ${#FAILED_FILES[@]} -eq 0 ]; then
-        log_msg "✅ Success! All files match the source."
-    else
-        # 2. Dynamically set retry threads based on failed count
-        local RETRY_THREADS=${#FAILED_FILES[@]}
-        log_msg "⚠️  Verification failed for $RETRY_THREADS files. Retrying in parallel..."
-
-        # Log failed filenames regardless of verbosity for audit purposes
-        #printf "%s\n" "${FAILED_FILES[@]}"
-
-        # Parallelize the retry
-        printf "%s\n" "${FAILED_FILES[@]}" | parallel -j "$RETRY_THREADS" cp -L {} "$DEST"
-
-        # Final check pass
-        log_msg "--- Phase 4: Final Verification Pass ---"
-        if md5sum -c "$HASH_FILE" > /dev/null 2>&1; then
-            log_msg "✅ All files verified successfully after parallel retry."
-        else
-            mecho0 "❌ CRITICAL: Verification still failing after 2 tries."
-            md5sum -c "$HASH_FILE"
-        fi
-    fi
-
-    rm "$HASH_FILE"
 }
 
 ########################################################################
@@ -705,8 +561,7 @@ function setsubtract {
     echo "${diffset[*]}"
 }
 
-########################################################################
-
+####################################################################
 # Function to check if parentheses or quotes are balanced
 # Returns 0 (true) if balanced, 1 (false) otherwise
 function is_balanced {
@@ -717,91 +572,89 @@ function is_balanced {
     # Count single quotes
     local sq_count
     sq_count=$(grep -o "'" <<< "$str" | wc -l)
-
     # Both must be even numbers
     (( dq_count % 2 == 0 )) && (( sq_count % 2 == 0 ))
 }
-
-########################################################################
+####################################################################
 
 # Function to check if parentheses or quotes are balanced
 # Returns 0 (true) if balanced, 1 (false) otherwise
 
 function validate_assignment {
-    local line="$1"
+        local line="$1"
 
-    local debug=false
-    varname=""; varvalue=""; vartype=""
+        local debug=false
+        varname=""; varvalue=""; vartype=""
 
-    # 1. Check basic assignment structure (Key=Value)
-    if [[ ! "$line" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$ ]]; then
-        if $debug; then echo "❌ Invalid Syntax: Not a valid assignment line."; fi
+        # 1. Check basic assignment structure (Key=Value)
+        if [[ ! "$line" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$ ]]; then
+            if $debug; then echo "❌ Invalid Syntax: Not a valid assignment line."; fi
+            return 1
+        fi
+
+        varname="${BASH_REMATCH[1]}"
+        varvalue="${BASH_REMATCH[2]}"
+
+        # --- CHECK A: Literal Array (Strict) ---
+        if [[ "${varvalue}" =~ ^\(.*\)$ ]]; then
+            # Strip the outer parentheses to check the inside
+            # ${value:1:-1} removes first and last char
+            local content="${varvalue:1:-1}"
+
+            # Security Check 1: Reject Danger Characters
+            # We reject: $ (variable/command sub), ` (backtick), ; (terminator), & (background), | (pipe)
+            if [[ "$content" =~ [\$\`\;\&\|] ]]; then
+                if $debug; then echo "❌ Invalid Array: Contains unsafe characters (${varname})"; fi
+                return 1
+            fi
+
+            # Security Check 2: Reject Unbalanced Quotes
+            if ! is_balanced "$content"; then
+                 if $debug; then echo "❌ Invalid Array: Unbalanced quotes (${varname})"; fi
+                 return 1
+            fi
+
+            if $debug; then echo "✅ Valid: Safe Literal Array (${varname})"; fi
+            vartype="Array"
+            return 0
+        fi
+
+        # --- CHECK B: Number (Integer or Float) ---
+        if [[ "${varvalue}" =~ ^(\'|\")?[-+]?([0-9]*\.[0-9]+|[0-9]+)(\'|\")?$ ]]; then
+            if $debug; then echo "✅ Valid: Number (${varname})"; fi
+            vartype="Number"
+            return 0
+        fi
+
+        # --- CHECK C: Bool (true or false) ---
+        if [[ "${varvalue}" =~ ^(true|false)$ ]]; then
+            if $debug; then echo "✅ Valid: Bool (${varname})"; fi
+            vartype="Bool"
+            return 0
+        fi
+
+        # --- CHECK D: String ---
+        # Case 1: Strictly quoted (Start/End with " or ')
+        if [[ "${varvalue}" =~ ^(\".*\"|\'.*\')$ ]]; then
+            # Ensure the quotes inside aren't broken/unbalanced
+            if ! is_balanced "${varvalue}"; then
+                if $debug; then echo "❌ Invalid String: Unbalanced quotes (${varname})"; fi
+                return 1
+            fi
+            if $debug; then echo "✅ Valid: Quoted String (${varname})"; fi
+            vartype="String"
+            return 0
+        fi
+
+        # Case 2: Safe unquoted string (No spaces, no special chars)
+        if [[ "${varvalue}" =~ ^[a-zA-Z0-9_./-]+$ ]]; then
+            if $debug; then echo "✅ Valid: Simple String (${varname})"; fi
+            vartype="String"
+            return 0
+        fi
+
+        if $debug; then echo "❌ Invalid Value: ${varvalue} - Does not match Number, Safe Array, or String."; fi
         return 1
-    fi
-
-    varname="${BASH_REMATCH[1]}"
-    varvalue="${BASH_REMATCH[2]}"
-
-    # --- CHECK A: Literal Array (Strict) ---
-    if [[ "${varvalue}" =~ ^\(.*\)$ ]]; then
-        # Strip the outer parentheses to check the inside
-        # ${value:1:-1} removes first and last char
-        local content="${varvalue:1:-1}"
-
-        # Security Check 1: Reject Danger Characters
-        # We reject: $ (variable/command sub), ` (backtick), ; (terminator), & (background), | (pipe)
-        if [[ "$content" =~ [\$\`\;\&\|] ]]; then
-            if $debug; then echo "❌ Invalid Array: Contains unsafe characters (${varname})"; fi
-            return 1
-        fi
-
-        # Security Check 2: Reject Unbalanced Quotes
-        if ! is_balanced "$content"; then
-             if $debug; then echo "❌ Invalid Array: Unbalanced quotes (${varname})"; fi
-             return 1
-        fi
-
-        if $debug; then echo "✅ Valid: Safe Literal Array (${varname})"; fi
-        vartype="Array"
-        return 0
-    fi
-
-    # --- CHECK B: Number (Integer or Float) ---
-    if [[ "${varvalue}" =~ ^(\'|\")?[-+]?([0-9]*\.[0-9]+|[0-9]+)(\'|\")?$ ]]; then
-        if $debug; then echo "✅ Valid: Number (${varname})"; fi
-        vartype="Number"
-        return 0
-    fi
-
-    # --- CHECK C: Bool (true or false) ---
-    if [[ "${varvalue}" =~ ^(true|false)$ ]]; then
-        if $debug; then echo "✅ Valid: Bool (${varname})"; fi
-        vartype="Bool"
-        return 0
-    fi
-
-    # --- CHECK D: String ---
-    # Case 1: Strictly quoted (Start/End with " or ')
-    if [[ "${varvalue}" =~ ^(\".*\"|\'.*\')$ ]]; then
-        # Ensure the quotes inside aren't broken/unbalanced
-        if ! is_balanced "${varvalue}"; then
-            if $debug; then echo "❌ Invalid String: Unbalanced quotes (${varname})"; fi
-            return 1
-        fi
-        if $debug; then echo "✅ Valid: Quoted String (${varname})"; fi
-        vartype="String"
-        return 0
-    fi
-
-    # Case 2: Safe unquoted string (No spaces, no special chars)
-    if [[ "${varvalue}" =~ ^[a-zA-Z0-9_./-]+$ ]]; then
-        if $debug; then echo "✅ Valid: Simple String (${varname})"; fi
-        vartype="String"
-        return 0
-    fi
-
-    if $debug; then echo "❌ Invalid Value: ${varvalue} - Does not match Number, Safe Array, or String."; fi
-    return 1
 }
 
 # echo "--- VALID EXAMPLES ---"
@@ -818,128 +671,91 @@ function validate_assignment {
 ########################################################################
 
 #verb=false
-#readconf config.ini COMMON SECTION1
 
 function readconf {
     if [[ $# -lt 2 ]]; then
-        mecho0 "${RED}ERROR${NC}: No enough argument to function \"readconf\"."
+        mecho0 "${RED}ERROR${NC}: Not enough arguments to function \"readconf\"."
         exit 1
     fi
-    local configfile=$1
+
+    local configfile="$1"
     local sections
-
     sections=$(join_by \| "${@:2}")
-    local debug=0
 
-    if [[ ! -e $configfile ]]; then
-        mecho0 "${RED}ERROR${NC}: Case configuration file: $configfile not exist. Have you run ${BROWN}setup_mpas-wofs.sh${NC}?"
-        exit 1
-    fi
-
-    local readmode line
-    declare -a read_sections=()
-    declare -A type_colors=(["Number"]=GREEN ["String"]=PURPLE ["Array"]=RED ["Bool"]=LIGHT_BLUE)
-
-    #local regex="^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$"
+    local debug=$verb           # global verb
+    local readmode=false
+    local line clean_part
     local varname varvalue vartype
 
-    readmode=false
-    while read -r line; do
-        if [[ $debug -eq 1 ]]; then
-            if [[ "$line" == "" ]]; then
-                echo "$line"
-                continue
-            else
-                printf "%-132s" "$line"
-            fi
-        fi
+    declare -a read_sections=()
+    declare -A type_colors=(["Number"]="GREEN" ["String"]="PURPLE" ["Array"]="RED" ["Bool"]="LIGHT_BLUE")
 
-        # remove leading whitespace from a string
-        line=${line##+([[:space:]])}
-        # remove trailing whitespace from a string
-        line=${line%%+([[:space:]])}
+    if [[ ! -f "$configfile" ]]; then
+        mecho0 "${RED}ERROR${NC}: Configuration file '$configfile' not found."
+        exit 1
+    fi
 
-        if [[ "$line" =~ ^#.* ]]; then
-            if [[ $debug -eq 1 ]]; then echo "### Comment"; fi
-            continue
-        elif [[ "$line" =~ ^\[$sections\]$ ]]; then
-            if [[ $debug -eq 1 ]]; then echo "=== Found $sections"; fi
+    # Use a cleaner while loop with parameter expansion instead of heavy regex where possible
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # 1. Strip whitespace and ignore comments/empty lines
+        line="${line#"${line%%[![:space:]]*}"}" # Leading trim
+        line="${line%"${line##*[![:space:]]}"}" # Trailing trim
+
+        [[ -z "$line" || "$line" == "#"* ]] && continue
+
+        # 2. Section Detection
+        if [[ "$line" =~ ^\[($sections)\]$ ]]; then
             readmode=true
-            sname="${line#[}"
-            sname="${sname%]}"
-            read_sections+=("${sname}")
-            #echo "read_sections = ${read_sections[*]}"
+            local sname="${BASH_REMATCH[1]}"
+            if [[ $debug -eq 1 ]]; then
+                mecho0 ""
+                mecho0 "=== SECTION: ${YELLOW}$sname${NC}"
+            fi
+            read_sections+=("$sname")
             continue
-        elif [[ "$line" == \[*\] ]]; then
-            if [[ $debug -eq 1 ]]; then echo "%%% Another Section"; fi
+        elif [[ "$line" == "["*"]" ]]; then
             readmode=false
             continue
         fi
 
-        if $readmode; then
-            # remove comment starting with "# "
-            line=${line%%# *}
+        # 3. Processing Logic
+        if [[ "$readmode" == true ]]; then
+            # Remove inline comments
+            line="${line%%# *}"
 
-            # 1. Split the line by semicolon into an array
+            # Split by semicolon for multi-statement lines
             IFS=';' read -ra STATEMENTS <<< "$line"
 
-            # 2. Iterate over each statement
-            i=0
             for part in "${STATEMENTS[@]}"; do
-                # remove leading whitespace from a string
-                clean_part=${part##+([[:space:]])}
-                # remove trailing whitespace from a string
-                clean_part=${clean_part%%+([[:space:]])}
+                # Trim the part
+                clean_part="${part#"${part%%[![:space:]]*}"}"
+                clean_part="${clean_part%"${clean_part##*[![:space:]]}"}"
 
-                # 3. Validate the assignment statement with the clean part
-                if validate_assignment "${clean_part}"; then
+                [[ -z "$clean_part" ]] && continue
+
+                if validate_assignment "$clean_part"; then
                     if [[ $debug -eq 1 ]]; then
-                        (( i > 0)) && printf "%-132s" " "
-                        echo -ne "+++ Variable Assignment (${!type_colors[$vartype]}$vartype${NC}): "
-                        echo -e "${BROWN}${varname}${NC} = ${WHITE}${varvalue}${NC}"
+                        local color_key=${type_colors[$vartype]}
+                        local vartypestr=$(printf "%-6s" "${vartype}")
+                        mecho0 "+++ (${!color_key}$vartypestr${NC}): ${BROWN}${varname}${NC} = ${DARK}${varvalue}${NC}"
                     fi
-                    [[ -v ${varname} ]] && mecho0 "*** ${LIGHT_PURPLE}WARNING${NC} *** Variable ${BROWN}${varname}${NC} value changed from ${YELLOW}${!varname}${NC} to ${WHITE}${varvalue}${NC}"
-                    eval "${clean_part}"
+
+                    # Safety check for existing variables
+                    [[ -v "$varname" ]] && mecho0 "*** WARNING *** Variable ${BROWN}${varname}${NC} changed: ${YELLOW}${!varname}${NC} -> ${WHITE}${varvalue}${NC}"
+
+                    # Execute the assignment
+                    eval "$clean_part"
                 else
-                    mecho0 "${LIGHT_RED}ERROR${NC}: ${WHITE}${clean_part}${NC} Should not happen."
+                    mecho0 "${LIGHT_RED}ERROR${NC}: Invalid assignment in: ${WHITE}${clean_part}${NC}"
                     exit 1
                 fi
-                ((i++))
             done
-        else
-            if [[ $debug -eq 1 ]]; then echo "--- Ignore: $line"; fi
         fi
+    done < "$configfile"
 
-    done < $configfile
+    if [[ $debug -eq 1 ]]; then mecho0 ""; fi
 
-    mecho0 "Reading in sections are - ${YELLOW}${read_sections[*]}${NC}."
-}
-
-########################################################################
-
-function convert2days {
-    # Usage:
-    #   read -r -a g_date < <(convert2days "${anlys_date}" "${anlys_time}")
-    #   echo "${g_date[0]}, ${g_date[1]}"
-    #         days          seconds since 1601-01-01 00:00:00
-
-    local datestr=$1
-    local timestr=$2
-
-    if [[ $# -ne 2 ]]; then
-        echo "No enough argument for \"${FUNCNAME[0]}:\", get: $*"
-        exit 0
-    fi
-
-    # epoch: 1970-01-01 00:00:00 is 134774 days since '1601-01-01'
-    # one day is 86400 seconds
-
-    local g_sec g_days g_secs
-    g_sec=$(date -u -d "${datestr} ${timestr}" +%s)
-    (( g_days=g_sec/86400 + 134774 ))
-    (( g_secs=g_sec-86400*(g_sec/86400) ))
-
-    echo "$g_days $g_secs"
+    mecho0 "Successfully read sections: ${YELLOW}${read_sections[*]}${NC}."
 }
 
 ########################################################################
@@ -965,32 +781,6 @@ function convertS2days {
     (( g_secs=g_sec-86400*(g_sec/86400) ))
 
     echo "$g_days $g_secs"
-}
-
-########################################################################
-
-function convert2date {
-    # Usage:
-    #   read -r -a e_date < <(convert2date "${days}" "${seconds}")
-    #   echo "${e_date[0]}, ${e_date[1]}"
-    #         %Y%m%d        %H%M
-
-    local days=$1
-    local secs=$2
-
-    if [[ $# -ne 2 ]]; then
-        echo "No enough argument for \"${FUNCNAME[0]}:\", get: $*"
-        exit 0
-    fi
-
-    # epoch: 1970-01-01 00:00:00 is 134774 days since '1601-01-01'
-    # one day is 86400 seconds
-
-    local epoch_sec datestr
-    (( epoch_sec= (days-134774)*86400 + secs ))
-    datestr=$(date -u -d @"${epoch_sec}" +%Y%m%d%H%M)
-
-    echo "${datestr:0:8} ${datestr:8:4}"
 }
 
 ########################################################################
@@ -1358,3 +1148,94 @@ function expand_range {
 ##    echo "$num"
 ##done
 ########################################################################
+
+# Arguments:
+# $1: The prompt message
+# $2...$n: The options
+function select_option() {
+    local msg="$1"
+    shift
+    local options=("$@")
+    local selected=0
+
+    local ESC=$(printf '\033')
+    local CURSOR_OFF="${ESC}[?25l"
+    local CURSOR_ON="${ESC}[?25h"
+    local CLEAR_LINE="${ESC}[2K"
+
+    echo -ne "$CURSOR_OFF"
+
+    function draw_menu() {
+        # Move cursor up: (number of options + 1 for the prompt message)
+        local num_options=${#options[@]}
+        for ((i=0; i<=num_options; i++)); do echo -ne "${ESC}[A${CLEAR_LINE}\r"; done
+
+        # Print the prompt message
+        mecho2 "\033[1;37m$msg\033[0m"
+
+        for i in "${!options[@]}"; do
+            local item="${options[$i]}"
+            local display_val=""
+            local note=""
+
+            # Check if ":" exists to split into Value and Note
+            if [[ "$item" == *":"* ]]; then
+                display_val="${item%%:*}" # Everything before first ":"
+                note=": ${item#*:}"      # Everything after first ":"
+            else
+                display_val="$item"
+                note=""
+            fi
+
+            if [ "$i" -eq "$selected" ]; then
+                # Selected: Green arrow and bright text
+                echo -e "  \033[32m❯ ● $display_val\033[0m\033[90m$note\033[0m"
+            else
+                # Unselected: Plain circle and dimmed note
+                echo -e "    ○ $display_val\033[90m$note\033[0m"
+            fi
+        done
+    }
+
+    # Initial spacing
+    for ((i=0; i<=${#options[@]}; i++)); do echo ""; done
+    draw_menu
+
+    while true; do
+        read -rsn3 key
+        case "$key" in
+            "${ESC}[A" | "${ESC}[D") # Up or Left
+                ((selected--))
+                [ $selected -lt 0 ] && selected=$((${#options[@]} - 1))
+                draw_menu
+                ;;
+            "${ESC}[B" | "${ESC}[C") # Down or Right
+                ((selected++))
+                [ $selected -ge ${#options[@]} ] && selected=0
+                draw_menu
+                ;;
+            "" | " ") # Enter
+                break
+                ;;
+        esac
+    done
+
+    echo -ne "$CURSOR_ON"
+
+    return $selected
+}
+
+## --- Usage Example ---
+#
+## Mixture of simple strings and "Value:Note" strings
+#my_options=(
+#    "azure:Microsoft Cloud"
+#    "aws:Amazon Web Services"
+#    "digitalocean"
+#    "local:On-premise runtime"
+#)
+#
+## Use Command Substitution to capture the returned string
+#result=$(select_option "Select your deployment target:" "${my_options[@]}")
+#
+#echo -e "\n\033[1;32mSelected Identifier:\033[0m $result"

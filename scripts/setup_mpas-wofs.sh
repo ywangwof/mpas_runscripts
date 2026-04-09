@@ -1265,21 +1265,30 @@ function write_config {
     local configname=$1
 
     if [[ -e $configname ]]; then
-        mecho0  "Case configuration file: ${CYAN}$configname${NC} exist."
-        mecho0n "Overwrite, [${BROWN}yes,no,skip,bak${NC}]? "
-        read -r doit
-        if [[ ${doit^^} == "YES" ]]; then
+        local options selected result
+        options=(
+                 "abort:     Exit the workflow"
+                 "overwrite: Replace existing config"
+                 "skip:      Keep existing and continue"
+                 "backup:    Create new & save original (timestamped)"
+        )
+
+        select_option "Case configuration file: $configname exist. Overwrite? " "${options[@]}"
+
+        selected=$?; result="${options[$selected]}"; result="${result%%:*}"
+
+        if [[ ${result,,} == "overwrite" ]]; then
             mecho0 "${BROWN}WARNING${NC}: ${CYAN}$configname${NC} will be replaced."
-        elif [[ ${doit^^} == "SKIP" ]]; then
+        elif [[ ${result,,} == "skip" ]]; then
             mecho0 "${BROWN}WARNING${NC}: ${CYAN}$configname${NC} will be kept. Skip ${BROWN}setup${NC}."
             return
-        elif [[ ${doit^^} == "BAK" ]]; then
+        elif [[ ${result,,} == "backup" ]]; then
             datestr=$(date +%Y%m%d_%H%M%S)
             mecho0 "${BROWN}WARNING${NC}: Orignal ${CYAN}$configname${NC} is backuped as"
             mecho0 "         ${PURPLE}${configname}.bak_${datestr}${NC}"
             mv ${configname} ${configname}.bak_${datestr}
         else
-            mecho0 "Got ${PURPLE}${doit^^}${NC}, exit the program."
+            mecho0 "Got ${PURPLE}${result,,}${NC}, exit the program."
             exit 1
         fi
     fi
@@ -1439,7 +1448,6 @@ function write_config {
     partition_filter="${partition_filter}";  partition_post="${partition_post}"
     npefcst="${npedafcst}";   ncores_fcst="${ncores_dafcst}";   nnodes_fcst="${nnodes_dafcst}"
     npefilter="${npefilter}"; ncores_filter="${ncores_filter}"; nnodes_filter="${nnodes_filter}"
-    npepost="${npepost}"
 
     claim_cpu_fcst="${claim_cpu_dafcst}"
     claim_cpu_filter="${claim_cpu_filter}"

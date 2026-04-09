@@ -47,3 +47,11 @@ fix_files/jedi/keptvars.yaml
 fix_files/jedi/obsop_name_map.yaml
 modules/env.mpas_smiol
 run_dirs
+fix_files/MP_TEMPO_QRacrQG_DATA.DBL
+fix_files/MP_TEMPO_QIautQS_DATA.DBL
+fix_files/MP_TEMPO_QRacrQS_DATA.DBL
+fix_files/MP_THOMPSON_freezeH2O_DATA.DBL
+fix_files/MP_THOMPSON_QIautQS_DATA.DBL
+fix_files/MP_THOMPSON_QRacrQG_DATA.DBL
+fix_files/MP_THOMPSON_QRacrQS_DATA.DBL
+fix_files/QNWFA_QNIFA_SIGMA_MONTHLY.dat

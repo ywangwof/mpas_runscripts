@@ -47,7 +47,7 @@ function setup_machine {
     Ursa )
         modulename="build_ursa_Rocky9_intel_hpxmpi_smiol"
 
-        MPAS_DIR="/scratch3/NAGAPE/wof/ywang/GSL_JEDI/rrfs-workflow/modulefiles"
+        MPAS_DIR="/scratch3/NAGAPE/wof/ywang/GSL_JEDI/rrfs-workflow"
         mpas_modulename="rrfs/ursa.intel"
 
         rrfs_dir="/scratch3/NAGAPE/wof/ywang/GSL_JEDI/rrfs-workflow"
@@ -96,60 +96,6 @@ function setup_machine {
             OBS_DIR_CWP="/scratch3/NAGAPE/wof/kknopfmeier/CWP"
 
             hrrr_dir="/scratch3/NAGAPE/wof/kknopfmeier/HRRRE"
-        fi
-        ;;
-    Jet )
-        modulename="build_jet_Rocky8_intel_smiol"
-        #modulename="RDAS/jet.intel"
-
-        MPAS_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/GSL_JEDI/rrfs-workflow.new"
-        mpas_modulename="rrfs/jet.intel"
-
-        rrfs_dir="/lfs5/NAGAPE/hpc-wof1/ywang/GSL_JEDI/rrfs-workflow.new"
-        rrfs_modulename="rrfs/jet.intel"
-
-        #JEDI_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/GSL_JEDI/rrfs-workflow.new/sorc/RDASApp"
-        JEDI_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/CADRE2/CADRE_JEDI_MODEL"
-        #JEDI_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/NCAR_JEDI"
-        jedi_modulename="jet.intel"            # CADRE
-        #jedi_modulename="RDAS/jet.intel"      # RRFS
-
-        workdirDF="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS/run_dirs"
-        post_dir="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS/frdd-wofs-post"
-
-        if [[ ${set_up} == true ]]; then
-            source /etc/profile.d/modules.sh
-            module purge
-            module use ${MPAS_DIR}/modulefiles
-            module load ${mpas_modulename}
-            #module load wgrib2/2.0.8
-        fi
-        export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/home/Yunheng.Wang/local/lib
-
-        if [[ ${initialize} == true ]]; then
-            partition_wps="xjet,kjet"
-            partition_static="xjet,kjet"  ; claim_cpu_static="--cpus-per-task=12"
-            partition_create="bigmem"     ; claim_cpu_create="--mem-per-cpu=128G"
-
-            npestatic=24
-
-            mach="slurm"
-            job_exclusive_str="#SBATCH --exclusive"
-            job_account_str="#SBATCH -A ${hpcaccount-hpc-wof1}"
-            job_runmpexe_str="srun"
-            job_runexe_str="srun"
-            runcmd_str=""
-
-            WPSGEOG_PATH="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
-            wgrib2path="/apps/wgrib2/3.1.1/gnu_13.2.0/wmo/bin/wgrib2"
-            nckspath="/apps/nco/5.1.6/gcc-13.2.0/bin/ncks"
-            gpmetis="/home/Yunheng.Wang/local/bin/gpmetis"
-
-            OBS_DIR="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS/run_dirs/OBS_SEQ.Reduced"
-            OBS_DIR_REF="/scratch4/BMC/rtrr/RRFS2_RETRO_DATA/May2024"
-            OBS_DIR_VEL="/scratch4/BMC/rtrr/RRFS2_RETRO_DATA/May2024"
-
-            hrrr_dir="/lfs5/NAGAPE/hpc-wof1/ywang/HRRRE"
         fi
         ;;
     Hercules )
@@ -301,40 +247,6 @@ function default_site_settings {
     #-------------------------------------------------------------------
 
     case $machine in
-    "Jet" )
-        mpas_wofs_python="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS/wofs_new_noise"
-
-        # ICs
-        npeics=24; ncores_ics=2
-        partition_ics="xjet,kjet"
-        claim_cpu_ics="--cpus-per-task=2"
-        claim_cpu_ungrib="--cpus-per-task=12"   # --mem-per-cpu=10G"
-
-        # LBCs
-        npelbc=24;  ncores_lbc=2
-        partition_lbc="xjet,kjet"
-        claim_cpu_lbc="--cpus-per-task=2"
-
-        # DA cycles
-        ncores_dafcst=24;  ncores_filter=24
-        partition_dafcst="xjet,kjet"; claim_cpu_dafcst="--cpus-per-task=1"
-        partition_filter="xjet,kjet"; claim_cpu_filter="--cpus-per-task=2"
-                                      claim_cpu_ioda="--cpus-per-task=1 --mem-per-cpu=8G"
-                                      claim_cpu_ioda_refl="--cpus-per-task=2"
-        npedafcst=96         #; nnodes_fcst=$(( npefcst/ncores_fcst ))
-        npefilter=120        #; nnodes_filter=$(( npefilter/ncores_filter ))
-        nnodes_filter=$(( npefilter/ncores_filter ))
-        nnodes_dafcst=$(( npedafcst/ncores_dafcst ))
-
-        # FCST cycles
-        ncores_fcst=24;  ncores_post=24
-        partition_fcst="xjet,kjet";   claim_cpu_fcst="--cpus-per-task=2"
-        partition_post="xjet,kjet";   claim_cpu_post="--cpus-per-task=12"
-
-        npefcst=96     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
-        npepost=48     ; nnodes_post=$(( npepost/ncores_post ))
-        ;;
-
     "Ursa" )
         mpas_wofs_python="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/wofs_new_noise"
 
