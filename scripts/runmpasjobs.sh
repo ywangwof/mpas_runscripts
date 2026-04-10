@@ -57,10 +57,10 @@ function usage {
     echo    " "
     echo    "   DEFAULTS:"
     echo -e "              EVENTDATE  = ${DIR_CLR}${eventdateDF:0:8}$NC"
-    echo -e "              WORKDIR    = ${LIGHT_BLUE}\${workdirDF}${NC}   # from scripts/Site_Runtime.sh"
+    echo -e "              WORKDIR    = ${LIGHT_BLUE}\${site_workdir}${NC}   # from scripts/Site_Runtime.sh"
     echo    "              rootdir    = ${rootdir}"
     echo    "              script_dir = ${script_dir}"
-    echo    "              post_dir   = \${post_dir}"
+    echo    "              post_dir   = \${site_postdir}"
     echo    " "
     echo    "                                     -- By Y. Wang (2024.04.17)"
     echo    " "
@@ -191,7 +191,7 @@ fi
 [[ -v args["endtime"] ]]   && endtime=${args["endtime"]}     || endtime="${default_endtime}"
 [[ -v args["starttime"] ]] && starttime=${args["starttime"]}
 # shellcheck disable=SC2154
-[[ -v args["run_dir"] ]]   && run_dir=${args["run_dir"]}     || run_dir="${workdirDF}"
+[[ -v args["run_dir"] ]]   && run_dir=${args["run_dir"]}     || run_dir="${site_workdir}"
 
 if [[ -v args["config_file"] ]]; then
     config_file="${args['config_file']}"
@@ -293,19 +293,23 @@ post | plot | diag | verif | snd )
     # Load Python environment as needed
     setup_machine "${post_machine}" "$rootdir" true false false
 
+    : "${config_OUTINVL:?"ERROR: config_file not read?"}"
+    : "${config_fcst_length_seconds:?"ERROR: config_file not read"}"
+    : "${site_postdir:?"ERROR: setup_machine not return correctly?"}"
+
+    post_dir="${site_postdir}"
+
     donepost="${run_dir}/summary_files/${eventdate}${affix}/${endtime}/wofs_postswt_${endtime}_finished"
     doneplot="${run_dir}/image_files/flags/${eventdate}${affix}/${endtime}/wofs_plotpbl_${endtime}_finished"
     doneverif="${run_dir}/image_files/flags/${eventdate}${affix}/wofs_plotwwa_${endtime}_finished"
     donesnd="${run_dir}/image_files/flags/${eventdate}${affix}/wofs_postsnd_${endtime}_finished"
 
-    # shellcheck disable=SC2154
     post_script_dir="${post_dir}/wofs/scripts"
     post_config_orig="${post_dir}/conf/WOFS_MPAS_config.yaml"
 
-    dt=$(( OUTINVL/60 ))
-    # shellcheck disable=SC2154
-    nt=$(( fcst_length_seconds/OUTINVL ))
-    case ${fcst_length_seconds} in
+    dt=$(( config_OUTINVL/60 ))
+    nt=$(( config_fcst_length_seconds/config_OUTINVL ))
+    case ${config_fcst_length_seconds} in
     21600 )
         qpe_mode_string="['qpe_15m', 'qpe_1hr', 'qpe_3hr', 'qpe_6hr']"
         ;;
@@ -313,7 +317,7 @@ post | plot | diag | verif | snd )
         qpe_mode_string="['qpe_15m', 'qpe_1hr', 'qpe_3hr']"
         ;;
     * )
-        echo -e "${RED}ERROR${NC}: fcstlength = ${PURPLE}${fcst_length_seconds}${NC} is not supported."
+        echo -e "${RED}ERROR${NC}: fcstlength = ${PURPLE}${config_fcst_length_seconds}${NC} is not supported."
         exit 1
         ;;
     esac
@@ -322,7 +326,7 @@ post | plot | diag | verif | snd )
     #rm -f "${post_config}"
 
     # shellcheck disable=SC2154
-    wof_domain_name="geo_${domname##*_}"
+    wof_domain_name="geo_${config_domname##*_}"
 
     if [[ ! -f "${post_config}" ]]; then
         fbeg_s=$(date -u -d "${startdatetime:0:8} ${startdatetime:8:4}" +%s)
@@ -335,12 +339,12 @@ post | plot | diag | verif | snd )
         done
 
         # shellcheck disable=SC2154
-        if [[ ! -f "${vertLevel_file}" ]]; then
-            echo -e "${RED}ERROR${NC}: Vertical level file - ${CYAN}${vertLevel_file}${NC} not exist."
+        if [[ ! -f "${config_vertLevel_file}" ]]; then
+            echo -e "${RED}ERROR${NC}: Vertical level file - ${CYAN}${config_vertLevel_file}${NC} not exist."
             exit 1
         fi
 
-        num_levels=$(wc -l "${vertLevel_file}"| cut -d' ' -f1)
+        num_levels=$(wc -l "${config_vertLevel_file}"| cut -d' ' -f1)
         (( num_levels -= 1 ))
 
         # modify the configuration file
@@ -445,8 +449,7 @@ post )
 
     if [[ ! -e ${donepost} ]]; then
 
-        #damode=$(grep '^ *damode=' "${config_file}" | cut -d'=' -f2 | tr -d '"')
-        #if [[ ${damode} == "restart" ]]; then
+        #if [[ ${config_damode} == "restart" ]]; then
             fcstbegs="$dt"
         #else
         #    fcstbegs="0"
@@ -468,10 +471,10 @@ post )
             wrkdir="${post_script_dir}"
             # shellcheck disable=SC2154
             declare -A jobParms=(
-                [PARTION]="${partition_post}"
+                [PARTION]="${config_partition_post}"
                 [NOPART]="1"
                 [JOBNAME]="${task}_${eventdate}${affix}"
-                [CPUSPEC]="${claim_cpu_post}"
+                [CPUSPEC]="${config_claim_cpu_post}"
                 [MACHINE]="${machine}"
                 [LOGDIR]="${run_dir}/summary_files"
                 [PYTHONSCRIPT]="./wofs_${task}_summary_files_MPAS.py"
@@ -502,10 +505,10 @@ plot )
 
             wrkdir="${post_script_dir}"
             declare -A jobParms=(
-                [PARTION]="${partition_post}"
+                [PARTION]="${config_partition_post}"
                 [NOPART]="1"
                 [JOBNAME]="${task}_${eventdate}${affix}"
-                [CPUSPEC]="${claim_cpu_post}"
+                [CPUSPEC]="${config_claim_cpu_post}"
                 [MACHINE]="${machine}"
                 [LOGDIR]="${run_dir}/summary_files"
                 [PYTHONSCRIPT]="./wofs_${task}_summary_files_MPAS.py"
@@ -536,10 +539,10 @@ verif )
 
             wrkdir="${post_script_dir}"
             declare -A jobParms=(
-                [PARTION]="${partition_post}"
+                [PARTION]="${config_partition_post}"
                 [NOPART]="1"
                 [JOBNAME]="${task}_${eventdate}${affix}"
-                [CPUSPEC]="${claim_cpu_post}"
+                [CPUSPEC]="${config_claim_cpu_post}"
                 [MACHINE]="${machine}"
                 [LOGDIR]="${run_dir}/summary_files"
                 [PYTHONSCRIPT]="./wofs_plot_verification_MPAS.py"
@@ -570,10 +573,10 @@ snd )
 
             wrkdir="${post_script_dir}"
             declare -A jobParms=(
-                [PARTION]="${partition_post}"
+                [PARTION]="${config_partition_post}"
                 [NOPART]="1"
                 [JOBNAME]="${task}_${eventdate}${affix}"
-                [CPUSPEC]="${claim_cpu_post}"
+                [CPUSPEC]="${config_claim_cpu_post}"
                 [MACHINE]="${machine}"
                 [LOGDIR]="${run_dir}/summary_files"
                 [PYTHONSCRIPT]="./wofs_plot_sounding_MPAS.py"
@@ -605,10 +608,10 @@ diag )
 
         jobscript="${wrkdir}/run_${task}.slurm"
         declare -A jobParms=(
-            [PARTION]="${partition_post}"
+            [PARTION]="${config_partition_post}"
             [NOPART]="1"
             [JOBNAME]="${task}_${eventdate}${affix}"
-            [CPUSPEC]="${claim_cpu_post}"
+            [CPUSPEC]="${config_claim_cpu_post}"
             [MACHINE]="${machine}"
             [LOGDIR]="${wrkdir}"
             [PYTHONSCRIPT]="${cmds[*]}"

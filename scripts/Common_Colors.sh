@@ -14,15 +14,23 @@
 
 # shellcheck disable=SC2034
 #if [ -t 1 ]; then
-    NC='\033[0m'            # No Color
-    BLACK='\033[0;30m';     DARK='\033[1;30m'
-    RED='\033[0;31m';       LIGHT_RED='\033[1;31m'
-    GREEN='\033[0;32m';     LIGHT_GREEN='\033[1;32m'
-    BROWN='\033[0;33m';     YELLOW='\033[1;33m'
-    BLUE='\033[0;34m';      LIGHT_BLUE='\033[1;34m'
-    PURPLE='\033[0;35m';    LIGHT_PURPLE='\033[1;35m'
-    CYAN='\033[0;36m';      LIGHT_CYAN='\033[1;36m'
-    LIGHT='\033[0;37m';     WHITE='\033[1;37m'
+NC='\033[0m' # No Color
+BLACK='\033[0;30m'
+DARK='\033[1;30m'
+RED='\033[0;31m'
+LIGHT_RED='\033[1;31m'
+GREEN='\033[0;32m'
+LIGHT_GREEN='\033[1;32m'
+BROWN='\033[0;33m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+LIGHT_BLUE='\033[1;34m'
+PURPLE='\033[0;35m'
+LIGHT_PURPLE='\033[1;35m'
+CYAN='\033[0;36m'
+LIGHT_CYAN='\033[1;36m'
+LIGHT='\033[0;37m'
+WHITE='\033[1;37m'
 #else
 #    NC=''
 #    BLACK='';     DARK=''
@@ -89,4 +97,5 @@
 # To set both the foreground and background colours at once, use ther form echo -e "\e[S;FG;BGm".
 # For example: echo -e "\e[1;97;41m" (bold white foreground on red background)
 
-    DIR_CLR='\033[0;97;44m'; DIRa_CLR='\033[0;95;44m';
+DIR_CLR='\033[0;97;44m'
+DIRa_CLR='\033[0;95;44m'

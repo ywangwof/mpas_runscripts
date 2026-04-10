@@ -43,7 +43,7 @@ function usage {
     echo    " "
     echo    "   DEFAULTS:"
     echo    "              eventdate  = $eventdateDF"
-    echo    "              WORKDIR    = \$workdirDF/run_dirs"
+    echo    "              WORKDIR    = \$site_workdir/run_dirs"
     echo    "              rootdir    = $rootdir"
     echo    "              script_dir = $script_dir"
     echo    " "
@@ -156,7 +156,7 @@ parse_args "$@"
 setup_machine "${machine}" "$rootdir" true false false
 
 [[ -v args["eventdate"] ]]   && eventdate=${args["eventdate"]}     || eventdate=${eventdateDF}
-[[ -v args["run_dir"] ]]     && run_dir=${args["run_dir"]}         || run_dir="${workdirDF}"
+[[ -v args["run_dir"] ]]     && run_dir=${args["run_dir"]}         || run_dir="${site_workdir}"
 [[ -v args["starttime"] ]]   && starttime=${args["starttime"]}     || starttime="1500"
 [[ -v args["endtime"] ]]     && endtime=${args["endtime"]}         || endtime="0300"
 
@@ -321,6 +321,8 @@ if [[ ! -e done.zigzag ]]; then
             convert "$fn" -resize 1100x1100 -trim "${image_destdir}/${destfn}"
             (( estatus+=$? ))
         done
+
+        post_dir="${site_postdir}"
 
         if [[ ${estatus} -eq 0 ]]; then
             "${script_dir}/process_da_json.py" "${post_dir}/json/wofs_run_metadata_obsdiag.json" \

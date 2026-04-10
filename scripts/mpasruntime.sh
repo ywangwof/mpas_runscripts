@@ -57,7 +57,7 @@ indexval=6
 while [[ $# -gt 0 ]]; do
     key="$1"
 
-    case $key in
+    case ${key} in
         -h)
             usage 0
             ;;
@@ -98,20 +98,20 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -*)
-            echo "Unknown option: $key"
+            echo "Unknown option: ${key}"
             usage 2
             ;;
         mpas | fcst | update_states | update_bc | mpassit??? )
-            taskname="$key"
+            taskname="${key}"
             ;;
         *)
-            if [[ -d $key ]]; then
+            if [[ -d ${key} ]]; then
                 rundir="${key}"
-            elif [[ -f $key ]]; then
+            elif [[ -f ${key} ]]; then
                 rundir="${key}"
             else
                 echo ""
-                echo "ERROR: unknown argument, get [$key]."
+                echo "ERROR: unknown argument, get [${key}]."
                 usage 3
             fi
             ;;
@@ -129,12 +129,12 @@ max_m=0; max_sec=0
 
 if [[ "${taskname}" == "mpas" ]]; then
 
-    if [[ ! -f $rundir ]]; then
-        if [[ ! -f $rundir/log.atmosphere.0000.out ]]; then
+    if [[ ! -f ${rundir} ]]; then
+        if [[ ! -f ${rundir}/log.atmosphere.0000.out ]]; then
             echo "ERROR: a MPAS log file is required."
             usage 2
         else
-            rundir="$rundir/log.atmosphere.0000.out"
+            rundir="${rundir}/log.atmosphere.0000.out"
         fi
     fi
 
@@ -142,45 +142,45 @@ if [[ "${taskname}" == "mpas" ]]; then
 
     while IFS= read -r line; do
         echo "${line}"
-        read -r -a my_array <<< "$line"
+        read -r -a my_array <<< "${line}"
         #echo "${my_array[2]} -> ${my_array[7]}, ${my_array[8]}"
         timestr="${my_array[2]}"
         myindex=$((indexval+1))
-        minval="${my_array[$myindex]}"
+        minval="${my_array[${myindex}]}"
         minval=${minval//[$'\t\r\n ']}  # remove whitespace from a string
         if ! ${timeavg}; then
             myindex=$((indexval+2))
-            maxval="${my_array[$myindex]}"
+            maxval="${my_array[${myindex}]}"
             maxval=${maxval//[$'\t\r\n ']}  # remove whitespace from a string
-            if [[ $maxval =~ "E" ]]; then
-                maxval=$(sed -E 's/([+-]?[0-9.]+)[eE]\+?(-?)([0-9]+)/\1*10^\2\3/g' <<<"$maxval")
+            if [[ ${maxval} =~ "E" ]]; then
+                maxval=$(sed -E 's/([+-]?[0-9.]+)[eE]\+?(-?)([0-9]+)/\1*10^\2\3/g' <<<"${maxval}")
             fi
         else
             maxval=${minval}
         fi
 
-        runtimes_secs[$timestr]=${minval}
+        runtimes_secs[${timestr}]=${minval}
 
-        total_min=$(bc -l <<< "$total_min + $minval")
-        total_max=$(bc -l <<< "$total_max + $maxval")
+        total_min=$(bc -l <<< "${total_min} + ${minval}")
+        total_max=$(bc -l <<< "${total_max} + ${maxval}")
         (( nsteps += 1 ))
 
         if (( $(bc -l <<< "${min_sec} > ${minval}") )); then
             min_sec=${minval}
-            min_m=$timestr
+            min_m=${timestr}
         fi
 
         if (( $(bc -l <<< "${max_sec} < ${maxval}") )); then
             max_sec=${maxval}
-            max_m=$timestr
+            max_m=${timestr}
         fi
-    done < <( integration_time "$rundir" "$token" )
+    done < <( integration_time "${rundir}" "${token}" )
 
     if ${timeavg}; then
         echo ""
         echo "Total = ${total_min} seconds in ${nsteps} integration steps."
 
-        average_secs=$(bc -l <<< "scale=5; $total_min/$nsteps" )
+        average_secs=$(bc -l <<< "scale=5; ${total_min}/${nsteps}" )
 
         echo "Minimum ${taskname} integration time: ${min_sec} seconds = ${runtimes_secs[${min_m}]} (at ${min_m})."
         echo "Maximum ${taskname} integration time: ${max_sec} seconds = ${runtimes_secs[${max_m}]} (at ${max_m})."
@@ -195,8 +195,8 @@ else               # ensemble tasks
     total_sec=0
 
     for((n=1;n<=NENS;n++)); do
-        nm=$(printf "%02d" $n)
-        IFS=':' read -r -d '' -a words < <( grep "Job run time" "$rundir"/"${taskname}_${n}"_*.log && printf '\0')
+        nm=$(printf "%02d" "${n"})
+        IFS=':' read -r -d '' -a words < <( grep "Job run time" "${rundir}"/"${taskname}_${n}"_*.log && printf '\0')
         hour=${words[-3]}
         min=${words[-2]}
         sec=${words[-1]}
@@ -207,34 +207,34 @@ else               # ensemble tasks
         #sec=${sec%%+([[:space:]])}
         sec=${sec//[$'\t\r\n. ']}
 
-        echo "memeber $nm: ${taskname} run time: ${hour}:${min}:${sec}"
+        echo "memeber ${nm}: ${taskname} run time: ${hour}:${min}:${sec}"
 
         runtimes_mins["${nm}"]="${hour}:${min}:${sec}"
-        runtimes_secs["${nm}"]="$((10#$hour*3600+10#$min*60+10#$sec))"
+        runtimes_secs["${nm}"]="$((10#${hour}*3600+10#${min}*60+10#${sec}))"
 
-        (( total_sec+=${runtimes_secs[$nm]} ))
+        (( total_sec+=${runtimes_secs[${nm}]} ))
 
-        if [[ ${min_sec} -gt ${runtimes_secs[$nm]} ]]; then
-            min_sec=${runtimes_secs[$nm]}
-            min_m=$nm
+        if [[ ${min_sec} -gt ${runtimes_secs[${nm}]} ]]; then
+            min_sec=${runtimes_secs[${nm}]}
+            min_m=${nm}
         fi
 
-        if [[ $max_sec -lt ${runtimes_secs[$nm]} ]]; then
-            max_sec=${runtimes_secs[$nm]}
-            max_m=$nm
+        if [[ ${max_sec} -lt ${runtimes_secs[${nm}]} ]]; then
+            max_sec=${runtimes_secs[${nm}]}
+            max_m=${nm}
         fi
 
     done
 
     echo "Total   = ${total_sec} seconds"
-    average_secs=$(bc <<< "$total_sec/$NENS" )
+    average_secs=$(bc <<< "${total_sec}/${NENS}" )
     echo "Average = ${average_secs} seconds"
 
     (( hour = average_secs/3600 ))
     (( diff = average_secs%3600 ))
     (( min  = diff/60 ))
     (( sec  = diff%60 ))
-    average_mins=$(printf '%02d:%02d:%02d' $hour $min $sec )
+    average_mins=$(printf '%02d:%02d:%02d' "${hour}" "${min}" "${sec}" )
 
     echo "Minimum ${taskname} run time: ${min_sec} seconds = ${runtimes_mins[${min_m}]} (${min_m})."
     echo "Maximum ${taskname} run time: ${max_sec} seconds = ${runtimes_mins[${max_m}]} (${max_m})."

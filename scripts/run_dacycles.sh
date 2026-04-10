@@ -119,7 +119,7 @@ function usage {
     echo "              -v                  Verbose mode"
     echo "              -k  [0,1,2]         Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
     echo "                                  Default is 0 for ungrib, mpassit, upp and 1 for others"
-    echo "              -m  Machine         Machine name to run on, [Jet, Cheyenne, Vecna]."
+    echo "              -m  Machine         Machine name to run on, [Ursa, Cheyenne, Vecna]."
     echo "              -a/-c/-d            Works with the Clean command only, accept one argument {filter,mpas} or nothing."
     echo "                                  Default (Nothing): Deletes output files (log/standard output, etc.) only."
     echo "                                  -a: Deep clean of the whole working directory"
@@ -188,8 +188,8 @@ function parse_args {
                 fi
                 ;;
             -m)
-                if [[ ${2^^} == "JET" ]]; then
-                    args["machine"]=Jet
+                if [[ ${2^^} == "URSA" ]]; then
+                    args["machine"]=Ursa
                 elif [[ ${2^^} == "VECNA" ]]; then
                     args["machine"]=Vecna
                 elif [[ ${2^^} == "HERCULES" ]]; then
@@ -279,25 +279,25 @@ function run_ioda {
     # Run ioda_bufr for all bufr observation files
     #------------------------------------------------------
 
-    if [[ ${anlys_min} == "00" && ${use_BUFR} == true ]]; then
+    if [[ ${anlys_min} == "00" && ${config_use_BUFR} == true ]]; then
         run_ioda_bufr ${wrkdir} ${iseconds}
     fi
 
     #------------------------------------------------------
     # Run ioda_mrms_refl for reflectivity
     #------------------------------------------------------
-    if [[ ${use_REF} == true ]]; then
+    if [[ ${config_use_REF} == true ]]; then
         run_ioda_mrms_refl ${wrkdir} ${iseconds}
     fi
 
-    if [[ ${use_VR} == true ]]; then
+    if [[ ${config_use_VR} == true ]]; then
         obs_string="${obs_string},rw"
     fi
 
     #------------------------------------------------------
     # Run ioda_cwp for GOESCloudWaterPath
     #------------------------------------------------------
-    if [[ ${use_CWP} == true ]]; then
+    if [[ ${config_use_CWP} == true ]]; then
         run_ioda_cwp ${wrkdir} ${iseconds}
     fi
 
@@ -331,16 +331,16 @@ function run_ioda_bufr {
     jobscript="run_ioda_bufr.${mach}"
 
     declare -A jobParms=(
-        [PARTION]="${partition_filter}"
+        [PARTION]="${config_partition_filter}"
         [NOPART]="1"
         [JOBNAME]="ioda_bufr_${eventtime}"
-        [CPUSPEC]="${claim_cpu_ioda}"
-        [EXEDIR]="${EXEDIR}/jedi"
+        [CPUSPEC]="${config_claim_cpu_ioda}"
+        [EXEDIR]="${config_EXEDIR}/jedi"
         [CPCMD]="${cpcmd}"
         [CURRDATE]="${anlys_date}"
         [CYCHR]="${anlys_hour}"
-        [OBSDIR]="${OBS_DIR}/obs_rap"
-        [FIXDIR]="${FIXDIR}"
+        [OBSDIR]="${config_OBS_DIR}/obs_rap"
+        [FIXDIR]="${config_FIXDIR}"
         [ROOTDIR]="${rootdir}"
         [GRIDFILE]="${rundir}/$domname/${domname}.grid.nc"
         [RRFSDIR]="${rrfs_dir}"
@@ -351,7 +351,7 @@ function run_ioda_bufr {
         jobParms[NCORES]="1"
     fi
 
-    submit_a_job $wrkdir/ioda_bufr "ioda_bufr" jobParms $TEMPDIR/$jobscript $jobscript ""
+    submit_a_job $wrkdir/ioda_bufr "ioda_bufr" jobParms ${config_TEMPDIR}/$jobscript $jobscript ""
 }
 
 ########################################################################
@@ -399,7 +399,6 @@ function run_ioda_mrms_refl {
     #-----------------------------------------------------------------------
     #
     obs_appendix="grib2"
-    OBSPATH_NSSLMOSIAC="${OBS_DIR}/reflectivity"
     #
     #-----------------------------------------------------------------------
     #
@@ -416,10 +415,10 @@ function run_ioda_mrms_refl {
             curr_time=$(date -u -d @$curr_sec +%Y%m%d-%H%M)
             echo -en " ${PURPLE}${curr_time}${NC},"
 
-            mapfile -t fileslist < <(compgen -G "${OBSPATH_NSSLMOSIAC}/MergedReflectivityQC_*_${curr_time}??.${obs_appendix}" | sort -V)
+            mapfile -t fileslist < <(compgen -G "${config_OBS_REF_DIR}/MergedReflectivityQC_*_${curr_time}??.${obs_appendix}" | sort -V)
             if [ ${#fileslist[@]} -ge 10 ] && [ ! -e filelist_mrms ]; then
                 echo ""
-                mecho0 "Found ${YELLOW}${#fileslist[@]}${NC} GRIB-2 files from ${CYAN}${OBSPATH_NSSLMOSIAC}${NC}"
+                mecho0 "Found ${YELLOW}${#fileslist[@]}${NC} GRIB-2 files from ${CYAN}${config_OBS_REF_DIR}${NC}"
                 for nsslfile in "${fileslist[@]}"; do
                     ${cpcmd}   "${nsslfile}" .
                     base_filename=$(basename "${nsslfile}")
@@ -505,11 +504,11 @@ EOF
     jobscript="run_ioda_mrms_refl.${mach}"
 
     declare -A jobParms=(
-        [PARTION]="${partition_filter}"
+        [PARTION]="${config_partition_filter}"
         [NOPART]="${numgrib2}"
         [JOBNAME]="ioda_refl_${eventtime}"
-        [CPUSPEC]="${claim_cpu_ioda_refl}"
-        [EXEDIR]="${EXEDIR}/jedi"
+        [CPUSPEC]="${config_claim_cpu_ioda_refl}"
+        [EXEDIR]="${config_EXEDIR}/jedi"
         [CURRDATE]="${anlys_date}${anlys_min}"
         [ROOTDIR]="${rootdir}"
         [RRFSDIR]="${rrfs_dir}"
@@ -520,7 +519,7 @@ EOF
         jobParms[NCORES]="1"
     fi
 
-    submit_a_job $wrkdir/ioda_mrms_refl "ioda_refl" jobParms $TEMPDIR/$jobscript $jobscript ""
+    submit_a_job $wrkdir/ioda_mrms_refl "ioda_refl" jobParms ${config_TEMPDIR}/$jobscript $jobscript ""
 }
 
 ########################################################################
@@ -542,7 +541,6 @@ function run_ioda_cwp {
                                      # 1: Remove existing same name directory
     cd $wrkdir/ioda_cwp || exit $?
 
-    anlys_dateonly=$(date -u -d @$iseconds  +%Y%m%d)
     anlys_eventtime=$(date -u -d @$iseconds  +%Y%m%d%H%M)
     #
     # Return if is running or is done
@@ -574,7 +572,7 @@ function run_ioda_cwp {
             curr_datetime=$(date -u -d @$curr_sec +%Y%m%d%H%M)
             if [[ $verb -eq 1 ]]; then mecho0 "Looking for CWP data valid: ${DARK}${curr_datetime}${NC}"; fi
 
-            cwpfile="${OBS_CWP_DIR}/${curr_date}/${curr_datetime}_GOES16_CWP_OBS.nc"
+            cwpfile="${config_OBS_CWP_DIR}/${curr_date}/${curr_datetime}_GOES16_CWP_OBS.nc"
             if [[ -s "${cwpfile}" ]]; then
                 mecho0 "Using CWP file ${CYAN}${cwpfile}${NC}"
                 #break 2
@@ -638,36 +636,36 @@ function create_namelist {
     #
     # Default runtime parameters for MPAS model
     #
-    [[ ! -v coef_3rd_order ]]      && coef_3rd_order=1.0
-    [[ ! -v smagorinsky_coe ]]     && smagorinsky_coef=0.25
-    [[ ! -v visc4_2dsmag ]]        && visc4_2dsmag=0.125
-    [[ ! -v h_mom_eddy_visc4 ]]    && h_mom_eddy_visc4=0.0
-    [[ ! -v h_theta_eddy_visc4 ]]  && h_theta_eddy_visc4=0.25
-    #[[ ! -v h_scalar_eddy_visc4 ]] && h_scalar_eddy_visc4=0.25
-    [[ ! -v smdiv ]]               && smdiv=0.1
-    [[ ! -v physics_suite ]]       && physics_suite='convection_permitting'
+    [[ ! -v config_coef_3rd_order ]]      && config_coef_3rd_order=1.0
+    [[ ! -v config_smagorinsky_coe ]]     && config_smagorinsky_coef=0.25
+    [[ ! -v config_visc4_2dsmag ]]        && config_visc4_2dsmag=0.125
+    [[ ! -v config_h_mom_eddy_visc4 ]]    && config_h_mom_eddy_visc4=0.0
+    [[ ! -v config_h_theta_eddy_visc4 ]]  && config_h_theta_eddy_visc4=0.25
+    #[[ ! -v config_h_scalar_eddy_visc4 ]] && config_h_scalar_eddy_visc4=0.25
+    [[ ! -v config_smdiv ]]               && config_smdiv=0.1
+    [[ ! -v config_physics_suite ]]       && config_physics_suite='convection_permitting'
 
     # the ratio of radt to dt is 15
-    # config_h_scalar_eddy_visc4      = ${h_scalar_eddy_visc4}
+    # config_h_scalar_eddy_visc4      = ${config_h_scalar_eddy_visc4}
 
     cat << EOF_MPAS > "${filename}"
 &nhyd_model
     config_time_integration_order   = 2
-    config_dt                       = ${time_step}
+    config_dt                       = ${config_time_step}
     config_start_time               = '${currtime_str}'
     config_run_duration             = '00:${fcstmin_str}:00'
     config_split_dynamics_transport = true
     config_number_of_sub_steps      = 4
     config_dynamics_split_steps     = 3
     config_h_mom_eddy_visc2         = 0.0
-    config_h_mom_eddy_visc4         = ${h_mom_eddy_visc4}
+    config_h_mom_eddy_visc4         = ${config_h_mom_eddy_visc4}
     config_v_mom_eddy_visc2         = 0.0
     config_h_theta_eddy_visc2       = 0.0
-    config_h_theta_eddy_visc4       = ${h_theta_eddy_visc4}
+    config_h_theta_eddy_visc4       = ${config_h_theta_eddy_visc4}
     config_v_theta_eddy_visc2       = 0.0
     config_horiz_mixing             = '2d_smagorinsky'
     config_len_disp                 = 3000.0
-    config_visc4_2dsmag             = ${visc4_2dsmag}
+    config_visc4_2dsmag             = ${config_visc4_2dsmag}
     config_w_adv_order              = 3
     config_theta_adv_order          = 3
     config_scalar_adv_order         = 3
@@ -677,10 +675,10 @@ function create_namelist {
     config_scalar_vadv_order        = 3
     config_scalar_advection         = true
     config_monotonic                = true
-    config_coef_3rd_order           = ${coef_3rd_order}
+    config_coef_3rd_order           = ${config_coef_3rd_order}
     config_epssm                    = 0.1
-    config_smdiv                    = ${smdiv}
-    config_smagorinsky_coef         = ${smagorinsky_coef}
+    config_smdiv                    = ${config_smdiv}
+    config_smagorinsky_coef         = ${config_smagorinsky_coef}
 /
 &damping
     config_mpas_cam_coef             = 2.0
@@ -719,16 +717,16 @@ function create_namelist {
     config_radtlw_interval           = '00:05:00'
     config_radtsw_interval           = '00:05:00'
     config_bucket_update             = 'none'
-    config_lsm_scheme                = '${MPASLSM}'
-    num_soil_layers                  = ${MPASNFLS}
+    config_lsm_scheme                = '${config_MPASLSM}'
+    num_soil_layers                  = ${config_MPASNFLS}
     config_microp_re                 = true
-    config_physics_suite             = '${physics_suite}'
+    config_physics_suite             = '${config_physics_suite}'
     config_convection_scheme         = 'off'
 
     config_frac_seaice         = true
 EOF_MPAS
 
-    if [[ ${sfcscheme} == "sf_mynn" && ${mpscheme} != "mp_tcwa2" ]]; then
+    if [[ ${sfcscheme} == "sf_mynn" && ${config_mpscheme} != "mp_tcwa2" ]]; then
         cat << EOF >> "${filename}"
     config_pbl_scheme          = 'bl_mynnedmf'
     config_gwdo_scheme         = 'bl_ugwp_gwdo'
@@ -741,10 +739,10 @@ EOF
 EOF
     fi
 
-    if [[ ${mpscheme} == "mp_nssl2m" ]]; then
+    if [[ ${config_mpscheme} == "mp_nssl2m" ]]; then
         cat << EOF >> "${filename}"
     config_sfclayer_scheme           = '${sfcscheme}'
-    config_microp_scheme             = '${mpscheme}'
+    config_microp_scheme             = '${config_mpscheme}'
 /
 &nssl_mp_params
     ehw0                             = 0.9
@@ -754,10 +752,10 @@ EOF
     iusewetsnow                      = 0
 /
 EOF
-    elif [[ ${mpscheme} == "mp_tempo" ]]; then
+    elif [[ ${config_mpscheme} == "mp_tempo" ]]; then
         cat << EOF >> "${filename}"
     config_sfclayer_scheme           = '${sfcscheme/sf_mynn/sf_mynnsfclay}'
-    config_microp_scheme             = '${mpscheme}'
+    config_microp_scheme             = '${config_mpscheme}'
     config_tempo_hailaware           = .true.
     config_tempo_aerosolaware        = .true.
     config_tempo_ml_nc_pbl           = .true.
@@ -766,7 +764,7 @@ EOF
 EOF
     else
         cat << EOF >> "${filename}"
-    config_microp_scheme             = '${mpscheme}'
+    config_microp_scheme             = '${config_mpscheme}'
 /
 EOF
     fi
@@ -822,7 +820,7 @@ function create_streams {
 <immutable_stream name="restart"
                   type="input;output"
                   filename_template="${domname}_${memstr}.restart.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-                  io_type="${OUTIOTYPE}"
+                  io_type="${config_OUTIOTYPE}"
                   input_interval="initial_only"
                   clobber_mode="replace_files"
                   output_interval="${RSTINVL_STR}" />
@@ -830,7 +828,7 @@ function create_streams {
 <stream name="output"
                   type="output"
                   filename_template="${domname}_${memstr}.history.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-                  io_type="${OUTIOTYPE}"
+                  io_type="${config_OUTIOTYPE}"
                   clobber_mode="replace_files"
                   output_interval="${OUTINVL_STR}" >
 
@@ -840,7 +838,7 @@ function create_streams {
 <stream name="diagnostics"
                   type="output"
                   filename_template="${domname}_${memstr}.diag.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-                  io_type="${OUTIOTYPE}"
+                  io_type="${config_OUTIOTYPE}"
                   clobber_mode="replace_files"
                   output_interval="${RSTINVL_STR}" >
 
@@ -955,7 +953,7 @@ function read_convinfo_initial {
     local infile="$1"
     local obs_list
 
-    #file_content=$(< "${FIXDIR}/jedi/convinfo") # read in all content
+    #file_content=$(< "${config_FIXDIR}/jedi/convinfo") # read in all content
     while read -r line; do
         # remove leading whitespace from a string
         aline=${line##+([[:space:]])}
@@ -1006,7 +1004,7 @@ function get_convinfo {
         rm -f ${outfile}
     fi
 
-    #file_content=$(< "${FIXDIR}/jedi/convinfo") # read in all content
+    #file_content=$(< "${config_FIXDIR}/jedi/convinfo") # read in all content
     while read -r line; do
         # remove leading whitespace from a string
         aline=${line##+([[:space:]])}
@@ -1065,14 +1063,14 @@ function jedi_preparation {
     anlys_hour=$(date -u -d @$iseconds  +%H)
     anlys_min=$(date -u -d @$iseconds   +%M)
 
-    timesec_pre=$((iseconds-intvl_sec))
+    timesec_pre=$((iseconds-config_intvl_sec))
     event_pre=$(date -u -d @${timesec_pre}   +%H%M)
 
 
     datetime_dir=$(dirname "${wrkdir}")
     parentdir=$(dirname "${datetime_dir}")
     casedir="${rundir}"
-    if $relative_path; then
+    if ${config_relative_path}; then
         parentdir=$(realpath -m --relative-to=${wrkdir} ${parentdir})
         casedir=$(realpath -m --relative-to=${wrkdir} ${rundir})
     fi
@@ -1082,7 +1080,7 @@ function jedi_preparation {
     # Fix observation string in case run_ioda was not executed
     #------------------------------------------------------
 
-    if [[ ${use_REF} == true ]]; then
+    if [[ ${config_use_REF} == true ]]; then
         radar_reffile="${datetime_dir}/ioda_mrms_refl/ioda_mrms_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
         if [[ -s ${radar_reffile} ]]; then
             if [[ "${obs_string}" == *"refl10cm"* ]]; then
@@ -1093,8 +1091,8 @@ function jedi_preparation {
         fi
     fi
 
-    if [[ ${use_VR} == true && $icycle -gt 0 ]]; then
-        radar_vrfile="${OBS_VEL_DIR}/${anlys_date}/ioda_VR_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
+    if [[ ${config_use_VR} == true && $icycle -gt 0 ]]; then
+        radar_vrfile="${config_OBS_VEL_DIR}/${anlys_date}/ioda_VR_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
         if [[ -s ${radar_vrfile} ]]; then
             if [[ "${obs_string}" == *"rw"* ]]; then
                 :
@@ -1104,7 +1102,7 @@ function jedi_preparation {
         fi
     fi
 
-    if [[ ${use_CWP} == true ]]; then
+    if [[ ${config_use_CWP} == true ]]; then
         if [[ "${obs_string}" == *"cwp"* ]]; then
             :
         else
@@ -1131,20 +1129,22 @@ function jedi_preparation {
                                         SOILPARM.TBL VEGPARM.TBL )
 
         for fn in "${physics_convection_permitting[@]}"; do
-            ln -sf "${FIXDIR}/${fn}" .
+            ln -sf "${config_FIXDIR}/${fn}" .
         done
 
+        # shellcheck disable=SC2034
         physics_mp_tempo=( MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL MP_TEMPO_QIautQS_DATA.DBL \
                            MP_TEMPO_QRacrQG_DATA.DBL           MP_TEMPO_QRacrQS_DATA.DBL \
                            MP_TEMPO_freezeH2O_DATA.DBL        )
 
+        # shellcheck disable=SC2034
         physics_mp_thompson=( MP_THOMPSON_QIautQS_DATA.DBL   MP_THOMPSON_QRacrQG_DATA.DBL   \
                            MP_THOMPSON_QRacrQS_DATA.DBL   MP_THOMPSON_freezeH2O_DATA.DBL      )
 
-        if [[ "${mpscheme}" =~ ^(mp_tempo|mp_thompson)$ ]]; then
-            declare -n mp_target="physics_${mpscheme}"
+        if [[ "${config_mpscheme}" =~ ^(mp_tempo|mp_thompson)$ ]]; then
+            declare -n mp_target="physics_${config_mpscheme}"
             for fn in "${mp_target[@]}"; do
-                ln -sf "${FIXDIR}/${fn}" .
+                ln -sf "${config_FIXDIR}/${fn}" .
             done
         fi
 
@@ -1154,9 +1154,9 @@ function jedi_preparation {
         #mkdir -p graphinfo stream_list
         #ln -snf "${FIXrrfs}"/graphinfo/* graphinfo/
         #ln -snf "${FIXrrfs}/stream_list/${PHYSICS_SUITE}"/* stream_list/
-        ${cpcmd} "${FIXDIR}"/jedi/obsop_name_map.yaml .
-        ${cpcmd} "${FIXDIR}"/jedi/keptvars.yaml .
-        ${cpcmd} "${FIXDIR}"/jedi/geovars.yaml .
+        ${cpcmd} "${config_FIXDIR}"/jedi/obsop_name_map.yaml .
+        ${cpcmd} "${config_FIXDIR}"/jedi/keptvars.yaml .
+        ${cpcmd} "${config_FIXDIR}"/jedi/geovars.yaml .
     fi
 
     #------------------------------------------------------
@@ -1182,7 +1182,7 @@ function jedi_preparation {
         # link ensembles to ens/
         currtime_fil=${currtime_str//:/.}
 
-        for mem in $(seq -w 01 "${ENS_SIZE}"); do
+        for mem in $(seq -w 01 "${config_ENS_SIZE}"); do
             if [[ $icycle -eq 0 ]]; then
                 input_file_="${casedir}/init/${domname}_${mem}.init.nc"
                 #mkdir -p ana
@@ -1201,7 +1201,7 @@ function jedi_preparation {
     #    #
     #    mecho0 "Copying ensemble members from ens to ana ..."
     #    local -a mem_filelist
-    #    for mem in $(seq -w 001 "${ENS_SIZE}"); do
+    #    for mem in $(seq -w 001 "${config_ENS_SIZE}"); do
     #        #( cp --dereference "ens/mem${mem}.nc" "ana/mem${mem}.nc" ) &
     #        mem_filelist+=("ens/mem${mem}.nc")
     #    done
@@ -1216,8 +1216,8 @@ function jedi_preparation {
     if [[ -n ${obs_string} ]]; then
         #
         # generate namelist, streams, and getkf.yaml on the fly
-        #file_content=$(< "${FIXDIR}/jedi/namelist.atmosphere") # read in all content
-        #dt=${time_step}
+        #file_content=$(< "${config_FIXDIR}/jedi/namelist.atmosphere") # read in all content
+        #dt=${config_time_step}
         #start_time="${currtime_str}"
         #run_duration="00:${fcstmin_str}:00"
         #substeps=4
@@ -1233,26 +1233,26 @@ function jedi_preparation {
         pblscheme="bl_mynnedmf"
         sfcscheme="sf_mynn"
         create_namelist "namelist.atmosphere"
-        #cp "${FIXDIR}/jedi/streams.atmosphere.getkf" streams.atmosphere
+        #cp "${config_FIXDIR}/jedi/streams.atmosphere.getkf" streams.atmosphere
         create_streams "GETKF" "streams.atmosphere"
 
-        if ${relative_path}; then
+        if ${config_relative_path}; then
             casedir=$(realpath -m --relative-to=${wrkdir} ${rundir})
         fi
 
         local num_processors
         if [[ "${taskname}" == "post" ]]; then
-            num_processors=${npepost}
+            num_processors=${config_npepost}
         else
-            num_processors=${npefilter}
+            num_processors=${config_npefilter}
         fi
 
         if [[ ! -f $casedir/$domname/$domname.graph.info.part.${num_processors} ]]; then
-            split_graph "${gpmetis}" "${domname}.graph.info" "${num_processors}" "$rundir/$domname" "$dorun" "$verb"
+            split_graph "${config_gpmetis}" "${domname}.graph.info" "${num_processors}" "$rundir/$domname" "$dorun" "$verb"
         fi
         ln -sf $casedir/$domname/$domname.graph.info.part.${num_processors} .
 
-        ln -sf "${FIXDIR}"/jedi/stream_list/* .
+        ln -sf "${config_FIXDIR}"/jedi/stream_list/* .
 
     #------------------------------------------------------
     # 5. Prepare JEDI yaml file
@@ -1261,7 +1261,7 @@ function jedi_preparation {
         # Prepare convinfo file based on obsvations
 
         mecho0 "task = ${taskname}, obs_string = ${obs_string#,}"
-        get_convinfo "${FIXDIR}/jedi/convinfo" ./convinfo "${obs_string}"
+        get_convinfo "${config_FIXDIR}/jedi/convinfo" ./convinfo "${obs_string}"
 
         # generate getkf.yaml based on how YAML_GEN_METHOD is set
         local analysisDate bseconds beginDate lenwind
@@ -1274,7 +1274,7 @@ function jedi_preparation {
         #source "${USHrrfs}"/yaml_from_parm.sh "getkf"
 
         sed -e "s/@analysisDate@/${analysisDate}/;s/@beginDate@/${beginDate}/;s/@lenWin@/${lenwind}/" \
-               "${FIXDIR}/jedi/getkf_${taskname}.yaml" > getkf.yaml
+               "${config_FIXDIR}/jedi/getkf_${taskname}.yaml" > getkf.yaml
 
         # ---- MP-dependent state / increment variables ----
         local _mp_state_block
@@ -1282,7 +1282,7 @@ function jedi_preparation {
 
         local cwp_hail="false"
 
-        case "${mpscheme}" in
+        case "${config_mpscheme}" in
         mp_nssl2m )
             _mp_state_block="  - rain_number_concentration
   - hail
@@ -1314,7 +1314,7 @@ function jedi_preparation {
         #
         #  Generate the final YAML configuration file based on convinfo and available ioda files
         #
-        [[ -s "${FIXDIR}/jedi/satinfo" ]] && cp "${FIXDIR}/jedi/satinfo" .
+        [[ -s "${config_FIXDIR}/jedi/satinfo" ]] && cp "${config_FIXDIR}/jedi/satinfo" .
         export GETKF_TYPE="${taskname}"
         mecho0 "yaml_finalize - $(${rrfs_dir}/ush/yaml_finalize getkf.yaml 2>&1)"        # manage output message
 
@@ -1325,14 +1325,14 @@ function jedi_preparation {
             sed -i "/filename:/s/ens/ana/" getkf.yaml
         fi
 
-        sed -i "/background:/,/nmembers:/{s/nmembers:.*$/nmembers: ${ENS_SIZE}/}" getkf.yaml
+        sed -i "/background:/,/nmembers:/{s/nmembers:.*$/nmembers: ${config_ENS_SIZE}/}" getkf.yaml
         sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: Deterministic LETKF/}' getkf.yaml
         #if [[ "${JEDI_DIR}" == *CADRE* ]]; then
-        #    #${scpdir}/process_yaml.py getkf.yaml -f CADRE -o "${obs_string}" -m ${ENS_SIZE} -v
+        #    #${scpdir}/process_yaml.py getkf.yaml -f CADRE -o "${obs_string}" -m ${config_ENS_SIZE} -v
         #    #sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: GETKF/}' getkf.yaml
         #    sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: LETKF/}' getkf.yaml
         #else
-        #    #${scpdir}/process_yaml.py getkf.yaml -f RRFS  -o "${obs_string}" -m ${ENS_SIZE} -v
+        #    #${scpdir}/process_yaml.py getkf.yaml -f RRFS  -o "${obs_string}" -m ${config_ENS_SIZE} -v
         #    sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: Deterministic GETKF/}' getkf.yaml
         #fi
     fi
@@ -1357,8 +1357,8 @@ function run_jedi_observer {
     fi
 
     #
-    # GLOBAL: ENS_SIZE, rundir, ADAPTIVE_INF, OBS_DIR
-    #         intvl_sec, ncores_filter
+    # GLOBAL: rundir
+    #         config_intvl_sec, config_ncores_filter
     # RETURN: input_file_list, output_file_list
     #
 
@@ -1369,7 +1369,7 @@ function run_jedi_observer {
                                     # 1: Remove existing same name directory
     cd $wrkdir || return
 
-    if ${relative_path}; then
+    if ${config_relative_path}; then
         datimedir=$(realpath -m --relative-to=. ${datimedir})
     fi
 
@@ -1463,23 +1463,23 @@ function run_jedi_observer {
     jobscript="run_mpasjedi.${mach}"
 
     declare -A jobParms=(
-        [PARTION]="${partition_filter}"
-        [NOPART]="${npefilter}"
-        [NNODES]="${nnodes_filter}"
+        [PARTION]="${config_partition_filter}"
+        [NOPART]="${config_npefilter}"
+        [NNODES]="${config_nnodes_filter}"
         [JOBNAME]="${taskname}-${jobname}_${eventtime}"
-        [CPUSPEC]="${claim_cpu_filter}"
-        [EXEDIR]="${EXEDIR}/jedi"
+        [CPUSPEC]="${config_claim_cpu_filter}"
+        [EXEDIR]="${config_EXEDIR}/jedi"
         [WRKDIR]="${wrkdir}"
         [TASKNAME]="${taskname}"
         [JEDIDIR]="${JEDI_DIR}"
         [MODULE]="${jedi_modulename}"
     )
     if [[ "${mach}" == "pbs" ]]; then
-        jobParms[NNODES]="${nnodes_filter}"
-        jobParms[NCORES]="${ncores_filter}"
+        jobParms[NNODES]="${config_nnodes_filter}"
+        jobParms[NCORES]="${config_ncores_filter}"
     fi
 
-    submit_a_job "${wrkdir}" "jedi_${taskname}" "jobParms" "$TEMPDIR/$jobscript" "run_mpasjedi_${taskname}.${mach}" ""
+    submit_a_job "${wrkdir}" "jedi_${taskname}" "jobParms" "${config_TEMPDIR}/$jobscript" "run_mpasjedi_${taskname}.${mach}" ""
 }
 
 ########################################################################
@@ -1501,8 +1501,8 @@ function run_jedi_solver {
     fi
 
     #
-    # GLOBAL: ENS_SIZE, rundir, ADAPTIVE_INF, OBS_DIR
-    #         intvl_sec, ncores_filter
+    # GLOBAL: config_ENS_SIZE, rundir
+    #         config_intvl_sec, config_ncores_filter
     # RETURN: input_file_list, output_file_list
     #
 
@@ -1513,7 +1513,7 @@ function run_jedi_solver {
                                      # 1: Remove existing same name directory
     cd $wrkdir || return
 
-    if ${relative_path}; then
+    if ${config_relative_path}; then
         datimedir=$(realpath -m --relative-to=. ${datimedir})
     fi
 
@@ -1558,27 +1558,27 @@ function run_jedi_solver {
     jobscript="run_mpasjedi_solver.${mach}"
 
     declare -A jobParms=(
-        [PARTION]="${partition_filter}"
-        [NOPART]="${npefilter}"
-        [NNODES]="${nnodes_filter}"
+        [PARTION]="${config_partition_filter}"
+        [NOPART]="${config_npefilter}"
+        [NNODES]="${config_nnodes_filter}"
         [JOBNAME]="${taskname}-${jobname}_${eventtime}"
-        [CPUSPEC]="${claim_cpu_filter}"
-        [EXEDIR]="${EXEDIR}/jedi"
+        [CPUSPEC]="${config_claim_cpu_filter}"
+        [EXEDIR]="${config_EXEDIR}/jedi"
         [WRKDIR]="${wrkdir}"
         [TASKNAME]="${taskname}"
         [JEDIDIR]="${JEDI_DIR}"
         [VARLIST]="${anlys_varstr}"         #  Special for Solver
         [CYCLENO]="${icycle}"               #  Special for Solver
-        [ENS_SIZE]="${ENS_SIZE}"            #  Special for Solver
+        [ENS_SIZE]="${config_ENS_SIZE}"            #  Special for Solver
         [MODULE]="${jedi_modulename}"
     )
 
     if [[ "${mach}" == "pbs" ]]; then
-        jobParms[NNODES]="${nnodes_filter}"
-        jobParms[NCORES]="${ncores_filter}"
+        jobParms[NNODES]="${config_nnodes_filter}"
+        jobParms[NCORES]="${config_ncores_filter}"
     fi
 
-    submit_a_job "${wrkdir}" "jedi_${taskname}" "jobParms" "$TEMPDIR/run_mpasjedi.${mach}" "$jobscript" ""
+    submit_a_job "${wrkdir}" "jedi_${taskname}" "jobParms" "${config_TEMPDIR}/run_mpasjedi.${mach}" "$jobscript" ""
 }
 
 ########################################################################
@@ -1600,8 +1600,8 @@ function run_jedi_post {
     fi
 
     #
-    # GLOBAL: ENS_SIZE, rundir, ADAPTIVE_INF, OBS_DIR
-    #         intvl_sec, ncores_filter
+    # GLOBAL: config_ENS_SIZE, rundir
+    #         config_intvl_sec, config_ncores_filter
     # RETURN: input_file_list, output_file_list
     #
 
@@ -1612,7 +1612,7 @@ function run_jedi_post {
                                      # 1: Remove existing same name directory
     cd $wrkdir || return
 
-    if ${relative_path}; then
+    if ${config_relative_path}; then
         datimedir=$(realpath -m --relative-to=. ${datimedir})
     fi
 
@@ -1650,12 +1650,12 @@ function run_jedi_post {
     jobscript="run_mpasjedi_post.${mach}"
 
     declare -A jobParms=(
-        [PARTION]="${partition_post}"
-        [NOPART]="${npepost}"
-        [NNODES]="${nnodes_post}"
+        [PARTION]="${config_partition_post}"
+        [NOPART]="${config_npepost}"
+        [NNODES]="${config_nnodes_post}"
         [JOBNAME]="${taskname}-${jobname}_${eventtime}"
-        [CPUSPEC]="${claim_cpu_post}"
-        [EXEDIR]="${EXEDIR}/jedi"
+        [CPUSPEC]="${config_claim_cpu_post}"
+        [EXEDIR]="${config_EXEDIR}/jedi"
         [WRKDIR]="${wrkdir}"
         [TASKNAME]="${taskname}"
         [JEDIDIR]="${JEDI_DIR}"
@@ -1663,11 +1663,11 @@ function run_jedi_post {
     )
 
     if [[ "${mach}" == "pbs" ]]; then
-        jobParms[NNODES]="${nnodes_post}"
-        jobParms[NCORES]="${ncores_post}"
+        jobParms[NNODES]="${config_nnodes_post}"
+        jobParms[NCORES]="${config_ncores_post}"
     fi
 
-    submit_a_job "${wrkdir}" "jedi_${taskname}" "jobParms" "$TEMPDIR/run_mpasjedi.${mach}" "$jobscript" ""
+    submit_a_job "${wrkdir}" "jedi_${taskname}" "jobParms" "${config_TEMPDIR}/run_mpasjedi.${mach}" "$jobscript" ""
 }
 
 ########################################################################
@@ -1679,7 +1679,7 @@ function run_add_noise {
     local iseconds=$2
 
     #
-    # GLOBAL: ENS_SIZE, rundir, update_in_place
+    # GLOBAL: config_ENS_SIZE, rundir, update_in_place
     #         input_file_list
     #
 
@@ -1741,19 +1741,19 @@ function run_add_noise {
         #
         # Create job script and submit it
         #
-        runexe_str="${job_runexe_str} -n 1"
+        runexe_str="${config_runcmd_str} -n 1"
 
         jobscript="run_noise_mask.${mach}"
 
         declare -A jobParms=(
-            [PARTION]="${partition_filter}"
+            [PARTION]="${config_partition_filter}"
             [NOPART]="1"
             [JOBNAME]="noise_mask_${eventtime}"
-            [CPUSPEC]="${claim_cpu_update}"
+            [CPUSPEC]="${config_claim_cpu_update}"
             [MACHINE]="${machine}"
             [SEQFILE]="${seqfile}"
             [INVFILE]="${invfile}"
-            [WAN_PATH]="${WOFSAN_PATH}"
+            [WAN_PATH]="${config_WOFSAN_PATH}"
             [EVENTDAYS]="${days_secs[0]}"
             [EVENTSECS]="${days_secs[1]}"
             [RUNCMD]="${runexe_str}"
@@ -1763,7 +1763,7 @@ function run_add_noise {
             jobParms[NCORES]="1"
         fi
 
-        submit_a_job $wrkdir "noise_mask" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
+        submit_a_job $wrkdir "noise_mask" "jobParms" "${config_TEMPDIR}/$jobscript" "$jobscript" ""
     fi
 
     #------------------------------------------------------
@@ -1798,7 +1798,7 @@ function run_add_noise {
     invfile="$rundir/init/${domname}.invariant.nc"
 
     jobarrays=()
-    for iens in $(seq 1 $ENS_SIZE); do
+    for iens in $(seq 1 ${config_ENS_SIZE}); do
         memstr=$(printf "%02d" $iens)
 
         memwrkdir=$wrkdir/fcst_$memstr
@@ -1820,17 +1820,17 @@ function run_add_noise {
     if [[ ${#jobarrays[@]} -gt 0 ]]; then
         jobscript="run_noise_pert.${mach}"
 
-        runexe_str="${job_runexe_str} -n 1"
+        runexe_str="${config_runcmd_str} -n 1"
 
         declare -A jobParms=(
-            [PARTION]="${partition_filter}"
+            [PARTION]="${config_partition_filter}"
             [NOPART]="1"
             [JOBNAME]="noist_pert_${eventtime}"
-            [CPUSPEC]="${claim_cpu_update}"
+            [CPUSPEC]="${config_claim_cpu_update}"
             [INVFILE]="${invfile}"
             [MACHINE]="${machine}"
             [SEQFILE]="${seqfile}"
-            [WAN_PATH]="${WOFSAN_PATH}"
+            [WAN_PATH]="${config_WOFSAN_PATH}"
             [EVENTDAYS]="${days_secs[0]}"
             [EVENTSECS]="${days_secs[1]}"
             [RUNCMD]="${runexe_str}"
@@ -1841,7 +1841,7 @@ function run_add_noise {
         fi
 
         jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
-        submit_a_job $wrkdir "add_noise" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" "${jobarraystr}"
+        submit_a_job $wrkdir "add_noise" "jobParms" "${config_TEMPDIR}/$jobscript" "$jobscript" "${jobarraystr}"
     fi
 }
 
@@ -1864,7 +1864,7 @@ function run_update_bc {
     fi
 
     local casedir="${rundir}"
-    if ${relative_path}; then
+    if ${config_relative_path}; then
         casedir=$(realpath -m --relative-to=${wrkdir} ${rundir})
     fi
     #
@@ -1894,7 +1894,7 @@ function run_update_bc {
     lbcfiles_mems=(); lbcfiles_next=()
 
     jobarrays=()
-    for iens in $(seq 1 $ENS_SIZE); do
+    for iens in $(seq 1 ${config_ENS_SIZE}); do
         #(( jindex=iens-1 ))
 
         memstr=$(printf "%02d" $iens)
@@ -1906,7 +1906,7 @@ function run_update_bc {
         #
         # lbc files
         #
-        jens=$(( (iens-1)%nenslbc+1 ))
+        jens=$(( (iens-1)%config_nenslbc+1 ))
         mlbcstr=$(printf "%02d" $jens)                # get LBC member string
 
         # isec_nlbc1, isec_nlbc2, isec_elbc and icycle_lbcgap are set in the caller
@@ -1919,7 +1919,7 @@ function run_update_bc {
         mpastime_str1=$(date -u -d @${iseconds}   +%Y-%m-%d_%H.%M.%S)
         mpastime_str2=$(date -u -d @${isec_elbc}  +%Y-%m-%d_%H.%M.%S)
 
-        if ${relative_path}; then
+        if ${config_relative_path}; then
             casedir=$(realpath -m --relative-to=${memwrkdir} ${rundir})
         fi
 
@@ -1960,19 +1960,19 @@ function run_update_bc {
     jobscript="run_update_bc.${mach}"
 
     declare -A jobParms=(
-        [PARTION]="${partition_filter}"
+        [PARTION]="${config_partition_filter}"
         [NOPART]="1"
         [JOBNAME]="updatebc_${eventtime}"
-        [CPUSPEC]="${claim_cpu_update}"
+        [CPUSPEC]="${config_claim_cpu_update}"
         [CPCMD]="${cpcmd}"
-        [MPSCHEME]="${mpscheme}"
+        [MPSCHEME]="${config_mpscheme}"
         [LBCFILEORGSTR1]="${lbcfiles_org1[*]}"
         [LBCFILEORGSTR2]="${lbcfiles_org2[*]}"
         [LBCFILEMEMSSTR]="${lbcfiles_mems[*]}"
         [LBCFILENEXTSTR]="${lbcfiles_next[*]}"
         [LBCFILEMEMS1]="${lbcfiles_mem1[*]}"
         [LBCFILEMEMS2]="${lbcfiles_mem2[*]}"
-        [UPDATEBC]="${update_in_place}"
+        [UPDATEBC]="${config_update_in_place}"
     )
     if [[ "${mach}" == "pbs" ]]; then
         jobParms[NNODES]="1"
@@ -1981,7 +1981,7 @@ function run_update_bc {
 
     jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
 
-    submit_a_job $wrkdir "update_bc" jobParms $TEMPDIR/$jobscript $jobscript "${jobarraystr}"
+    submit_a_job $wrkdir "update_bc" jobParms ${config_TEMPDIR}/$jobscript $jobscript "${jobarraystr}"
 }
 
 ########################################################################
@@ -1994,7 +1994,7 @@ function run_mpas {
     local iseconds=$3
 
     #
-    # GLOBAL: ENS_SIZE, rundir, intvl_sec, npefcst
+    # GLOBAL: config_ENS_SIZE, rundir, config_intvl_sec, config_npefcst
     #
 
     #
@@ -2040,12 +2040,12 @@ function run_mpas {
     #
     # Preparation for all members
     #
-    if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npefcst} ]]; then
-        split_graph "${gpmetis}" "${domname}.graph.info" "${npefcst}" "$rundir/$domname" "$dorun" "$verb"
+    if [[ ! -f $rundir/$domname/$domname.graph.info.part.${config_npefcst} ]]; then
+        split_graph "${config_gpmetis}" "${domname}.graph.info" "${config_npefcst}" "$rundir/$domname" "$dorun" "$verb"
     fi
 
     currtime_fil=${currtime_str//:/.}
-    #fcst_sec=$(( iseconds + intvl_sec ))
+    #fcst_sec=$(( iseconds + config_intvl_sec ))
     #fcsttime_fil=$(date -u -d @${fcst_sec} +%Y-%m-%d_%H.%M.%S)
 
 
@@ -2053,7 +2053,7 @@ function run_mpas {
     # Preparation for each member
     #
     jobarrays=()
-    for iens in $(seq 1 $ENS_SIZE); do
+    for iens in $(seq 1 ${config_ENS_SIZE}); do
         memstr=$(printf "%02d" $iens)
         basen=$(( (iens-1)%6 ))
         if [[ $basen -lt 2 ]]; then     # map to 0,1,2
@@ -2063,8 +2063,8 @@ function run_mpas {
         else
             idx=2
         fi
-        pblscheme=${pbl_schemes[$idx]}
-        sfcscheme=${sfclayer_schemes[$idx]}
+        pblscheme=${config_pbl_schemes[$idx]}
+        sfcscheme=${config_sfclayer_schemes[$idx]}
 
         memwrkdir=$wrkdir/fcst_$memstr
         mkwrkdir $memwrkdir 0
@@ -2073,12 +2073,12 @@ function run_mpas {
         #
         # init files
         #
-        if [[ $icycle -eq 0 || ${damode} == "init" ]]; then
+        if [[ $icycle -eq 0 || ${config_damode} == "init" ]]; then
             do_restart="false"
             do_dacyle="false"
             mpas_inputfile_template="${domname}_${memstr}.init.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
             initfile="./${domname}_${memstr}.init.${currtime_fil}.nc"
-        elif [[ ${damode} == "mpasout" ]]; then
+        elif [[ ${config_damode} == "mpasout" ]]; then
             do_restart="false"
             do_dacyle="true"
             mpas_inputfile_template="${domname}_${memstr}.init.nc"
@@ -2091,7 +2091,7 @@ function run_mpas {
         fi
 
         local casedir="${rundir}"
-        if $relative_path; then
+        if ${config_relative_path}; then
             casedir=$(realpath -m --relative-to=. ${rundir})
         fi
 
@@ -2108,22 +2108,22 @@ function run_mpas {
         fi
 
         if [[ ! -e ${initfile} && ${dorun} == true ]]; then
-            mecho0 "${RED}ERROR${NC}: ${damode} file: ${CYAN}${initfile}${NC} not exists"
+            mecho0 "${RED}ERROR${NC}: ${config_damode} file: ${CYAN}${initfile}${NC} not exists"
             exit 1              # something wrong should never happen
         fi
 
-        ln -sf ${casedir}/${domname}/${domname}.graph.info.part.${npefcst} .
+        ln -sf ${casedir}/${domname}/${domname}.graph.info.part.${config_npefcst} .
         ln -sf ${casedir}/${domname}/${domname}.ugwp_oro_data.nc .
         ln -sf ${casedir}/init/${domname}.invariant.nc .
 
         diag_stream="stream_list.atmosphere.diagnostics_da"
-        if [[ ${outwrf} == true ]]; then
+        if [[ ${config_outwrf} == true ]]; then
             diag_stream="stream_list.atmosphere.diagnostics_fcst"
         fi
 
         streamlists=("${diag_stream}" stream_list.atmosphere.output stream_list.atmosphere.surface stream_list.atmosphere.da_state)
         for fn in "${streamlists[@]}"; do
-            cp -f ${FIXDIR}/$fn .
+            cp -f ${config_FIXDIR}/$fn .
         done
 
         datafiles=(  CAM_ABS_DATA.DBL  CAM_AEROPT_DATA.DBL GENPARM.TBL       LANDUSE.TBL    \
@@ -2132,22 +2132,22 @@ function run_mpas {
                      VEGPARM.TBL )
 
         for fn in "${datafiles[@]}"; do
-            ln -sf ${FIXDIR}/$fn .
+            ln -sf ${config_FIXDIR}/$fn .
         done
 
-        if [[ "${mpscheme}" == "mp_tempo" ]]; then
+        if [[ "${config_mpscheme}" == "mp_tempo" ]]; then
             thompson_tables=( MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL MP_TEMPO_QRacrQS_DATA.DBL   \
                               MP_TEMPO_freezeH2O_DATA.DBL         MP_TEMPO_QIautQS_DATA.DBL   CCN_ACTIVATE_DATA )
 
             for fn in "${thompson_tables[@]}"; do
-                ln -sf ${FIXDIR}/$fn .
+                ln -sf ${config_FIXDIR}/$fn .
             done
-        elif [[ "${mpscheme}" == "mp_thompson" ]]; then
+        elif [[ "${config_mpscheme}" == "mp_thompson" ]]; then
             thompson_tables=( MP_THOMPSON_QRacrQG_DATA.DBL   MP_THOMPSON_QRacrQS_DATA.DBL   \
                               MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL CCN_ACTIVATE.BIN )
 
             for fn in "${thompson_tables[@]}"; do
-                ln -sf ${FIXDIR}/$fn .
+                ln -sf ${config_FIXDIR}/$fn .
             done
         fi
 
@@ -2164,12 +2164,12 @@ function run_mpas {
     # Create job script for MPAS forecast and submit it
     #
     declare -A jobParms=(
-        [PARTION]="${partition_fcst}"
-        [NOPART]="$npefcst"
-        [NNODES]="${nnodes_fcst}"
+        [PARTION]="${config_partition_fcst}"
+        [NOPART]="${config_npefcst}"
+        [NNODES]="${config_nnodes_fcst}"
         [JOBNAME]="mfrd-${jobname}_${eventtime}"
-        [CPUSPEC]="${claim_cpu_fcst}"
-        [CLAIMTIME]="${claim_time_fcst}"
+        [CPUSPEC]="${config_claim_cpu_fcst}"
+        [CLAIMTIME]="${config_claim_time_fcst}"
         [MPASDIR]="${MPAS_DIR}"
         [MODULE]="${mpas_modulename}"
     )
@@ -2177,33 +2177,24 @@ function run_mpas {
     jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
 
     if [[ "${mach}" == "pbs" ]]; then
-        jobParms[NNODES]="${nnodes_fcst}"
-        jobParms[NCORES]="${ncores_fcst}"
+        jobParms[NNODES]="${config_nnodes_fcst}"
+        jobParms[NCORES]="${config_ncores_fcst}"
     fi
 
-    submit_a_job "$wrkdir" "fcst" "jobParms" "$TEMPDIR/run_mpas_array.${mach}" "$mpas_jobscript" "${jobarraystr}"
+    submit_a_job "$wrkdir" "fcst" "jobParms" "${config_TEMPDIR}/run_mpas_array.${mach}" "$mpas_jobscript" "${jobarraystr}"
 }
 
 ########################################################################
 
 function dacycle_driver() {
     #
-    #  based on driver_mpas_dart.csh in the DART package
-    #
     #  THIS IS A TOP-LEVEL DRIVER SCRIPT FOR CYCLING RUNS.
     #
     #  Required files to run this driver:
     #  1. executables:
-    #       filter
-    #       update_mpas_states
-    #       update_bc
+    #       init_atmosphere_model
     #       atmosphere_model
-    #
-    #  Input files to run this script:
-    #  A. input_state_file_list  - a list of input ensemble netcdf files for DART/filter
-    #  B. output_state_file_list - a list of output ensemble netcdf files from DART/filter
-    #  C. RUN_DIR/fcst_??/${mpas_filename}    - the input file listed in input_state_file_list for each member
-    #  D. OBS_DIR/${obs_seq_in}.${YYYYMMDDHH} - obs sequence files for each analysis cycle (YYYYMMDDHH)
+    #       jedi/mpasjedi_enkf.x
     #
     ##############################################################################################
     # USER SPECIFIED PARAMETERS
@@ -2227,8 +2218,8 @@ function dacycle_driver() {
     local date_beg date_end intvl_min n_cycles
     date_beg=$(date -u -d @$start_sec +%Y%m%d%H%M)
     date_end=$(date -u -d @$end_sec +%Y%m%d%H%M)
-    intvl_min=$((intvl_sec/60))
-    n_cycles=$(( (end_sec-start_sec)/intvl_sec+1 ))
+    intvl_min=$((config_intvl_sec/60))
+    n_cycles=$(( (end_sec-start_sec)/config_intvl_sec+1 ))
 
     echo -e "Total ${n_cycles} cycles from ${GREEN}$date_beg${NC} to ${LIGHT_BLUE}$date_end${NC} will be run every $intvl_min minutes."
 
@@ -2238,8 +2229,8 @@ function dacycle_driver() {
         num_resubmit=0               # Just check job status
     fi
 
-    local icyc=$(( (start_sec-init_sec)/intvl_sec ))
-    for isec in $(seq $start_sec $intvl_sec $end_sec ); do
+    local icyc=$(( (start_sec-init_sec)/config_intvl_sec ))
+    for isec in $(seq $start_sec $config_intvl_sec $end_sec ); do
         timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
         eventtime=$(date -u -d @$isec +%H%M)
 
@@ -2257,11 +2248,11 @@ function dacycle_driver() {
         # Lateral boundary times for this cycle
         #------------------------------------------------------
 
-        isec_nlbc1=$(( isec - isec%EXTINVL ))            # get whole hour in seconds
-        isec_nlbc2=$(( isec_nlbc1 + EXTINVL ))        # next whole hour
-        isec_elbc=$(( isec + intvl_sec ))
+        isec_nlbc1=$(( isec - isec%config_EXTINVL ))            # get whole hour in seconds
+        isec_nlbc2=$(( isec_nlbc1 + config_EXTINVL ))        # next whole hour
+        isec_elbc=$(( isec + config_intvl_sec ))
         while [[ $isec_elbc -gt $isec_nlbc2 ]]; do
-            (( isec_nlbc2+=EXTINVL ))
+            (( isec_nlbc2+=config_EXTINVL ))
         done
         isec_elbc=${isec_nlbc2}                      # use variant lbc interval or not
         icycle_lbcgap=$((isec_elbc-isec))
@@ -2273,20 +2264,20 @@ function dacycle_driver() {
             if [[ $icyc -eq 0 ]]; then
                 if [[ ! -e $rundir/lbc/done.lbc ]]; then
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-                    check_job_status "${domname}" $rundir/lbc $nenslbc run_lbc.${mach}
+                    check_job_status "${domname}" $rundir/lbc ${config_nenslbc} run_lbc.${mach}
                 fi
             else   #if [[ $icyc -gt 0 ]]; then
-                timesec_pre=$((isec-intvl_sec))
+                timesec_pre=$((isec-config_intvl_sec))
                 event_pre=$(date -u -d @$timesec_pre  +%H%M)
                 wrkdir_pre=${wrkdir}/${event_pre}
                 if [[ ! -e ${wrkdir_pre}/done.fcst ]]; then
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-                    check_job_status "fcst" $wrkdir_pre $ENS_SIZE run_mpas.${mach}
+                    check_job_status "fcst" $wrkdir_pre ${config_ENS_SIZE} run_mpas.${mach}
                 fi
             fi
         fi
 
-        intvl_min=$((intvl_sec/60))
+        intvl_min=$((config_intvl_sec/60))
 
         currtime_str=$(date -u -d @${isec} +%Y-%m-%d_%H:%M:%S)
         fcstmin_str=$(printf "%02d" "${intvl_min}")
@@ -2296,9 +2287,9 @@ function dacycle_driver() {
         #------------------------------------------------------
 
         obs_string=""
-        if [[ ${eventtime} == ??00 && ${icyc} -gt 0 && ${use_BUFR} == true ]]; then
+        if [[ ${eventtime} == ??00 && ${icyc} -gt 0 && ${config_use_BUFR} == true ]]; then
             #obs_string="t120,t133,q120,q133,uv220,uv233"
-            obs_string=$(read_convinfo_initial "${FIXDIR}/jedi/convinfo")
+            obs_string=$(read_convinfo_initial "${config_FIXDIR}/jedi/convinfo")
             #echo "obs_string=$obs_string"
             #exit 0
         fi
@@ -2353,7 +2344,7 @@ function dacycle_driver() {
         # 6. Add noise (must run after solver)
         #------------------------------------------------------
 
-        if [[ $run_addnoise == true && $icyc -gt 0 ]]; then
+        if [[ ${config_run_addnoise} == true && $icyc -gt 0 ]]; then
             if [[ ! -e jedi_solver/done.solver ]]; then
                 wait_for_conditions "jedi_solver/done.solver"
             fi
@@ -2370,7 +2361,7 @@ function dacycle_driver() {
             # check and set update_bc status
             if [[ ! -e done.update_bc ]]; then
                 #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-                check_job_status "update_bc fcst update_bc" $dawrkdir $ENS_SIZE run_update_bc.${mach} ${num_resubmit}
+                check_job_status "update_bc fcst update_bc" ${dawrkdir} ${config_ENS_SIZE} run_update_bc.${mach} ${num_resubmit}
             fi
 
             if [[ $verb -eq 1 ]]; then echo "  Run advance model at $eventtime"; fi
@@ -2380,7 +2371,7 @@ function dacycle_driver() {
 
             if [[ ! -e done.fcst ]]; then
                 #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-                check_job_status "fcst" $dawrkdir $ENS_SIZE $mpas_jobscript ${num_resubmit}
+                check_job_status "fcst" ${dawrkdir} ${config_ENS_SIZE} $mpas_jobscript ${num_resubmit}
             fi
         fi
 
@@ -2404,11 +2395,11 @@ function dacycle_driver() {
 
             run_mpassit $dawrkdir ${isec}
 
-            check_job_status "mpassit mem mpasssit" $dawrkdir/mpassit $ENS_SIZE run_mpassit.${mach} ${num_resubmit}
+            check_job_status "mpassit mem mpasssit" ${dawrkdir}/mpassit ${config_ENS_SIZE} run_mpassit.${mach} ${num_resubmit}
         else
             # Clean not needed files in each member's forecast directory after
             # the MPAS forward forecast
-            if [[ $outwrf == false && $icyc -gt 0 ]]; then
+            if [[ $config_outwrf == false && $icyc -gt 0 ]]; then
                 rm -rf ${dawrkdir}/fcst_??/${domname}_??.{diag,history}.*
             fi
         fi
@@ -2462,7 +2453,7 @@ function run_mpassit_mean {
     #
     # Prepare MPASSIT working files
     #
-    if [[ "${mpscheme}" == "mp_nssl2m" ]]; then
+    if [[ "${config_mpscheme}" == "mp_nssl2m" ]]; then
         fileappend="NSSL"
     else
         fileappend="THOM"
@@ -2475,12 +2466,12 @@ function run_mpassit_mean {
     for fn in "${parmfiles[@]}"; do
         if [[ ! -e $fn ]]; then
             #if [[ $verb -eq 1 ]]; then echo "Linking $fn ..."; fi
-            if [[ -e $FIXDIR/MPASSIT/${fn}.${fileappend}_analysis_mean ]]; then
-                ln -sf $FIXDIR/MPASSIT/${fn}.${fileappend}_analysis_mean $fn
-            elif [[ -e $FIXDIR/MPASSIT/${fn}_analysis_mean ]]; then
-                ln -sf $FIXDIR/MPASSIT/${fn}_analysis_mean $fn
+            if [[ -e ${config_FIXDIR}/MPASSIT/${fn}.${fileappend}_analysis_mean ]]; then
+                ln -sf ${config_FIXDIR}/MPASSIT/${fn}.${fileappend}_analysis_mean $fn
+            elif [[ -e ${config_FIXDIR}/MPASSIT/${fn}_analysis_mean ]]; then
+                ln -sf ${config_FIXDIR}/MPASSIT/${fn}_analysis_mean $fn
             else
-                mecho0 "${RED}ERROR${NC}: file ${BLUE}$FIXDIR/MPASSIT/${fn}_analysis_mean${NC} not exist."
+                mecho0 "${RED}ERROR${NC}: file ${BLUE}${config_FIXDIR}/MPASSIT/${fn}_analysis_mean${NC} not exist."
                 return
             fi
         fi
@@ -2489,10 +2480,10 @@ function run_mpassit_mean {
     fn="histlist_soil"
     if [[ ! -e $fn ]]; then
         #if [[ $verb -eq 1 ]]; then echo "Linking $fn ..."; fi
-        if [[ -e $FIXDIR/MPASSIT/${fn} ]]; then
-            ln -sf $FIXDIR/MPASSIT/${fn} $fn
+        if [[ -e ${config_FIXDIR}/MPASSIT/${fn} ]]; then
+            ln -sf ${config_FIXDIR}/MPASSIT/${fn} $fn
         else
-            mecho0 "${RED}ERROR${NC}: file ${BLUE}$FIXDIR/MPASSIT/${fn}${NC} not exist."
+            mecho0 "${RED}ERROR${NC}: file ${BLUE}${config_FIXDIR}/MPASSIT/${fn}${NC} not exist."
             return
         fi
     fi
@@ -2549,8 +2540,8 @@ function run_mpassit_mean {
             mecho0 "Merging background datasets to ${CYAN}${filename}${NC} ..."
             {
                 echo -e "\nRunning NCO to merge background static datasets to the stage file:\n"
-                echo "${runcmd_str} ncks -A -C -x -v ${anlys_varstr} ${bkg_file} ${filename}"
-                ${runcmd_str} ncks -A -C -x -v ${anlys_varstr} "${bkg_file}" "${filename}"
+                echo "${config_runcmd_str} ncks -A -C -x -v ${anlys_varstr} ${bkg_file} ${filename}"
+                ${config_runcmd_str} ncks -A -C -x -v ${anlys_varstr} "${bkg_file}" "${filename}"
             } &>> merge_${stage}.log
         fi
 
@@ -2576,19 +2567,19 @@ EOF
         jobscript="run_mpassit_${stage}.${mach}"
 
         declare -A jobParms=(
-            [PARTION]="${partition_filter}"
-            [NOPART]="${npepost}"
+            [PARTION]="${config_partition_filter}"
+            [NOPART]="${config_npepost}"
             [JOBNAME]="mpassit_${stage}"
-            [CPUSPEC]="${claim_cpu_post}"
+            [CPUSPEC]="${config_claim_cpu_post}"
             [HHHSTR]="${stage}"
         )
         if [[ "${mach}" == "pbs" ]]; then
-            jobParms[NNODES]="${nnodes_post}"
+            jobParms[NNODES]="${config_nnodes_post}"
             # shellcheck disable=SC2034
-            jobParms[NCORES]="${ncores_post}"
+            jobParms[NCORES]="${config_ncores_post}"
         fi
 
-        submit_a_job "$wrkdir" "mpassit${stage}" "jobParms" "$TEMPDIR/run_mpassit.${mach}" "$jobscript" ""
+        submit_a_job "$wrkdir" "mpassit${stage}" "jobParms" "${config_TEMPDIR}/run_mpassit.${mach}" "$jobscript" ""
     done
 }
 
@@ -2625,10 +2616,10 @@ function run_mpassit {
         return
     fi
 
-    minstr=$(printf "%02d" $((intvl_sec/60)) )
+    minstr=$(printf "%02d" $((config_intvl_sec/60)) )
     #minstr="00"
     fcst_minutes=()
-    if [[ ${damode} == "init" || $icyc -eq 0 ]]; then
+    if [[ ${config_damode} == "init" || $icyc -eq 0 ]]; then
         fcst_minutes=("00")
     fi
     fcst_minutes+=("${minstr}")
@@ -2637,14 +2628,14 @@ function run_mpassit {
     # Prepare MPASSIT working files
     #
     if [[ ${#fcst_minutes[@]} -gt 0 ]]; then
-        if [[ "${mpscheme}" == "mp_nssl2m" ]]; then
+        if [[ "${config_mpscheme}" == "mp_nssl2m" ]]; then
             fileappend="NSSL"
         else
             fileappend="THOM"
         fi
 
         jobarrays=()
-        for mem in $(seq 1 $ENS_SIZE); do
+        for mem in $(seq 1 ${config_ENS_SIZE}); do
             memstr=$(printf "%02d" $mem)
             memdir=$wrkdir/mem$memstr
             mkwrkdir $memdir 0
@@ -2657,12 +2648,12 @@ function run_mpassit {
             for fn in "${parmfiles[@]}"; do
                 if [[ ! -e $fn ]]; then
                     #if [[ $verb -eq 1 ]]; then echo "Linking $fn ..."; fi
-                    if [[ -e $FIXDIR/MPASSIT/${fn}.${fileappend} ]]; then
-                        ln -sf $FIXDIR/MPASSIT/${fn}.${fileappend} $fn
-                    elif [[ -e $FIXDIR/MPASSIT/${fn} ]]; then
-                        ln -sf $FIXDIR/MPASSIT/$fn .
+                    if [[ -e ${config_FIXDIR}/MPASSIT/${fn}.${fileappend} ]]; then
+                        ln -sf ${config_FIXDIR}/MPASSIT/${fn}.${fileappend} $fn
+                    elif [[ -e ${config_FIXDIR}/MPASSIT/${fn} ]]; then
+                        ln -sf ${config_FIXDIR}/MPASSIT/$fn .
                     else
-                        mecho0 "${RED}ERROR${NC}: file ${BLUE}$FIXDIR/MPASSIT/${fn}${NC} not exist."
+                        mecho0 "${RED}ERROR${NC}: file ${BLUE}${config_FIXDIR}/MPASSIT/${fn}${NC} not exist."
                         return
                     fi
                 fi
@@ -2717,23 +2708,23 @@ function run_mpassit_alltimes {
     jobscript="run_mpassit.${mach}"
 
     declare -A jobParms=(
-        [PARTION]="${partition_filter}"
-        [NOPART]="$npepost"
+        [PARTION]="${config_partition_filter}"
+        [NOPART]="${config_npepost}"
         [JOBNAME]="mpassit_${eventtime}"
-        [CPUSPEC]="${claim_cpu_post}"
-        [CLAIMTIME]="${claim_time_mpassit_alltimes}"
+        [CPUSPEC]="${config_claim_cpu_post}"
+        [CLAIMTIME]="${config_claim_time_mpassit_alltimes}"
         [HHMINSTR]=""
         [FCST_START]="${minsec}"
         [FCST_END]="${maxsec}"
-        [FCST_INTVL]="${intvl_sec}"
+        [FCST_INTVL]="${config_intvl_sec}"
     )
     if [[ "${mach}" == "pbs" ]]; then
-        jobParms[NNODES]="${nnodes_post}"
+        jobParms[NNODES]="${config_nnodes_post}"
         # shellcheck disable=SC2034
-        jobParms[NCORES]="${ncores_post}"
+        jobParms[NCORES]="${config_ncores_post}"
     fi
 
-    submit_a_job "$wrkdir" "mpassit" "jobParms" "$TEMPDIR/run_mpassit_array.${mach}" "$jobscript" "$jobarraystr"
+    submit_a_job "$wrkdir" "mpassit" "jobParms" "${config_TEMPDIR}/run_mpassit_array.${mach}" "$jobscript" "$jobarraystr"
 }
 
 ########################################################################
@@ -2760,7 +2751,7 @@ function prepare_mpassit_onetime {
 
     outdone=false
     jobarrays=()
-    for mem in $(seq 1 $ENS_SIZE); do
+    for mem in $(seq 1 ${config_ENS_SIZE}); do
         memstr=$(printf "%02d" $mem)
         memdir=$wrkdir/mem$memstr
         mkwrkdir $memdir 0
@@ -2775,7 +2766,7 @@ function prepare_mpassit_onetime {
         if [[ $dorun == true ]]; then
             for fn in $histfile $diagfile; do
                 if [[ $outdone == false ]]; then
-                    mecho0 "Checking forecast files at $fminstr for all $ENS_SIZE memebers from dacycles${daffix}/${fcst_lauch_time} ..."
+                    mecho0 "Checking forecast files at $fminstr for all ${config_ENS_SIZE} memebers from dacycles${daffix}/${fcst_lauch_time} ..."
                     outdone=true
                 fi
                 while [[ ! -f $fn ]]; do
@@ -2860,7 +2851,7 @@ function run_clean {
         show=""
     fi
 
-    for isec in $(seq $start_sec $intvl_sec $end_sec ); do
+    for isec in $(seq $start_sec ${config_intvl_sec} $end_sec ); do
         timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
         eventtime=$(date    -u -d @$isec +%H%M)
         timestr_file=$(date -u -d @$isec +%Y-%m-%d_%H.%M.%S)
@@ -2976,12 +2967,13 @@ fi
 
 source "${scpdir}/Site_Runtime.sh" || exit $?
 
-#[[ ${run_trimvr} == true || ${run_addnoise} == true ]] && use_python=true || use_python=false
+#[[ ${run_trimvr} == true || ${config_run_addnoise} == true ]] && use_python=true || use_python=false
 setup_machine "${args['machine']}" "$rootdir" true false
 
-[[ $dorun == false ]] && runcmd="echo $runcmd"
+[[ $dorun == false ]] && runcmd="echo ${site_runcmd}" || runcmd="${site_runcmd}"
+export runcmd
 
-[[ -v args["WORKDIR"] ]] && WORKDIR=${args["WORKDIR"]} || WORKDIR="${workdirDF}"
+[[ -v args["WORKDIR"] ]] && WORKDIR=${args["WORKDIR"]} || WORKDIR="${site_workdir}"
 
 #-----------------------------------------------------------------------
 # Set Event Date
@@ -3024,15 +3016,18 @@ else
 fi
 
 readconf ${config_file} COMMON MPAS_OPTIONS dacycles || exit $?
-# get ENS_SIZE, time_step, EXTINVL, ADAPTIVE_INF, update_in_place
+# get config_ENS_SIZE, time_step, config_EXTINVL, update_in_place
+
+domname="${config_domname}"
+mach="${config_mach}"
 
 #
 # Check configurations reading in
 #
-if [[ "${damode}" =~ ^(init|restart|mpasout)$ ]]; then
+if [[ "${config_damode}" =~ ^(init|restart|mpasout)$ ]]; then
     :
 else
-    echo -e "${RED}ERROR${NC}: damode=${damode} is not supported."
+    echo -e "${RED}ERROR${NC}: damode=${config_damode} is not supported."
     usage 1
 fi
 
@@ -3040,7 +3035,7 @@ fi
 # overwritten by ncks from the background.  MP-dependent because different
 # microphysics schemes carry different number-concentration / volume fields.
 anlys_varstr_base="pressure_p,rho,qv,qc,qr,qi,qs,qg,surface_pressure,theta,u,uReconstructZonal,uReconstructMeridional,refl10cm,w"
-case "${mpscheme}" in
+case "${config_mpscheme}" in
 mp_nssl2m )
     anlys_varstr="${anlys_varstr_base},ni,nr,ns,ng,nh,nc,nccn,nifa,nwfa,qh,volg,volh"
     ;;
@@ -3051,13 +3046,13 @@ mp_thompson_aers|mp_tempo )
     anlys_varstr="${anlys_varstr_base},ni,nr,ng,nc,nifa,nwfa,volg"
     ;;
 *)
-    mecho0 "${RED}ERROR${NC}: mpscheme=${PURPLE}${mpscheme}${NC} is not supported."
+    mecho0 "${RED}ERROR${NC}: mpscheme=${PURPLE}${config_mpscheme}${NC} is not supported."
     usage 1
     ;;
 esac
 
-if [[ $update_in_place == true ]]; then
-    if ${relative_path}; then
+if [[ ${config_update_in_place} == true ]]; then
+    if ${config_relative_path}; then
         cpcmd="ln -sfnr"
     else
         cpcmd="ln -sf"
@@ -3114,18 +3109,18 @@ echo    ""
 echo -e "---- Jobs (${YELLOW}$$${NC}) started at $(date +'%m-%d %H:%M:%S (%Z)') on host ${LIGHT_RED}$(hostname)${NC} ----\n"
 echo -e "  Event  date: ${WHITE}$eventdate${NC} ${YELLOW}${eventtime}${NC} --> ${WHITE}${enddatetime:0:8}${NC} ${YELLOW}${enddatetime:8:4}${NC}"
 echo -e "  ROOT    dir: ${rootdir}${BROWN}/scripts${NC}"
-echo -e "  TEMP    dir: ${PURPLE}${TEMPDIR}${NC}"
-echo -e "  FIXED   dir: ${DARK}${FIXDIR}${NC}"
-echo -e "  EXEC    dir: ${GREEN}${EXEDIR}${NC}"
+echo -e "  TEMP    dir: ${PURPLE}${config_TEMPDIR}${NC}"
+echo -e "  FIXED   dir: ${DARK}${config_FIXDIR}${NC}"
+echo -e "  EXEC    dir: ${GREEN}${config_EXEDIR}${NC}"
 echo -e "  Working dir: ${WHITE}${WORKDIR}${LIGHT_BLUE}/${eventdate}/dacycles${daffix}${NC}"
-echo -e "  Domain name: ${RED}$domname${NC};  MP scheme: ${CYAN}${mpscheme}${NC}"
+echo -e "  Domain name: ${RED}${domname}${NC};  MP scheme: ${CYAN}${config_mpscheme}${NC}"
 echo    " "
 
 jobname="${eventdate:4:4}"
 
-RSTINVL=${intvl_sec}
+RSTINVL=${config_intvl_sec}
 OUTINVL=${RSTINVL}
-if [[ ${outwrf} == true ]]; then
+if [[ ${config_outwrf} == true ]]; then
     jobs+=(mpassit)
 fi
 

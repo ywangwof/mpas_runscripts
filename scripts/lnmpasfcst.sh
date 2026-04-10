@@ -1,7 +1,7 @@
 #!/bin/bash
 
 script_dir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
-#rootdir=$(realpath "$(dirname "${script_dir}")")
+rootdir=$(realpath "$(dirname "${script_dir}")")
 
 eventdateDF=$(date -u +%Y%m%d)
 
@@ -9,8 +9,13 @@ fcstlength=$((6*3600))
 fcstintvl=300
 fcstmems=18
 
+# shellcheck source=/dev/null
 source "${script_dir}/Site_Runtime.sh" || exit $?
-mpasworkdir="${workdirDF}"
+
+setup_machine "" "${rootdir}" false false false
+
+# shellcheck disable=SC2154
+mpasworkdir="${site_workdir}"
 
 #-----------------------------------------------------------------------
 
@@ -236,9 +241,9 @@ for ((s=start_s;s<=end_s;s+=3600)); do
     evttime_str=$(date -u -d @$s +%Y%m%d%H%M)
 
     evttime_dir="${fcst_root}/${eventdate}/${fcstdir}/${evtime}/mpassit"
-    for mem in $(seq 1 $fcstmems); do
-        memstr=$(printf "%02d" "$mem")
-        memdir="${evttime_dir}/mem$memstr"
+    for mem in $(seq 1 "${fcstmems}"); do
+        memstr=$(printf "%02d" "${mem}")
+        memdir="${evttime_dir}/mem${memstr}"
 
         desdir="${dest_root}/${eventdate}${affix}/${evtime}/ENS_MEM_${memstr}"
         if [[ ! -d $desdir ]]; then
@@ -249,8 +254,8 @@ for ((s=start_s;s<=end_s;s+=3600)); do
         #echo "Linking member $memstr from $memdir to $desdir ...."
         for ((i=fcstbeg*60;i<=fcstlength;i+=fcstintvl)); do
             (( fcsttime = s+i ))
-            fcsttimestr=$(date -u -d @$fcsttime +%Y-%m-%d_%H.%M.%S)
-            wrftimestr=$(date -u -d @$fcsttime  +%Y-%m-%d_%H:%M:%S)
+            fcsttimestr=$(date -u -d @${fcsttime} +%Y-%m-%d_%H.%M.%S)
+            wrftimestr=$(date -u -d @${fcsttime}  +%Y-%m-%d_%H:%M:%S)
             memfile="MPASSIT_${memstr}.${fcsttimestr}.nc"
             desfile="wrfwof_d01_${wrftimestr}"
             if [[ ! -f ${desfile} || ${force_clean} == true ]]; then

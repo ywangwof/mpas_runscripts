@@ -3,7 +3,7 @@
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
-rootdir=$(realpath "$(dirname "$scpdir")")
+rootdir=$(realpath "$(dirname "${scpdir}")")
 
 mpasworkdir="/scratch/wofs_mpas"     # platform dependent, it is set in Site_Runtime.sh
 
@@ -119,8 +119,8 @@ function usage {
     echo -e "   DEFAULTS:"
     echo    "              eventdate             = ${eventdateDF}"
     echo    "              WORKDIR               = ${mpasworkdir}/run_dirs"
-    echo -e "  ${DARK}(*auto)${NC}     ROOTDIR/SCPDIR        = $rootdir${BROWN}/scripts${NC}"
-    echo -e "  ${DARK}(%config)${NC}   TEMPDIR/FIXDIR/EXEDIR = $rootdir${BROWN}${PURPLE}/templates${NC}|${DARK}/fix_files${NC}|${GREEN}/exec${NC}"
+    echo -e "  ${DARK}(*auto)${NC}     ROOTDIR/SCPDIR        = ${rootdir}${BROWN}/scripts${NC}"
+    echo -e "  ${DARK}(%config)${NC}   TEMPDIR/FIXDIR/EXEDIR = ${rootdir}${BROWN}${PURPLE}/templates${NC}|${DARK}/fix_files${NC}|${GREEN}/exec${NC}"
     echo " "
     echo "                                     -- By Y. Wang (2025.03.01)"
     echo " "
@@ -150,7 +150,7 @@ function parse_args {
     while [[ $# -gt 0 ]]; do
         key="$1"
 
-        case $key in
+        case ${key} in
             -h)
                 usage 0
                 ;;
@@ -180,7 +180,7 @@ function parse_args {
                     fi
                 fi
 
-                argname="${argsnames[$keyname]}"
+                argname="${argsnames[${keyname}]}"
                 if [[ -d "${keydir}" ]]; then
                     args[${argname}]="${keydir}"
                 else
@@ -281,30 +281,30 @@ function parse_args {
                 shift
                 ;;
             -*)
-                echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
+                echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}${key}${NC}"
                 usage 2
                 ;;
             static* | geogrid* | createWOFS | projectHexes | meshplot* | ungrib* | rotate* | clean* | setup | check*)
                 args["jobs"]="${key//,/ }"
                 ;;
             *)
-                if [[ $key =~ ^[0-9]{12}$ ]]; then
+                if [[ ${key} =~ ^[0-9]{12}$ ]]; then
                     args["eventdate"]=${key:0:8}
                     args["eventtime"]=${key:8:4}
-                elif [[ $key =~ ^[0-9]{8}$ ]]; then
+                elif [[ ${key} =~ ^[0-9]{8}$ ]]; then
                     args["eventdate"]=${key}
-                elif [[ -d $key ]]; then
-                    WORKDIR=$key
-                    lastdir=$(basename $WORKDIR)
-                    if [[ $lastdir =~ ^[0-9]{8}$ ]]; then
+                elif [[ -d ${key} ]]; then
+                    WORKDIR=${key}
+                    lastdir=$(basename ${WORKDIR})
+                    if [[ ${lastdir} =~ ^[0-9]{8}$ ]]; then
                         args["WORKDIR"]=$(dirname ${WORKDIR})
                         args["eventdate"]=${lastdir}
                     else
-                        args["WORKDIR"]=$WORKDIR
+                        args["WORKDIR"]=${WORKDIR}
                     fi
                     #echo $WORKDIR,$eventdate,$eventtime
                 else
-                    echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}$key${NC}."
+                    echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}${key}${NC}."
                     usage 3
                 fi
                 ;;
@@ -324,13 +324,13 @@ function parse_args {
 #
 function ncattget {
     # shellcheck disable=SC2154
-    if which ${nckspath} 2> /dev/null ; then
-        if ! ${nckspath} -x -M "$1" | grep -E "(corner_lats|corner_lons|CEN_LAT|CEN_LON|TRUELAT[12]|STAND_LON|MOAD_CEN_LAT|DX|DY|[ij]_parent)"; then
-            mecho0 "${RED}ERROR${NC}: Command failed: ${BLUE}${nckspath} -x -M \"$1\" | grep${NC}"
+    if which ${site_nckspath} 2> /dev/null ; then
+        if ! ${site_nckspath} -x -M "$1" | grep -E "(corner_lats|corner_lons|CEN_LAT|CEN_LON|TRUELAT[12]|STAND_LON|MOAD_CEN_LAT|DX|DY|[ij]_parent)"; then
+            mecho0 "${RED}ERROR${NC}: Command failed: ${BLUE}${site_nckspath} -x -M \"$1\" | grep${NC}"
             exit 1
         fi
     else
-        mecho0 "${RED}ERROR${NC}: Program ${BLUE}${nckspath}${NC} not found."
+        mecho0 "${RED}ERROR${NC}: Program ${BLUE}${site_nckspath}${NC} not found."
         exit 2
     fi
 }
@@ -340,15 +340,15 @@ function ncattget {
 function run_geogrid {
 
     wrkdir=$1
-    mkwrkdir "$wrkdir" "$overwrite"
-    cd "$wrkdir" || return
+    mkwrkdir "${wrkdir}" "${overwrite}"
+    cd "${wrkdir}" || return
 
     if [[ -f done.geogrid ]]; then
         mecho0 "Found file ${CYAN}done.geogrid${NC}, skipping ${WHITE}${FUNCNAME[0]}${NC} ...."
         return
     fi
 
-    if ! [[ $cen_lat && $cen_lon ]]; then
+    if ! [[ -n ${cen_lat} && -n ${cen_lon} ]]; then
         mecho0 "${RED}ERROR${NC}: Domain center is required as command line option ${BLUE}-c lat,lon${NC}."
         exit 0
     fi
@@ -362,6 +362,8 @@ function run_geogrid {
     standlon="${cen_lon}"
 
     ln -sf ${FIXDIR}/WRFV4.0/GEOGRID.TBL.ARW GEOGRID.TBL
+
+    : ${site_WPSGEOG_PATH:?"ERROR: setup_machine not return right?"}
 
     cat <<EOF > namelist.wps
 &share
@@ -379,18 +381,18 @@ function run_geogrid {
   parent_grid_ratio = 1,
   i_parent_start = 1,
   j_parent_start = 1,
-  e_we = $nx,
-  e_sn = $ny,
+  e_we = ${nx},
+  e_sn = ${ny},
   geog_data_res = 'modis_lakes+15s+modis_fpar+modis_lai+30s',
-  dx = $dx,
-  dy = $dy,
+  dx = ${dx},
+  dy = ${dy},
   map_proj = 'lambert',
   ref_lat = ${cen_lat},
   ref_lon = ${cen_lon},
   truelat1 = ${trulats[0]},
   truelat2 = ${trulats[1]},
   stand_lon = ${standlon}
-  geog_data_path = '${WPSGEOG_PATH}',
+  geog_data_path = '${site_WPSGEOG_PATH}',
   opt_geogrid_tbl_path = './',
 /
 
@@ -409,10 +411,10 @@ EOF
     "stdlat1" : ${trulats[0]},
     "stdlat2" : ${trulats[1]},
     "stdlon"  : ${standlon},
-    "nx"      : $nx,
-    "ny"      : $ny,
-    "dx"      : $dx,
-    "dy"      : $dy
+    "nx"      : ${nx},
+    "ny"      : ${ny},
+    "dx"      : ${dx},
+    "dy"      : ${dy}
 }
 EOF
 
@@ -423,12 +425,13 @@ EOF
     jobscript="run_geogrid.slurm"
 
     # Associative arrays are local by default
+    # shellcheck disable=SC2154
     declare -A jobParms=(
-        [PARTION]="${partition_wps}"
-        [NOPART]="${npestatic}"
+        [PARTION]="${default_partition_wps}"
+        [NOPART]="${default_npestatic}"
         [JOBNAME]="${geoname}"
     )
-    submit_a_job "$wrkdir" "geogrid" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
+    submit_a_job "${wrkdir}" "geogrid" "jobParms" "${TEMPDIR}/${jobscript}" "${jobscript}" ""
 }
 
 ########################################################################
@@ -442,27 +445,27 @@ function run_createWOFS {
             conditions+=("$1")
             ;;
         *)
-            conditions+=("$rundir/$1")
+            conditions+=("${rundir}/$1")
             ;;
         esac
         shift
     done
 
-    if [[ $dorun == true ]]; then
+    if [[ ${dorun} == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking: ${CYAN}$cond"${NC}
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: ${CYAN}$cond"${NC}
+            mecho0 "Checking: ${CYAN}${cond}"${NC}
+            while [[ ! -e ${cond} ]]; do
+                if [[ ${verb} -eq 1 ]]; then
+                    mecho0 "Waiting for file: ${CYAN}${cond}"${NC}
                 fi
                 sleep 10
             done
         done
     fi
 
-    wrkdir="$rundir/$domname"
-    mkwrkdir $wrkdir $overwrite
-    cd $wrkdir || return
+    wrkdir="${rundir}/${domname}"
+    mkwrkdir ${wrkdir} ${overwrite}
+    cd ${wrkdir} || return
 
     if [[ -f done.create ]]; then
         mecho0 "Found file ${CYAN}done.create${NC}, skipping ${WHITE}${FUNCNAME[0]}${NC} ...."
@@ -474,29 +477,29 @@ function run_createWOFS {
     local mrpythondir
 
     # Check MPAS-Limited-Area
-    mrpythondir="$rootdir/MPAS-Limited-Area"
-    if [[ ! -r $mrpythondir ]]; then
-        mecho0 "MPAS-Limited-Area directory not found in ${BLUE}$mrpythondir${NC}"
+    mrpythondir="${rootdir}/MPAS-Limited-Area"
+    if [[ ! -r ${mrpythondir} ]]; then
+        mecho0 "MPAS-Limited-Area directory not found in ${BLUE}${mrpythondir}${NC}"
         exit 0
     fi
 
-    cp    $mrpythondir/create_region .
-    cp -r $mrpythondir/limited_area .
+    cp    ${mrpythondir}/create_region .
+    cp -r ${mrpythondir}/limited_area .
 
     # Check x1.65536002.grid.nc, global 3 km mesh grid
-    if [[ ! -f $FIXDIR/x1.65536002.grid.nc ]]; then
-        mecho0 "File ${CYAN}x1.65536002.grid.nc${NC} not found in ${BLUE}$FIXDIR${NC}."
+    if [[ ! -f ${FIXDIR}/x1.65536002.grid.nc ]]; then
+        mecho0 "File ${CYAN}x1.65536002.grid.nc${NC} not found in ${BLUE}${FIXDIR}${NC}."
         exit 0
     fi
-    ln -sf $FIXDIR/x1.65536002.grid.nc .
+    ln -sf ${FIXDIR}/x1.65536002.grid.nc .
 
     local geofile wrfdomain wrfkey vals val keyval domelements
     # Get lat/lon ranges
     geofile=$(dirname ${conditions[0]})/geo_em.d01.nc
-    wrfdomain=$(ncattget $geofile)
+    wrfdomain=$(ncattget ${geofile})
 
     # shellcheck disable=SC2206
-    IFS=$'\n' domelements=($wrfdomain)
+    IFS=$'\n' domelements=(${wrfdomain})
     # shellcheck disable=SC2206
     for var in "${domelements[@]}"; do
         IFS='= ' keyval=(${var%%;})
@@ -505,26 +508,26 @@ function run_createWOFS {
 
         #echo "${wrfkey} -> ${vals[@]}"
 
-        case $wrfkey in
+        case ${wrfkey} in
         CEN_LAT | CEN_LON )
             newval=${vals[0]%%f}
-            declare "$wrfkey=$newval"
+            declare "${wrfkey}=${newval}"
             ;;
         corner_lats | corner_lons)
             minval=360.0
             maxval=-360.0
             for val in "${vals[@]}"; do
                 newval=${val%%f*}
-                if (( $(echo "$newval > $maxval" | bc -l) )); then
-                    maxval=$newval
+                if (( $(echo "${newval} > ${maxval}" | bc -l) )); then
+                    maxval=${newval}
                 fi
 
-                if (( $(echo "$newval < $minval" | bc -l) )); then
-                    minval=$newval
+                if (( $(echo "${newval} < ${minval}" | bc -l) )); then
+                    minval=${newval}
                 fi
             done
-            declare "${wrfkey}_min=$minval"
-            declare "${wrfkey}_max=$maxval"
+            declare "${wrfkey}_min=${minval}"
+            declare "${wrfkey}_max=${maxval}"
             ;;
         *)
             continue
@@ -538,25 +541,25 @@ function run_createWOFS {
     #exit 0
 
     # shellcheck disable=SC2154
-    lat_s=$(echo "$corner_lats_min-0.2" | bc -l)
+    lat_s=$(echo "${corner_lats_min}-0.2" | bc -l)
     # shellcheck disable=SC2154
-    lat_n=$(echo "$corner_lats_max+0.2" | bc -l)
+    lat_n=$(echo "${corner_lats_max}+0.2" | bc -l)
     # shellcheck disable=SC2154
-    lon_sw=$(echo "$corner_lons_min+0.5" | bc -l)
-    lon_nw=$(echo "$corner_lons_min-0.2" | bc -l)
+    lon_sw=$(echo "${corner_lons_min}+0.5" | bc -l)
+    lon_nw=$(echo "${corner_lons_min}-0.2" | bc -l)
     # shellcheck disable=SC2154
-    lon_ne=$(echo "$corner_lons_max+0.2" | bc -l)
-    lon_se=$(echo "$corner_lons_max-0.5" | bc -l)
+    lon_ne=$(echo "${corner_lons_max}+0.2" | bc -l)
+    lon_se=$(echo "${corner_lons_max}-0.5" | bc -l)
 
     # shellcheck disable=SC2153
-    cat <<EOF > $domname.custom.pts
-Name: $domname
+    cat <<EOF > ${domname}.custom.pts
+Name: ${domname}
 Type: custom
-Point: $CEN_LAT, $CEN_LON
-$lat_n, $lon_nw
-$lat_n, $lon_ne
-$lat_s, $lon_se
-$lat_s, $lon_sw
+Point: ${CEN_LAT}, ${CEN_LON}
+${lat_n}, ${lon_nw}
+${lat_n}, ${lon_ne}
+${lat_s}, ${lon_se}
+${lat_s}, ${lon_sw}
 EOF
 
     #
@@ -564,12 +567,13 @@ EOF
     #
     jobscript="run_createWOFS.slurm"
 
+    # shellcheck disable=SC2154
     declare -A jobParms=(
-        [PARTION]="${partition_create}"
-        [CPUSPEC]="${claim_cpu_create}"
+        [PARTION]="${default_partition_create}"
+        [CPUSPEC]="${default_claim_cpu_create}"
         [JOBNAME]="createWOFS"
     )
-    submit_a_job $wrkdir "create" jobParms $TEMPDIR/$jobscript $jobscript ""
+    submit_a_job ${wrkdir} "create" jobParms ${TEMPDIR}/${jobscript} ${jobscript} ""
 }
 
 ########################################################################
@@ -583,27 +587,27 @@ function run_projectHexes {
             conditions+=("$1")
             ;;
         *)
-            conditions+=("$rundir/$1")
+            conditions+=("${rundir}/$1")
             ;;
         esac
         shift
     done
 
-    if [[ $dorun == true ]]; then
+    if [[ ${dorun} == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking: ${CYAN}$cond${NC}"
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: ${CYAN}$cond${NC}"
+            mecho0 "Checking: ${CYAN}${cond}${NC}"
+            while [[ ! -e ${cond} ]]; do
+                if [[ ${verb} -eq 1 ]]; then
+                    mecho0 "Waiting for file: ${CYAN}${cond}${NC}"
                 fi
                 sleep 10
             done
         done
     fi
 
-    wrkdir="$rundir/$domname"
-    mkwrkdir $wrkdir $overwrite
-    cd $wrkdir || return
+    wrkdir="${rundir}/${domname}"
+    mkwrkdir ${wrkdir} ${overwrite}
+    cd ${wrkdir} || return
 
     if [[ -f done.project ]]; then
         mecho0 "Found file ${CYAN}done.project${NC}, skipping ${WHITE}${FUNCNAME[0]}${NC} ...."
@@ -615,10 +619,10 @@ function run_projectHexes {
     local geofile wrfdomain wrfkey vals val keyval domelements
     # Get lat/lon ranges
     geofile=$(dirname ${conditions[0]})/geo_em.d01.nc
-    wrfdomain=$(ncattget $geofile)
+    wrfdomain=$(ncattget ${geofile})
 
     # shellcheck disable=SC2206
-    IFS=$'\n' domelements=($wrfdomain)
+    IFS=$'\n' domelements=(${wrfdomain})
     # shellcheck disable=SC2206
     for var in "${domelements[@]}"; do
         IFS='= ' keyval=(${var%%;})
@@ -627,34 +631,34 @@ function run_projectHexes {
 
         #echo "${wrfkey} -> ${vals[@]}"
 
-        case $wrfkey in
+        case ${wrfkey} in
         CEN_LAT | CEN_LON | TRUELAT? | STAND_LON | MOAD_CEN_LAT )
             newval=${vals[0]%%f}
-            declare "$wrfkey=$newval"
+            declare "${wrfkey}=${newval}"
             ;;
         DX | DY )
             newval=${vals[0]%%.f}
-            declare "$wrfkey=$newval"
+            declare "${wrfkey}=${newval}"
             ;;
         i_parent_start | i_parent_end | j_parent_start | j_parent_end )
             newval=${vals[0]%%f}
-            declare "$wrfkey=$newval"
+            declare "${wrfkey}=${newval}"
             ;;
         corner_lats | corner_lons)
             minval=360.0
             maxval=-360.0
             for val in "${vals[@]}"; do
                 newval=${val%%f*}
-                if (( $(echo "$newval > $maxval" | bc -l) )); then
-                    maxval=$newval
+                if (( $(echo "${newval} > ${maxval}" | bc -l) )); then
+                    maxval=${newval}
                 fi
 
-                if (( $(echo "$newval < $minval" | bc -l) )); then
-                    minval=$newval
+                if (( $(echo "${newval} < ${minval}" | bc -l) )); then
+                    minval=${newval}
                 fi
             done
-            declare "${wrfkey}_min=$minval"
-            declare "${wrfkey}_max=$maxval"
+            declare "${wrfkey}_min=${minval}"
+            declare "${wrfkey}_max=${maxval}"
             ;;
         *)
             continue
@@ -704,13 +708,14 @@ EOF
     #
     jobscript="run_projectHexes.slurm"
 
+    # shellcheck disable=SC2154
     declare -A jobParms=(
-        [PARTION]="${partition_static}"
-        [CPUSPEC]="${claim_cpu_static}"
+        [PARTION]="${default_partition_static}"
+        [CPUSPEC]="${default_claim_cpu_static}"
         [JOBNAME]="project_${domname}"
         [DOMNAME]="${domname}"
     )
-    submit_a_job "$wrkdir" "projectHexes" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
+    submit_a_job "${wrkdir}" "projectHexes" "jobParms" "${TEMPDIR}/${jobscript}" "${jobscript}" ""
 }
 
 ########################################################################
@@ -724,27 +729,27 @@ function run_static {
             conditions+=("$1")
             ;;
         *)
-            conditions+=("$rundir/$1")
+            conditions+=("${rundir}/$1")
             ;;
         esac
         shift
     done
 
-    if [[ $dorun == true ]]; then
+    if [[ ${dorun} == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking: ${CYAN}$cond"${NC}
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: ${CYAN}$cond"${NC}
+            mecho0 "Checking: ${CYAN}${cond}"${NC}
+            while [[ ! -e ${cond} ]]; do
+                if [[ ${verb} -eq 1 ]]; then
+                    mecho0 "Waiting for file: ${CYAN}${cond}"${NC}
                 fi
                 sleep 10
             done
         done
     fi
 
-    wrkdir=$rundir/$domname
-    mkwrkdir $wrkdir $overwrite
-    cd $wrkdir || return
+    wrkdir=${rundir}/${domname}
+    mkwrkdir ${wrkdir} ${overwrite}
+    cd ${wrkdir} || return
 
     if [[ -f done.static ]]; then
         mecho0 "Found file ${CYAN}done.static${NC}, skipping ${WHITE}${FUNCNAME[0]}${NC} ...."
@@ -753,9 +758,9 @@ function run_static {
         return                   # skip
     fi
 
-    if [[ ! -f $domname.graph.info.part.${npestatic} ]]; then
+    if [[ ! -f ${domname}.graph.info.part.${default_npestatic} ]]; then
         # shellcheck disable=SC2154
-        split_graph "${gpmetis}" "${domname}.graph.info" "${npestatic}" "$wrkdir" "$dorun" "$verb"
+        split_graph "${site_gpmetis}" "${domname}.graph.info" "${default_npestatic}" "${wrkdir}" "${dorun}" "${verb}"
     fi
 
     # The program needs a time string in file $domname.grid.nc
@@ -763,12 +768,12 @@ function run_static {
     inittime_str=$(date -u  -d "${eventdate} ${eventtime}" +%Y-%m-%d_%H)
     starttime_str=$(date -u -d "${eventdate} ${eventtime}" +%Y-%m-%d_%H:%M:%S)
 
-    initfile="../ungrib/${EXTHEAD}:$inittime_str"
-    if [[ ! -f $initfile ]]; then
-        mecho0 "Initial file (for extracting time): $initfile not found"
+    initfile="../ungrib/${EXTHEAD}:${inittime_str}"
+    if [[ ! -f ${initfile} ]]; then
+        mecho0 "Initial file (for extracting time): ${initfile} not found"
         exit 0
     fi
-    ln -sf $initfile .
+    ln -sf ${initfile} .
 
     cat <<EOF > namelist.init_atmosphere
 &nhyd_model
@@ -788,7 +793,7 @@ function run_static {
     config_nvegopt       = 2
 /
 &data_sources
-    config_geog_data_path         = '${WPSGEOG_PATH}'
+    config_geog_data_path         = '${site_WPSGEOG_PATH}'
     config_met_prefix             = '${EXTHEAD}'
     config_sfc_prefix             = 'SST'
     config_fg_interval            = ${EXTINVL}
@@ -865,18 +870,19 @@ EOF
     # Create job script and submit it
     #
     # shellcheck disable=SC2154
-    jobscript="run_static.${mach}"
+    jobscript="run_static.${site_mach}"
 
+    # shellcheck disable=SC2154
     declare -A jobParms=(
-        [PARTION]="${partition_static}"
-        [NOPART]="${npestatic}"
+        [PARTION]="${default_partition_static}"
+        [NOPART]="${default_npestatic}"
         [JOBNAME]="static_${jobname}"
-        [CPUSPEC]="${claim_cpu_static}"
+        [CPUSPEC]="${default_claim_cpu_static}"
         [DOMNAME]="${domname}"
         [MPASDIR]="${MPAS_DIR}"
         [MODULE]="${mpas_modulename}"
     )
-    submit_a_job "$wrkdir" "static" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
+    submit_a_job "${wrkdir}" "static" "jobParms" "${TEMPDIR}/${jobscript}" "${jobscript}" ""
 }
 
 ########################################################################
@@ -890,27 +896,27 @@ function run_rotate {
             conditions+=("$1")
             ;;
         *)
-            conditions+=("$rundir/$1")
+            conditions+=("${rundir}/$1")
             ;;
         esac
         shift
     done
 
-    if [[ $dorun == true ]]; then
+    if [[ ${dorun} == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking: ${CYAN}$cond"${NC}
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: ${CYAN}$cond"${NC}
+            mecho0 "Checking: ${CYAN}${cond}"${NC}
+            while [[ ! -e ${cond} ]]; do
+                if [[ ${verb} -eq 1 ]]; then
+                    mecho0 "Waiting for file: ${CYAN}${cond}"${NC}
                 fi
                 sleep 10
             done
         done
     fi
 
-    wrkdir="$rundir/$domname"
-    mkwrkdir $wrkdir $overwrite
-    cd $wrkdir || return
+    wrkdir="${rundir}/${domname}"
+    mkwrkdir ${wrkdir} ${overwrite}
+    cd ${wrkdir} || return
 
     if [[ -f done.rotate ]]; then
         mecho0 "Found file ${CYAN}done.rotate${NC}, skipping ${WHITE}${FUNCNAME[0]}${NC} ...."
@@ -922,10 +928,10 @@ function run_rotate {
     local geofile wrfdomain wrfkey vals val keyval domelements
     # Get lat/lon ranges
     geofile=$(dirname ${conditions[0]})/geo_em.d01.nc
-    wrfdomain=$(ncattget $geofile)
+    wrfdomain=$(ncattget ${geofile})
 
     # shellcheck disable=SC2206
-    IFS=$'\n' domelements=($wrfdomain)
+    IFS=$'\n' domelements=(${wrfdomain})
     # shellcheck disable=SC2206
     for var in "${domelements[@]}"; do
         IFS='= ' keyval=(${var%%;})
@@ -934,26 +940,26 @@ function run_rotate {
 
         #echo "${wrfkey} -> ${vals[@]}"
 
-        case $wrfkey in
+        case ${wrfkey} in
         CEN_LAT | CEN_LON)
             newval=${vals[0]%%f}
-            declare "$wrfkey=$newval"
+            declare "${wrfkey}=${newval}"
             ;;
         corner_lats | corner_lons)
             minval=360.0
             maxval=-360.0
             for val in "${vals[@]}"; do
                 newval=${val%%f*}
-                if (( $(echo "$newval > $maxval" | bc -l) )); then
-                    maxval=$newval
+                if (( $(echo "${newval} > ${maxval}" | bc -l) )); then
+                    maxval=${newval}
                 fi
 
-                if (( $(echo "$newval < $minval" | bc -l) )); then
-                    minval=$newval
+                if (( $(echo "${newval} < ${minval}" | bc -l) )); then
+                    minval=${newval}
                 fi
             done
-            declare "${wrfkey}_min=$minval"
-            declare "${wrfkey}_max=$maxval"
+            declare "${wrfkey}_min=${minval}"
+            declare "${wrfkey}_max=${maxval}"
             ;;
         *)
             continue
@@ -976,8 +982,8 @@ function run_rotate {
    config_original_latitude_degrees =    43.33296
    config_original_longitude_degrees =  -84.24591
 
-   config_new_latitude_degrees =   $CEN_LAT
-   config_new_longitude_degrees =  $CEN_LON
+   config_new_latitude_degrees =   ${CEN_LAT}
+   config_new_longitude_degrees =  ${CEN_LON}
    config_birdseye_rotation_counter_clockwise_degrees = ${ang_rotate}
 /
 EOF
@@ -988,12 +994,12 @@ EOF
     jobscript="run_rotate.slurm"
 
     declare -A jobParms=(
-        [PARTION]="${partition_static}"
-        [CPUSPEC]="${claim_cpu_static}"
+        [PARTION]="${default_partition_static}"
+        [CPUSPEC]="${default_claim_cpu_static}"
         [JOBNAME]="grid_rotate"
         [DOMNAME]="${domname}"
     )
-    submit_a_job "$wrkdir" "rotate" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
+    submit_a_job "${wrkdir}" "rotate" "jobParms" "${TEMPDIR}/${jobscript}" "${jobscript}" ""
 }
 
 ########################################################################
@@ -1005,9 +1011,9 @@ function run_ungrib_hrrr {
     fi
     hrrr_grib_dir=$1
 
-    wrkdir=$rundir/ungrib
-    mkwrkdir $wrkdir 0
-    cd $wrkdir || return
+    wrkdir=${rundir}/ungrib
+    mkwrkdir ${wrkdir} 0
+    cd ${wrkdir} || return
 
     if [[ -f done.ungrib ]]; then
         mecho0 "Found file ${CYAN}done.ungrib${NC}, skipping ${WHITE}${FUNCNAME[0]}${NC} ...."
@@ -1018,26 +1024,26 @@ function run_ungrib_hrrr {
 
     h=${eventtime:0:2}
     hstr=$(printf "%02d" ${h#0})
-    if [[ -f $hrrr_grib_dir ]]; then
-        hrrrfile=$hrrr_grib_dir
+    if [[ -f ${hrrr_grib_dir} ]]; then
+        hrrrfile=${hrrr_grib_dir}
     else
         julday=$(date -u -d "${eventdate} ${eventtime}" +%y%j%H)
         hrrrbase="${julday}0000"
-        hrrrfile="$hrrr_grib_dir/${hrrrbase}$hstr"
+        hrrrfile="${hrrr_grib_dir}/${hrrrbase}${hstr}"
     fi
-    basefn=$(basename $hrrrfile)
-    basefn="NSSL_$basefn"
+    basefn=$(basename ${hrrrfile})
+    basefn="NSSL_${basefn}"
 
-    if [[ $verb -eq 1 ]]; then mecho0 "HRRR file: ${BLUE}$hrrrfile${NC}"; fi
-    while [[ ! -f $hrrrfile && ! -f $basefn ]]; do
-        if [[ $verb -eq 1 ]]; then
-            mecho0 "Waiting for $hrrrfile ..."
+    if [[ ${verb} -eq 1 ]]; then mecho0 "HRRR file: ${BLUE}${hrrrfile}${NC}"; fi
+    while [[ ! -f ${hrrrfile} && ! -f ${basefn} ]]; do
+        if [[ ${verb} -eq 1 ]]; then
+            mecho0 "Waiting for ${hrrrfile} ..."
         fi
         sleep 10
     done
 
     ln -sf ${hrrrfile} GRIBFILE.AAA
-    ln -sf $FIXDIR/WRFV4.0/${hrrrvtable} Vtable
+    ln -sf ${FIXDIR}/WRFV4.0/${hrrrvtable} Vtable
 
     hrrrtime_str=$(date -u -d "${eventdate} ${eventtime}" +%Y-%m-%d_%H:%M:%S)
 
@@ -1063,14 +1069,14 @@ EOF
     #
     # Create job script and submit it
     #
-    jobscript="run_ungrib.${mach}"
+    jobscript="run_ungrib.${site_mach}"
 
     # shellcheck disable=SC2034
     declare -A jobParms=(
-        [PARTION]="${partition_wps}"
+        [PARTION]="${default_partition_wps}"
         [JOBNAME]="ungrb_hrrr_${jobname}"
     )
-    submit_a_job "$wrkdir" "ungrib" "jobParms" "$TEMPDIR/$jobscript" "$jobscript" ""
+    submit_a_job "${wrkdir}" "ungrib" "jobParms" "${TEMPDIR}/${jobscript}" "${jobscript}" ""
 }
 
 ########################################################################
@@ -1084,30 +1090,30 @@ function run_meshplot_ncl {
             conditions+=("$1")
             ;;
         *)
-            conditions+=("$rundir/$1")
+            conditions+=("${rundir}/$1")
             ;;
         esac
         shift
     done
 
-    if [[ $dorun == true ]]; then
+    if [[ ${dorun} == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking: ${CYAN}$cond"${NC}
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: ${CYAN}$cond"${NC}
+            mecho0 "Checking: ${CYAN}${cond}"${NC}
+            while [[ ! -e ${cond} ]]; do
+                if [[ ${verb} -eq 1 ]]; then
+                    mecho0 "Waiting for file: ${CYAN}${cond}"${NC}
                 fi
                 sleep 10
             done
         done
     fi
 
-    wrkdir="$rundir/$domname"
-    if [[ ! -f $wrkdir/$domname.grid.nc ]]; then
-        mecho0 "Working file: $wrkdir/$domname.grid.nc not exist."
+    wrkdir="${rundir}/${domname}"
+    if [[ ! -f ${wrkdir}/${domname}.grid.nc ]]; then
+        mecho0 "Working file: ${wrkdir}/${domname}.grid.nc not exist."
         return
     fi
-    cd $wrkdir || return
+    cd ${wrkdir} || return
 
     ln -sf ../geo_${domname##*_}/geo_em.d01.nc .
 
@@ -1117,18 +1123,18 @@ function run_meshplot_ncl {
     jobscript="wofs_mesh.ncl"
 
     sedfile=$(mktemp -t rotate_ncl.sed_XXXX)
-    cat <<EOF > $sedfile
-s#INPUTFILENAME#$domname.grid.nc#
-s#OUTFILENAME#$domname#
+    cat <<EOF > ${sedfile}
+s#INPUTFILENAME#${domname}.grid.nc#
+s#OUTFILENAME#${domname}#
 s/DATESTRING/${starttime_str:0:10}/
 EOF
 
-    sed -f $sedfile $TEMPDIR/$jobscript > $jobscript
+    sed -f ${sedfile} ${TEMPDIR}/${jobscript} > ${jobscript}
     # shellcheck disable=SC2154
-    $nclpath $jobscript
+    ${site_nclpath} ${jobscript}
 
-    if [[ -f $domname.png ]]; then
-        mecho0 "Domain on ${starttime_str:0:10} is saved as $wrkdir/$domname.png."
+    if [[ -f ${domname}.png ]]; then
+        mecho0 "Domain on ${starttime_str:0:10} is saved as ${wrkdir}/${domname}.png."
     fi
 }
 
@@ -1144,37 +1150,37 @@ function run_meshplot_py {
             conditions+=("$1")
             ;;
         *)
-            conditions+=("$rundir/$1")
+            conditions+=("${rundir}/$1")
             ;;
         esac
         shift
     done
 
-    if [[ $dorun == true ]]; then
+    if [[ ${dorun} == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking: ${CYAN}$cond"${NC}
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: ${CYAN}$cond"${NC}
+            mecho0 "Checking: ${CYAN}${cond}"${NC}
+            while [[ ! -e ${cond} ]]; do
+                if [[ ${verb} -eq 1 ]]; then
+                    mecho0 "Waiting for file: ${CYAN}${cond}"${NC}
                 fi
                 sleep 10
             done
         done
     fi
 
-    wrkdir="$rundir/$domname"
+    wrkdir="${rundir}/${domname}"
     #if [[ ! -f $wrkdir/$domname.grid.nc ]]; then
     #    mecho0 "Working file: $wrkdir/$domname.grid.nc not exist."
     #    return
     #fi
-    cd $wrkdir  || return
+    cd ${wrkdir}  || return
 
     if [[ -f "${domname}.${eventdate}.radars.sh" ]]; then
         mecho0 "Found file ${CYAN}${domname}.${eventdate}.radars.sh${NC}, skipping ${WHITE}${FUNCNAME[0]}${NC} ...."
         return
     fi
 
-    output_grid="$(dirname $wrkdir)/geo_${domname##*_}/${domname}_output.json"
+    output_grid="$(dirname ${wrkdir})/geo_${domname##*_}/${domname}_output.json"
 
     #
     # Run job script and submit it
@@ -1193,9 +1199,9 @@ function run_meshplot_py {
     #  --outgrid OUTGRID     Plot an output grid, "True", "False" or a filename.
     #                        When "True", retrieve grid from command line.
     #
-    jobcmdstr="$jobscript -o $wrkdir --title ${domname}.${eventdate} --outgrid ${output_grid} -g ${FIXDIR}/nexrad_stations.txt -m stereo ${conditions[1]}"
-    mecho0 "Running ${BROWN}$jobcmdstr${NC}"
-    python $jobcmdstr
+    jobcmdstr="${jobscript} -o ${wrkdir} --title ${domname}.${eventdate} --outgrid ${output_grid} -g ${FIXDIR}/nexrad_stations.txt -m stereo ${conditions[1]}"
+    mecho0 "Running ${BROWN}${jobcmdstr}${NC}"
+    python ${jobcmdstr}
 
     #ls -l ${domname}.${eventdate}.radars.sh
     #echo "Waiting for ${domname}.${eventdate}.radars.sh ...."
@@ -1209,42 +1215,42 @@ function run_meshplot_py {
 function run_clean {
 
     for dirname in "$@"; do
-        case $dirname in
+        case ${dirname} in
         geogrid )
-            cd "$rundir/geo_mpas" || return
+            cd "${rundir}/geo_mpas" || return
 
-            donegeo="$rundir/geo_mpas/done.geogrid"
-            if [[ -f $donegeo ]]; then
+            donegeo="${rundir}/geo_mpas/done.geogrid"
+            if [[ -f ${donegeo} ]]; then
                 rm -rf geogrid.log.* geogrid_*.log
                 rm -rf error.geogrid queue.geogrid running.geogrid
             fi
             ;;
         createWOFS )
-            if [[ -d $rundir/$domname ]]; then
-                cd "$rundir/$domname" || return
+            if [[ -d ${rundir}/${domname} ]]; then
+                cd "${rundir}/${domname}" || return
 
-                donecreate="$rundir/$domname/done.create"
-                if [[ -e $donecreate ]]; then
+                donecreate="${rundir}/${domname}/done.create"
+                if [[ -e ${donecreate} ]]; then
                     rm -rf create_region limited_area create_*.log x1.65536002.grid.nc
                 fi
             fi
             ;;
         projectHexes )
-            if [[ -d $rundir/$domname ]]; then
-                cd "$rundir/$domname" || return
+            if [[ -d ${rundir}/${domname} ]]; then
+                cd "${rundir}/${domname}" || return
 
-                doneproject="$rundir/$domname/done.project"
-                if [[ -e $doneproject ]]; then
+                doneproject="${rundir}/${domname}/done.project"
+                if [[ -e ${doneproject} ]]; then
                     rm -rf queue.projectHexes projectHexes_*.log
                 fi
             fi
             ;;
         static )
-            if [[ -d $rundir/$domname ]]; then
-                cd "$rundir/$domname" || return
+            if [[ -d ${rundir}/${domname} ]]; then
+                cd "${rundir}/${domname}" || return
 
-                donestatic="$rundir/$domname/done.static"
-                if [[ -e $donestatic ]]; then
+                donestatic="${rundir}/${domname}/done.static"
+                if [[ -e ${donestatic} ]]; then
                     rm -f log.init_atmosphere.* static_*.log  #$EXTHEAD:*
                     rm -f gpmetis.out*
                 fi
@@ -1264,7 +1270,7 @@ function write_config {
     fi
     local configname=$1
 
-    if [[ -e $configname ]]; then
+    if [[ -e ${configname} ]]; then
         local options selected result
         options=(
                  "abort:     Exit the workflow"
@@ -1273,18 +1279,18 @@ function write_config {
                  "backup:    Create new & save original (timestamped)"
         )
 
-        select_option "Case configuration file: $configname exist. Overwrite? " "${options[@]}"
+        select_option "Case configuration file: ${configname} exist. Overwrite? " "${options[@]}"
 
-        selected=$?; result="${options[$selected]}"; result="${result%%:*}"
+        selected=$?; result="${options[${selected}]}"; result="${result%%:*}"
 
         if [[ ${result,,} == "overwrite" ]]; then
-            mecho0 "${BROWN}WARNING${NC}: ${CYAN}$configname${NC} will be replaced."
+            mecho0 "${BROWN}WARNING${NC}: ${CYAN}${configname}${NC} will be replaced."
         elif [[ ${result,,} == "skip" ]]; then
-            mecho0 "${BROWN}WARNING${NC}: ${CYAN}$configname${NC} will be kept. Skip ${BROWN}setup${NC}."
+            mecho0 "${BROWN}WARNING${NC}: ${CYAN}${configname}${NC} will be kept. Skip ${BROWN}setup${NC}."
             return
         elif [[ ${result,,} == "backup" ]]; then
             datestr=$(date +%Y%m%d_%H%M%S)
-            mecho0 "${BROWN}WARNING${NC}: Orignal ${CYAN}$configname${NC} is backuped as"
+            mecho0 "${BROWN}WARNING${NC}: Orignal ${CYAN}${configname}${NC} is backuped as"
             mecho0 "         ${PURPLE}${configname}.bak_${datestr}${NC}"
             mv ${configname} ${configname}.bak_${datestr}
         else
@@ -1302,11 +1308,11 @@ function write_config {
     #-------------------------------------------------------------------
 
     # shellcheck disable=SC2154
-    cat <<EOF > $configname
+    cat <<EOF > ${configname}
 #!/bin/bash
 # shellcheck disable=SC1035,SC1020,SC1073,SC1072
 #
-# This file contains settings specifically for case $eventdate
+# This file contains settings specifically for case ${eventdate}
 # It does NOT contain anything that is configurable from the command line
 # for each task. Use optin "-h" to check command line options.
 #
@@ -1350,21 +1356,20 @@ function write_config {
 
     vertLevel_file="${fixed_level}"
 
-    WPSGEOG_PATH="${WPSGEOG_PATH}"
+    site_WPSGEOG_PATH="${site_WPSGEOG_PATH}"
 
     FIXDIR="${FIXDIR}"
     TEMPDIR="${TEMPDIR}"
     EXEDIR="${EXEDIR}"
 
-    wgrib2path="${wgrib2path}"
-    gpmetis="${gpmetis}"
+    gpmetis="${site_gpmetis}"
 
-    mach="${mach}"
-    job_exclusive_str="${job_exclusive_str}"
-    job_account_str="${job_account_str}"
-    job_runmpexe_str="${job_runmpexe_str}"
-    job_runexe_str="${job_runexe_str}"
-    runcmd_str="${runcmd_str}"
+    mach="${site_mach}"
+    job_exclusive_str="${site_job_exclusive_str}"
+    job_account_str="${site_job_account_str}"
+    job_runmpexe_str="${site_job_runmpexe_str}"
+    job_runexe_str="${site_job_runexe_str}"
+    runcmd_str="${site_runcmd_str}"
 
     relative_path=${relative_path}
 #
@@ -1392,16 +1397,16 @@ function write_config {
     EXTNFLS=9
     EXTHEAD="HRRRE"
     hrrrvtable="${hrrrvtable}"
-    hrrr_dir="${hrrr_dir}"
+    hrrr_dir="${site_hrrr_dir}"
     hrrr_subdir="${hrrr_sub_ics}"         # + 2-digit member string
     hrrr_time="${hrrr_time_ics}"
 
     initscheme="GSL"
 
-    partition_ics="${partition_ics}"
-    claim_cpu_ics="${claim_cpu_ics}"
-    npeics="${npeics}";    ncores_ics="${ncores_ics}"
-    claim_cpu_ungrib="${claim_cpu_ungrib}"
+    partition_ics="${default_partition_ics}"
+    claim_cpu_ics="${default_claim_cpu_ics}"
+    npeics="${default_npeics}";    ncores_ics="${default_ncores_ics}"
+    claim_cpu_ungrib="${default_claim_cpu_ungrib}"
 
 [lbc]
     LBCIOTYPE="pnetcdf,cdf5"
@@ -1409,20 +1414,19 @@ function write_config {
     EXTNFLS=9
     EXTHEAD="HRRRE"
     hrrrvtable="${hrrrvtable}"
-    hrrr_dir="${hrrr_dir}"
+    hrrr_dir="${site_hrrr_dir}"
     hrrr_subdir="${hrrr_sub_lbc}"         # + 2-digit member string
     hrrr_time="${hrrr_time_lbc}"
 
     lbcscheme="GSL"
 
-    npelbc="${npelbc}"; ncores_lbc="${ncores_lbc}"
-    partition_lbc="${partition_lbc}"
-    claim_cpu_lbc="${claim_cpu_lbc}"
-    claim_cpu_ungrib="${claim_cpu_ungrib}"
+    npelbc="${default_npelbc}";   ncores_lbc="${default_ncores_lbc}"
+    partition_lbc="${default_partition_lbc}"
+    claim_cpu_lbc="${default_claim_cpu_lbc}"
+    claim_cpu_ungrib="${default_claim_cpu_ungrib}"
 
 [dacycles]
     ENS_SIZE=36
-    ADAPTIVE_INF=true
     update_in_place=true                # update MPAS states in-place or
                                         # making a copy of the restart files
 
@@ -1432,33 +1436,34 @@ function write_config {
     use_CWP=true
 
     run_addnoise=false                  # run WoFS add_noise facility (Python)
-    WOFSAN_PATH="${mpas_wofs_python}"
+    WOFSAN_PATH="${default_mpas_wofs_python}"
 
     OUTIOTYPE="pnetcdf,cdf5"
     outwrf=false                        # Run MPASSIT after each data assimilation
 
-    OBS_DIR="${OBS_DIR}"
-    OBS_REF_DIR="${OBS_DIR_REF}"
-    OBS_VEL_DIR="${OBS_DIR_VEL}"
-    OBS_CWP_DIR="${OBS_DIR_CWP}"
+    OBS_DIR="${site_OBS_DIR}"
+    OBS_REF_DIR="${site_OBS_DIR_REF}"
+    OBS_VEL_DIR="${site_OBS_DIR_VEL}"
+    OBS_CWP_DIR="${site_OBS_DIR_CWP}"
 
     time_step=15
 
-    partition_fcst="${partition_dafcst}";
-    partition_filter="${partition_filter}";  partition_post="${partition_post}"
-    npefcst="${npedafcst}";   ncores_fcst="${ncores_dafcst}";   nnodes_fcst="${nnodes_dafcst}"
-    npefilter="${npefilter}"; ncores_filter="${ncores_filter}"; nnodes_filter="${nnodes_filter}"
+    partition_fcst="${default_partition_dafcst}";
+    partition_filter="${default_partition_filter}";  partition_post="${default_partition_post}"
+    npefcst="${default_npedafcst}";   ncores_fcst="${default_ncores_dafcst}";   nnodes_fcst="${default_nnodes_dafcst}"
+    npefilter="${default_npefilter}"; ncores_filter="${default_ncores_filter}"; nnodes_filter="${default_nnodes_filter}"
 
-    claim_cpu_fcst="${claim_cpu_dafcst}"
-    claim_cpu_filter="${claim_cpu_filter}"
-    claim_cpu_ioda="${claim_cpu_ioda}"
-    claim_cpu_ioda_refl="${claim_cpu_ioda_refl}"
+    claim_cpu_fcst="${default_claim_cpu_dafcst}"
+    claim_cpu_filter="${default_claim_cpu_filter}"
+    claim_cpu_ioda="${default_claim_cpu_ioda}"
+    claim_cpu_ioda_refl="${default_claim_cpu_ioda_refl}"
+    claim_cpu_update="${default_claim_cpu_update}"
 
     claim_time_fcst="00:40:00"
     claim_time_mpassit_alltimes="00:30:00"
 
-    npepost=${npepost}; ncores_post=${ncores_post}; nnodes_post=${nnodes_post}
-    claim_cpu_post="${claim_cpu_post}";
+    npepost=${default_npepost}; ncores_post=${default_ncores_post}; nnodes_post=${default_nnodes_post}
+    claim_cpu_post="${default_claim_cpu_post}";
 
 [fcst]
     fcstmode="${fcstmode}"
@@ -1472,12 +1477,12 @@ function write_config {
 
     time_step=20
 
-    partition_fcst="${partition_fcst}"
-    partition_post="${partition_post}"
-    claim_cpu_fcst="${claim_cpu_fcst}"
-    claim_cpu_post="${claim_cpu_post}"
-    npefcst="${npefcst}";    ncores_fcst="${ncores_fcst}";  nnodes_fcst="${nnodes_fcst}"
-    npepost="${npepost}";    ncores_post="${ncores_post}";  nnodes_post="${nnodes_post}"
+    partition_fcst="${default_partition_fcst}"
+    partition_post="${default_partition_post}"
+    claim_cpu_fcst="${default_claim_cpu_fcst}"
+    claim_cpu_post="${default_claim_cpu_post}"
+    npefcst="${default_npefcst}";    ncores_fcst="${default_ncores_fcst}";  nnodes_fcst="${default_nnodes_fcst}"
+    npepost="${default_npepost}";    ncores_post="${default_ncores_post}";  nnodes_post="${default_nnodes_post}"
 
     claim_time_fcst="01:20:00"
     claim_time_mpassit_alltimes="03:30:00"
@@ -1495,6 +1500,8 @@ function check_hrrr_subdir {
     #
     # Check the external grib2 files availability for providing the system ICS/LBCs
     #
+
+    hrrr_dir="${site_hrrr_dir}"
 
     mecho0 "Checking ${CYAN}${hrrrfile0}${NC} ... "
     if [[ -e ${hrrrfile0} ]]; then
@@ -1523,9 +1530,9 @@ function check_hrrr_subdir {
         pcount=$(find ${hrrr_dir}/${eventdate}/${hrrr_time_lbc}  -maxdepth 1 -name "postprd_mem00??" -type d | wc -l)
         mcount=$(find ${hrrr_dir}/${eventdate}/${hrrr_time_lbc}  -maxdepth 1 -name "mem??" -type d | wc -l)
 
-        if [[ $pcount -eq 18 ]]; then
+        if [[ ${pcount} -eq 18 ]]; then
             hrrr_sub_lbc="postprd_mem00"
-        elif [[ $mcount -eq 18 ]]; then
+        elif [[ ${mcount} -eq 18 ]]; then
             hrrr_sub_lbc="mem"
         else
             mecho0 "Missing  ${RED}${hrrr_dir}/${eventdate}/${hrrr_time_lbc}/${hrrr_sub_lbc}??${NC}"
@@ -1547,14 +1554,16 @@ function check_hrrr_files {
     # Check the external grib2 files availability for providing the system ICS/LBCs
     #
 
-    mecho0n "Checking ${CYAN}$hrrrfile0${NC} ... "
-    if ls $hrrrfile0 > /dev/null 2>&1; then
+    hrrr_dir="${site_hrrr_dir}"
+
+    mecho0n "Checking ${CYAN}${hrrrfile0}${NC} ... "
+    if ls ${hrrrfile0} > /dev/null 2>&1; then
         echo -e "${GREEN}Found${NC}"
     else
         echo -e "${RED}Missing${NC}"
         althrrrfile=${hrrrfile0/postprd_mem00/mem}
         mecho0n "Checking ${CYAN}${althrrrfile}${NC} ... "
-        if ls $althrrrfile > /dev/null 2>&1; then
+        if ls ${althrrrfile} > /dev/null 2>&1; then
             echo -e "${GREEN}Found${NC}"
             hrrr_sub_ics="mem"
             hrrrfile0="${althrrrfile}"
@@ -1569,12 +1578,12 @@ function check_hrrr_files {
         n=0
         for mdir in "${hrrr_dir}/${eventdate}/${hrrr_time_ics}/${hrrr_sub_ics}"??; do
             if (( n%4 == 0)); then echo ""; fi
-            if [[ -d $mdir ]]; then
-                subdir=$(basename $mdir)
-                fcount=("$mdir"/wrfnat_hrrre_newse_mem00??_01.grib2)
-                echo -ne "\t$subdir .... ${GREEN}${#fcount[@]}${NC}"
+            if [[ -d ${mdir} ]]; then
+                subdir=$(basename ${mdir})
+                fcount=("${mdir}"/wrfnat_hrrre_newse_mem00??_01.grib2)
+                echo -ne "\t${subdir} .... ${GREEN}${#fcount[@]}${NC}"
             else
-                echo -ne "\t$(basename $mdir) ${RED}missing${NC}"
+                echo -ne "\t$(basename ${mdir}) ${RED}missing${NC}"
             fi
             ((n++))
         done
@@ -1589,12 +1598,12 @@ function check_hrrr_files {
         echo -e "${GREEN}Found${NC}"
         for mdir in "${hrrr_dir}/${eventdate}/${hrrr_time_lbc}/${hrrr_sub_lbc}"??; do
             if (( n%4 == 0)); then echo ""; fi
-            if [[ -d $mdir ]]; then
-                subdir=$(basename $mdir)
-                fcount=("$mdir"/wrfnat_pert_hrrr_mem00??_??.grib2)
-                echo -ne "\t$subdir .... ${GREEN}${#fcount[@]}${NC}"
+            if [[ -d ${mdir} ]]; then
+                subdir=$(basename ${mdir})
+                fcount=("${mdir}"/wrfnat_pert_hrrr_mem00??_??.grib2)
+                echo -ne "\t${subdir} .... ${GREEN}${#fcount[@]}${NC}"
             else
-                echo -ne "\t$(basename $mdir) ${RED}missing${NC}"
+                echo -ne "\t$(basename ${mdir}) ${RED}missing${NC}"
             fi
             ((n++))
         done
@@ -1621,10 +1630,10 @@ function check_obs_files {
     n=0
     for fn in "${obsfiles[@]}"; do
         if (( n%4 == 0 )); then echo ""; fi
-        if [[ "$fn" =~ "miss" ]]; then
-            echo -ne "    ${RED}$fn${NC}"
+        if [[ "${fn}" =~ "miss" ]]; then
+            echo -ne "    ${RED}${fn}${NC}"
         else
-            echo -n "    $fn"
+            echo -n "    ${fn}"
         fi
         ((n++))
     done
@@ -1642,10 +1651,10 @@ function check_obs_files {
     n=0
     for fn in "${obsfiles[@]}"; do
         if (( n%3 == 0 )); then echo ""; fi
-        if [[ "$fn" =~ "miss" ]]; then
-            echo -ne "    ${RED}$fn${NC}"
+        if [[ "${fn}" =~ "miss" ]]; then
+            echo -ne "    ${RED}${fn}${NC}"
         else
-            echo -n "    $fn"
+            echo -n "    ${fn}"
         fi
         ((n++))
     done
@@ -1658,16 +1667,16 @@ function check_obs_files {
     mapfile -t my_array < <( ${rootdir}/observations/run_cwpobs.sh -d /${domname##*_} check ${eventdate} )
     #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/prepbufr_wofs.sh check ${eventdate} && printf '\0')
     read -r -a obsfiles <<< "${my_array[-1]}"
-    # shellcheck disable=SC2154
     echo -ne "${DARK}observations/run_cwpobs.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} CWP files"
+    # shellcheck disable=SC2154
     echo -e " from ${LIGHT_BLUE}${srcdir}/${BROWN}${eventdate}${NC}/${domname##*_}${NC} ..."
     n=0
     for fn in "${obsfiles[@]}"; do
         if (( n%4 == 0 )); then echo ""; fi
-        if [[ "$fn" =~ "-missing" ]]; then
-            echo -ne "    ${RED}$fn${NC}  "
+        if [[ "${fn}" =~ "-missing" ]]; then
+            echo -ne "    ${RED}${fn}${NC}  "
         else
-            echo -n "    $fn"
+            echo -n "    ${fn}"
         fi
         ((n++))
     done
@@ -1685,10 +1694,10 @@ function check_obs_files {
     n=0
     for fn in "${obsfiles[@]}"; do
         if (( n%4 == 0 )); then echo ""; fi
-        if [[ "$fn" =~ "-missing" ]]; then
-            echo -ne "    ${RED}$fn${NC}"
+        if [[ "${fn}" =~ "-missing" ]]; then
+            echo -ne "    ${RED}${fn}${NC}"
         else
-            echo -n "    $fn"
+            echo -n "    ${fn}"
         fi
         ((n++))
     done
@@ -1706,10 +1715,10 @@ function check_obs_files {
     n=0
     for fn in "${obsfiles[@]}"; do
         if (( n%4 == 0 )); then echo ""; fi
-        if [[ "$fn" =~ "missing:" ]]; then
-            echo -ne "    ${RED}$fn${NC}"
+        if [[ "${fn}" =~ "missing:" ]]; then
+            echo -ne "    ${RED}${fn}${NC}"
         else
-            echo -n "    $(basename $fn)"
+            echo -n "    $(basename ${fn})"
         fi
         ((n++))
     done
@@ -1728,9 +1737,9 @@ function check_obs_files {
 
     declare -a radnames
     for fn in "${!velfiles[@]}"; do
-        string2array "${velfiles[$fn]}" "radnames"
+        string2array "${velfiles[${fn}]}" "radnames"
         if [[ ${#radnames[@]} -ne 0 ]]; then
-            if [[ -z $common ]]; then
+            if [[ -z ${common} ]]; then
                 common=("${radnames[@]}")
             else
                 mapfile -t common < <( intersection "${common[*]}" "${radnames[*]}" )
@@ -1742,13 +1751,13 @@ function check_obs_files {
     echo ""
 
     for fn in "${!velfiles[@]}"; do
-        string2array "${velfiles[$fn]}" "radnames"
+        string2array "${velfiles[${fn}]}" "radnames"
 
         if [[ ${#radnames[@]} -eq 0 ]]; then
-            echo -e "    $fn: ${RED}Missing${NC}"
+            echo -e "    ${fn}: ${RED}Missing${NC}"
         else
             mapfile -t radunique < <(setsubtract "${radnames[*]}" "${common[*]}" )
-            echo -e "    $fn: ${radunique[*]} (${GREEN}${#radnames[@]}${NC})"
+            echo -e "    ${fn}: ${radunique[*]} (${GREEN}${#radnames[@]}${NC})"
         fi
     done | sort -n -k3
 }
@@ -1803,12 +1812,14 @@ parse_args "$@"
 
 source "${scpdir}/Site_Runtime.sh" || exit $?
 
-setup_machine "${args['machine']}" "$rootdir" true true
-
-[[ $dorun == false ]]    && runcmd="echo $runcmd"
+setup_machine "${args['machine']}" "${rootdir}" true true
 
 # shellcheck disable=SC2154
-[[ -v args["WORKDIR"] ]] && WORKDIR=${args["WORKDIR"]} || WORKDIR="${workdirDF}"
+[[ ${dorun} == false ]]    && runcmd="echo ${site_runcmd}" || runcmd="${site_runcmd}"
+export runcmd
+
+# shellcheck disable=SC2154
+[[ -v args["WORKDIR"] ]] && WORKDIR=${args["WORKDIR"]} || WORKDIR="${site_workdir}"
 [[ -v args["TEMPDIR"] ]] && TEMPDIR=${args["TEMPDIR"]} || TEMPDIR="${rootdir}/templates"
 [[ -v args["FIXDIR"] ]]  && FIXDIR=${args["FIXDIR"]}   || FIXDIR="${rootdir}/fix_files"
 [[ -v args["EXEDIR"] ]]  && EXEDIR=${args["EXEDIR"]}   || EXEDIR="${rootdir}/exec"
@@ -1833,7 +1844,7 @@ fi
 # Set Event Date and Time
 #
 #-----------------------------------------------------------------------
-[[ -v args["eventdate"] ]] && eventdate="${args['eventdate']}" || eventdate="$eventdateDF"
+[[ -v args["eventdate"] ]] && eventdate="${args['eventdate']}" || eventdate="${eventdateDF}"
 [[ -v args["eventtime"] ]] && eventtime="${args['eventtime']}" || eventtime="1500"
 
 [[ -v args["init"] ]] && inittime="${args['init']}" || inittime="1400"
@@ -1851,13 +1862,13 @@ fi
 
 echo    ""
 echo -e "---- Jobs (${YELLOW}$$${NC}) started at $(date +'%m-%d %H:%M:%S (%Z)') on host ${LIGHT_RED}$(hostname)${NC} ----\n"
-echo -e "  Event  date: ${WHITE}$eventdate${NC} ${YELLOW}${eventtime}${NC}"
+echo -e "  Event  date: ${WHITE}${eventdate}${NC} ${YELLOW}${eventtime}${NC}"
 echo -e "  ROOT    dir: ${rootdir}${BROWN}/scripts${NC}"
 echo -e "  TEMP    dir: ${PURPLE}${TEMPDIR}${NC}"
 echo -e "  FIXED   dir: ${DARK}${FIXDIR}${NC}"
 echo -e "  EXEC    dir: ${GREEN}${EXEDIR}${NC}"
 echo -e "  Working dir: ${WHITE}${WORKDIR}${LIGHT_BLUE}/${eventdate}${NC}"
-echo -ne "  Domain name: ${RED}$domname${NC};  MP scheme: ${CYAN}mp_nssl2m${NC}"
+echo -ne "  Domain name: ${RED}${domname}${NC};  MP scheme: ${CYAN}mp_nssl2m${NC}"
 
 if [[ -n ${cen_lat} || -n ${cen_lon} ]]; then
     echo -e "; Domain Center: ${WHITE}${cen_lat}${NC},${WHITE}${cen_lon}${NC}"
@@ -1880,10 +1891,8 @@ hrrr_time_lbc="${lbctime}"
 hrrr_sub_ics="postprd_mem00"         # + 2-digit member string
 hrrr_sub_lbc="postprd_mem00"         # + 2-digit member string
 
-hrrrfile0="${hrrr_dir}/${eventdate}/${hrrr_time_ics}/${hrrr_sub_ics}01/wrfnat_hrrre_newse_mem0001_01.grib2"
+hrrrfile0="${site_hrrr_dir}/${eventdate}/${hrrr_time_ics}/${hrrr_sub_ics}01/wrfnat_hrrre_newse_mem0001_01.grib2"
 #hrrrfile0="/lfs5/NAGAPE/hpc-wof1/ywang/NCAR_JEDI/fix_files/GEFS_0p5_degree_grib_files/2022062218/ens_1/gep01.t18z.pgrb2.0p50.f000"
-
-EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
 
 if [[ " ${jobs[*]} " =~ [[:space:]]check(bg|obs)*[[:space:]]  ]]; then
     if [[ " ${jobs[*]} " == " check " ]]; then
@@ -1891,26 +1900,26 @@ if [[ " ${jobs[*]} " =~ [[:space:]]check(bg|obs)*[[:space:]]  ]]; then
         checkobs=true
     fi
 
-    if [[ " ${jobs[*]} " == " checkbg " || $checkmodel == true ]]; then
+    if [[ " ${jobs[*]} " == " checkbg " || ${checkmodel} == true ]]; then
         check_hrrr_files
     fi
 
-    if [[ " ${jobs[*]} " == " checkobs " || $checkobs == true ]]; then
+    if [[ " ${jobs[*]} " == " checkobs " || ${checkobs} == true ]]; then
         check_obs_files
     fi
     exit 0
 fi
 
-if $dorun && [[ " ${jobs[*]} " != " clean " && " ${jobs[*]} " != " setup " ]] && ! check_hrrr_subdir; then
+if ${dorun} && [[ " ${jobs[*]} " != " clean " && " ${jobs[*]} " != " setup " ]] && ! check_hrrr_subdir; then
     exit $?
 fi
 
 starttime_str=$(date -u -d "${eventdate} ${eventtime}" +%Y-%m-%d_%H:%M:%S)
 
-rundir="$WORKDIR/${eventdate}"
+rundir="${WORKDIR}/${eventdate}"
 
-if [[ ! -d $rundir ]]; then
-    mkdir -p "$rundir"
+if [[ ! -d ${rundir} ]]; then
+    mkdir -p "${rundir}"
 fi
 
 jobname="${eventdate:4:4}"
@@ -1919,7 +1928,7 @@ jobname="${eventdate:4:4}"
 # write runtime configuration file
 #
 if [[ " ${jobs[*]} " != " clean " ]]; then
-    write_config "$caseconfig"
+    write_config "${caseconfig}"
 fi
 
 if [[ " ${jobs[*]} " == " setup " ]]; then exit 0; fi
@@ -1937,20 +1946,20 @@ declare -A jobargs=([geogrid]="${rundir}/geo_${domname##*_}"            \
                     [createWOFS]="geo_${domname##*_}/done.geogrid"      \
                     [projectHexes]="geo_${domname##*_}/done.geogrid"      \
                     [rotate]="geo_${domname##*_}/done.geogrid"          \
-                    [meshplot_ncl]="$domname/done.rotate"                         \
-                    [meshplot_py]="$domname/done.${mesh} $domname/$domname.grid.nc" \
-                    [static]="$domname/done.${mesh} ungrib/done.ungrib" \
+                    [meshplot_ncl]="${domname}/done.rotate"                         \
+                    [meshplot_py]="${domname}/done.${mesh} ${domname}/${domname}.grid.nc" \
+                    [static]="${domname}/done.${mesh} ungrib/done.ungrib" \
                     [ungrib_hrrr]="${hrrrfile0}"                        \
                     [clean]="geogrid static createWOFS projectHexes"    \
                    )
 
 for job in "${jobs[@]}"; do
-    if [[ $verb -eq 1 ]]; then
+    if [[ ${verb} -eq 1 ]]; then
         echo " "
-        echo "    run_$job ${jobargs[$job]}"
+        echo "    run_${job} ${jobargs[${job}]}"
     fi
 
-    "run_$job" ${jobargs[$job]}
+    "run_${job}" ${jobargs[${job}]}
 done
 
 echo " "

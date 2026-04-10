@@ -1,9 +1,8 @@
-## Version History
+# Version History
 
-11/22/2024 
-    1. Added option to use relative path or absolute path
-       All runtime file (init,lbc,restart etc.) links can be relative now.
-       But the linked static files are still using the absolute path.
+11/22/2024 1. Added option to use relative path or absolute path
+All runtime file (init,lbc,restart etc.) links can be relative now.
+But the linked static files are still using the absolute path.
 
 03/21/2024 Version 4.1
 
@@ -14,11 +13,11 @@
 05/12/2023 Version 4.0
 
     a. Added DA cycles scripts for MPAS-WoFS.
-	1. scripts/setup_mpas-wofs_grid.sh
-	2. scripts/make_ics.sh
-	3. scripts/make_lbc.sh
-	4. scripts/run_dacycles.sh
-	5. scripts/run_fcst.sh
+        1. scripts/setup_mpas-wofs_grid.sh
+        2. scripts/make_ics.sh
+        3. scripts/make_lbc.sh
+        4. scripts/run_dacycles.sh
+        5. scripts/run_fcst.sh
     b. Separated subdirectories templates from fix_files
     c. Started to use scripts/Common_Utilfuncs.sh
 

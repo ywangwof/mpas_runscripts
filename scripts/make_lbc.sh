@@ -78,9 +78,9 @@ function usage {
     echo "              -f  conf_file       Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
     echo " "
     echo "   DEFAULTS:"
-    echo "              eventdt = $eventdate"
-    echo "              rootdir = $rootdir"
-    echo "              WORKDIR = $mpasworkdir/run_dirs"
+    echo "              eventdt = ${eventdate}"
+    echo "              rootdir = ${rootdir}"
+    echo "              WORKDIR = ${mpasworkdir}/run_dirs"
     echo " "
     echo "                                     -- By Y. Wang (2023.05.25)"
     echo " "
@@ -104,7 +104,7 @@ function parse_args {
     while [[ $# -gt 0 ]]; do
         key="$1"
 
-        case $key in
+        case ${key} in
             -h)
                 usage 0
                 ;;
@@ -130,8 +130,8 @@ function parse_args {
                 args["cleanall"]=true
                 ;;
             -m)
-                if [[ ${2^^} == "JET" ]]; then
-                    args["machine"]=Jet
+                if [[ ${2^^} == "URSA" ]]; then
+                    args["machine"]=Ursa
                 elif [[ ${2^^} == "VECNA" ]]; then
                     args["machine"]=Vecna
                 elif [[ ${2^^} == "HERCULES" ]]; then
@@ -176,21 +176,21 @@ function parse_args {
                 shift
                 ;;
             -*)
-                echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
+                echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}${key}${NC}"
                 usage 2
                 ;;
             ungrib* | lbc* | clean* | time_intrp )
                 args["jobs"]="${key//,/ }"
                 ;;
             *)
-                if [[ $key =~ ^[0-9]{8}$ ]]; then
+                if [[ ${key} =~ ^[0-9]{8}$ ]]; then
                     args["eventdate"]="${key}"
-                elif [[ -d $key ]]; then
+                elif [[ -d ${key} ]]; then
                     args["WORKDIR"]="${key}"
-                elif [[ -f $key ]]; then
+                elif [[ -f ${key} ]]; then
                     args["config_file"]="${key}"
                 else
-                    echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}$key${NC}."
+                    echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}${key}${NC}."
                     usage 3
                 fi
                 ;;
@@ -205,9 +205,9 @@ function run_ungrib {
     grib_dir=$1
     gribtime=$2
 
-    wrkdir=$rundir/lbc/ungrib
-    mkwrkdir $wrkdir 0
-    cd $wrkdir || return
+    wrkdir=${rundir}/lbc/ungrib
+    mkwrkdir ${wrkdir} 0
+    cd ${wrkdir} || return
 
     if [[ -f running.ungrib || -f done.ungrib || -f queue.ungrib ]]; then
         return 0                   # skip
@@ -229,8 +229,8 @@ function run_ungrib {
 
     jobarrays=()
     # shellcheck disable=SC2154
-    for mem in $(seq 1 $nenslbc); do
-        memstr=$(printf "%02d" $mem)
+    for mem in $(seq 1 ${config_nenslbc}); do
+        memstr=$(printf "%02d" ${mem})
 
         inits=$(date  -u -d "${hdate}             ${htime}"             +%s)
         starts=$(date -u -d "${startdatetime:0:8} ${startdatetime:8:4}" +%s)
@@ -238,51 +238,51 @@ function run_ungrib {
         starthr=$(( (starts-inits)/3600 ))
         endhr=$(( (ends-inits)/3600 ))
 
-        gribstart_str=$(date -u -d "$hdate $htime $starthr hours" +%Y-%m-%d_%H:%M:%S )
-        gribendtm_str=$(date -u -d "$hdate $htime $endhr hours"   +%Y-%m-%d_%H:%M:%S )
+        gribstart_str=$(date -u -d "${hdate} ${htime} ${starthr} hours" +%Y-%m-%d_%H:%M:%S )
+        gribendtm_str=$(date -u -d "${hdate} ${htime} ${endhr} hours"   +%Y-%m-%d_%H:%M:%S )
 
         mecho0 "GRIB files from ${grib_dir}:"
         gribfiles=(); gribfiles2=()
-        for (( h=starthr;h<=endhr;h+=$((EXTINVL/3600)) )); do
-            hstr=$(printf "%02d" $h)
-            if [[ ${hrrr_subdir} == "pgrb2ap5" ]]; then
-                gribfilename="gefs.$eventdate/${gribtime}/${hrrr_subdir}/gep${memstr}.t${gribtime}z.pgrb2a.0p50.f0${hstr}"
-                gribfilename2="gefs.$eventdate/${gribtime}/${hrrr_subdir/pgrb2ap5/pgrb2bp5}/gep${memstr}.t${gribtime}z.pgrb2b.0p50.f0${hstr}"
+        for (( h=starthr;h<=endhr;h+=$((config_EXTINVL/3600)) )); do
+            hstr=$(printf "%02d" ${h})
+            if [[ ${config_hrrr_subdir} == "pgrb2ap5" ]]; then
+                gribfilename="gefs.${eventdate}/${gribtime}/${config_hrrr_subdir}/gep${memstr}.t${gribtime}z.pgrb2a.0p50.f0${hstr}"
+                gribfilename2="gefs.${eventdate}/${gribtime}/${config_hrrr_subdir/pgrb2ap5/pgrb2bp5}/gep${memstr}.t${gribtime}z.pgrb2b.0p50.f0${hstr}"
             else
-                gribfilename="$hdate/${htime}/${hrrr_subdir}${memstr}/wrfnat_pert_hrrr_mem00${memstr}_${hstr}.grib2"
-                #gribfilename="${gribtime}/${hrrr_subdir}${mem}/gep${memstr}.t${htime:0:2}z.pgrb2.0p50.f0${hstr}"
+                gribfilename="${hdate}/${htime}/${config_hrrr_subdir}${memstr}/wrfnat_pert_hrrr_mem00${memstr}_${hstr}.grib2"
+                #gribfilename="${gribtime}/${config_hrrr_subdir}${mem}/gep${memstr}.t${htime:0:2}z.pgrb2.0p50.f0${hstr}"
             fi
             gribfile="${grib_dir}/${gribfilename}"
 
-            mecho0 "mem $memstr GRIB file $hstr: ${gribfilename}"
-            while [[ ! -f $gribfile ]]; do
-                if [[ $verb -eq 1 ]]; then
+            mecho0 "mem ${memstr} GRIB file ${hstr}: ${gribfilename}"
+            while [[ ! -f ${gribfile} ]]; do
+                if [[ ${verb} -eq 1 ]]; then
                     mecho0 "Waiting for ${gribfilename} ..."
                 fi
                 sleep 10
             done
 
-            gribfiles+=("$gribfile")
+            gribfiles+=("${gribfile}")
             [[ -n ${gribfilename2} ]] && gribfiles2+=("${grib_dir}/${gribfilename2}")
         done
 
-        mywrkdir="$wrkdir/ungrib_$memstr"
-        mkwrkdir $mywrkdir 1
-        cd $mywrkdir || return
+        mywrkdir="${wrkdir}/ungrib_${memstr}"
+        mkwrkdir ${mywrkdir} 1
+        cd ${mywrkdir} || return
 
         rm -f GRIBFILE.??? >& /dev/null
         for i in "${!gribfiles[@]}"; do
-            char3=$(get_3char_order $i)
+            char3=$(get_3char_order ${i})
             if [[ ${#gribfiles2[@]} -gt 0 ]]; then
-                cp "${gribfiles[$i]}" "GRIBFILE.${char3}"
-                cat "${gribfiles2[$i]}" >> "GRIBFILE.${char3}"
+                cp "${gribfiles[${i}]}" "GRIBFILE.${char3}"
+                cat "${gribfiles2[${i}]}" >> "GRIBFILE.${char3}"
             else
-                ln -sf "${gribfiles[$i]}" "GRIBFILE.${char3}"
+                ln -sf "${gribfiles[${i}]}" "GRIBFILE.${char3}"
             fi
         done
 
         # shellcheck disable=SC2154
-        ln -sf $FIXDIR/WRFV4.0/${hrrrvtable} Vtable
+        ln -sf ${config_FIXDIR}/WRFV4.0/${config_hrrrvtable} Vtable
 
         cat << EOF > namelist.wps
 &share
@@ -290,25 +290,25 @@ function run_ungrib {
   max_dom = 1,
   start_date = '${gribstart_str}',
   end_date = '${gribendtm_str}',
-  interval_seconds = ${EXTINVL}
+  interval_seconds = ${config_EXTINVL}
   io_form_geogrid = 2,
 /
 &geogrid
 /
 &ungrib
   out_format = 'WPS',
-  prefix = '${EXTHEAD}${memstr}',
+  prefix = '${config_EXTHEAD}${memstr}',
 /
 &metgrid
 /
 EOF
-        jobarrays+=("$mem")
+        jobarrays+=("${mem}")
     done
 
     #
     # Create job script and submit it
     #
-    cd $wrkdir || return
+    cd ${wrkdir} || return
 
     if [[ ${#jobarrays[@]} -gt 0 ]]; then
         jobscript="run_ungrib.${mach}"
@@ -316,18 +316,18 @@ EOF
         jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
         declare -A jobParms=(
-            [PARTION]="${partition_lbc}"
+            [PARTION]="${config_partition_lbc}"
             [JOBNAME]="ungrb_${jobname}"
-            [CPUSPEC]="${claim_cpu_ungrib}"
-            [PREFIX]="${EXTHEAD}"
+            [CPUSPEC]="${config_claim_cpu_ungrib}"
+            [PREFIX]="${config_EXTHEAD}"
         )
         # shellcheck disable=SC2154
-        submit_a_job "$wrkdir" "ungrib" "jobParms" "$TEMPDIR/run_ungrib_array.${mach}" "$jobscript" "${jobarraystr}"
+        submit_a_job "${wrkdir}" "ungrib" "jobParms" "${config_TEMPDIR}/run_ungrib_array.${mach}" "${jobscript}" "${jobarraystr}"
     fi
 
-    if [[ $dorun == true && $jobwait -eq 1 ]]; then
+    if [[ ${dorun} == true && ${jobwait} -eq 1 ]]; then
         #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-        check_job_status "ungrib" $wrkdir $nenslbc $jobscript 2
+        check_job_status "ungrib" ${wrkdir} ${config_nenslbc} ${jobscript} 2
     fi
 }
 
@@ -337,7 +337,7 @@ function create_namelist {
     local scheme=$1
     local filename=$2
 
-    if [[ "$scheme" == "GSL" ]]; then
+    if [[ "${scheme}" == "GSL" ]]; then
 
        cat << EOF_GSL > "${filename}"
 &nhyd_model
@@ -349,17 +349,17 @@ function create_namelist {
 /
 &dimensions
     config_nvertlevels            = ${nvertlevels}
-    config_nsoillevels            = ${MPASNFLS}
-    config_nfglevels              = ${EXTNFGL}
-    config_nfgsoillevels          = ${EXTNFLS}
+    config_nsoillevels            = ${config_MPASNFLS}
+    config_nfglevels              = ${config_EXTNFGL}
+    config_nfgsoillevels          = ${config_EXTNFLS}
     config_nsoilcat               = 16
     config_nvegopt                = 2
 /
 &data_sources
-    config_geog_data_path         = '${WPSGEOG_PATH}'
-    config_met_prefix             = '${EXTHEAD}${memstr}'
+    config_geog_data_path         = '${config_WPSGEOG_PATH}'
+    config_met_prefix             = '${config_EXTHEAD}${memstr}'
     config_sfc_prefix             = 'SST'
-    config_fg_interval            = ${EXTINVL}
+    config_fg_interval            = ${config_EXTINVL}
     config_landuse_data           = 'MODIFIED_IGBP_MODIS_NOAH_15s'
     config_topo_data              = 'GMTED2010'
     config_vegfrac_data           = 'MODIS'
@@ -378,7 +378,7 @@ function create_namelist {
     config_nsm                    = 30
     config_tc_vertical_grid       = true
     config_blend_bdy_terrain      = true
-    config_specified_zeta_levels  = '${vertLevel_file}'
+    config_specified_zeta_levels  = '${config_vertLevel_file}'
 /
 &interpolation_control
     config_extrap_airtemp         = 'lapse-rate'
@@ -401,10 +401,10 @@ function create_namelist {
     config_pio_stride = 1
 /
 &decomposition
-    config_block_decomp_file_prefix = '$domname.graph.info.part.'
+    config_block_decomp_file_prefix = '${domname}.graph.info.part.'
 /
 EOF_GSL
-    elif [[ "$scheme" == "NCAR" ]]; then
+    elif [[ "${scheme}" == "NCAR" ]]; then
 
        cat << EOF_NCAR > "${filename}"
 &nhyd_model
@@ -417,15 +417,15 @@ EOF_GSL
 /
 &dimensions
     config_nvertlevels        = ${nvertlevels}
-    config_nsoillevels        = ${MPASNFLS}
-    config_nfglevels          = ${EXTNFGL}
-    config_nfgsoillevels      = ${EXTNFLS}
+    config_nsoillevels        = ${config_MPASNFLS}
+    config_nfglevels          = ${config_EXTNFGL}
+    config_nfgsoillevels      = ${config_EXTNFLS}
 /
 &data_sources
-    config_geog_data_path     = '${WPSGEOG_PATH}'
-    config_met_prefix         = '${EXTHEAD}${memstr}'
+    config_geog_data_path     = '${config_WPSGEOG_PATH}'
+    config_met_prefix         = '${config_EXTHEAD}${memstr}'
     config_sfc_prefix         = 'SST'
-    config_fg_interval        = ${EXTINVL}
+    config_fg_interval        = ${config_EXTINVL}
     config_landuse_data       = 'MODIFIED_IGBP_MODIS_NOAH'
     config_topo_data          = 'GMTED2010'
     config_vegfrac_data       = 'MODIS'
@@ -442,7 +442,7 @@ EOF_GSL
     config_nsm                = 30
     config_tc_vertical_grid   = true
     config_blend_bdy_terrain  = true
-    config_specified_zeta_levels = '${vertLevel_file}'
+    config_specified_zeta_levels = '${config_vertLevel_file}'
 /
 &interpolation_control
     config_extrap_airtemp     = 'linear'
@@ -460,11 +460,11 @@ EOF_GSL
    config_pio_stride         = 1
 /
 &decomposition
-   config_block_decomp_file_prefix = '$domname.graph.info.part.'
+   config_block_decomp_file_prefix = '${domname}.graph.info.part.'
 /
 EOF_NCAR
     else
-       echo -e "${RED}ERROR${NC}: Unsupported lateral boundary scheme: ${PURPLE}$scheme${NC}."
+       echo -e "${RED}ERROR${NC}: Unsupported lateral boundary scheme: ${PURPLE}${scheme}${NC}."
        usage 1
 
     fi
@@ -486,7 +486,7 @@ function create_streams {
 
 <immutable_stream name="output"
                   type="output"
-                  filename_template="$domname.none.nc"
+                  filename_template="${domname}.none.nc"
                   io_type="netcdf"
                   packages="initial_conds"
                   clobber_mode="replace_files"
@@ -504,7 +504,7 @@ function create_streams {
                   filename_template="${domname}_${memstr}.lbc.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
                   filename_interval="output_interval"
                   packages="lbcs"
-                  io_type="${LBCIOTYPE}"
+                  io_type="${config_LBCIOTYPE}"
                   clobber_mode="replace_files"
                   output_interval="${EXTINVL_STR}" />
 
@@ -523,66 +523,66 @@ function run_lbc {
             conditions+=("$1")
             ;;
         *)
-            conditions+=("$rundir/$1")
+            conditions+=("${rundir}/$1")
             ;;
         esac
         shift
     done
 
-    if [[ $dorun == true ]]; then
+    if [[ ${dorun} == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking: ${CYAN}$cond${NC} ...."
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: ${CYAN}$cond${NC}"
+            mecho0 "Checking: ${CYAN}${cond}${NC} ...."
+            while [[ ! -e ${cond} ]]; do
+                if [[ ${verb} -eq 1 ]]; then
+                    mecho0 "Waiting for file: ${CYAN}${cond}${NC}"
                 fi
 
                 # shellcheck disable=SC2154
-                check_job_status "ics ${domname} ${domname}" $rundir/init $nensics
-                check_job_status "ungrib" $rundir/lbc/ungrib $nenslbc
+                check_job_status "ics ${domname} ${domname}" ${rundir}/init ${config_nensics}
+                check_job_status "ungrib" ${rundir}/lbc/ungrib ${config_nenslbc}
                 sleep 10
             done
         done
-        cd $rundir/init || return
+        cd ${rundir}/init || return
         ln -sf ${domname}_01.init.nc ${domname}.invariant.nc
     fi
 
-    wrkdir=$rundir/lbc
+    wrkdir=${rundir}/lbc
 
-    if [[ -f $wrkdir/done.${domname} ]]; then
+    if [[ -f ${wrkdir}/done.${domname} ]]; then
         return 0
     fi
 
-    if [[ -f $wrkdir/running.${domname} || -f $wrkdir/queue.${domname} ]]; then
+    if [[ -f ${wrkdir}/running.${domname} || -f ${wrkdir}/queue.${domname} ]]; then
         #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-        check_job_status "${domname}" "$wrkdir" "$nenslbc"
+        check_job_status "${domname}" "${wrkdir}" "${config_nenslbc}"
         return 0
     fi
 
-    mkwrkdir $wrkdir $overwrite
-    cd $wrkdir || return
+    mkwrkdir ${wrkdir} ${overwrite}
+    cd ${wrkdir} || return
 
     jobarrays=()
-    for mem in $(seq 1 $nenslbc); do
-        memstr=$(printf "%02d" $mem)
-        memwrkdir="$wrkdir/${domname}_$memstr"
+    for mem in $(seq 1 ${config_nenslbc}); do
+        memstr=$(printf "%02d" ${mem})
+        memwrkdir="${wrkdir}/${domname}_${memstr}"
 
-        mkwrkdir $memwrkdir 1
-        cd $memwrkdir || return
+        mkwrkdir ${memwrkdir} 1
+        cd ${memwrkdir} || return
 
-        ln -sf ../ungrib/${EXTHEAD}${memstr}:* .
-        ln -sf $rundir/init/${domname}_${memstr}.init.nc .
+        ln -sf ../ungrib/${config_EXTHEAD}${memstr}:* .
+        ln -sf ${rundir}/init/${domname}_${memstr}.init.nc .
         #ln -sf $rundir/init/${domname}.invariant.nc .
 
-        if [[ ! -f $rundir/$domname/$domname.graph.info.part.${npelbc} ]]; then
-            split_graph "${gpmetis}" "${domname}.graph.info" "${npelbc}" "$rundir/$domname" "$dorun" "$verb"
+        if [[ ! -f ${rundir}/${domname}/${domname}.graph.info.part.${config_npelbc} ]]; then
+            split_graph "${config_gpmetis}" "${domname}.graph.info" "${config_npelbc}" "${rundir}/${domname}" "${dorun}" "${verb}"
         fi
-        ln -sf $rundir/$domname/$domname.graph.info.part.${npelbc} .
+        ln -sf ${rundir}/${domname}/${domname}.graph.info.part.${config_npelbc} .
 
-        create_namelist "${lbcscheme}" "namelist.init_atmosphere"
-        create_streams  "${lbcscheme}" "streams.init_atmosphere"
+        create_namelist "${config_lbcscheme}" "namelist.init_atmosphere"
+        create_streams  "${config_lbcscheme}" "streams.init_atmosphere"
 
-        jobarrays+=("$mem")
+        jobarrays+=("${mem}")
     done
     #
     # Create job script and submit it
@@ -592,9 +592,9 @@ function run_lbc {
         jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
         declare -A jobParms=(
-            [PARTION]="${partition_lbc}"
-            [NOPART]="$npelbc"
-            [CPUSPEC]="${claim_cpu_lbc}"
+            [PARTION]="${config_partition_lbc}"
+            [NOPART]="${config_npelbc}"
+            [CPUSPEC]="${config_claim_cpu_lbc}"
             [JOBNAME]="lbc_${jobname}"
             [PREFIX]="${domname}"
             [MPASDIR]="${MPAS_DIR}"
@@ -602,18 +602,18 @@ function run_lbc {
       )
         # shellcheck disable=SC2154
         if [[ "${mach}" == "pbs" ]]; then
-            jobParms[NNODES]="${nnodes_ics}"
+            jobParms[NNODES]="${config_nnodes_ics}"
             # shellcheck disable=SC2034
-            jobParms[NCORES]="${ncores_lbc}"
+            jobParms[NCORES]="${config_ncores_lbc}"
         fi
 
         # shellcheck disable=SC2154
-        submit_a_job "$wrkdir" "${domname}" "jobParms" "$TEMPDIR/run_lbc_array.${mach}" "$jobscript" "${jobarraystr}"
+        submit_a_job "${wrkdir}" "${domname}" "jobParms" "${config_TEMPDIR}/run_lbc_array.${mach}" "${jobscript}" "${jobarraystr}"
     fi
 
-    if [[ $dorun == true && $jobwait -eq 1 ]]; then
+    if [[ ${dorun} == true && ${jobwait} -eq 1 ]]; then
         #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-        check_job_status "${domname}" $wrkdir $nenslbc $jobscript 2
+        check_job_status "${domname}" ${wrkdir} ${config_nenslbc} ${jobscript} 2
     fi
 }
 
@@ -627,28 +627,28 @@ function run_time_intrp {
             conditions+=("$1")
             ;;
         *)
-            conditions+=("$rundir/$1")
+            conditions+=("${rundir}/$1")
             ;;
         esac
         shift
     done
 
-    if [[ $dorun == true ]]; then
+    if [[ ${dorun} == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking: ${CYAN}$cond${NC} ...."
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: ${CYAN}$cond${NC}"
+            mecho0 "Checking: ${CYAN}${cond}${NC} ...."
+            while [[ ! -e ${cond} ]]; do
+                if [[ ${verb} -eq 1 ]]; then
+                    mecho0 "Waiting for file: ${CYAN}${cond}${NC}"
                 fi
 
                 # shellcheck disable=SC2154
-                check_job_status "${domname}" "$rundir/lbc" "$nenslbc"
+                check_job_status "${domname}" "${rundir}/lbc" "${config_nenslbc}"
                 sleep 10
             done
         done
     fi
 
-    wrkdir=$rundir/lbc
+    wrkdir=${rundir}/lbc
     cd "${wrkdir}" || exit $?
 
     #@@@
@@ -660,7 +660,7 @@ function run_time_intrp {
 
     #[[ $verb -eq 1 ]] && mecho0 "Running time intrpolation ...."
 
-    #for((i=starttime_s;i<=stoptime_s;i+=intvl_sec)); do
+    #for((i=starttime_s;i<=stoptime_s;i+=config_intvl_sec)); do
     #    min=$(date -u -d @$i +%M)
     #    j=$((10#$min*60))
     #    if [[ ${min} != "00" ]]; then
@@ -669,7 +669,7 @@ function run_time_intrp {
     #        time_str=$(date  -u -d @$i  +%Y-%m-%d_%H.%M.%S)
     #        time_str1=$(date -u -d @$i1 +%Y-%m-%d_%H.%M.%S)
     #        time_str2=$(date -u -d @$i2 +%Y-%m-%d_%H.%M.%S)
-    #        for mem in $(seq 1 $nenslbc); do
+    #        for mem in $(seq 1 ${config_nenslbc}); do
     #            printf -v mem_str "%02d" $mem
     #            lbc_filename="${domname}_${mem_str}.lbc.${time_str}.nc"
     #            lbc_file1="${domname}_${mem_str}.lbc.${time_str1}.nc"
@@ -688,8 +688,8 @@ function run_time_intrp {
     #done
 
     jobarrays=()
-    for mem in $(seq 1 $nenslbc); do
-        jobarrays+=("$mem")
+    for mem in $(seq 1 ${config_nenslbc}); do
+        jobarrays+=("${mem}")
     done
     #
     # Create job script and submit it
@@ -699,29 +699,29 @@ function run_time_intrp {
         jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
         declare -A jobParms=(
-            [PARTION]="${partition_lbc}"
-            [NOPART]="$npelbc"
-            [CPUSPEC]="${claim_cpu_lbc}"
+            [PARTION]="${config_partition_lbc}"
+            [NOPART]="${config_npelbc}"
+            [CPUSPEC]="${config_claim_cpu_lbc}"
             [JOBNAME]="intrp_${jobname}"
             [PREFIX]="${domname}"
             [STARTSECS]="${starttime_s}"
             [STOPSECS]="${stoptime_s}"
-            [INTVL_SECS]=${intvl_sec}
+            [INTVL_SECS]=${config_intvl_sec}
         )
         # shellcheck disable=SC2154
         if [[ "${mach}" == "pbs" ]]; then
-            jobParms[NNODES]="${nnodes_ics}"
+            jobParms[NNODES]="${config_nnodes_ics}"
             # shellcheck disable=SC2034
-            jobParms[NCORES]="${ncores_lbc}"
+            jobParms[NCORES]="${config_ncores_lbc}"
         fi
 
         # shellcheck disable=SC2154
-        submit_a_job "$wrkdir" "${domname}" "jobParms" "$TEMPDIR/run_lbc_intrp_array.${mach}" "$jobscript" "${jobarraystr}"
+        submit_a_job "${wrkdir}" "${domname}" "jobParms" "${config_TEMPDIR}/run_lbc_intrp_array.${mach}" "${jobscript}" "${jobarraystr}"
     fi
 
-    if [[ $dorun == true && $jobwait -eq 1 ]]; then
+    if [[ ${dorun} == true && ${jobwait} -eq 1 ]]; then
         #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-        check_job_status "${domname}" $wrkdir $nenslbc $jobscript 2
+        check_job_status "${domname}" ${wrkdir} ${config_nenslbc} ${jobscript} 2
     fi
 }
 
@@ -730,25 +730,29 @@ function run_time_intrp {
 function run_clean {
 
     for dirname in "$@"; do
-        case $dirname in
+        case ${dirname} in
         ungrib )
             if "${cleanall}"; then
-                cd "$rundir/lbc" || return
+                cd "${rundir}/lbc" || return
                 rm -rf ungrib
             else
-                cd "$rundir/lbc/ungrib" || return
+                cd "${rundir}/lbc/ungrib" || return
                 if [[ -e done.ungrib ]]; then
                     #jobname=$1 mywrkdir=$2 nummem=$3
-                    clean_mem_runfiles "ungrib" "$rundir/lbc/ungrib" "$nenslbc"
+                    clean_mem_runfiles "ungrib" "${rundir}/lbc/ungrib" "${config_nenslbc}"
                 fi
             fi
             ;;
         lbc )
-            cd "$rundir/lbc" || return
+            cd "${rundir}/lbc" || return
             if [[ -e done.${domname} ]]; then
                 #jobname=$1 mywrkdir=$2 nummem=$3
-                clean_mem_runfiles "${domname}" "$rundir/lbc" "$nenslbc"
+                clean_mem_runfiles "${domname}" "${rundir}/lbc" "${config_nenslbc}"
             fi
+            ;;
+
+        * )
+            mecho1 "ERROR: unsuported directory: ${dirname}"
             ;;
         esac
     done
@@ -760,7 +764,7 @@ function run_clean {
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-source $scpdir/Common_Utilfuncs.sh || exit $?
+source ${scpdir}/Common_Utilfuncs.sh || exit $?
 
 #-----------------------------------------------------------------------
 #
@@ -798,18 +802,19 @@ parse_args "$@"
 source "${scpdir}/Site_Runtime.sh" || exit $?
 
 
-setup_machine "${args['machine']}" "$rootdir" ${usepython} false
+setup_machine "${args['machine']}" "${rootdir}" ${usepython} false
 
-[[ $dorun == false ]] && runcmd="echo $runcmd"
+[[ ${dorun} == false ]] && runcmd="echo ${site_runcmd}" || runcmd="${site_runcmd}"
+export runcmd
 
-[[ -v args["WORKDIR"] ]] && WORKDIR=${args["WORKDIR"]} || WORKDIR="${workdirDF}"
+[[ -v args["WORKDIR"] ]] && WORKDIR=${args["WORKDIR"]} || WORKDIR="${site_workdir}"
 
 #-----------------------------------------------------------------------
 #
 # Set Event Date and Start Time
 #
 #-----------------------------------------------------------------------
-[[ -v args["eventdate"] ]] && eventdate="${args['eventdate']}" || eventdate="$eventdateDF"
+[[ -v args["eventdate"] ]] && eventdate="${args['eventdate']}" || eventdate="${eventdateDF}"
 [[ -v args["eventtime"] ]] && eventtime="${args['eventtime']}" || eventtime="1500"
 [[ -v args["endtime"] ]]   && endtime="${args['endtime']}"     || endtime="0900"
 [[ -v args["stoptime"] ]]  && stoptime="${args['stoptime']}"   || stoptime="0300"
@@ -822,14 +827,14 @@ setup_machine "${args['machine']}" "$rootdir" ${usepython} false
 if [[ -v args["config_file"] ]]; then
     config_file="${args['config_file']}"
 
-    if [[ "$config_file" =~ "/" ]]; then
+    if [[ "${config_file}" =~ "/" ]]; then
         WORKDIR=$(realpath "$(dirname ${config_file})")
     else
         config_file="${WORKDIR}/${config_file}"
     fi
     [[ ${config_file} =~ config\.([0-9]{8}) && ! -v args["eventdate"] ]] && eventdate="${BASH_REMATCH[1]}"
 else
-    config_file="$WORKDIR/config.${eventdate}"
+    config_file="${WORKDIR}/config.${eventdate}"
 fi
 
 if [[ -r ${config_file} ]]; then
@@ -840,13 +845,16 @@ else
     exit 2
 fi
 readconf ${config_file} COMMON lbc || exit $?
-# get ENS_SIZE, EXTINVL, LBCIOTYPE
+# get config_EXTINVL, config_LBCIOTYPE
 
-if [[ -e ${vertLevel_file} ]]; then
-    nvertlevels=$(cat ${vertLevel_file} | sed '/^\s*$/d' | wc -l)
+domname="${config_domname}"
+mach="${config_mach}"
+
+if [[ -e ${config_vertLevel_file} ]]; then
+    nvertlevels=$(grep -cve '^\s*$' ${config_vertLevel_file})
     (( nvertlevels -= 1 ))
 else
-    echo -e "${RED}ERROR${NC}: vertLevel_file=${BLUE}${vertLevel_file}${NC} not exist."
+    echo -e "${RED}ERROR${NC}: vertLevel_file=${BLUE}${config_vertLevel_file}${NC} not exist."
     usage 1
 fi
 #-----------------------------------------------------------------------
@@ -865,14 +873,14 @@ fi
 if [[ ${#endtime} -eq 12 ]]; then
     enddatetime=${endtime}
 else
-    if ((10#$endtime < 1500)); then
+    if ((10#${endtime} < 1500)); then
         enddatetime=$(date -u -d "${eventdate} ${endtime} 1 day" +%Y%m%d%H%M)
     else
         enddatetime=$(date -u -d "${eventdate} ${endtime}" +%Y%m%d%H%M)
     fi
 fi
 
-if ((10#$stoptime < 1500)); then
+if ((10#${stoptime} < 1500)); then
     stopdatetime=$(date -u -d "${eventdate} ${stoptime} 1 day" +%Y%m%d%H%M)
 else
     stopdatetime=$(date -u -d "${eventdate} ${stoptime}" +%Y%m%d%H%M)
@@ -884,20 +892,20 @@ fi
 #
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
-rundir="$WORKDIR/${eventdate}"
-if [[ ! -d $rundir ]]; then
-    mkdir -p $rundir
+rundir="${WORKDIR}/${eventdate}"
+if [[ ! -d ${rundir} ]]; then
+    mkdir -p ${rundir}
 fi
 
 echo    ""
 echo -e "---- Jobs (${YELLOW}$$${NC}) started at $(date +'%m-%d %H:%M:%S (%Z)') on host ${LIGHT_RED}$(hostname)${NC} ----\n"
 echo -e "  Event  date: ${WHITE}${startdatetime}${NC} --> ${WHITE}${enddatetime:0:8}${NC} ${YELLOW}${enddatetime:8:4}${NC}"
 echo -e "  ROOT    dir: ${rootdir}${BROWN}/scripts${NC}"
-echo -e "  TEMP    dir: ${PURPLE}${TEMPDIR}${NC}"
-echo -e "  FIXED   dir: ${DARK}${FIXDIR}${NC}"
-echo -e "  EXEC    dir: ${GREEN}${EXEDIR}${NC}"
+echo -e "  TEMP    dir: ${PURPLE}${config_TEMPDIR}${NC}"
+echo -e "  FIXED   dir: ${DARK}${config_FIXDIR}${NC}"
+echo -e "  EXEC    dir: ${GREEN}${config_EXEDIR}${NC}"
 echo -e "  Working dir: ${WHITE}${WORKDIR}${LIGHT_BLUE}/${eventdate}/lbc${NC}"
-echo -e "  Domain name: ${RED}$domname${NC}; HRRRE time: ${DARK}${hrrr_time}${NC}; NENSLBC: ${WHITE}${nenslbc}${NC}"
+echo -e "  Domain name: ${RED}${domname}${NC}; HRRRE time: ${DARK}${config_hrrr_time}${NC}; NENSLBC: ${WHITE}${config_nenslbc}${NC}"
 echo    " "
 
 jobname="${eventdate:4:4}"
@@ -905,13 +913,13 @@ jobname="${eventdate:4:4}"
 starttime_str=$(date -u -d "${startdatetime:0:8} ${startdatetime:8:4}" +%Y-%m-%d_%H:%M:%S)
 endtime_str=$(date   -u -d "${enddatetime:0:8}   ${enddatetime:8:4}"   +%Y-%m-%d_%H:%M:%S)
 
-EXTINVL_STR=$(printf "%02d:00:00" $((EXTINVL/3600)) )
+EXTINVL_STR=$(printf "%02d:00:00" $((config_EXTINVL/3600)) )
 
 #
 # Start to execute each procedue
 #
 
-declare -A jobargs=([ungrib]="${hrrr_dir} ${hrrr_time}"                 \
+declare -A jobargs=([ungrib]="${config_hrrr_dir} ${config_hrrr_time}"   \
                     [lbc]="lbc/ungrib/done.ungrib init/done.${domname}" \
                     [clean]="ungrib lbc"                                \
                     [cleanungrib]=""                                    \
@@ -919,12 +927,12 @@ declare -A jobargs=([ungrib]="${hrrr_dir} ${hrrr_time}"                 \
                    )
 
 for job in "${jobs[@]}"; do
-    if [[ $verb -eq 1 ]]; then
+    if [[ ${verb} -eq 1 ]]; then
         echo " "
-        echo "    run_$job ${jobargs[$job]}"
+        echo "    run_${job} ${jobargs[${job}]}"
     fi
 
-    run_$job ${jobargs[$job]}
+    run_${job} ${jobargs[${job}]}
 done
 
 echo " "

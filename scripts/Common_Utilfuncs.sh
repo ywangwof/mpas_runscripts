@@ -36,7 +36,7 @@
 ########################################################################
 
 mydir=$(dirname "${BASH_SOURCE[0]}")
-source $mydir/Common_Colors.sh
+source ${mydir}/Common_Colors.sh
 
 shopt -s extglob
 
@@ -45,7 +45,7 @@ shopt -s extglob
 function mecho {
     local i=$(($1-1))
     funstr=$(printf "%-18.17s" "${FUNCNAME[$1]}")
-    linestr=$(printf "(%5s)" "${BASH_LINENO[$i]}")
+    linestr=$(printf "(%5s)" "${BASH_LINENO[${i}]}")
     echo $2 "${DARK}${funstr} ${linestr}${NC} : ${*:3}"
 }
 
@@ -77,32 +77,32 @@ function mkwrkdir {
 
     local bakno bakdir
 
-    if [[ -d $mydir ]]; then
-        if [[ $backup -eq 1 ]]; then
-            rm -rf $mydir
-        elif [[ $backup -eq 2 ]]; then
-            basedir=$(dirname $mydir)
-            namedir=$(basename $mydir)
+    if [[ -d ${mydir} ]]; then
+        if [[ ${backup} -eq 1 ]]; then
+            rm -rf ${mydir}
+        elif [[ ${backup} -eq 2 ]]; then
+            basedir=$(dirname ${mydir})
+            namedir=$(basename ${mydir})
             bakno=0
-            bakdir="$basedir/${namedir}.bak$bakno"
-            while [[ -d $bakdir ]]; do
+            bakdir="${basedir}/${namedir}.bak${bakno}"
+            while [[ -d ${bakdir} ]]; do
                 (( bakno++ ))
-                bakdir="$basedir/${namedir}.bak$bakno"
+                bakdir="${basedir}/${namedir}.bak${bakno}"
             done
 
             for ((i=bakno;i>0;i--)); do
                 j=$((i-1))
-                olddir="$basedir/${namedir}.bak$j"
-                bakdir="$basedir/${namedir}.bak$i"
-                echo "Moving $olddir --> $bakdir ..."
-                mv $olddir $bakdir
+                olddir="${basedir}/${namedir}.bak${j}"
+                bakdir="${basedir}/${namedir}.bak${i}"
+                echo "Moving ${olddir} --> ${bakdir} ..."
+                mv ${olddir} ${bakdir}
             done
-            bakdir="$basedir/${namedir}.bak0"
-            echo "Backing $mydir --> $bakdir ..."
-            mv $mydir $bakdir
+            bakdir="${basedir}/${namedir}.bak0"
+            echo "Backing ${mydir} --> ${bakdir} ..."
+            mv ${mydir} ${bakdir}
         fi
     fi
-    mkdir -p $mydir
+    mkdir -p ${mydir}
 }
 
 ########################################################################
@@ -113,8 +113,9 @@ function submit_a_job {
     # wrkdir jobname jobparms jobtemp jobscript joboption
     #
     # Use global variables: $verb, $dorun, $runcmd, $exedir
-    #          $relative_path, $rootdir, $modulename, $machine
-    #          $job_account_str, $job_exclusive_str, $job_runexe_str, $job_runmpexe_str
+    #          ${config_relative_path}, $rootdir, $modulename, $machine
+    #          $config_job_account_str, $config_job_exclusive_str
+    #          $config_job_runexe_str, $config_job_runmpexe_str
     #
     # Purpose:
     #
@@ -141,10 +142,10 @@ function submit_a_job {
     sedfile=$(mktemp -t ${myjobname}.sed_XXXX)
 
     # shellcheck disable=SC2154
-    case ${relative_path} in
+    case ${config_relative_path} in
     true  ) jobdir="."         ;;
     false ) jobdir="${mywrkdir}" ;;
-    *     ) mecho0 "${RED}ERROR${NC}: Hi, what is this <${relative_path}>?"; exit 1;;
+    *     ) mecho0 "${RED}ERROR${NC}: Hi, what is this config_relative_path=<${config_relative_path}>?"; exit 1;;
     esac
     #
     # Common parameters for all jobs
@@ -153,21 +154,21 @@ function submit_a_job {
         [WRKDIR]="${jobdir}"
         [ROOTDIR]="${rootdir}"
         [MODULE]="${modulename}"
-        [ACCTSTR]="${job_account_str}"
-        [EXCLSTR]="${job_exclusive_str}"
+        [ACCTSTR]="${config_job_account_str}"
+        [EXCLSTR]="${config_job_exclusive_str}"
         [MACHINE]="${machine}"
-        [RUNCMD]="${job_runexe_str}"
-        [RUNMPCMD]="${job_runmpexe_str}"
-        [EXEDIR]="${EXEDIR}"
+        [RUNCMD]="${config_job_runexe_str}"
+        [RUNMPCMD]="${config_job_runmpexe_str}"
+        [EXEDIR]="${config_EXEDIR}"
     )
     # If the job passes in a specific value for any of the common parameters
     # it will be taken. Merge the two arrays
     for parm in "${!jparms_ref[@]}"; do
-        commparms[$parm]="${jparms_ref[$parm]}"
+        commparms[${parm}]="${jparms_ref[${parm}]}"
     done
 
     for parm in "${!commparms[@]}"; do
-        echo "s^${parm}^${commparms[$parm]}^g" >> ${sedfile}
+        echo "s^${parm}^${commparms[${parm}]}^g" >> ${sedfile}
     done
 
     sed -f ${sedfile} ${myjobtemp} > ${myjobscript}
@@ -182,14 +183,14 @@ function submit_a_job {
 
     local -a commandlist=("${runcmd}")
     [[ -n ${myjoboption} ]] && commandlist+=("${myjoboption}")
-    #[[ -f ${EXEDIR}/bad_nodes.txt ]] && commandlist+=("--exclude=$(paste -sd "," ${EXEDIR}/bad_nodes.txt)")
+    #[[ -f ${config_EXEDIR}/bad_nodes.txt ]] && commandlist+=("--exclude=$(paste -sd "," ${config_EXEDIR}/bad_nodes.txt)")
     commandlist+=("${myjobscript}")
 
     # shellcheck disable=SC2154
-    if [[ $dorun == true ]]; then mecho1n "Submitting ${BROWN}${myjobscript}${NC} .... "; fi
+    if [[ ${dorun} == true ]]; then mecho1n "Submitting ${BROWN}${myjobscript}${NC} .... "; fi
     # shellcheck disable=SC2154
     "${commandlist[@]}"
-    if [[ $dorun == true && $? -eq 0 ]]; then touch ${mywrkdir}/queue.${myjobname}; fi
+    if [[ ${dorun} == true && $? -eq 0 ]]; then touch ${mywrkdir}/queue.${myjobname}; fi
     echo " "
 }
 
@@ -201,17 +202,17 @@ function resubmit_a_jobscript {
 
     read -r -a myjobs <<< "${jobarray_str}"
 
-    if [[ $myjobscript == *.slurm ]]; then
+    if [[ ${myjobscript} == *.slurm ]]; then
         jobs_str=$(get_jobarray_str 'slurm' "${myjobs[@]}")
-        $runcmd ${jobs_str} $myjobscript
-    elif [[ $myjobscript == *.pbs ]]; then
+        ${runcmd} ${jobs_str} ${myjobscript}
+    elif [[ ${myjobscript} == *.pbs ]]; then
         jobgroupstr=$(group_numbers_by_steps "${myjobs[@]}")
         IFS=";" read -r -a jobgroups <<< "${jobgroupstr}"; unset IFS  # convert string to array
         #while IFS=';' read -r line; do jobgroups+=("$line"); done < <(group_numbers_by_steps "${abortjobarray[*]}")
         for jobg in "${jobgroups[@]}"; do
             IFS=" " read -r -a jobgar <<< "${jobg}"; unset IFS        # convert string to array
             jobgstr=$(get_jobarray_str 'pbs' "${jobgar[@]}")
-            $runcmd ${jobgstr} $myjobscript
+            ${runcmd} ${jobgstr} ${myjobscript}
         done
     else
         mecho0 "Do nothing for ${CYAN}${myjobscript}${NC}."
@@ -257,74 +258,92 @@ function check_job_status {
     local numtry "done" memdir runjobs mem memstr
     local memdonefile memerrorfile donefile
 
-    cd $mywrkdir || { mecho1 "Working directory ${CYAN}${mywrkdir}${NC} not exist.";  exit $?; }
+    cd ${mywrkdir} || { mecho1 "Working directory ${CYAN}${mywrkdir}${NC} not exist.";  exit $?; }
 
-    if [[ -e $mywrkdir/done.${jobname} ]]; then    # do nothing
-        done=$donenum
+    if [[ -e ${mywrkdir}/done.${jobname} ]]; then    # do nothing
+        done=${donenum}
         return
     fi
 
     checkonly=false
-    if [[ $numtries -le 0 ]]; then checkonly=true; fi
+    if [[ ${numtries} -le 0 ]]; then checkonly=true; fi
 
     # check all member's status
     runjobs=()
     for ((i=1; i<=donenum; i++)); do
-        runjobs+=("$i")
+        runjobs+=("${i}")
     done
     #while IFS='' read -r line; do runjobs+=("$line"); done < <(seq 1 $donenum)
 
+    local patterns pattern
+    local sorted_files latestfile
     #-------------------------------------------------------------------
     # Check and wait for all members job status in ${runjobs} and
     # resubmit if necessary
     #-------------------------------------------------------------------
     mecho1 "Waiting for ensemble jobs of ${WHITE}${jobname}${NC} in ${LIGHT_BLUE}${mywrkdir##"${WORKDIR}"/}${NC}"
-    donefile="$mywrkdir/done.${jobname}"
+    donefile="${mywrkdir}/done.${jobname}"
     numtry=0
-    while [[ $numtry -le $numtries ]]; do
+    while [[ ${numtry} -le ${numtries} ]]; do
         done=0; error=0; running=0; unknown=0; abort=0
         abortjobarray=(); errorjobarray=()
 
         for mem in "${runjobs[@]}"; do
-            memstr=$(printf "%02d" $mem)
-            memdir="$mywrkdir/${memname}_$memstr"
-            memdonefile="$memdir/done.${stfile}_$memstr"
-            memerrorfile="$memdir/error.${stfile}_$memstr"
+            memstr=$(printf "%02d" ${mem})
+            memdir="${mywrkdir}/${memname}_${memstr}"
+            memdonefile="${memdir}/done.${stfile}_${memstr}"
+            memerrorfile="${memdir}/error.${stfile}_${memstr}"
 
-            if [[ $verb -eq 1 ]]; then mecho0 "Checking $memdonefile"; fi
+            if [[ ${verb} -eq 1 ]]; then mecho0 "Checking ${memdonefile}"; fi
             # 4 possiblilites
             #   1. done, do not enter the following loop
             #   2. queued or running, wait for the log file or error/done file
             #   3. abort, may be a machine error
             #   4. error, A program error? resubmitting will not help
 
-            while [[ ! -e $memdonefile && ! -e $donefile ]]; do
-                # shellcheck disable=SC2012
-                if compgen -G "$mywrkdir/${jobname}_${mem}_*.log" > /dev/null; then
-                    # Handle occasionally machine errors on Vecna
-                    lastestfile=$(ls -t $mywrkdir/${jobname}_${mem}_*.log | head -1)
-                elif compgen -G "$mywrkdir/*_${mem}_${jobname}_*.log" > /dev/null; then
-                    lastestfile=$(ls -t $mywrkdir/*_${mem}_${jobname}_*.log | head -1)
-                fi
+            while [[ ! -e ${memdonefile} && ! -e ${donefile} ]]; do
+                # Handle occasionally machine errors on Vecna
 
-                if [[ -f ${lastestfile} ]]; then
-                    #if grep -q "srun: Job step aborted:" ${lastestfile}; then
-                    if grep -q "slurmstepd: error:" ${lastestfile}; then
-                        # abort: Slurm error, resubmission may help
-                        abortjobarray+=("$mem")
-                        (( abort+=1 ))
-                        #rm ${lastestfile}                               # to avoid it will be used for next try again
-                        mv ${lastestfile} ${lastestfile}_try${numtry}    # to avoid it will be used for next try again
+                # Define patterns in the order of priority
+                patterns=(
+                    "${mywrkdir}/${jobname}_${mem}_*.log"
+                    "${mywrkdir}/*_${mem}_${jobname}_*.log"
+                )
+
+                latestfile=""
+
+                for pattern in "${patterns[@]}"; do
+                    # Check if the pattern matches any files
+                    if compgen -G "${pattern}" > /dev/null; then
+                        # Load all matches into an array, sorted numerically
+                        readarray -td '' sorted_files < <(printf '%s\0' ${pattern} | sort -zV)
+
+                        # Grab the highest sequence/number
+                        latestfile="${sorted_files[-1]}"
+
+                        # Found the target, stop looking through other patterns
                         break
-                    elif [[ -e $memerrorfile ]]; then   # error: program error, resubmission may not help
-                        errorjobarray+=("$mem")
+                    fi
+                done
+
+                if [[ -f ${latestfile} ]]; then
+                    #if grep -q "srun: Job step aborted:" ${latestfile}; then
+                    if grep -q "slurmstepd: error:" ${latestfile}; then
+                        # abort: Slurm error, resubmission may help
+                        abortjobarray+=("${mem}")
+                        (( abort+=1 ))
+                        #rm ${latestfile}                               # to avoid it will be used for next try again
+                        mv ${latestfile} ${latestfile}_try"${numtry}"    # to avoid it will be used for next try again
+                        break
+                    elif [[ -e ${memerrorfile} ]]; then   # error: program error, resubmission may not help
+                        errorjobarray+=("${mem}")
                         (( error+=1 ))
                         break
                     fi
                 fi
 
-                if $checkonly; then
-                    if [[ -e $mywrkdir/queue.${jobname} || -e running.${jobname}_$memstr ]]; then
+                if ${checkonly}; then
+                    if [[ -e ${mywrkdir}/queue.${jobname} || -e running.${jobname}_${memstr} ]]; then
                         (( running+=1 ))
                     else
                         (( unknown+=1 ))
@@ -335,21 +354,21 @@ function check_job_status {
                     sleep 10
                 fi
             done
-            if [[ -e $donefile ]]; then
-                done=$donenum
+            if [[ -e ${donefile} ]]; then
+                done=${donenum}
                 break
-            elif [[ -e $memdonefile ]]; then
+            elif [[ -e ${memdonefile} ]]; then
                 (( done+=1 ))
             fi
         done
 
         (( numtry+=1 ))
 
-        if [[ $done -eq $donenum ]]; then
-            touch $mywrkdir/done.${stfile}
-            rm -f $mywrkdir/queue.${stfile}
+        if [[ ${done} -eq ${donenum} ]]; then
+            touch ${mywrkdir}/done.${stfile}
+            rm -f ${mywrkdir}/queue.${stfile}
             break                                                               # No further check needed
-        elif [[ ${#abortjobarray[@]} -gt 0 && $numtry -lt $numtries ]]; then    # aborted jobs found
+        elif [[ ${#abortjobarray[@]} -gt 0 && ${numtry} -lt ${numtries} ]]; then    # aborted jobs found
             mecho1 "${numtry}/${numtries} - Try these failed jobs again: ${PURPLE}${abortjobarray[*]}${NC}"
             resubmit_a_jobscript "${myjobscript}" "${abortjobarray[*]}"
         else                                                                    # Stop further tries
@@ -360,26 +379,26 @@ function check_job_status {
     #-------------------------------------------------------------------
     # Output a status message and then return or exit
     #-------------------------------------------------------------------
-    outmessage="Status of $jobname: done: ${GREEN}$done${NC}"
-    if [[ $running -gt 0 ]]; then
-        outmessage="$outmessage; queued/running: ${BROWN}$running${NC}"
+    outmessage="Status of ${jobname}: done: ${GREEN}${done}${NC}"
+    if [[ ${running} -gt 0 ]]; then
+        outmessage="${outmessage}; queued/running: ${BROWN}${running}${NC}"
     fi
 
-    if [[ $unknown -gt 0 ]]; then
-        outmessage="$outmessage; unknown: ${DARK}$unknown${NC}"
+    if [[ ${unknown} -gt 0 ]]; then
+        outmessage="${outmessage}; unknown: ${DARK}${unknown}${NC}"
     fi
 
     if [[ ${#errorjobarray[@]} -gt 0 ]]; then
-        outmessage="$outmessage; failed: ${#errorjobarray[@]} - [${LIGHT_RED}$(nums2range "${errorjobarray[@]}")${NC}]"
+        outmessage="${outmessage}; failed: ${#errorjobarray[@]} - [${LIGHT_RED}$(nums2range "${errorjobarray[@]}")${NC}]"
     fi
 
     if [[ ${#abortjobarray[@]} -gt 0 ]]; then
-        outmessage="$outmessage; SLURM failed: ${#abortjobarray[@]} - [${RED}$(nums2range "${abortjobarray[@]}")${NC}]"
+        outmessage="${outmessage}; SLURM failed: ${#abortjobarray[@]} - [${RED}$(nums2range "${abortjobarray[@]}")${NC}]"
     fi
 
-    mecho1 "$outmessage"
-    if [[ $done -lt $donenum ]]; then
-        if $checkonly; then return; else exit 9; fi
+    mecho1 "${outmessage}"
+    if [[ ${done} -lt ${donenum} ]]; then
+        if ${checkonly}; then return; else exit 9; fi
     fi
 }
 
@@ -393,7 +412,7 @@ function group_numbers_by_steps {
     #mapfile -t sortednumbers < <(sort -g <<<"${orgnumberstr}")
     local sortednumbers=()
     while IFS='' read -r line; do
-        sortednumbers+=("$line")
+        sortednumbers+=("${line}")
     done < <(sort -g <<<"${orgnumberstr}")
     unset IFS
 
@@ -409,31 +428,31 @@ function group_numbers_by_steps {
         #echo "step=${step}: ${workarray[*]}"
         for idx in "${!workarray[@]}"; do
 
-            local prev=${workarray[$idx]}
+            local prev=${workarray[${idx}]}
 
             #echo "    prev=$prev: ${ar2[*]}"
 
             if [[ " ${ar2[*]} " =~ \ ${prev}\  ]]; then   # the number is still in the remain set
 
-                local ar1=("$prev")
+                local ar1=("${prev}")
                 local dropset=()
 
                 for nidx in "${!ar2[@]}"; do
-                    local next=${ar2[$nidx]}
+                    local next=${ar2[${nidx}]}
                     #echo "        next=${next}, ar1=${ar1[*]}"
-                    if (( 10#$next == (10#$prev+step) )); then
-                        ar1+=("$next")
-                        dropset+=("$nidx")
+                    if (( 10#${next} == (10#${prev}+step) )); then
+                        ar1+=("${next}")
+                        dropset+=("${nidx}")
                         prev=${next}
-                    elif [[ $next -eq $prev ]]; then
-                        dropset+=("$nidx")
+                    elif [[ ${next} -eq ${prev} ]]; then
+                        dropset+=("${nidx}")
                     fi
                 done
 
                 if [[ ${#ar1[@]} -ge 3 ]]; then
                     retarray+=("${ar1[*]}")
                     for didx in "${dropset[@]}"; do
-                        unset -v "ar2[$didx]"
+                        unset -v "ar2[${didx}]"
                     done
                     ar2=("${ar2[@]}")
                     #echo "        new ar2=${ar2[*]}"
@@ -446,7 +465,7 @@ function group_numbers_by_steps {
     # every element contains at least two jobs numbers even they are not continous
     for ((i=0;i<${#workarray[@]};i+=2)); do
         (( j=i+1 ))
-        retarray+=("${workarray[$i]} ${workarray[$j]}")
+        retarray+=("${workarray[${i}]} ${workarray[${j}]}")
     done
 
     IFS=$';' retnumberstr="${retarray[*]}"; unset IFS
@@ -473,8 +492,8 @@ function get_jobarray_str {
             local maxno=${subjobs[-1]}
 
             for i in "${subjobs[@]}"; do
-                (( i > maxno )) && maxno=$i
-                (( i < minno )) && minno=$i
+                (( i > maxno )) && maxno=${i}
+                (( i < minno )) && minno=${i}
             done
             (( stepno = (maxno-minno)/(${#subjobs[@]}-1) ))
             echo "-J ${minno}-${maxno}:${stepno}"
@@ -522,7 +541,7 @@ function typeset2array {
 
     while IFS="=" read -r key val; do
         # shellcheck disable=SC2034
-        arrayname["$key"]="$val"
+        arrayname["${key}"]="${val}"
     done < <(
         echo "${arraystr}" |
             tr ' ' '\n' |
@@ -568,10 +587,10 @@ function is_balanced {
     local str="$1"
     # Count double quotes
     local dq_count
-    dq_count=$(grep -o '"' <<< "$str" | wc -l)
+    dq_count=$(grep -o '"' <<< "${str}" | wc -l)
     # Count single quotes
     local sq_count
-    sq_count=$(grep -o "'" <<< "$str" | wc -l)
+    sq_count=$(grep -o "'" <<< "${str}" | wc -l)
     # Both must be even numbers
     (( dq_count % 2 == 0 )) && (( sq_count % 2 == 0 ))
 }
@@ -587,8 +606,8 @@ function validate_assignment {
         varname=""; varvalue=""; vartype=""
 
         # 1. Check basic assignment structure (Key=Value)
-        if [[ ! "$line" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$ ]]; then
-            if $debug; then echo "❌ Invalid Syntax: Not a valid assignment line."; fi
+        if [[ ! "${line}" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$ ]]; then
+            if ${debug}; then echo "❌ Invalid Syntax: Not a valid assignment line."; fi
             return 1
         fi
 
@@ -603,32 +622,32 @@ function validate_assignment {
 
             # Security Check 1: Reject Danger Characters
             # We reject: $ (variable/command sub), ` (backtick), ; (terminator), & (background), | (pipe)
-            if [[ "$content" =~ [\$\`\;\&\|] ]]; then
-                if $debug; then echo "❌ Invalid Array: Contains unsafe characters (${varname})"; fi
+            if [[ "${content}" =~ [\$\`\;\&\|] ]]; then
+                if ${debug}; then echo "❌ Invalid Array: Contains unsafe characters (${varname})"; fi
                 return 1
             fi
 
             # Security Check 2: Reject Unbalanced Quotes
-            if ! is_balanced "$content"; then
-                 if $debug; then echo "❌ Invalid Array: Unbalanced quotes (${varname})"; fi
+            if ! is_balanced "${content}"; then
+                 if ${debug}; then echo "❌ Invalid Array: Unbalanced quotes (${varname})"; fi
                  return 1
             fi
 
-            if $debug; then echo "✅ Valid: Safe Literal Array (${varname})"; fi
+            if ${debug}; then echo "✅ Valid: Safe Literal Array (${varname})"; fi
             vartype="Array"
             return 0
         fi
 
         # --- CHECK B: Number (Integer or Float) ---
         if [[ "${varvalue}" =~ ^(\'|\")?[-+]?([0-9]*\.[0-9]+|[0-9]+)(\'|\")?$ ]]; then
-            if $debug; then echo "✅ Valid: Number (${varname})"; fi
+            if ${debug}; then echo "✅ Valid: Number (${varname})"; fi
             vartype="Number"
             return 0
         fi
 
         # --- CHECK C: Bool (true or false) ---
         if [[ "${varvalue}" =~ ^(true|false)$ ]]; then
-            if $debug; then echo "✅ Valid: Bool (${varname})"; fi
+            if ${debug}; then echo "✅ Valid: Bool (${varname})"; fi
             vartype="Bool"
             return 0
         fi
@@ -638,22 +657,22 @@ function validate_assignment {
         if [[ "${varvalue}" =~ ^(\".*\"|\'.*\')$ ]]; then
             # Ensure the quotes inside aren't broken/unbalanced
             if ! is_balanced "${varvalue}"; then
-                if $debug; then echo "❌ Invalid String: Unbalanced quotes (${varname})"; fi
+                if ${debug}; then echo "❌ Invalid String: Unbalanced quotes (${varname})"; fi
                 return 1
             fi
-            if $debug; then echo "✅ Valid: Quoted String (${varname})"; fi
+            if ${debug}; then echo "✅ Valid: Quoted String (${varname})"; fi
             vartype="String"
             return 0
         fi
 
         # Case 2: Safe unquoted string (No spaces, no special chars)
         if [[ "${varvalue}" =~ ^[a-zA-Z0-9_./-]+$ ]]; then
-            if $debug; then echo "✅ Valid: Simple String (${varname})"; fi
+            if ${debug}; then echo "✅ Valid: Simple String (${varname})"; fi
             vartype="String"
             return 0
         fi
 
-        if $debug; then echo "❌ Invalid Value: ${varvalue} - Does not match Number, Safe Array, or String."; fi
+        if ${debug}; then echo "❌ Invalid Value: ${varvalue} - Does not match Number, Safe Array, or String."; fi
         return 1
 }
 
@@ -682,78 +701,81 @@ function readconf {
     local sections
     sections=$(join_by \| "${@:2}")
 
-    local debug=$verb           # global verb
+    local debug=${verb}           # global verb
     local readmode=false
     local line clean_part
     local varname varvalue vartype
+    local color_key vartypestr
+    local confvarname
 
     declare -a read_sections=()
     declare -A type_colors=(["Number"]="GREEN" ["String"]="PURPLE" ["Array"]="RED" ["Bool"]="LIGHT_BLUE")
 
-    if [[ ! -f "$configfile" ]]; then
-        mecho0 "${RED}ERROR${NC}: Configuration file '$configfile' not found."
+    if [[ ! -f "${configfile}" ]]; then
+        mecho0 "${RED}ERROR${NC}: Configuration file '${configfile}' not found."
         exit 1
     fi
 
     # Use a cleaner while loop with parameter expansion instead of heavy regex where possible
-    while IFS= read -r line || [[ -n "$line" ]]; do
+    while IFS= read -r line || [[ -n "${line}" ]]; do
         # 1. Strip whitespace and ignore comments/empty lines
         line="${line#"${line%%[![:space:]]*}"}" # Leading trim
         line="${line%"${line##*[![:space:]]}"}" # Trailing trim
 
-        [[ -z "$line" || "$line" == "#"* ]] && continue
+        [[ -z "${line}" || "${line}" == "#"* ]] && continue
 
         # 2. Section Detection
-        if [[ "$line" =~ ^\[($sections)\]$ ]]; then
+        if [[ "${line}" =~ ^\[(${sections})\]$ ]]; then
             readmode=true
             local sname="${BASH_REMATCH[1]}"
-            if [[ $debug -eq 1 ]]; then
+            if [[ ${debug} -eq 1 ]]; then
                 mecho0 ""
-                mecho0 "=== SECTION: ${YELLOW}$sname${NC}"
+                mecho0 "=== SECTION: ${YELLOW}${sname}${NC}"
             fi
-            read_sections+=("$sname")
+            read_sections+=("${sname}")
             continue
-        elif [[ "$line" == "["*"]" ]]; then
+        elif [[ "${line}" == "["*"]" ]]; then
             readmode=false
             continue
         fi
 
         # 3. Processing Logic
-        if [[ "$readmode" == true ]]; then
+        if [[ "${readmode}" == true ]]; then
             # Remove inline comments
             line="${line%%# *}"
 
             # Split by semicolon for multi-statement lines
-            IFS=';' read -ra STATEMENTS <<< "$line"
+            IFS=';' read -ra STATEMENTS <<< "${line}"
 
             for part in "${STATEMENTS[@]}"; do
                 # Trim the part
                 clean_part="${part#"${part%%[![:space:]]*}"}"
                 clean_part="${clean_part%"${clean_part##*[![:space:]]}"}"
 
-                [[ -z "$clean_part" ]] && continue
+                [[ -z "${clean_part}" ]] && continue
 
-                if validate_assignment "$clean_part"; then
-                    if [[ $debug -eq 1 ]]; then
-                        local color_key=${type_colors[$vartype]}
-                        local vartypestr=$(printf "%-6s" "${vartype}")
-                        mecho0 "+++ (${!color_key}$vartypestr${NC}): ${BROWN}${varname}${NC} = ${DARK}${varvalue}${NC}"
+                if validate_assignment "${clean_part}"; then
+                    if [[ ${debug} -eq 1 ]]; then
+                        color_key=${type_colors[${vartype}]}
+                        vartypestr=$(printf "%-6s" "${vartype}")
+                        mecho0 "+++ (${!color_key}${vartypestr}${NC}): ${BROWN}${varname}${NC} = ${DARK}${varvalue}${NC}"
                     fi
 
+                    confvarname="config_${varname}"
                     # Safety check for existing variables
-                    [[ -v "$varname" ]] && mecho0 "*** WARNING *** Variable ${BROWN}${varname}${NC} changed: ${YELLOW}${!varname}${NC} -> ${WHITE}${varvalue}${NC}"
+                    [[ -v "${confvarname}" ]] && mecho0 "*** WARNING *** Variable ${BROWN}${varname}${NC} changed: ${YELLOW}${!confvarname}${NC} -> ${WHITE}${varvalue}${NC}"
 
                     # Execute the assignment
-                    eval "$clean_part"
+                    eval "config_${clean_part}"
                 else
                     mecho0 "${LIGHT_RED}ERROR${NC}: Invalid assignment in: ${WHITE}${clean_part}${NC}"
                     exit 1
                 fi
             done
         fi
-    done < "$configfile"
+    done < "${configfile}"
 
-    if [[ $debug -eq 1 ]]; then mecho0 ""; fi
+    if [[ ${debug} -eq 1 ]]; then mecho0 ""; fi
 
     mecho0 "Successfully read sections: ${YELLOW}${read_sections[*]}${NC}."
 }
@@ -780,7 +802,7 @@ function convertS2days {
     (( g_days=g_sec/86400 + 134774 ))
     (( g_secs=g_sec-86400*(g_sec/86400) ))
 
-    echo "$g_days $g_secs"
+    echo "${g_days} ${g_secs}"
 }
 
 ########################################################################
@@ -790,10 +812,10 @@ function upnlevels {
     local n=$2
 
     for ((i=1; i<=n; i++)); do
-        newndir=$(dirname $newndir)
+        newndir=$(dirname ${newndir})
     done
 
-    echo "$newndir"
+    echo "${newndir}"
 }
 
 ########################################################################
@@ -806,12 +828,12 @@ function wait_for_file_age {
     file_path=$(realpath ${file_name})
 
     if [[ ! -f ${file_path} ]]; then
-        echo "File: $file_path not exists."
+        echo "File: ${file_path} not exists."
         return 1
     fi
 
     fileage=$(( $(date +%s) - $(stat -c %Y "${file_path}") ))
-    while [[ $fileage -lt ${min_age} ]]; do
+    while [[ ${fileage} -lt ${min_age} ]]; do
         #echo "Waiting for ${file_path} (age: $fileage seconds) ...."
         sleep 10
         fileage=$(( $(date +%s) - $(stat -c %Y "${file_path}") ))
@@ -830,12 +852,12 @@ function wait_for_file_size {
     file_path=$(realpath ${file_name})
 
     if [[ ! -f ${file_path} ]]; then
-        echo "File: $file_path not exists."
+        echo "File: ${file_path} not exists."
         return 1
     fi
 
     filesize=$(stat -c %s ${file_path})
-    while [[ $filesize -lt ${min_size} ]]; do
+    while [[ ${filesize} -lt ${min_size} ]]; do
         #echo "Waiting for ${file_path} (size: $filesize bytes) ...."
         sleep 10
         filesize=$(stat -c %s ${file_path})
@@ -850,12 +872,12 @@ wait_for_conditions () {
     local conditions
     read -r -a conditions <<< "$1"
 
-    if [[ $dorun == true ]]; then
+    if [[ ${dorun} == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho1 "Checking $cond ...."
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho1 "Waiting for file: $cond"
+            mecho1 "Checking ${cond} ...."
+            while [[ ! -e ${cond} ]]; do
+                if [[ ${verb} -eq 1 ]]; then
+                    mecho1 "Waiting for file: ${cond}"
                 fi
                 sleep 10
             done
@@ -870,18 +892,18 @@ function get_3char_order {
 
     local alpha=( {A..Z} )
 
-    local num=$((10#$i))
-    local i1=$((10#$num % 26))
+    local num=$((10#${i}))
+    local i1=$((10#${num} % 26))
     local leftover=$((num/26))
     local i2=$((leftover % 26 ))
     local i3=$((leftover/26))
 
-    if [[ $i3 -ge 26 ]]; then
+    if [[ ${i3} -ge 26 ]]; then
        mecho1 "RAN OUT OF 3-CHARACTER ORDER!"
        exit 1
     fi
 
-    echo "${alpha[$i3]}${alpha[$i2]}${alpha[$i1]}"
+    echo "${alpha[${i3}]}${alpha[${i2}]}${alpha[${i1}]}"
 }
 
 ########################################################################
@@ -917,9 +939,9 @@ function num_pending_jobs_greater_than {
     #    done
     #fi
 
-    runnum=$(squeue -u $USER -h -t pending -r | wc -l)
+    runnum=$(squeue -u ${USER} -h -t pending -r | wc -l)
 
-    [ ${runnum} -gt ${numcond} ]
+    [[ ${runnum} -gt ${numcond} ]]
 }
 
 ########################################################################
@@ -932,32 +954,32 @@ function clean_mem_runfiles {
 
     local mem memstr memdir donefile
 
-    cd $mywrkdir  || return
+    cd ${mywrkdir}  || return
 
     done=0
-    for mem in $(seq 1 $nummem); do
-        memstr=$(printf "%02d" $mem)
-        memdir="${jobname}_$memstr"
-        donefile="$memdir/done.${jobname}_$memstr"
+    for mem in $(seq 1 ${nummem}); do
+        memstr=$(printf "%02d" ${mem})
+        memdir="${jobname}_${memstr}"
+        donefile="${memdir}/done.${jobname}_${memstr}"
 
         #echo $donefile, $memdir
-        if [[ -e $donefile ]]; then
-            if [[ $verb -eq 1 ]]; then
-                mecho1 "${CYAN}$donefile${NC} exist, delete ${BROWN}$memdir${NC} & ${BROWN}${jobname}_${mem}_*.log${NC}."
+        if [[ -e ${donefile} ]]; then
+            if [[ ${verb} -eq 1 ]]; then
+                mecho1 "${CYAN}${donefile}${NC} exist, delete ${BROWN}${memdir}${NC} & ${BROWN}${jobname}_${mem}_*.log${NC}."
             fi
-            rm -rf $memdir
+            rm -rf ${memdir}
             rm -f  ${jobname}_${mem}_*.log
             (( done+=1 ))
         else
-            if [[ $verb -eq 1 ]]; then
-                mecho1 "${CYAN}$donefile${NC} not found. Skip deleting ${BROWN}$memdir${NC} & ${BROWN}${jobname}_${mem}_*.log${NC}."
+            if [[ ${verb} -eq 1 ]]; then
+                mecho1 "${CYAN}${donefile}${NC} not found. Skip deleting ${BROWN}${memdir}${NC} & ${BROWN}${jobname}_${mem}_*.log${NC}."
             fi
         fi
     done
 
-    if [[ $done -eq $nummem ]]; then
-        rm -f queue.$jobname
-        touch done.$jobname
+    if [[ ${done} -eq ${nummem} ]]; then
+        rm -f queue.${jobname}
+        touch done.${jobname}
     fi
 }
 
@@ -975,24 +997,24 @@ function split_graph {
     local wrkdir
     wrkdir=$(pwd)
 
-    IFS=$'/' read -r -a outdirs <<< "$rundir"; unset IFS
+    IFS=$'/' read -r -a outdirs <<< "${rundir}"; unset IFS
     shortdir="${outdirs[-2]}/${outdirs[-1]}"
 
     cd "${rundir}" || exit $?
 
-    if [[ $verb -eq 1 ]]; then
+    if [[ ${verb} -eq 1 ]]; then
         mecho0 "Generating ${CYAN}${graph_file}.part.${numprocs}${NC} in ${BLUE}${shortdir}${NC} using ${GREEN}${gpmetis}${NC}"
     fi
-    if which ${gpmetis} >/dev/null 2>&1; then
+    if command -v ${gpmetis} >/dev/null 2>&1; then
         ${gpmetis} -minconn -contig -niter=200 ${graph_file} ${numprocs} > gpmetis.out${numprocs}
         estatus=$?
         if [[ ${estatus} -ne 0 ]]; then
             mecho0 "${estatus}: ${gpmetis} -minconn -contig -niter=200 ${graph_file} ${numprocs}"
-            exit ${estatus}
+            exit "${estatus}"
         fi
     else
         mecho0 "${RED}ERROR${NC}: Command gpmetis=${BLUE}${gpmetis}${NC} not found."
-        if [[ $dorun == true ]]; then exit 1; fi
+        if [[ ${dorun} == true ]]; then exit 1; fi
     fi
 
     cd "${wrkdir}" || exit $?
@@ -1006,7 +1028,7 @@ function array_contains {
     local found=1
 
     for item in "${array_ref[@]}"; do
-        if [[ "$item" == "$target" ]]; then
+        if [[ "${item}" == "${target}" ]]; then
             found=0
             break
         fi
@@ -1017,7 +1039,7 @@ function array_contains {
     #if [[ " ${array_ref[*]} " =~ " ${target} " ]]; then
     #    echo "Found using string matching"
     #fi
-    return $found
+    return "${found}"
 }
 
 ########################################################################
@@ -1030,14 +1052,14 @@ function array_keys_contains {
 
     local found=1
     # Check if the key exists
-    if [[ -v user_data["$target_key"] ]]; then
+    if [[ -v user_data["${target_key}"] ]]; then
         #echo "Key '$target_key' exists!"
         found=0
     #else
         #echo "Key not found."
     fi
 
-    return $found
+    return "${found}"
 }
 
 ########################################################################
@@ -1068,15 +1090,15 @@ function nums2range {
     for num in "$@"; do
         #(( i++ ))
         #echo "$i/$#: num = $num, first=$first, last=$last -> $str"
-        if [[ -z $first ]]; then
-            first=$num
-            last=$num
+        if [[ -z ${first} ]]; then
+            first=${num}
+            last=${num}
             continue
         fi
 
-        if [[ $num -ne $((last + 1)) ]]; then
-            [[ $first -eq $last ]] && str+="$first," || str+="$first-$last,"
-            first=$num; last=$num
+        if [[ ${num} -ne $((last + 1)) ]]; then
+            [[ ${first} -eq ${last} ]] && str+="${first}," || str+="${first}-${last},"
+            first=${num}; last=${num}
             inrange=false
         else
             inrange=true
@@ -1085,7 +1107,7 @@ function nums2range {
 
     done
     # Handle the last item
-    [[ $inrange == true ]] && str+="$first-$num" || str+="$first"
+    [[ ${inrange} == true ]] && str+="${first}-${num}" || str+="${first}"
 
     echo "${str%%,}"
 }
@@ -1100,19 +1122,19 @@ function expand_range {
 
     local start end
     for part in $1; do
-        if [[ "$part" =~ ^[0-9]+-[0-9]+$ ]]; then
+        if [[ "${part}" =~ ^[0-9]+-[0-9]+$ ]]; then
             # Handle ranges (e.g., 1-5)
-            start=$(echo "$part" | cut -d'-' -f1)
-            end=$(echo "$part" | cut -d'-' -f2)
+            start=$(echo "${part}" | cut -d'-' -f1)
+            end=$(echo "${part}" | cut -d'-' -f2)
             for ((i=start; i<=end; i++)); do
-                numbers_list+="$i "
+                numbers_list+="${i} "
             done
-        elif [[ "$part" =~ ^[0-9]+$ ]]; then
+        elif [[ "${part}" =~ ^[0-9]+$ ]]; then
             # Handle single numbers (e.g., 10)
-            numbers_list+="$part "
+            numbers_list+="${part} "
         fi
     done
-    echo "$numbers_list"
+    echo "${numbers_list}"
 }
 
 ## Example usage:
@@ -1158,12 +1180,13 @@ function select_option() {
     local options=("$@")
     local selected=0
 
+    # shellcheck disable=SC2155
     local ESC=$(printf '\033')
     local CURSOR_OFF="${ESC}[?25l"
     local CURSOR_ON="${ESC}[?25h"
     local CLEAR_LINE="${ESC}[2K"
 
-    echo -ne "$CURSOR_OFF"
+    echo -ne "${CURSOR_OFF}"
 
     function draw_menu() {
         # Move cursor up: (number of options + 1 for the prompt message)
@@ -1171,28 +1194,28 @@ function select_option() {
         for ((i=0; i<=num_options; i++)); do echo -ne "${ESC}[A${CLEAR_LINE}\r"; done
 
         # Print the prompt message
-        mecho2 "\033[1;37m$msg\033[0m"
+        mecho2 "\033[1;37m${msg}\033[0m"
 
         for i in "${!options[@]}"; do
-            local item="${options[$i]}"
+            local item="${options[${i}]}"
             local display_val=""
             local note=""
 
             # Check if ":" exists to split into Value and Note
-            if [[ "$item" == *":"* ]]; then
+            if [[ "${item}" == *":"* ]]; then
                 display_val="${item%%:*}" # Everything before first ":"
                 note=": ${item#*:}"      # Everything after first ":"
             else
-                display_val="$item"
+                display_val="${item}"
                 note=""
             fi
 
-            if [ "$i" -eq "$selected" ]; then
+            if [[ "${i}" -eq "${selected}" ]]; then
                 # Selected: Green arrow and bright text
-                echo -e "  \033[32m❯ ● $display_val\033[0m\033[90m$note\033[0m"
+                echo -e "  \033[32m❯ ● ${display_val}\033[0m\033[90m${note}\033[0m"
             else
                 # Unselected: Plain circle and dimmed note
-                echo -e "    ○ $display_val\033[90m$note\033[0m"
+                echo -e "    ○ ${display_val}\033[90m${note}\033[0m"
             fi
         done
     }
@@ -1203,26 +1226,29 @@ function select_option() {
 
     while true; do
         read -rsn3 key
-        case "$key" in
+        case "${key}" in
             "${ESC}[A" | "${ESC}[D") # Up or Left
                 ((selected--))
-                [ $selected -lt 0 ] && selected=$((${#options[@]} - 1))
+                [[ "${selected}" -lt 0 ]] && selected=$((${#options[@]} - 1))
                 draw_menu
                 ;;
             "${ESC}[B" | "${ESC}[C") # Down or Right
                 ((selected++))
-                [ $selected -ge ${#options[@]} ] && selected=0
+                [[ "${selected}" -ge ${#options[@]} ]] && selected=0
                 draw_menu
                 ;;
             "" | " ") # Enter
                 break
                 ;;
+            * )
+                continue
+                ;;
         esac
     done
 
-    echo -ne "$CURSOR_ON"
+    echo -ne "${CURSOR_ON}"
 
-    return $selected
+    return "${selected}"
 }
 
 ## --- Usage Example ---
@@ -1238,4 +1264,4 @@ function select_option() {
 ## Use Command Substitution to capture the returned string
 #result=$(select_option "Select your deployment target:" "${my_options[@]}")
 #
-#echo -e "\n\033[1;32mSelected Identifier:\033[0m $result"
+#echo -e "\n\033[1;32mSelected Identifier:\033[0m ${result}"

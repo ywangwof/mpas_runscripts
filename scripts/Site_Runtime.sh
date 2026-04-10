@@ -17,7 +17,7 @@ function setup_machine {
     if [[ -n ${machine_name} ]]; then
         machine=${machine_name}
     else
-        machine="Jet"
+        machine="Ursa"
 
         myhostname=$(hostname)
         if [[ "${myhostname}" == ln? ]]; then
@@ -39,7 +39,7 @@ function setup_machine {
     #
     #-----------------------------------------------------------------------
 
-    runcmd="sbatch"
+    site_runcmd="sbatch"
 
     [[ $set_up == true ]] && echo -e "\nLoading working environment on ${LIGHT_RED}${machine}${NC} ...."
 
@@ -58,11 +58,12 @@ function setup_machine {
         JEDI_DIR="/scratch3/NAGAPE/wof/ywang/GSL_JEDI/rrfs-workflow/sorc/RDASApp"
         jedi_modulename="RDAS/ursa.intel"      # RRFS
 
-        workdirDF="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/run_dirs"
-        post_dir="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/frdd-wofs-post"
+        site_workdir="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/run_dirs"
+        site_postdir="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/frdd-wofs-post"
         RT_OBSDIR="/scratch3/NAGAPE/wof/ywang/rt_obs"
 
         if [[ ${set_up} == true ]]; then
+            # shellcheck source=/dev/null
             source /etc/profile.d/modules.sh
             module purge
             module use "${root_dir}/modules"
@@ -72,30 +73,30 @@ function setup_machine {
         export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/home/Yunheng.Wang/local/lib
 
         if [[ ${initialize} == true ]]; then
-            partition_wps="u1-compute"
-            partition_static="u1-compute"  ; claim_cpu_static="--cpus-per-task=12"
-            partition_create="u1-service"  ; claim_cpu_create="--mem-per-cpu=128G"
+            default_partition_wps="u1-compute"
+            default_partition_static="u1-compute"  ; default_claim_cpu_static="--cpus-per-task=12"
+            default_partition_create="u1-service"  ; default_claim_cpu_create="--mem-per-cpu=128G"
 
-            npestatic=96
+            default_npestatic=96
 
-            mach="slurm"
-            job_exclusive_str="#SBATCH --exclusive"
-            job_account_str="#SBATCH -A ${hpcaccount-wof}"
-            job_runmpexe_str="srun"
-            job_runexe_str="srun"
-            runcmd_str=""
+            site_mach="slurm"
+            site_job_exclusive_str="#SBATCH --exclusive"
+            site_job_account_str="#SBATCH -A ${hpcaccount-wof}"
+            site_job_runmpexe_str="srun"
+            site_job_runexe_str="srun"
+            site_runcmd_str=""
 
-            WPSGEOG_PATH="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/WPS_GEOG/"
-            wgrib2path="/apps/wgrib2/3.1.3/gnu_11.4.1/wmo/bin/wgrib2"
-            nckspath="/apps/spack-2024-12/linux-rocky9-x86_64/gcc-11.4.1/nco-5.2.4-h2xd52tl4efe2ga4ayd6rjr3t5elfe6v/bin/ncks"
-            gpmetis="/scratch3/NAGAPE/wof/ywang/tools/bin/gpmetis"
+            site_WPSGEOG_PATH="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/WPS_GEOG/"
+            #site_wgrib2path="/apps/wgrib2/3.1.3/gnu_11.4.1/wmo/bin/wgrib2"
+            site_nckspath="/apps/spack-2024-12/linux-rocky9-x86_64/gcc-11.4.1/nco-5.2.4-h2xd52tl4efe2ga4ayd6rjr3t5elfe6v/bin/ncks"
+            site_gpmetis="/scratch3/NAGAPE/wof/ywang/tools/bin/gpmetis"
 
-            OBS_DIR="/scratch3/NAGAPE/wof/kknopfmeier/prepbufr"
-            OBS_DIR_REF="/scratch3/NAGAPE/wof/kknopfmeier/MRMS"
-            OBS_DIR_VEL="/scratch3/NAGAPE/wof/kknopfmeier/MRMS"
-            OBS_DIR_CWP="/scratch3/NAGAPE/wof/kknopfmeier/CWP"
+            site_OBS_DIR="/scratch3/NAGAPE/wof/kknopfmeier/prepbufr"
+            site_OBS_DIR_REF="/scratch3/NAGAPE/wof/kknopfmeier/MRMS/reflectivity"
+            site_OBS_DIR_VEL="/scratch3/NAGAPE/wof/kknopfmeier/MRMS"
+            site_OBS_DIR_CWP="/scratch3/NAGAPE/wof/kknopfmeier/CWP"
 
-            hrrr_dir="/scratch3/NAGAPE/wof/kknopfmeier/HRRRE"
+            site_hrrr_dir="/scratch3/NAGAPE/wof/kknopfmeier/HRRRE"
         fi
         ;;
     Hercules )
@@ -103,125 +104,129 @@ function setup_machine {
 
         if [[ ${set_up} == true ]]; then
             module purge
-            module use ${root_dir}/modules
+            module use "${root_dir}"/modules
             module load ${modulename}
         fi
 
-        workdirDF="/work2/noaa/wof/ywang/MPAS/MPAS_PROJECT/run_dirs"
+        site_workdir="/work2/noaa/wof/ywang/MPAS/MPAS_PROJECT/run_dirs"
 
         if [[ ${initialize} == true ]]; then
-            partition_wps="batch"
-            partition_static="batch"  ; claim_cpu_static="--cpus-per-task=12"
-            partition_create="batch"  ; claim_cpu_create="--mem-per-cpu=128G"
+            default_partition_wps="batch"
+            default_partition_static="batch"  ; default_claim_cpu_static="--cpus-per-task=12"
+            default_partition_create="batch"  ; default_claim_cpu_create="--mem-per-cpu=128G"
 
-            npestatic=40
+            default_npestatic=40
 
-            mach="slurm"
-            job_exclusive_str="#SBATCH --exclusive"
-            job_account_str="#SBATCH -A ${hpcaccount-wof}"
-            job_runmpexe_str="srun"
-            job_runexe_str="srun"
+            site_mach="slurm"
+            site_job_exclusive_str="#SBATCH --exclusive"
+            site_job_account_str="#SBATCH -A ${hpcaccount-wof}"
+            site_job_runmpexe_str="srun"
+            site_job_runexe_str="srun"
+            site_runcmd_str=""
 
-            WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
-            wgrib2path="/work2/noaa/wof/ywang/tools/hpc-stack/intel-oneapi-compilers-2022.2.1/wgrib2/2.0.8/bin/wgrib2"
-            nckspath="/work2/noaa/wof/ywang/tools/hpc-stack/intel-oneapi-compilers-2022.2.1/nco/5.0.6/bin/ncks"
-            gpmetis="/home/yhwang/local/bin/gpmetis"
+            site_WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
+            #site_wgrib2path="/work2/noaa/wof/ywang/tools/hpc-stack/intel-oneapi-compilers-2022.2.1/wgrib2/2.0.8/bin/wgrib2"
+            site_nckspath="/work2/noaa/wof/ywang/tools/hpc-stack/intel-oneapi-compilers-2022.2.1/nco/5.0.6/bin/ncks"
+            site_gpmetis="/home/yhwang/local/bin/gpmetis"
 
-            OBS_DIR="/work2/noaa/wof/ywang/MPAS/OBSGEN"
+            site_OBS_DIR="/work2/noaa/wof/ywang/MPAS/OBSGEN"
 
-            hrrr_dir="/work2/noaa/wof/ywang/MPAS/MODEL_DATA/HRRRE"
+            site_hrrr_dir="/work2/noaa/wof/ywang/MPAS/MODEL_DATA/HRRRE"
         fi
 
         ;;
     Cheyenne )
-        runcmd="qsub"
+        site_runcmd="qsub"
         modulename="defaults"
 
-        workdirDF="/glade/scratch/wofs_mpas/run_dirs"
+        site_workdir="/glade/scratch/wofs_mpas/run_dirs"
 
         if [[ ${initialize} == true ]]; then
             ncores_static=32
-            partition_wps="main"
-            partition_static="main" ; claim_cpu_static="ncpus=${ncores_static}"
-            partition_create="main" ; claim_cpu_create="ncpus=${ncores_static}"
+            default_partition_wps="main"
+            default_partition_static="main" ; default_claim_cpu_static="ncpus=${ncores_static}"
+            default_partition_create="main" ; default_claim_cpu_create="ncpus=${ncores_static}"
 
-            npestatic=72
+            default_npestatic=72
 
-            mach="pbs"
-            job_exclusive_str="#PBS -l job_priority=economy"
-            job_account_str="#PBS -A ${hpcaccount-NMMM0021}"
-            job_runmpexe_str="mpiexec"
-            job_runexe_str="mpiexec"
-            runcmd_str=""
+            site_mach="pbs"
+            site_job_exclusive_str="#PBS -l job_priority=economy"
+            site_job_account_str="#PBS -A ${hpcaccount-NMMM0021}"
+            site_job_runmpexe_str="mpiexec"
+            site_job_runexe_str="mpiexec"
+            site_runcmd_str=""
 
-            WPSGEOG_PATH="/glade/work/ywang/WPS_GEOG/"
-            wgrib2path="/glade/u/apps/derecho/23.09/spack/opt/spack/wgrib2/3.1.1/gcc/7.5.0/i5h5/bin/wgrib2"
-            nckspath="/glade/u/apps/derecho/23.09/spack/opt/spack/nco/5.2.4/gcc/12.2.0/c2uf/bin/ncks"
-            gpmetis="/glade/work/ywang/tools/bin/gpmetis"
+            site_WPSGEOG_PATH="/glade/work/ywang/WPS_GEOG/"
+            #site_wgrib2path="/glade/u/apps/derecho/23.09/spack/opt/spack/wgrib2/3.1.1/gcc/7.5.0/i5h5/bin/wgrib2"
+            site_nckspath="/glade/u/apps/derecho/23.09/spack/opt/spack/nco/5.2.4/gcc/12.2.0/c2uf/bin/ncks"
+            site_gpmetis="/glade/work/ywang/tools/bin/gpmetis"
 
-            OBS_DIR="/glade/work/ywang/observations"
+            site_OBS_DIR="/glade/work/ywang/observations"
 
-            hrrr_dir="/glade/derecho/scratch/ywang/tmp"
+            site_hrrr_dir="/glade/derecho/scratch/ywang/tmp"
         fi
 
         ;;
     wof-epyc* )
         # wof-epyc8 at NSSL
         modulename="env.mpas_smiol"
-        workdirDF="/scratch/wofs_mpas/run_dirs"
-        post_dir="/scratch/home/yunheng.wang/MPAS/frdd-wofs-post"
+        site_workdir="/scratch/wofs_mpas/run_dirs"
+        site_postdir="/scratch/home/yunheng.wang/MPAS/frdd-wofs-post"
         RT_OBSDIR="/work/rt_obs"
         ;;
     * )
         # Vecna at NSSL
         modulename="env.mpas_smiol"
         if [[ ${set_up} == true ]]; then
+            # shellcheck source=/dev/null
             source /usr/share/Modules/init/bash
-            source ${root_dir}/modules/${modulename} > /dev/null || exit $?
+            # shellcheck source=/dev/null
+            source "${root_dir}/modules/${modulename}" > /dev/null || exit $?
         fi
-        workdirDF="/scratch/wofs_mpas/run_dirs"
-        post_dir="/home/yunheng.wang/MPAS/frdd-wofs-post"
+        site_workdir="/scratch/wofs_mpas/run_dirs"
+        site_postdir="/home/yunheng.wang/MPAS/frdd-wofs-post"
         RT_OBSDIR="/work/rt_obs"
 
         if [[ ${initialize} == true ]]; then
-            ncores_static=96
-            partition_wps="batch"
-            partition_static="batch"    ; claim_cpu_static=""
-            partition_create="batch"    ; claim_cpu_create="--mem-per-cpu=128G"
+            default_partition_wps="batch"
+            default_partition_static="batch"    ; default_claim_cpu_static=""
+            default_partition_create="batch"    ; default_claim_cpu_create="--mem-per-cpu=128G"
 
-            npestatic=24
+            default_npestatic=24
 
-            mach="slurm"
+            site_mach="slurm"
             #job_exclusive_str="#SBATCH --exclude=cn11,cn14"
-            job_exclusive_str="#SBATCH --exclusive"
-            job_account_str=""
-            job_runmpexe_str="srun"
-            job_runexe_str="srun"
-            runcmd_str="srun -n 1"
+            site_job_exclusive_str="#SBATCH --exclusive"
+            site_job_account_str=""
+            site_job_runmpexe_str="srun"
+            site_job_runexe_str="srun"
+            site_runcmd_str="srun -n 1"
 
-            WPSGEOG_PATH="/scratch/wofs_mpas/WPS_GEOG/"   # Should keep last /
-            wgrib2path="/home/yunheng.wang/tools/gnu/bin/wgrib2"
-            nckspath="/home/yunheng.wang/tools/micromamba/envs/wofs_an/bin/ncks"
-            gpmetis="/home/yunheng.wang/tools/bin/gpmetis"
+            site_WPSGEOG_PATH="/scratch/wofs_mpas/WPS_GEOG/"   # Should keep last /
+            #site_wgrib2path="/home/yunheng.wang/tools/gnu/bin/wgrib2"
+            site_nckspath="/home/yunheng.wang/tools/micromamba/envs/wofs_an/bin/ncks"
+            site_gpmetis="/home/yunheng.wang/tools/bin/gpmetis"
             export LD_LIBRARY_PATH="/home/yunheng.wang/tools/lib"
-            nclpath="/scratch/software/miniconda3/bin/ncl"
+            site_nclpath="/scratch/software/miniconda3/bin/ncl"
 
-            OBS_DIR="/scratch/wofs_mpas/OBS_SEQ.reduced"
+            site_OBS_DIR="/scratch/wofs_mpas/OBS_SEQ.reduced"
 
             #hrrr_dir="/scratch2/wofuser/MODEL_DATA/HRRRE"
-            hrrr_dir="/scratch/wofs/wofuser/MODEL_DATA/HRRRE"
+            site_hrrr_dir="/scratch/wofs/wofuser/MODEL_DATA/HRRRE"
         fi
         ;;
     esac
 
     # Load Python Enviroment if necessary
     if [[ ${use_python} == true ]]; then
+        # shellcheck source=/dev/null
         source "${root_dir}/modules/env.python"  || exit $?
+        # shellcheck disable=SC2154
         echo -e "Activated Python environment ${YELLOW}${python_env}${NC} on ${LIGHT_RED}${machine}${NC} ..."
         export RT_OBSDIR
     fi
 
-    export machine runcmd workdirDF post_dir
+    export machine site_runcmd site_workdir site_postdir
     export MPAS_DIR mpas_modulename rrfs_dir rrfs_modulename JEDI_DIR jedi_modulename
 
     if [[ ${initialize} == true ]]; then
@@ -231,11 +236,12 @@ function setup_machine {
         # before running 'setup_mpas-wofs.sh', after that just modify
         # the runtime configuration file.
         #
-        export mach runcmd_str
-        export job_exclusive_str job_account_str job_runmpexe_str job_runexe_str
-        export partition_wps partition_static partition_create npestatic claim_cpu_static claim_cpu_create ncores_static
-        export WPSGEOG_PATH wgrib2path nckspath gpmetis nclpath
-        export OBS_DIR OBS_DIR_REF OBS_DIR_VEL OBS_DIR_CWP hrrr_dir
+        export site_mach site_runcmd_str
+        export site_job_exclusive_str site_job_account_str site_job_runmpexe_str site_job_runexe_str
+        export default_partition_wps default_partition_static default_partition_create
+        export default_npestatic default_claim_cpu_static default_claim_cpu_create
+        export site_WPSGEOG_PATH site_nckspath site_gpmetis site_nclpath
+        export site_OBS_DIR site_OBS_DIR_REF site_OBS_DIR_VEL site_OBS_DIR_CWP site_hrrr_dir
     fi
 }
 
@@ -248,148 +254,162 @@ function default_site_settings {
 
     case $machine in
     "Ursa" )
-        mpas_wofs_python="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/wofs_new_noise"
+        default_mpas_wofs_python="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/wofs_new_noise"
+        default_claim_cpu_ungrib="--cpus-per-task=96"   # --mem-per-cpu=10G"
 
         # ICs
-        npeics=96; ncores_ics=2
-        partition_ics="u1-compute"
-        claim_cpu_ics="--cpus-per-task=2"
-        claim_cpu_ungrib="--cpus-per-task=96"   # --mem-per-cpu=10G"
+        default_npeics=96; default_ncores_ics=2
+        default_partition_ics="u1-compute"
+        default_claim_cpu_ics="--cpus-per-task=2"
 
         # LBCs
-        npelbc=96;  ncores_lbc=2
-        partition_lbc="u1-compute"
-        claim_cpu_lbc="--cpus-per-task=2"
+        default_npelbc=96;  default_ncores_lbc=2
+        default_partition_lbc="u1-compute"
+        default_claim_cpu_lbc="--cpus-per-task=2"
 
         # DA cycles
-        ncores_dafcst=96;  ncores_filter=48
-        partition_dafcst="u1-compute"; claim_cpu_dafcst="--cpus-per-task=1"
-        partition_filter="u1-compute"; claim_cpu_filter="--ntasks-per-node=${ncores_filter}"
-                                       claim_cpu_ioda="--cpus-per-task=1"
-                                       claim_cpu_ioda_refl="--cpus-per-task=2"
-        npedafcst=96         #; nnodes_fcst=$(( npefcst/ncores_fcst ))
-        npefilter=96         #; nnodes_filter=$(( npefilter/ncores_filter ))
-        nnodes_filter=$(( npefilter/ncores_filter ))
-        nnodes_dafcst=$(( npedafcst/ncores_dafcst ))
+        default_ncores_dafcst=96;  default_ncores_filter=48
+        default_partition_dafcst="u1-compute"; default_claim_cpu_dafcst="--cpus-per-task=1"
+        default_partition_filter="u1-compute"; default_claim_cpu_filter="--ntasks-per-node=${default_ncores_filter}"
+
+        default_npedafcst=96         #; default_nnodes_fcst=$(( default_npefcst/default_ncores_fcst ))
+        default_npefilter=96         #; default_nnodes_filter=$(( npefilter/ncores_filter ))
+        default_nnodes_filter=$(( default_npefilter/default_ncores_filter ))
+        default_nnodes_dafcst=$(( default_npedafcst/default_ncores_dafcst ))
+
+        default_claim_cpu_ioda="--cpus-per-task=1"
+        default_claim_cpu_ioda_refl="--cpus-per-task=2"
+        default_claim_cpu_update="--cpus-per-task=1"
+
 
         # FCST cycles
-        ncores_fcst=96;  ncores_post=48
-        partition_fcst="u1-compute";   claim_cpu_fcst="--cpus-per-task=2"
-        partition_post="u1-compute";   claim_cpu_post="--ntasks-per-node=${ncores_post}"
+        default_ncores_fcst=96;  default_ncores_post=48
+        default_partition_fcst="u1-compute";   default_claim_cpu_fcst="--cpus-per-task=2"
+        default_partition_post="u1-compute";   default_claim_cpu_post="--ntasks-per-node=${default_ncores_post}"
 
-        npefcst=96     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
-        npepost=160    ; nnodes_post=$(( npepost/ncores_post ))
+        default_npefcst=96     ; default_nnodes_fcst=$(( default_npefcst/default_ncores_fcst ))
+        default_npepost=160    ; default_nnodes_post=$(( default_npepost/default_ncores_post ))
         ;;
 
     "Hercules" )
+        default_mpas_wofs_python="????"
+        default_claim_cpu_ungrib="--cpus-per-task=12 --mem-per-cpu=10G"
+
         # ICs
-        npeics=24; ncores_ics=2
-        partition_ics="batch"
-        claim_cpu_ics="--cpus-per-task=2"
-        claim_cpu_ungrib="--cpus-per-task=12 --mem-per-cpu=10G"
+        default_npeics=24; default_ncores_ics=2
+        default_partition_ics="batch"
+        default_claim_cpu_ics="--cpus-per-task=2"
 
         # LBCs
-        npelbc=24;  ncores_lbc=2
-        partition_lbc="batch"
-        claim_cpu_lbc="--cpus-per-task=2"
+        default_npelbc=24;  default_ncores_lbc=2
+        default_partition_lbc="batch"
+        default_claim_cpu_lbc="--cpus-per-task=2"
 
         # DA cycles
-        ncores_dafcst=40;  ncores_filter=40
-        partition_dafcst="batch"; claim_cpu_dafcst="--cpus-per-task=2"
-        partition_filter="batch"; claim_cpu_filter="--cpus-per-task=2"
-                                  claim_cpu_update="--cpus-per-task=1 --mem-per-cpu=8G"
-        npedafcst=40       #; nnodes_fcst=$(( npefcst/ncores_fcst ))
-        npefilter=160      #; nnodes_filter=$(( npefilter/ncores_filter ))
-        nnodes_filter="1"
-        nnodes_dafcst="1"
+        default_ncores_dafcst=40;  default_ncores_filter=40
+        default_partition_dafcst="batch"; default_claim_cpu_dafcst="--cpus-per-task=2"
+        default_partition_filter="batch"; default_claim_cpu_filter="--cpus-per-task=2"
+
+        default_npedafcst=40       ; default_nnodes_dafcst=$(( default_npedafcst/default_ncores_dafcst ))
+        default_npefilter=160      ; default_nnodes_filter=$(( default_npefilter/default_ncores_filter ))
+
+        default_claim_cpu_ioda="--cpus-per-task=1"
+        default_claim_cpu_ioda_refl="--cpus-per-task=2"
+        default_claim_cpu_update="--cpus-per-task=1"
+
 
         # FCST cycles
-        ncores_fcst=40;  ncores_post=40
-        partition_fcst="batch";   claim_cpu_fcst="--cpus-per-task=2"
-        partition_post="batch";   claim_cpu_post="--cpus-per-task=12"
+        default_ncores_fcst=40;  default_ncores_post=40
+        default_partition_fcst="batch";   default_claim_cpu_fcst="--cpus-per-task=2"
+        default_partition_post="batch";   default_claim_cpu_post="--cpus-per-task=12"
 
-        npefcst=40     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
-        npepost=40     ; nnodes_post=$(( npepost/ncores_post ))
+        default_npefcst=40     ; default_nnodes_fcst=$(( default_npefcst/default_ncores_fcst ))
+        default_npepost=40     ; default_nnodes_post=$(( default_npepost/default_ncores_post ))
         ;;
 
     "Cheyenne" )
-        mpas_wofs_python="/glade/work/ywang/wofs_new_noise"
+        default_mpas_wofs_python="/glade/work/ywang/wofs_new_noise"
+        default_claim_cpu_ungrib=""
 
         # Derecho node has 128 processors
         # ICs
-        npeics=32; ncores_ics=32
-        partition_ics="preempt"
-        claim_cpu_ics="ncpus=${ncores_ics}"
-        claim_cpu_ungrib=""
+        default_npeics=32; default_ncores_ics=32
+        default_partition_ics="preempt"
+        default_claim_cpu_ics="ncpus=${default_ncores_ics}"
 
         # LBCs
-        npelbc=32;  ncores_lbc=32
-        partition_lbc="preempt"
-        claim_cpu_lbc="ncpus=${ncores_lbc}"
+        default_npelbc=32;  default_ncores_lbc=32
+        default_partition_lbc="preempt"
+        default_claim_cpu_lbc="ncpus=${default_ncores_lbc}"
 
         # DA cycles
-        ncores_filter=128; ncores_dafcst=128
+        default_ncores_filter=128; default_ncores_dafcst=128
         # main, preempt, regular
-        partition_dafcst="preempt" ; claim_cpu_dafcst="ncpus=${ncores_dafcst}"
-        partition_filter="preempt" ; claim_cpu_filter="ncpus=${ncores_filter}"
-        claim_cpu_update="ncpus=${ncores_filter}"
+        default_partition_dafcst="preempt" ; default_claim_cpu_dafcst="ncpus=${default_ncores_dafcst}"
+        default_partition_filter="preempt" ; default_claim_cpu_filter="ncpus=${default_ncores_filter}"
 
-        npefilter=128     ; nnodes_filter=$(( npefilter/ncores_filter   ))
-        npedafcst=128     ; nnodes_dafcst=$(( npefcst/ncores_dafcst ))
+        default_npefilter=128     ; default_nnodes_filter=$(( default_npefilter/default_ncores_filter   ))
+        default_npedafcst=128     ; default_nnodes_dafcst=$(( default_npefcst/default_ncores_dafcst ))
+
+        default_claim_cpu_ioda="ncpus=1"
+        default_claim_cpu_ioda_refl="ncpus=2"
+        default_claim_cpu_update="ncpus=2"
 
         # FCST cycles
-        ncores_post=32; ncores_fcst=128
-        partition_fcst="preempt"   ; claim_cpu_fcst="ncpus=${ncores_fcst}"
-        partition_post="preempt"   ; claim_cpu_post="ncpus=${ncores_post}"
+        default_ncores_post=32; default_ncores_fcst=128
+        default_partition_fcst="preempt"   ; default_claim_cpu_fcst="ncpus=${default_ncores_fcst}"
+        default_partition_post="preempt"   ; default_claim_cpu_post="ncpus=${default_ncores_post}"
 
-        npepost=32      ; nnodes_post=$(( npepost/ncores_post   ))
-        npefcst=128     ; nnodes_fcst=$(( npefcst/ncores_fcst ))
+        default_npepost=32      ; default_nnodes_post=$(( default_npepost/default_ncores_post   ))
+        default_npefcst=128     ; default_nnodes_fcst=$(( default_npefcst/default_ncores_fcst ))
         ;;
 
     * )
         # Vecna at NSSL
 
-        mpas_wofs_python="/home/yunheng.wang/MPAS/wofs_new_noise"
+        default_mpas_wofs_python="/home/yunheng.wang/MPAS/wofs_new_noise"
+        default_claim_cpu_ungrib=""
 
         # ICs
-        npeics=24;   ncores_ics=96
-        partition_ics="batch"
-        claim_cpu_ics="--ntasks-per-node=${ncores_ics}"
-        claim_cpu_ungrib=""
+        default_npeics=24;   default_ncores_ics=96
+        default_partition_ics="batch"
+        default_claim_cpu_ics="--ntasks-per-node=${default_ncores_ics}"
 
         # LBCs
-        npelbc=24;  ncores_lbc=96
-        partition_lbc="batch"
-        claim_cpu_lbc="--ntasks-per-node=${ncores_lbc}"
-        claim_cpu_ungrib=""
+        default_npelbc=24;  default_ncores_lbc=96
+        default_partition_lbc="batch"
+        default_claim_cpu_lbc="--ntasks-per-node=${default_ncores_lbc}"
 
         # DA cycles
-        ncores_filter=96; ncores_dafcst=96
+        default_ncores_filter=96; default_ncores_dafcst=96
 
-        npefilter=768           ; nnodes_filter=1
-        npedafcst=56            ; nnodes_dafcst=1
+        default_npefilter=768           ; default_nnodes_filter=1
+        default_npedafcst=56            ; default_nnodes_dafcst=1
 
-        partition_dafcst="batch"  ; claim_cpu_dafcst="";
-        partition_filter="batch"  ; claim_cpu_filter="--ntasks-per-node=\${ncores_filter}"
-                                    claim_cpu_update="--ntasks-per-node=1 --mem-per-cpu=120G"   # 4 jobs each node
+        default_partition_dafcst="batch"; default_claim_cpu_dafcst="";
+        default_partition_filter="batch"; default_claim_cpu_filter="--ntasks-per-node=\${default_ncores_filter}"
+
+        default_claim_cpu_ioda="--cpus-per-task=1"
+        default_claim_cpu_ioda_refl="--cpus-per-task=2"
+        default_claim_cpu_update="--cpus-per-task=1"
 
         # FCST cycles
-        ncores_post=24; ncores_fcst=96
-        partition_fcst="batch"      ; claim_cpu_fcst="";
-        partition_post="batch"      ; claim_cpu_post=""
+        default_ncores_post=24         ; default_ncores_fcst=96
+        default_partition_fcst="batch" ; default_claim_cpu_fcst="";
+        default_partition_post="batch" ; default_claim_cpu_post=""
 
-        npepost=24      ; nnodes_post=1
-        npefcst=80      ; nnodes_fcst=1
+        default_npepost=24             ; default_nnodes_post=1
+        default_npefcst=80             ; default_nnodes_fcst=1
         ;;
     esac
 
-    export mpas_wofs_python
-    export claim_cpu_ungrib
-    export partition_ics    claim_cpu_ics    npeics        ncores_ics
-    export partition_lbc    claim_cpu_lbc    npelbc        ncores_lbc
-    export partition_dafcst claim_cpu_dafcst npedafcst     ncores_dafcst  nnodes_dafcst
-    export partition_filter claim_cpu_filter nnodes_filter ncores_filter  nnodes_filter
-    export claim_cpu_ioda   claim_cpu_ioda_refl  npepost
-    export partition_fcst   claim_cpu_fcst   npefcst       ncores_fcst    nnodes_fcst
-    export partition_post   claim_cpu_post   npepost       ncores_post    nnodes_post
+    export default_mpas_wofs_python
+    export default_claim_cpu_ungrib
+    export default_partition_ics    default_claim_cpu_ics    default_npeics        default_ncores_ics
+    export default_partition_lbc    default_claim_cpu_lbc    default_npelbc        default_ncores_lbc
+    export default_partition_dafcst default_claim_cpu_dafcst default_npedafcst     default_ncores_dafcst  default_nnodes_dafcst
+    export default_partition_filter default_claim_cpu_filter default_npefilter     default_ncores_filter  default_nnodes_filter
+    export default_claim_cpu_ioda   default_claim_cpu_ioda_refl  default_claim_cpu_update
+    export default_partition_fcst   default_claim_cpu_fcst   default_npefcst       default_ncores_fcst    default_nnodes_fcst
+    export default_partition_post   default_claim_cpu_post   default_npepost       default_ncores_post    default_nnodes_post
 }
