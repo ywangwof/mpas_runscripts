@@ -339,7 +339,7 @@ function run_ioda_bufr {
         [CPCMD]="${cpcmd}"
         [CURRDATE]="${anlys_date}"
         [CYCHR]="${anlys_hour}"
-        [OBSDIR]="${config_OBS_DIR}/obs_rap"
+        [OBSDIR]="${config_OBS_BUFR_DIR}"
         [FIXDIR]="${config_FIXDIR}"
         [ROOTDIR]="${rootdir}"
         [GRIDFILE]="${rundir}/$domname/${domname}.grid.nc"

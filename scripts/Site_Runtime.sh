@@ -91,8 +91,10 @@ function setup_machine {
             site_nckspath="/apps/spack-2024-12/linux-rocky9-x86_64/gcc-11.4.1/nco-5.2.4-h2xd52tl4efe2ga4ayd6rjr3t5elfe6v/bin/ncks"
             site_gpmetis="/scratch3/NAGAPE/wof/ywang/tools/bin/gpmetis"
 
-            site_OBS_DIR="/scratch3/NAGAPE/wof/kknopfmeier/prepbufr"
-            site_OBS_DIR_REF="/scratch3/NAGAPE/wof/kknopfmeier/MRMS/reflectivity"
+            #site_OBS_DIR_BUFR="/scratch3/NAGAPE/wof/kknopfmeier/prepbufr"
+            #site_OBS_DIR_REF="/scratch3/NAGAPE/wof/kknopfmeier/MRMS/reflectivity"
+            site_OBS_DIR_BUFR="/scratch4/BMC/rtrr/RRFS2_RETRO_DATA/May2024/obs_rap"
+            site_OBS_DIR_REF="/scratch4/BMC/rtrr/RRFS2_RETRO_DATA/May2024/reflectivity"
             site_OBS_DIR_VEL="/scratch3/NAGAPE/wof/kknopfmeier/MRMS"
             site_OBS_DIR_CWP="/scratch3/NAGAPE/wof/kknopfmeier/CWP"
 
@@ -241,7 +243,7 @@ function setup_machine {
         export default_partition_wps default_partition_static default_partition_create
         export default_npestatic default_claim_cpu_static default_claim_cpu_create
         export site_WPSGEOG_PATH site_nckspath site_gpmetis site_nclpath
-        export site_OBS_DIR site_OBS_DIR_REF site_OBS_DIR_VEL site_OBS_DIR_CWP site_hrrr_dir
+        export site_OBS_DIR_BUFR site_OBS_DIR_REF site_OBS_DIR_VEL site_OBS_DIR_CWP site_hrrr_dir
     fi
 }
 

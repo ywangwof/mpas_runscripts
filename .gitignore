@@ -6,7 +6,8 @@ exec/ungrib.exe
 exec/unipost.exe
 exec/project_hexes
 exec/grid_rotate
-exec/dart/
+exec/jedi/
+exec/gpmetis
 fix_files/CAM_ABS_DATA.DBL
 fix_files/CAM_AEROPT_DATA.DBL
 fix_files/GENPARM.TBL
@@ -50,8 +51,12 @@ run_dirs
 fix_files/MP_TEMPO_QRacrQG_DATA.DBL
 fix_files/MP_TEMPO_QIautQS_DATA.DBL
 fix_files/MP_TEMPO_QRacrQS_DATA.DBL
+fix_files/MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL
+fix_files/MP_TEMPO_freezeH2O_DATA.DBL
+fix_files/CCN_ACTIVATE_DATA
 fix_files/MP_THOMPSON_freezeH2O_DATA.DBL
 fix_files/MP_THOMPSON_QIautQS_DATA.DBL
 fix_files/MP_THOMPSON_QRacrQG_DATA.DBL
 fix_files/MP_THOMPSON_QRacrQS_DATA.DBL
 fix_files/QNWFA_QNIFA_SIGMA_MONTHLY.dat
+__pycache__

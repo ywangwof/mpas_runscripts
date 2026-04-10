@@ -1441,7 +1441,7 @@ function write_config {
     OUTIOTYPE="pnetcdf,cdf5"
     outwrf=false                        # Run MPASSIT after each data assimilation
 
-    OBS_DIR="${site_OBS_DIR}"
+    OBS_BUFR_DIR="${site_OBS_DIR_BUFR}"
     OBS_REF_DIR="${site_OBS_DIR_REF}"
     OBS_VEL_DIR="${site_OBS_DIR_VEL}"
     OBS_CWP_DIR="${site_OBS_DIR_CWP}"
