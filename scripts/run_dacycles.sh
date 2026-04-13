@@ -413,11 +413,10 @@ function run_ioda_mrms_refl {
         for l in -1 1; do
             curr_sec=$(( iseconds + l*j*60))
             curr_time=$(date -u -d @$curr_sec +%Y%m%d-%H%M)
-            echo -en " ${PURPLE}${curr_time}${NC},"
 
             mapfile -t fileslist < <(compgen -G "${config_OBS_REF_DIR}/MergedReflectivityQC_*_${curr_time}??.${obs_appendix}" | sort -V)
             if [ ${#fileslist[@]} -ge 10 ] && [ ! -e filelist_mrms ]; then
-                echo ""
+                echo -en " ${WHITE}${curr_time}${NC}\n"
                 mecho0 "Found ${YELLOW}${#fileslist[@]}${NC} GRIB-2 files from ${CYAN}${config_OBS_REF_DIR}${NC}"
                 for nsslfile in "${fileslist[@]}"; do
                     ${cpcmd}   "${nsslfile}" .
@@ -426,6 +425,8 @@ function run_ioda_mrms_refl {
                     if [[ $verb -eq 1 ]]; then mecho0 "Copying MRMS files ${CYAN}${base_filename}${NC} ...."; fi
                 done
                 break 2
+            else
+                echo -en " ${DARK}${curr_time}${NC},"
             fi
 
             [[ $j -eq 0 ]] && break
@@ -584,7 +585,7 @@ function run_ioda_cwp {
     done
 
     if [[ ! -s ${cwpfile} ]]; then
-        mecho0 "${YELLOW}INFO${NC}: No CWP file between ${WHITE}${curr_datetime}${NC} and ${WHITE}${anlys_eventtime}${NC} not exist."
+        mecho0 "${YELLOW}INFO${NC}: No CWP file between ${DARK}${curr_datetime}${NC} and ${DARK}${anlys_eventtime}${NC}"
         return
     fi
     #
@@ -1260,7 +1261,7 @@ function jedi_preparation {
 
         # Prepare convinfo file based on obsvations
 
-        mecho0 "task = ${taskname}, obs_string = ${obs_string#,}"
+        mecho0 "task = ${CYAN}${taskname}${NC}, obs_string = ${YELLOW}${obs_string#,}${NC}"
         get_convinfo "${config_FIXDIR}/jedi/convinfo" ./convinfo "${obs_string}"
 
         # generate getkf.yaml based on how YAML_GEN_METHOD is set
@@ -1424,30 +1425,45 @@ function run_jedi_observer {
                 #["ioda_crisf4_n20.nc"]="${bufr_obspath}/ioda_crisf4_n20.nc"  \
                 #["ioda_crisf4_n21.nc"]="${bufr_obspath}/ioda_crisf4_n21.nc"  \
             )
+    obs_lists=(  "ioda_adpsfc.nc"      \
+                 "ioda_adpupa.nc"      \
+                 "ioda_aircar.nc"      \
+                 "ioda_aircft.nc"      \
+                 "ioda_ascatw.nc"      \
+                 "ioda_msonet.nc"      \
+                 "ioda_proflr.nc"      \
+                 "ioda_rassda.nc"      \
+                 "ioda_sfcshp.nc"      \
+                 "ioda_vadwnd.nc"      \
+                 "ioda_gnss_ztd.nc"
+            )                # Just to ensure output order
 
     if [[ "${obs_string}" == *"refl10cm"* ]]; then
         mappings["ioda_mrms_refl.nc"]="${radar_reffile}"
+        obs_lists+=("ioda_mrms_refl.nc")
     fi
 
     if [[ "${obs_string}" == *"rw"* ]]; then
         mappings["ioda_rw_obs.nc"]="${radar_vrfile}"
+        obs_lists+=("ioda_rw_obs.nc")
     fi
+
     if [[ "${obs_string}" =~ (cwp|lwp|iwp|cwp_night) ]]; then
         for cwpobs in "${cwp_obses[@]}"; do
             if [[ "${obs_string}" == *${cwpobs}* ]]; then
                 mappings["ioda_${cwpobs}_obs.nc"]="${datimedir}/ioda_cwp/ioda_${cwpobs}_obs.nc"
+                obs_lists+=("ioda_${cwpobs}_obs.nc")
             fi
         done
     fi
 
     # loop through and copy files
-    for dst_file in "${!mappings[@]}"; do
-        src_file=${mappings[${dst_file}]}
-        if [[ -s "${src_file}" ]]; then
-            mecho0 "Will use ${CYAN}obs/${dst_file}${NC}"
-            ${cpcmd} "${src_file}"  "obs/${dst_file}"
+    for dst_file in "${obs_lists[@]}"; do
+        if [[ -s "${mappings[${dst_file}]}" ]]; then
+            mecho0 "Will use ${CYAN}${mappings[${dst_file}]}${NC}"
+            ${cpcmd} "${mappings[${dst_file}]}"  "obs/${dst_file}"
         else
-            [[ ${verb} -eq 1 ]] && mecho0 "${PURPLE}WARNING${NC}: ${CYAN}${src_file}${NC} does not exist!"
+            [[ ${verb} -eq 1 ]] && mecho0 "${PURPLE}WARNING${NC}: ${CYAN}${mappings[${dst_file}]}${NC} does not exist!"
         fi
     done
 
@@ -1873,17 +1889,7 @@ function run_update_bc {
     local -a conditions
     conditions=("${casedir}/lbc/done.${domname}")
 
-    if [[ $dorun == true ]]; then
-        for cond in "${conditions[@]}"; do
-            mecho0 "Checking $cond...."
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: $cond"
-                fi
-                sleep 10
-            done
-        done
-    fi
+    wait_for_conditions "${conditions[*]}"
 
     #------------------------------------------------------
     # Prepare update_bc by copying/linking the background files
@@ -2016,26 +2022,7 @@ function run_mpas {
     local -a conditions
     [[ $icycle -gt 0 ]] && conditions=("$wrkdir/jedi_solver/done.solver")
 
-    if [[ $dorun == true ]]; then
-        for cond in "${conditions[@]}"; do
-            mecho0 "Checking $cond...."
-            if [[ "$cond" =~ (.+)"|"(.+) ]]; then
-                cond1=${BASH_REMATCH[1]}
-                cond2=${BASH_REMATCH[2]}
-                while [[ ! -e "${cond1}" && ! -e "${cond2}" ]]; do
-                    [[ $verb -eq 1 ]] && mecho0 "Waiting for file: ${LIGHT_BLUE}$cond1${NC} or ${LIGHT_BLUE}$cond2${NC}"
-                    sleep 10
-                done
-            else
-                while [[ ! -e $cond ]]; do
-                    if [[ $verb -eq 1 ]]; then
-                        mecho0 "Waiting for file: $cond"
-                    fi
-                    sleep 10
-                done
-            fi
-        done
-    fi
+    wait_for_conditions "${conditions[*]}"
 
     #
     # Preparation for all members
@@ -2239,7 +2226,7 @@ function dacycle_driver() {
         cd $dawrkdir || return
 
         echo ""
-        echo -e "- Cycle $icyc at ${CYAN}$(date +'%m-%d %H:%M:%S (%Z)')${NC} for ${WHITE}${timestr_curr}${NC}"
+        echo -e "- Cycle $icyc at ${DARK}$(TZ="America/Chicago" date +'%m-%d %H:%M:%S')${NC} for ${WHITE}${timestr_curr}${NC}"
         time1=$(date +%s)
 
         no_observation=false
@@ -3106,13 +3093,13 @@ if [[ ! -d $rundir ]]; then
 fi
 
 echo    ""
-echo -e "---- Jobs (${YELLOW}$$${NC}) started at $(date +'%m-%d %H:%M:%S (%Z)') on host ${LIGHT_RED}$(hostname)${NC} ----\n"
+echo -e "---- Jobs (${YELLOW}$$${NC}) started at ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} on host ${LIGHT_RED}$(hostname)${NC} ----\n"
 echo -e "  Event  date: ${WHITE}$eventdate${NC} ${YELLOW}${eventtime}${NC} --> ${WHITE}${enddatetime:0:8}${NC} ${YELLOW}${enddatetime:8:4}${NC}"
 echo -e "  ROOT    dir: ${rootdir}${BROWN}/scripts${NC}"
-echo -e "  TEMP    dir: ${PURPLE}${config_TEMPDIR}${NC}"
-echo -e "  FIXED   dir: ${DARK}${config_FIXDIR}${NC}"
-echo -e "  EXEC    dir: ${GREEN}${config_EXEDIR}${NC}"
-echo -e "  Working dir: ${WHITE}${WORKDIR}${LIGHT_BLUE}/${eventdate}/dacycles${daffix}${NC}"
+echo -e "  TEMP    dir: ${config_TEMPDIR}"
+echo -e "  FIXED   dir: ${config_FIXDIR}"
+echo -e "  EXEC    dir: ${config_EXEDIR}"
+echo -e "  Working dir: ${WORKDIR}/${WHITE}${eventdate}/dacycles${daffix}${NC}"
 echo -e "  Domain name: ${RED}${domname}${NC};  MP scheme: ${CYAN}${config_mpscheme}${NC}"
 echo    " "
 
@@ -3144,6 +3131,6 @@ elif [[ " ${jobs[*]} " =~ " clean " ]]; then
     run_clean "${starttime_sec}" "${stoptime_sec}" "${cleanoption}" "${cleanjobs[*]}"
 fi
 
-echo -e "\n==== Jobs done $(date +'%m-%d %H:%M:%S (%Z)') ====\n"
+echo -e "\n==== Jobs done ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} ====\n"
 
 exit 0

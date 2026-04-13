@@ -44,7 +44,7 @@ shopt -s extglob
 
 function mecho {
     local i=$(($1-1))
-    funstr=$(printf "%-18.17s" "${FUNCNAME[$1]}")
+    funstr=$(printf "%-18.18s" "${FUNCNAME[$1]}")
     linestr=$(printf "(%5s)" "${BASH_LINENO[${i}]}")
     echo $2 "${DARK}${funstr} ${linestr}${NC} : ${*:3}"
 }
@@ -869,18 +869,29 @@ function wait_for_file_size {
 ########################################################################
 
 wait_for_conditions () {
-    local conditions
+    local conditions cond1 rcond1 cond2 rcond2
     read -r -a conditions <<< "$1"
 
     if [[ ${dorun} == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho1 "Checking ${cond} ...."
-            while [[ ! -e ${cond} ]]; do
-                if [[ ${verb} -eq 1 ]]; then
-                    mecho1 "Waiting for file: ${cond}"
-                fi
-                sleep 10
-            done
+            if [[ "$cond" =~ (.+)"|"(.+) ]]; then
+                cond1=${BASH_REMATCH[1]}; rcond1=$(realpath --relative-to "${WORKDIR}" "${cond1}")
+                cond2=${BASH_REMATCH[2]}; rcond2=$(realpath --relative-to "${WORKDIR}" "${cond1}")
+                mecho1 "Checking ${rcond1} or ${rcond2} ...."
+                while [[ ! -e "${cond1}" && ! -e "${cond2}" ]]; do
+                    [[ $verb -eq 1 ]] && mecho0 "Waiting for file: ${LIGHT_BLUE}${rcond1}${NC} or ${LIGHT_BLUE}${rcond2}${NC}"
+                    sleep 10
+                done
+            else
+                rcond1=$(realpath --relative-to "${WORKDIR}" "${cond}")
+                mecho1 "Checking ${rcond1} ...."
+                while [[ ! -e ${cond} ]]; do
+                    if [[ $verb -eq 1 ]]; then
+                        mecho0 "Waiting for file: ${rcond1}"
+                    fi
+                    sleep 10
+                done
+            fi
         done
     fi
 }

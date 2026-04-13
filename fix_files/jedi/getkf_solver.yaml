@@ -120,7 +120,7 @@ observations:
       obs filters:
         - filter: Background Check
           filter variables:
-            - name: equivalentReflectivityFactor
+          - name: equivalentReflectivityFactor
           threshold: 3.0
           action:
             name: reject
@@ -158,7 +158,7 @@ observations:
           maxvalue: 0.1
         - filter: Background Check
           filter variables:
-            - name: radialVelocity
+          - name: radialVelocity
           threshold: 4.0
           action:
             name: reject
@@ -227,8 +227,11 @@ observations:
           action:
             name: reduce obs space
       obs localizations:
-        - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 15000
+        - localization method: 3D Gaspari-Cohn
+          horizontal lengthscale: 25000.0
+          vertical lengthscale: 7000.0
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
           max nobs: 1000
     - obs space:
         name: cwp_night
@@ -274,8 +277,11 @@ observations:
           action:
             name: reduce obs space
       obs localizations:
-        - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 15000
+        - localization method: 3D Gaspari-Cohn
+          horizontal lengthscale: 25000.0
+          vertical lengthscale: 7000.0
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
           max nobs: 1000
     - obs space:
         name: lwp
@@ -321,8 +327,11 @@ observations:
           action:
             name: reduce obs space
       obs localizations:
-        - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 15000
+        - localization method: 3D Gaspari-Cohn
+          horizontal lengthscale: 25000.0
+          vertical lengthscale: 7000.0
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
           max nobs: 1000
     - obs space:
         name: iwp
@@ -368,14 +377,17 @@ observations:
           action:
             name: reduce obs space
       obs localizations:
-        - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 15000
+        - localization method: 3D Gaspari-Cohn
+          horizontal lengthscale: 25000.0
+          vertical lengthscale: 10000.0
+          ioda vertical coordinate: height
+          ioda vertical coordinate group: MetaData
           max nobs: 1000
     - obs space:
         name: adpsfc_t181
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -415,7 +427,7 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
@@ -451,17 +463,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: airTemperature
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: airTemperature
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -492,35 +504,35 @@ observations:
                   [ 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528, 0.7528]
                 #errors: [1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056, 1.5056]
 
-        #         # Error inflation based on pressure check (setupt.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: airTemperature
-        #           where:
-        #           - variable: ObsType/airTemperature
-        #             is_in: 181
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorPressureCheck
-        #               options:
-        #                 variable: airTemperature
-        #                 inflation factor: 8.0
+        ## Error inflation based on pressure check (setupt.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: airTemperature
+        #  where:
+        #  - variable: ObsType/airTemperature
+        #    is_in: 181
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorPressureCheck
+        #options:
+        #  variable: airTemperature
+        #  inflation factor: 8.0
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: airTemperature
-        #           where:
-        #           - variable: ObsType/airTemperature
-        #             is_in: 181
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [airTemperature]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: airTemperature
+        #  where:
+        #  - variable: ObsType/airTemperature
+        #    is_in: 181
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [airTemperature]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -658,7 +670,7 @@ observations:
         name: adpsfc_t183
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -699,7 +711,7 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
@@ -735,17 +747,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: airTemperature
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: airTemperature
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -790,20 +802,20 @@ observations:
                 variable: airTemperature
                 inflation factor: 8.0
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: airTemperature
-        #           where:
-        #           - variable: ObsType/airTemperature
-        #             is_in: 183
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [airTemperature]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: airTemperature
+        #  where:
+        #  - variable: ObsType/airTemperature
+        #    is_in: 183
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [airTemperature]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -941,7 +953,7 @@ observations:
         name: adpsfc_t187
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -978,7 +990,7 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
@@ -1014,17 +1026,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: airTemperature
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: airTemperature
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -1073,20 +1085,20 @@ observations:
                 # options for temperature and humidity in GSI.
                 #surface observation error ramp: true
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: airTemperature
-        #           where:
-        #           - variable: ObsType/airTemperature
-        #             is_in: 187
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [airTemperature]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: airTemperature
+        #  where:
+        #  - variable: ObsType/airTemperature
+        #    is_in: 187
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [airTemperature]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -1224,7 +1236,7 @@ observations:
         name: adpsfc_q181
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -1264,7 +1276,7 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
@@ -1300,17 +1312,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: specificHumidity
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: specificHumidity
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -1356,20 +1368,20 @@ observations:
                 inflation factor: 8.0
                 request_saturation_specific_humidity_geovals: false
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: specificHumidity
-        #           where:
-        #           - variable: ObsType/specificHumidity
-        #             is_in: 181
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [specificHumidity]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: specificHumidity
+        #  where:
+        #  - variable: ObsType/specificHumidity
+        #    is_in: 181
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [specificHumidity]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -1507,7 +1519,7 @@ observations:
         name: adpsfc_q183
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -1548,7 +1560,7 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
@@ -1584,17 +1596,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: specificHumidity
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        # - filter: Temporal Thinning
+        #   apply at iterations: 0,1
+        #   filter variables:
+        #   - name: specificHumidity
+        #   min_spacing: PT90M
+        #   tolerance: PT0H
+        #   seed_time: "@analysisDate@"
+        #   category_variable:
+        #     name: MetaData/longitude_latitude_pressure
+        #   action:
+        #     name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -1640,20 +1652,20 @@ observations:
                 inflation factor: 8.0
                 request_saturation_specific_humidity_geovals: false
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: specificHumidity
-        #           where:
-        #           - variable: ObsType/specificHumidity
-        #             is_in: 183
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [specificHumidity]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: specificHumidity
+        #  where:
+        #  - variable: ObsType/specificHumidity
+        #    is_in: 183
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [specificHumidity]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -1791,7 +1803,7 @@ observations:
         name: adpsfc_q187
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -1828,7 +1840,7 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
@@ -1864,17 +1876,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: specificHumidity
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        # - filter: Temporal Thinning
+        #   apply at iterations: 0,1
+        #   filter variables:
+        #   - name: specificHumidity
+        #   min_spacing: PT90M
+        #   tolerance: PT0H
+        #   seed_time: "@analysisDate@"
+        #   category_variable:
+        #     name: MetaData/longitude_latitude_pressure
+        #   action:
+        #     name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -1924,20 +1936,20 @@ observations:
                 # options for temperature and humidity in GSI.
                 #surface observation error ramp: true
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: specificHumidity
-        #           where:
-        #           - variable: ObsType/specificHumidity
-        #             is_in: 187
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [specificHumidity]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: specificHumidity
+        #  where:
+        #  - variable: ObsType/specificHumidity
+        #    is_in: 187
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [specificHumidity]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -2075,7 +2087,7 @@ observations:
         name: adpsfc_ps181
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -2096,7 +2108,7 @@ observations:
         simulated variables: [stationPressure]
 
       obs operator:
-        name: SfcPCorrected
+        name: SfcCorrected
         da_psfc_scheme: GSI
         geovar_sfc_geomz: geopotential_height_at_surface
         geovar_geomz: geopotential_height
@@ -2108,7 +2120,7 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
@@ -2144,17 +2156,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: stationPressure
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        # - filter: Temporal Thinning
+        #   apply at iterations: 0,1
+        #   filter variables:
+        #   - name: stationPressure
+        #   min_spacing: PT90M
+        #   tolerance: PT0H
+        #   seed_time: "@analysisDate@"
+        #   category_variable:
+        #     name: MetaData/longitude_latitude_pressure
+        #   action:
+        #     name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -2200,20 +2212,20 @@ observations:
                 #geovar_sfc_geomz: geopotential_height_at_surface
                 station_altitude: height
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: stationPressure
-        #           where:
-        #           - variable: ObsType/stationPressure
-        #             is_in: 181
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [stationPressure]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: stationPressure
+        #  where:
+        #  - variable: ObsType/stationPressure
+        #    is_in: 181
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [stationPressure]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -2351,7 +2363,7 @@ observations:
         name: adpsfc_ps187
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -2372,7 +2384,7 @@ observations:
         simulated variables: [stationPressure]
 
       obs operator:
-        name: SfcPCorrected
+        name: SfcCorrected
         da_psfc_scheme: GSI
         geovar_sfc_geomz: geopotential_height_at_surface
         geovar_geomz: geopotential_height
@@ -2384,7 +2396,7 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
@@ -2420,17 +2432,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: stationPressure
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        # - filter: Temporal Thinning
+        #   apply at iterations: 0,1
+        #   filter variables:
+        #   - name: stationPressure
+        #   min_spacing: PT90M
+        #   tolerance: PT0H
+        #   seed_time: "@analysisDate@"
+        #   category_variable:
+        #     name: MetaData/longitude_latitude_pressure
+        #   action:
+        #     name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -2476,20 +2488,20 @@ observations:
                 #geovar_sfc_geomz: geopotential_height_at_surface
                 station_altitude: height
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: stationPressure
-        #           where:
-        #           - variable: ObsType/stationPressure
-        #             is_in: 187
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [stationPressure]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: stationPressure
+        #  where:
+        #  - variable: ObsType/stationPressure
+        #    is_in: 187
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [stationPressure]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -2627,7 +2639,7 @@ observations:
         name: adpsfc_uv281
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -2671,7 +2683,7 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
@@ -2708,18 +2720,18 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: windEastward
-        #           - name: windNorthward
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        # - filter: Temporal Thinning
+        #   apply at iterations: 0,1
+        #   filter variables:
+        #   - name: windEastward
+        #   - name: windNorthward
+        #   min_spacing: PT90M
+        #   tolerance: PT0H
+        #   seed_time: "@analysisDate@"
+        #   category_variable:
+        #     name: MetaData/longitude_latitude_pressure
+        #   action:
+        #     name: reduce obs space
 
         # Online domain check
         - filter: Bounds Check
@@ -2787,41 +2799,41 @@ observations:
                 AddObsHeightToStationElevation: true
                 AssumedSfcWndObsHeight: 10
 
-        #         # Error inflation (windEastward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windEastward
-        #           where:
-        #           - variable: ObsType/windEastward
-        #             is_in: 281
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windEastward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windEastward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windEastward
+        #  where:
+        #  - variable: ObsType/windEastward
+        #    is_in: 281
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windEastward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
-        #         # Error inflation (windNorthward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windNorthward
-        #           where:
-        #           - variable: ObsType/windNorthward
-        #             is_in: 281
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windNorthward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windNorthward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windNorthward
+        #  where:
+        #  - variable: ObsType/windNorthward
+        #    is_in: 281
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windNorthward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -2954,7 +2966,7 @@ observations:
         name: adpsfc_uv284
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -2996,7 +3008,7 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
@@ -3033,18 +3045,18 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: windEastward
-        #           - name: windNorthward
-        #           min_spacing: PT60M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        # - filter: Temporal Thinning
+        #   apply at iterations: 0,1
+        #   filter variables:
+        #   - name: windEastward
+        #   - name: windNorthward
+        #   min_spacing: PT60M
+        #   tolerance: PT0H
+        #   seed_time: "@analysisDate@"
+        #   category_variable:
+        #     name: MetaData/longitude_latitude_pressure
+        #   action:
+        #     name: reduce obs space
 
         # Online domain check
         - filter: Bounds Check
@@ -3112,41 +3124,41 @@ observations:
                 AddObsHeightToStationElevation: true
                 AssumedSfcWndObsHeight: 10
 
-        #         # Error inflation (windEastward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windEastward
-        #           where:
-        #           - variable: ObsType/windEastward
-        #             is_in: 284
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windEastward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windEastward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windEastward
+        #  where:
+        #  - variable: ObsType/windEastward
+        #    is_in: 284
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windEastward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
-        #         # Error inflation (windNorthward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windNorthward
-        #           where:
-        #           - variable: ObsType/windNorthward
-        #             is_in: 284
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windNorthward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windNorthward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windNorthward
+        #  where:
+        #  - variable: ObsType/windNorthward
+        #    is_in: 284
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windNorthward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -3279,7 +3291,7 @@ observations:
         name: adpsfc_uv287
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -3320,7 +3332,7 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
@@ -3357,18 +3369,18 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: windEastward
-        #           - name: windNorthward
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        # - filter: Temporal Thinning
+        #   apply at iterations: 0,1
+        #   filter variables:
+        #   - name: windEastward
+        #   - name: windNorthward
+        #   min_spacing: PT90M
+        #   tolerance: PT0H
+        #   seed_time: "@analysisDate@"
+        #   category_variable:
+        #     name: MetaData/longitude_latitude_pressure
+        #   action:
+        #     name: reduce obs space
 
         # Online domain check
         - filter: Bounds Check
@@ -3436,41 +3448,41 @@ observations:
                 AddObsHeightToStationElevation: true
                 AssumedSfcWndObsHeight: 10
 
-        #         # Error inflation (windEastward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windEastward
-        #           where:
-        #           - variable: ObsType/windEastward
-        #             is_in: 287
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windEastward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windEastward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windEastward
+        #  where:
+        #  - variable: ObsType/windEastward
+        #    is_in: 287
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windEastward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
-        #         # Error inflation (windNorthward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windNorthward
-        #           where:
-        #           - variable: ObsType/windNorthward
-        #             is_in: 287
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windNorthward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windNorthward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windNorthward
+        #  where:
+        #  - variable: ObsType/windNorthward
+        #    is_in: 287
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windNorthward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -3603,7 +3615,7 @@ observations:
         name: adpupa_t120
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -3643,7 +3655,7 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
@@ -3679,17 +3691,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: airTemperature
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        # - filter: Temporal Thinning
+        #   apply at iterations: 0,1
+        #   filter variables:
+        #   - name: airTemperature
+        #   min_spacing: PT90M
+        #   tolerance: PT0H
+        #   seed_time: "@analysisDate@"
+        #   category_variable:
+        #     name: MetaData/longitude_latitude_pressure
+        #   action:
+        #     name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -3885,7 +3897,7 @@ observations:
         name: adpupa_t132
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -3925,7 +3937,7 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
@@ -3961,17 +3973,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: airTemperature
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        # - filter: Temporal Thinning
+        #   apply at iterations: 0,1
+        #   filter variables:
+        #   - name: airTemperature
+        #   min_spacing: PT90M
+        #   tolerance: PT0H
+        #   seed_time: "@analysisDate@"
+        #   category_variable:
+        #     name: MetaData/longitude_latitude_pressure
+        #   action:
+        #     name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -4167,7 +4179,7 @@ observations:
         name: adpupa_q120
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -4207,7 +4219,7 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
@@ -4243,17 +4255,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: specificHumidity
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        # - filter: Temporal Thinning
+        #   apply at iterations: 0,1
+        #   filter variables:
+        #   - name: specificHumidity
+        #   min_spacing: PT90M
+        #   tolerance: PT0H
+        #   seed_time: "@analysisDate@"
+        #   category_variable:
+        #     name: MetaData/longitude_latitude_pressure
+        #   action:
+        #     name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -4450,7 +4462,7 @@ observations:
         name: adpupa_q132
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -4490,7 +4502,7 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
@@ -4526,17 +4538,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: specificHumidity
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        # - filter: Temporal Thinning
+        #   apply at iterations: 0,1
+        #   filter variables:
+        #   - name: specificHumidity
+        #   min_spacing: PT90M
+        #   tolerance: PT0H
+        #   seed_time: "@analysisDate@"
+        #   category_variable:
+        #     name: MetaData/longitude_latitude_pressure
+        #   action:
+        #     name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -4733,7 +4745,7 @@ observations:
         name: adpupa_ps120
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -4754,7 +4766,7 @@ observations:
         simulated variables: [stationPressure]
 
       obs operator:
-        name: SfcPCorrected
+        name: SfcCorrected
         da_psfc_scheme: GSI
         geovar_sfc_geomz: geopotential_height_at_surface
         geovar_geomz: geopotential_height
@@ -4766,7 +4778,7 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
@@ -4802,17 +4814,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: stationPressure
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        # - filter: Temporal Thinning
+        #   apply at iterations: 0,1
+        #   filter variables:
+        #   - name: stationPressure
+        #   min_spacing: PT90M
+        #   tolerance: PT0H
+        #   seed_time: "@analysisDate@"
+        #   category_variable:
+        #     name: MetaData/longitude_latitude_pressure
+        #   action:
+        #     name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -4857,20 +4869,20 @@ observations:
                 geovar_geomz: geopotential_height
                 geovar_sfc_geomz: geopotential_height_at_surface
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: stationPressure
-        #           where:
-        #           - variable: ObsType/stationPressure
-        #             is_in: 120
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [stationPressure]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: stationPressure
+        #  where:
+        #  - variable: ObsType/stationPressure
+        #    is_in: 120
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [stationPressure]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -5008,7 +5020,7 @@ observations:
         name: adpupa_uv220
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -5049,13 +5061,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -5087,18 +5098,18 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: windEastward
-        #           - name: windNorthward
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        # - filter: Temporal Thinning
+        #   apply at iterations: 0,1
+        #   filter variables:
+        #   - name: windEastward
+        #   - name: windNorthward
+        #   min_spacing: PT90M
+        #   tolerance: PT0H
+        #   seed_time: "@analysisDate@"
+        #   category_variable:
+        #     name: MetaData/longitude_latitude_pressure
+        #   action:
+        #     name: reduce obs space
 
         # Online domain check
         - filter: Bounds Check
@@ -5327,7 +5338,7 @@ observations:
         name: adpupa_uv232
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -5368,13 +5379,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -5406,18 +5416,18 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: windEastward
-        #           - name: windNorthward
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        # - filter: Temporal Thinning
+        #   apply at iterations: 0,1
+        #   filter variables:
+        #   - name: windEastward
+        #   - name: windNorthward
+        #   min_spacing: PT90M
+        #   tolerance: PT0H
+        #   seed_time: "@analysisDate@"
+        #   category_variable:
+        #     name: MetaData/longitude_latitude_pressure
+        #   action:
+        #     name: reduce obs space
 
         # Online domain check
         - filter: Bounds Check
@@ -5646,7 +5656,7 @@ observations:
         name: aircar_t133
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -5686,13 +5696,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -5723,17 +5732,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: airTemperature
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        # - filter: Temporal Thinning
+        #   apply at iterations: 0,1
+        #   filter variables:
+        #   - name: airTemperature
+        #   min_spacing: PT90M
+        #   tolerance: PT0H
+        #   seed_time: "@analysisDate@"
+        #   category_variable:
+        #     name: MetaData/longitude_latitude_pressure
+        #   action:
+        #     name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -5778,20 +5787,20 @@ observations:
                 variable: airTemperature
                 inflation factor: 8.0
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: airTemperature
-        #           where:
-        #           - variable: ObsType/airTemperature
-        #             is_in: 133
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [airTemperature]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: airTemperature
+        #  where:
+        #  - variable: ObsType/airTemperature
+        #    is_in: 133
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [airTemperature]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -5929,7 +5938,7 @@ observations:
         name: aircar_q133
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -5969,13 +5978,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -6006,17 +6014,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: specificHumidity
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        # - filter: Temporal Thinning
+        #   apply at iterations: 0,1
+        #   filter variables:
+        #   - name: specificHumidity
+        #   min_spacing: PT90M
+        #   tolerance: PT0H
+        #   seed_time: "@analysisDate@"
+        #   category_variable:
+        #     name: MetaData/longitude_latitude_pressure
+        #   action:
+        #     name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -6062,20 +6070,20 @@ observations:
                 inflation factor: 8.0
                 request_saturation_specific_humidity_geovals: false
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: specificHumidity
-        #           where:
-        #           - variable: ObsType/specificHumidity
-        #             is_in: 133
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [specificHumidity]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: specificHumidity
+        #  where:
+        #  - variable: ObsType/specificHumidity
+        #    is_in: 133
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [specificHumidity]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -6213,7 +6221,7 @@ observations:
         name: aircar_uv233
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -6254,13 +6262,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -6292,18 +6299,18 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: windEastward
-        #           - name: windNorthward
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        # - filter: Temporal Thinning
+        #   apply at iterations: 0,1
+        #   filter variables:
+        #   - name: windEastward
+        #   - name: windNorthward
+        #   min_spacing: PT90M
+        #   tolerance: PT0H
+        #   seed_time: "@analysisDate@"
+        #   category_variable:
+        #     name: MetaData/longitude_latitude_pressure
+        #   action:
+        #     name: reduce obs space
 
         # Online domain check
         - filter: Bounds Check
@@ -6365,41 +6372,41 @@ observations:
                 variable: windNorthward
                 inflation factor: 4.0
 
-        #         # Error inflation (windEastward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windEastward
-        #           where:
-        #           - variable: ObsType/windEastward
-        #             is_in: 233
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windEastward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windEastward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windEastward
+        #  where:
+        #  - variable: ObsType/windEastward
+        #    is_in: 233
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windEastward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
-        #         # Error inflation (windNorthward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windNorthward
-        #           where:
-        #           - variable: ObsType/windNorthward
-        #             is_in: 233
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windNorthward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windNorthward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windNorthward
+        #  where:
+        #  - variable: ObsType/windNorthward
+        #    is_in: 233
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windNorthward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -6532,7 +6539,7 @@ observations:
         name: aircft_t130
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -6572,13 +6579,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -6609,17 +6615,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: airTemperature
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        # - filter: Temporal Thinning
+        #   apply at iterations: 0,1
+        #   filter variables:
+        #   - name: airTemperature
+        #   min_spacing: PT90M
+        #   tolerance: PT0H
+        #   seed_time: "@analysisDate@"
+        #   category_variable:
+        #     name: MetaData/longitude_latitude_pressure
+        #   action:
+        #     name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -6664,20 +6670,20 @@ observations:
                 variable: airTemperature
                 inflation factor: 8.0
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: airTemperature
-        #           where:
-        #           - variable: ObsType/airTemperature
-        #             is_in: 130
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [airTemperature]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: airTemperature
+        #  where:
+        #  - variable: ObsType/airTemperature
+        #    is_in: 130
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [airTemperature]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -6815,7 +6821,7 @@ observations:
         name: aircft_t131
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -6855,13 +6861,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -6892,17 +6897,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: airTemperature
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        # - filter: Temporal Thinning
+        #   apply at iterations: 0,1
+        #   filter variables:
+        #   - name: airTemperature
+        #   min_spacing: PT90M
+        #   tolerance: PT0H
+        #   seed_time: "@analysisDate@"
+        #   category_variable:
+        #     name: MetaData/longitude_latitude_pressure
+        #   action:
+        #     name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -6947,20 +6952,20 @@ observations:
                 variable: airTemperature
                 inflation factor: 8.0
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: airTemperature
-        #           where:
-        #           - variable: ObsType/airTemperature
-        #             is_in: 131
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [airTemperature]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: airTemperature
+        #  where:
+        #  - variable: ObsType/airTemperature
+        #    is_in: 131
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [airTemperature]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -7098,7 +7103,7 @@ observations:
         name: aircft_t134
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -7138,13 +7143,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -7175,17 +7179,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: airTemperature
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: airTemperature
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -7230,20 +7234,20 @@ observations:
                 variable: airTemperature
                 inflation factor: 8.0
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: airTemperature
-        #           where:
-        #           - variable: ObsType/airTemperature
-        #             is_in: 134
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [airTemperature]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: airTemperature
+        #  where:
+        #  - variable: ObsType/airTemperature
+        #    is_in: 134
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [airTemperature]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -7381,7 +7385,7 @@ observations:
         name: aircft_t135
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -7421,13 +7425,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -7458,17 +7461,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: airTemperature
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: airTemperature
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -7513,20 +7516,20 @@ observations:
                 variable: airTemperature
                 inflation factor: 8.0
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: airTemperature
-        #           where:
-        #           - variable: ObsType/airTemperature
-        #             is_in: 135
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [airTemperature]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: airTemperature
+        #  where:
+        #  - variable: ObsType/airTemperature
+        #    is_in: 135
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [airTemperature]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -7664,7 +7667,7 @@ observations:
         name: aircft_q134
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -7704,13 +7707,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -7741,17 +7743,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: specificHumidity
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: specificHumidity
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -7797,20 +7799,20 @@ observations:
                 inflation factor: 8.0
                 request_saturation_specific_humidity_geovals: false
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: specificHumidity
-        #           where:
-        #           - variable: ObsType/specificHumidity
-        #             is_in: 134
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [specificHumidity]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: specificHumidity
+        #  where:
+        #  - variable: ObsType/specificHumidity
+        #    is_in: 134
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [specificHumidity]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -7948,7 +7950,7 @@ observations:
         name: aircft_uv230
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -7989,13 +7991,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -8027,18 +8028,18 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: windEastward
-        #           - name: windNorthward
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: windEastward
+        #  - name: windNorthward
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online domain check
         - filter: Bounds Check
@@ -8100,41 +8101,41 @@ observations:
                 variable: windNorthward
                 inflation factor: 4.0
 
-        #         # Error inflation (windEastward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windEastward
-        #           where:
-        #           - variable: ObsType/windEastward
-        #             is_in: 230
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windEastward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windEastward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windEastward
+        #  where:
+        #  - variable: ObsType/windEastward
+        #    is_in: 230
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windEastward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
-        #         # Error inflation (windNorthward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windNorthward
-        #           where:
-        #           - variable: ObsType/windNorthward
-        #             is_in: 230
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windNorthward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windNorthward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windNorthward
+        #  where:
+        #  - variable: ObsType/windNorthward
+        #    is_in: 230
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windNorthward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -8267,7 +8268,7 @@ observations:
         name: aircft_uv231
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -8308,13 +8309,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -8346,18 +8346,18 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: windEastward
-        #           - name: windNorthward
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: windEastward
+        #  - name: windNorthward
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online domain check
         - filter: Bounds Check
@@ -8419,41 +8419,41 @@ observations:
                 variable: windNorthward
                 inflation factor: 4.0
 
-        #         # Error inflation (windEastward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windEastward
-        #           where:
-        #           - variable: ObsType/windEastward
-        #             is_in: 231
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windEastward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windEastward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windEastward
+        #  where:
+        #  - variable: ObsType/windEastward
+        #    is_in: 231
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windEastward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
-        #         # Error inflation (windNorthward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windNorthward
-        #           where:
-        #           - variable: ObsType/windNorthward
-        #             is_in: 231
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windNorthward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windNorthward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windNorthward
+        #  where:
+        #  - variable: ObsType/windNorthward
+        #    is_in: 231
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windNorthward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -8586,7 +8586,7 @@ observations:
         name: aircft_uv234
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -8627,13 +8627,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -8665,18 +8664,18 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: windEastward
-        #           - name: windNorthward
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: windEastward
+        #  - name: windNorthward
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online domain check
         - filter: Bounds Check
@@ -8738,41 +8737,41 @@ observations:
                 variable: windNorthward
                 inflation factor: 4.0
 
-        #         # Error inflation (windEastward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windEastward
-        #           where:
-        #           - variable: ObsType/windEastward
-        #             is_in: 234
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windEastward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windEastward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windEastward
+        #  where:
+        #  - variable: ObsType/windEastward
+        #    is_in: 234
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windEastward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
-        #         # Error inflation (windNorthward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windNorthward
-        #           where:
-        #           - variable: ObsType/windNorthward
-        #             is_in: 234
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windNorthward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windNorthward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windNorthward
+        #  where:
+        #  - variable: ObsType/windNorthward
+        #    is_in: 234
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windNorthward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -8905,7 +8904,7 @@ observations:
         name: aircft_uv235
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -8946,13 +8945,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -8984,18 +8982,18 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: windEastward
-        #           - name: windNorthward
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: windEastward
+        #  - name: windNorthward
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online domain check
         - filter: Bounds Check
@@ -9057,41 +9055,41 @@ observations:
                 variable: windNorthward
                 inflation factor: 4.0
 
-        #         # Error inflation (windEastward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windEastward
-        #           where:
-        #           - variable: ObsType/windEastward
-        #             is_in: 235
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windEastward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windEastward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windEastward
+        #  where:
+        #  - variable: ObsType/windEastward
+        #    is_in: 235
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windEastward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
-        #         # Error inflation (windNorthward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windNorthward
-        #           where:
-        #           - variable: ObsType/windNorthward
-        #             is_in: 235
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windNorthward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windNorthward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windNorthward
+        #  where:
+        #  - variable: ObsType/windNorthward
+        #    is_in: 235
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windNorthward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -9225,7 +9223,7 @@ observations:
 
         distribution: # for LETKF
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
 
         obsdatain:
           engine:
@@ -9258,13 +9256,13 @@ observations:
         covariance model: diagonal
 
       obs localizations: # for LETKF
+        - localization method: Horizontal Gaspari-Cohn
+          lengthscale: 100e3
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-        - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3
 
       obs filters:
         # Pre-online regional domain check (latitude/longitude)
@@ -9306,11 +9304,11 @@ observations:
             error parameter: 0.01
 
         # Monitoring mode (no assimilation, set QCflag=1)
-        #      - filter: Perform Action
-        #        filter variables:
-        #        - name: zenithTotalDelay
-        #        action:
-        #          name: passivate
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: zenithTotalDelay
+        #  action:
+        #    name: passivate
 
         # Terrain Height Discrepancy Check
         - filter: Difference Check
@@ -9322,17 +9320,17 @@ observations:
         - filter: Background Check
           threshold: 6
 
-    #      - filter: RejectList
-    #        where:
-    #        - variable: MetaData/productName
-    #          is_in: ["ROBG"]
-    #          is_in: ["LPT_"]
-    #          is_in: ["ROBG","LPT_"]
+        #- filter: RejectList
+        #  where:
+        #  - variable: MetaData/productName
+        #    is_in: ["ROBG"]
+        #    is_in: ["LPT_"]
+        #    is_in: ["ROBG","LPT_"]
     - obs space:
         name: msonet_t188
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -9372,13 +9370,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -9409,17 +9406,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: airTemperature
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: airTemperature
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -9464,20 +9461,20 @@ observations:
                 variable: airTemperature
                 inflation factor: 8.0
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: airTemperature
-        #           where:
-        #           - variable: ObsType/airTemperature
-        #             is_in: 188
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [airTemperature]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: airTemperature
+        #  where:
+        #  - variable: ObsType/airTemperature
+        #    is_in: 188
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [airTemperature]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -9615,7 +9612,7 @@ observations:
         name: msonet_q188
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -9655,13 +9652,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -9692,17 +9688,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: specificHumidity
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: specificHumidity
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -9748,20 +9744,20 @@ observations:
                 inflation factor: 8.0
                 request_saturation_specific_humidity_geovals: false
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: specificHumidity
-        #           where:
-        #           - variable: ObsType/specificHumidity
-        #             is_in: 188
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [specificHumidity]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: specificHumidity
+        #  where:
+        #  - variable: ObsType/specificHumidity
+        #    is_in: 188
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [specificHumidity]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -9899,7 +9895,7 @@ observations:
         name: msonet_ps188
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -9920,7 +9916,7 @@ observations:
         simulated variables: [stationPressure]
 
       obs operator:
-        name: SfcPCorrected
+        name: SfcCorrected
         da_psfc_scheme: GSI
         geovar_sfc_geomz: geopotential_height_at_surface
         geovar_geomz: geopotential_height
@@ -9932,13 +9928,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -9969,17 +9964,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: stationPressure
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: stationPressure
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -10024,20 +10019,20 @@ observations:
                 geovar_geomz: geopotential_height
                 geovar_sfc_geomz: geopotential_height_at_surface
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: stationPressure
-        #           where:
-        #           - variable: ObsType/stationPressure
-        #             is_in: 188
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [stationPressure]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: stationPressure
+        #  where:
+        #  - variable: ObsType/stationPressure
+        #    is_in: 188
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [stationPressure]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -10175,7 +10170,7 @@ observations:
         name: msonet_uv288
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -10219,13 +10214,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -10589,18 +10583,18 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: windEastward
-        #           - name: windNorthward
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: windEastward
+        #  - name: windNorthward
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online domain check
         - filter: Bounds Check
@@ -10668,41 +10662,41 @@ observations:
                 AddObsHeightToStationElevation: true
                 AssumedSfcWndObsHeight: 10
 
-        #         # Error inflation (windEastward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windEastward
-        #           where:
-        #           - variable: ObsType/windEastward
-        #             is_in: 288
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windEastward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windEastward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windEastward
+        #  where:
+        #  - variable: ObsType/windEastward
+        #    is_in: 288
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windEastward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
-        #         # Error inflation (windNorthward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windNorthward
-        #           where:
-        #           - variable: ObsType/windNorthward
-        #             is_in: 288
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windNorthward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windNorthward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windNorthward
+        #  where:
+        #  - variable: ObsType/windNorthward
+        #    is_in: 288
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windNorthward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -10876,13 +10870,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -10914,18 +10907,18 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: windEastward
-        #           - name: windNorthward
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: windEastward
+        #  - name: windNorthward
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -11199,7 +11192,7 @@ observations:
         name: rassda_t126
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -11239,13 +11232,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -11276,17 +11268,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: airTemperature
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: airTemperature
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -11480,7 +11472,7 @@ observations:
         name: sfcshp_t180
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -11520,13 +11512,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -11557,17 +11548,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: airTemperature
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: airTemperature
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -11612,20 +11603,20 @@ observations:
                 variable: airTemperature
                 inflation factor: 8.0
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: airTemperature
-        #           where:
-        #           - variable: ObsType/airTemperature
-        #             is_in: 180
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [airTemperature]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: airTemperature
+        #  where:
+        #  - variable: ObsType/airTemperature
+        #    is_in: 180
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [airTemperature]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -11763,7 +11754,7 @@ observations:
         name: sfcshp_t182
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -11803,13 +11794,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -11840,17 +11830,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: airTemperature
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: airTemperature
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -11895,20 +11885,20 @@ observations:
                 variable: airTemperature
                 inflation factor: 8.0
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: airTemperature
-        #           where:
-        #           - variable: ObsType/airTemperature
-        #             is_in: 182
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [airTemperature]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: airTemperature
+        #  where:
+        #  - variable: ObsType/airTemperature
+        #    is_in: 182
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [airTemperature]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -12046,7 +12036,7 @@ observations:
         name: sfcshp_t183
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -12087,13 +12077,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -12124,17 +12113,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: airTemperature
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: airTemperature
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -12179,20 +12168,20 @@ observations:
                 variable: airTemperature
                 inflation factor: 8.0
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: airTemperature
-        #           where:
-        #           - variable: ObsType/airTemperature
-        #             is_in: 183
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [airTemperature]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: airTemperature
+        #  where:
+        #  - variable: ObsType/airTemperature
+        #    is_in: 183
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [airTemperature]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -12330,7 +12319,7 @@ observations:
         name: sfcshp_q180
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -12370,13 +12359,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -12407,17 +12395,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: specificHumidity
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: specificHumidity
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -12463,20 +12451,20 @@ observations:
                 inflation factor: 8.0
                 request_saturation_specific_humidity_geovals: false
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: specificHumidity
-        #           where:
-        #           - variable: ObsType/specificHumidity
-        #             is_in: 180
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [specificHumidity]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: specificHumidity
+        #  where:
+        #  - variable: ObsType/specificHumidity
+        #    is_in: 180
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [specificHumidity]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -12614,7 +12602,7 @@ observations:
         name: sfcshp_q182
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -12654,13 +12642,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -12691,17 +12678,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: specificHumidity
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: specificHumidity
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -12747,20 +12734,20 @@ observations:
                 inflation factor: 8.0
                 request_saturation_specific_humidity_geovals: false
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: specificHumidity
-        #           where:
-        #           - variable: ObsType/specificHumidity
-        #             is_in: 182
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [specificHumidity]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: specificHumidity
+        #  where:
+        #  - variable: ObsType/specificHumidity
+        #    is_in: 182
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [specificHumidity]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -12898,7 +12885,7 @@ observations:
         name: sfcshp_q183
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -12939,13 +12926,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -12976,17 +12962,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: specificHumidity
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: specificHumidity
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -13032,20 +13018,20 @@ observations:
                 inflation factor: 8.0
                 request_saturation_specific_humidity_geovals: false
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: specificHumidity
-        #           where:
-        #           - variable: ObsType/specificHumidity
-        #             is_in: 183
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [specificHumidity]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: specificHumidity
+        #  where:
+        #  - variable: ObsType/specificHumidity
+        #    is_in: 183
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [specificHumidity]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -13183,7 +13169,7 @@ observations:
         name: sfcshp_ps180
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -13204,7 +13190,7 @@ observations:
         simulated variables: [stationPressure]
 
       obs operator:
-        name: SfcPCorrected
+        name: SfcCorrected
         da_psfc_scheme: GSI
         geovar_sfc_geomz: geopotential_height_at_surface
         geovar_geomz: geopotential_height
@@ -13216,13 +13202,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -13253,17 +13238,17 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: stationPressure
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: stationPressure
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online regional domain check
         - filter: Bounds Check
@@ -13317,20 +13302,20 @@ observations:
                 geovar_sfc_geomz: geopotential_height_at_surface
                 #station_altitude: height
 
-        #         # Error inflation based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: stationPressure
-        #           where:
-        #           - variable: ObsType/stationPressure
-        #             is_in: 180
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [stationPressure]
-        #                 pressure: MetaData/pressure
+        ## Error inflation based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: stationPressure
+        #  where:
+        #  - variable: ObsType/stationPressure
+        #    is_in: 180
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [stationPressure]
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -13468,7 +13453,7 @@ observations:
         name: sfcshp_uv280
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -13512,13 +13497,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -13550,18 +13534,18 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: windEastward
-        #           - name: windNorthward
-        #           min_spacing: PT60M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: windEastward
+        #  - name: windNorthward
+        #  min_spacing: PT60M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online domain check
         - filter: Bounds Check
@@ -13600,8 +13584,8 @@ observations:
           where:
             - variable: ObsType/windEastward
               is_in: 280
-          #           - variable: MetaData/dumpReportType # variable not in GSI-IODA
-          #             is_not_in: 522, 523, 531
+          #  - variable: MetaData/dumpReportType # variable not in GSI-IODA
+          #    is_not_in: 522, 523, 531
           action:
             name: inflate error
             inflation variable:
@@ -13620,8 +13604,8 @@ observations:
           where:
             - variable: ObsType/windNorthward
               is_in: 280
-          #           - variable: MetaData/dumpReportType # variable not in GSI-IODA
-          #             is_not_in: 522, 523, 531
+          #  - variable: MetaData/dumpReportType # variable not in GSI-IODA
+          #    is_not_in: 522, 523, 531
           action:
             name: inflate error
             inflation variable:
@@ -13633,81 +13617,81 @@ observations:
                 AddObsHeightToStationElevation: true
                 AssumedSfcWndObsHeight: 10
 
-        #         # Error inflation (windEastward) based on pressure check (setupw.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windEastward
-        #           where:
-        #           - variable: ObsType/windEastward
-        #             is_in: 280
-        #           - variable: MetaData/dumpReportType # variable not in GSI-IODA
-        #             is_in: 522, 523, 531
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorPressureCheck
-        #               options:
-        #                 variable: windEastward
-        #                 inflation factor: 4.0
-        #                 SetSfcWndObsHeight: true
-        #                 AddObsHeightToStationElevation: false
-        #                 AssumedSfcWndObsHeight: 20
+        ## Error inflation (windEastward) based on pressure check (setupw.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windEastward
+        #  where:
+        #  - variable: ObsType/windEastward
+        #    is_in: 280
+        #  - variable: MetaData/dumpReportType # variable not in GSI-IODA
+        #    is_in: 522, 523, 531
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorPressureCheck
+        #options:
+        #  variable: windEastward
+        #  inflation factor: 4.0
+        #  SetSfcWndObsHeight: true
+        #  AddObsHeightToStationElevation: false
+        #  AssumedSfcWndObsHeight: 20
 
-        #         # Error inflation (windNorthward) based on pressure check (setupw.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windNorthward
-        #           where:
-        #           - variable: ObsType/windNorthward
-        #             is_in: 280
-        #           - variable: MetaData/dumpReportType # variable not in GSI-IODA
-        #             is_in: 522, 523, 531
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorPressureCheck
-        #               options:
-        #                 variable: windNorthward
-        #                 inflation factor: 4.0
-        #                 SetSfcWndObsHeight: true
-        #                 AddObsHeightToStationElevation: false
-        #                 AssumedSfcWndObsHeight: 20
+        ## Error inflation (windNorthward) based on pressure check (setupw.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windNorthward
+        #  where:
+        #  - variable: ObsType/windNorthward
+        #    is_in: 280
+        #  - variable: MetaData/dumpReportType # variable not in GSI-IODA
+        #    is_in: 522, 523, 531
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorPressureCheck
+        #options:
+        #  variable: windNorthward
+        #  inflation factor: 4.0
+        #  SetSfcWndObsHeight: true
+        #  AddObsHeightToStationElevation: false
+        #  AssumedSfcWndObsHeight: 20
 
-        #         # Error inflation (windEastward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windEastward
-        #           where:
-        #           - variable: ObsType/windEastward
-        #             is_in: 280
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windEastward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windEastward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windEastward
+        #  where:
+        #  - variable: ObsType/windEastward
+        #    is_in: 280
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windEastward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
-        #         # Error inflation (windNorthward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windNorthward
-        #           where:
-        #           - variable: ObsType/windNorthward
-        #             is_in: 280
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windNorthward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windNorthward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windNorthward
+        #  where:
+        #  - variable: ObsType/windNorthward
+        #    is_in: 280
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windNorthward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -13840,7 +13824,7 @@ observations:
         name: sfcshp_uv282
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -13884,13 +13868,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -13922,18 +13905,18 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: windEastward
-        #           - name: windNorthward
-        #           min_spacing: PT60M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: windEastward
+        #  - name: windNorthward
+        #  min_spacing: PT60M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online domain check
         - filter: Bounds Check
@@ -14001,41 +13984,41 @@ observations:
                 AddObsHeightToStationElevation: true
                 AssumedSfcWndObsHeight: 10
 
-        #         # Error inflation (windEastward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windEastward
-        #           where:
-        #           - variable: ObsType/windEastward
-        #             is_in: 282
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windEastward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windEastward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windEastward
+        #  where:
+        #  - variable: ObsType/windEastward
+        #    is_in: 282
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windEastward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
-        #         # Error inflation (windNorthward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windNorthward
-        #           where:
-        #           - variable: ObsType/windNorthward
-        #             is_in: 282
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windNorthward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windNorthward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windNorthward
+        #  where:
+        #  - variable: ObsType/windNorthward
+        #    is_in: 282
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windNorthward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -14168,7 +14151,7 @@ observations:
         name: sfcshp_uv284
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -14210,13 +14193,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -14248,18 +14230,18 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: windEastward
-        #           - name: windNorthward
-        #           min_spacing: PT60M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: windEastward
+        #  - name: windNorthward
+        #  min_spacing: PT60M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online domain check
         - filter: Bounds Check
@@ -14327,41 +14309,41 @@ observations:
                 AddObsHeightToStationElevation: true
                 AssumedSfcWndObsHeight: 10
 
-        #         # Error inflation (windEastward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windEastward
-        #           where:
-        #           - variable: ObsType/windEastward
-        #             is_in: 284
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windEastward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windEastward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windEastward
+        #  where:
+        #  - variable: ObsType/windEastward
+        #    is_in: 284
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windEastward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
-        #         # Error inflation (windNorthward) based on errormod (qcmod.f90)
-        #         - filter: Perform Action
-        #           filter variables:
-        #           - name: windNorthward
-        #           where:
-        #           - variable: ObsType/windNorthward
-        #             is_in: 284
-        #           action:
-        #             name: inflate error
-        #             inflation variable:
-        #               name: ObsFunction/ObsErrorFactorConventional
-        #               options:
-        #                 inflate variables: [windNorthward]
-        #                 test QCflag: QualityMarker
-        #                 test QCthreshold: 3
-        #                 distance threshold: 0
-        #                 pressure: MetaData/pressure
+        ## Error inflation (windNorthward) based on errormod (qcmod.f90)
+        #- filter: Perform Action
+        #  filter variables:
+        #  - name: windNorthward
+        #  where:
+        #  - variable: ObsType/windNorthward
+        #    is_in: 284
+        #  action:
+        #    name: inflate error
+        #    inflation variable:
+        #name: ObsFunction/ObsErrorFactorConventional
+        #options:
+        #  inflate variables: [windNorthward]
+        #  test QCflag: QualityMarker
+        #  test QCthreshold: 3
+        #  distance threshold: 0
+        #  pressure: MetaData/pressure
 
         # Error inflation when QualityMarker == 3 (read_prepbufr.f90)
         - filter: Perform Action
@@ -14494,7 +14476,7 @@ observations:
         name: vadwnd_uv224
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -14535,13 +14517,12 @@ observations:
 
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs filters:
         # ------------------
@@ -14573,18 +14554,18 @@ observations:
             name: reduce obs space
 
         # Duplicate Check
-        #         - filter: Temporal Thinning
-        #           apply at iterations: 0,1
-        #           filter variables:
-        #           - name: windEastward
-        #           - name: windNorthward
-        #           min_spacing: PT90M
-        #           tolerance: PT0H
-        #           seed_time: "@analysisDate@"
-        #           category_variable:
-        #             name: MetaData/longitude_latitude_pressure
-        #           action:
-        #             name: reduce obs space
+        #- filter: Temporal Thinning
+        #  apply at iterations: 0,1
+        #  filter variables:
+        #  - name: windEastward
+        #  - name: windNorthward
+        #  min_spacing: PT90M
+        #  tolerance: PT0H
+        #  seed_time: "@analysisDate@"
+        #  category_variable:
+        #    name: MetaData/longitude_latitude_pressure
+        #  action:
+        #    name: reduce obs space
 
         # Online domain check
         - filter: Bounds Check
@@ -14865,7 +14846,7 @@ observations:
         name: amsua_n19
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -14893,13 +14874,12 @@ observations:
           Absorbers: [H2O, O3]
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
       obs bias:
         input file: data/obs/amsua_n19.satbias.nc
         output file: out_amsua_n19.satbias.nc
@@ -15224,7 +15204,7 @@ observations:
         name: amsua_n20
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -15253,13 +15233,12 @@ observations:
           Absorbers: [H2O, O3]
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
       obs bias:
         input file: data/obs/amsua_n20.satbias.nc
         output file: out_amsua_n20.satbias.nc
@@ -15784,7 +15763,7 @@ observations:
         name: atms_npp
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -15813,13 +15792,12 @@ observations:
           Absorbers: [H2O, O3]
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       obs bias:
         input file: data/obs/atms_npp.satbias.nc
@@ -16347,7 +16325,7 @@ observations:
         name: abi_g16
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -16380,13 +16358,12 @@ observations:
           Absorbers: [H2O, O3]
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
       # Observation Bias Correction (VarBC)
       # -----------------------------------
       obs bias:
@@ -16848,7 +16825,7 @@ observations:
         name: abi_g18
         distribution:
           name: "Halo"
-          halo size: 500e3
+          halo size: 200e3
         obsdatain:
           engine:
             type: H5File
@@ -16881,13 +16858,12 @@ observations:
           Absorbers: [H2O, O3]
       obs localizations:
         - localization method: Horizontal Gaspari-Cohn
-          lengthscale: 200e3 # orig
+          lengthscale: 100e3 # orig
         - localization method: Vertical localization
           vertical lengthscale: 6000
           ioda vertical coordinate: height
           ioda vertical coordinate group: MetaData
           localization function: Gaspari Cohn
-
 
       # Observation Bias Correction (VarBC)
       # -----------------------------------

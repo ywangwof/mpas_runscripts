@@ -1353,7 +1353,7 @@ function fcst_driver() {
         fi
 
         echo ""
-        echo -e "- FCST Cycle at ${WHITE}${eventtime}${NC} - ${CYAN}$(date +'%Y-%m-%d %H:%M:%S (%Z)')${NC}"
+        echo -e "- FCST Cycle for ${WHITE}${eventtime}${NC} at ${DARK}$(TZ="America/Chicago" date +'%m-%d %H:%M:%S')${NC}"
         time1=$(date +%s)
 
         if [[ " ${jobs[*]} " =~ " mpas " ]]; then
@@ -1771,13 +1771,13 @@ if [[ ! -d $rundir ]]; then
 fi
 
 echo    ""
-echo -e "---- Jobs (${YELLOW}$$${NC}) started at $(date +'%m-%d %H:%M:%S (%Z)') on host ${LIGHT_RED}$(hostname)${NC} ----\n"
+echo -e "---- Jobs (${YELLOW}$$${NC}) started at ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} on host ${LIGHT_RED}$(hostname)${NC} ----\n"
 echo -e "  Event  date: ${WHITE}${eventdate}${NC} ${YELLOW}${eventtime}${NC} --> ${WHITE}${enddatetime:0:8}${NC} ${YELLOW}${enddatetime:8:4}${NC}"
 echo -e "  ROOT    dir: ${rootdir}${BROWN}/scripts${NC}"
-echo -e "  TEMP    dir: ${PURPLE}${config_TEMPDIR}${NC}"
-echo -e "  FIXED   dir: ${DARK}${config_FIXDIR}${NC}"
-echo -e "  EXEC    dir: ${GREEN}${config_EXEDIR}${NC}"
-echo -e "  Working dir: ${WHITE}${WORKDIR}${LIGHT_BLUE}/${eventdate}/fcst${daffix}${NC}"
+echo -e "  TEMP    dir: ${config_TEMPDIR}"
+echo -e "  FIXED   dir: ${config_FIXDIR}"
+echo -e "  EXEC    dir: ${config_EXEDIR}"
+echo -e "  Working dir: ${WORKDIR}/${WHITE}${eventdate}/fcst${daffix}${NC}"
 echo -e "  Domain name: ${RED}${domname}${NC};  MP scheme: ${CYAN}${config_mpscheme}${NC}"
 echo    " "
 
@@ -1801,7 +1801,7 @@ fi
 
 
 echo " "
-echo "==== Jobs done $(date +'%m-%d %H:%M:%S (%Z)') ===="
+echo "==== Jobs done ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} ===="
 echo " "
 
 exit 0

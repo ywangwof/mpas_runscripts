@@ -1356,7 +1356,7 @@ function write_config {
 
     vertLevel_file="${fixed_level}"
 
-    site_WPSGEOG_PATH="${site_WPSGEOG_PATH}"
+    WPSGEOG_PATH="${site_WPSGEOG_PATH}"
 
     FIXDIR="${FIXDIR}"
     TEMPDIR="${TEMPDIR}"
@@ -1786,7 +1786,7 @@ parse_args "$@"
 [[ -v args["overwrite"] ]] && overwrite=${args["overwrite"]} || overwrite=0
 [[ -v args["dorun"] ]]     && dorun=${args["dorun"]}         || dorun=true
 
-[[ -v args["damode"] ]]    && damode="${args['damode']}"     || damode="init"
+[[ -v args["damode"] ]]    && damode="${args['damode']}"     || damode="mpasout"
 [[ -v args["fcstmode"] ]]  && fcstmode="${args['fcstmode']}" || fcstmode="${damode}"
 
 [[ -v args["domname"] ]]    && domname="${args['domname']}"   || domname="wofs_mpas"

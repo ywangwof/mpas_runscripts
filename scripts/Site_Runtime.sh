@@ -93,12 +93,15 @@ function setup_machine {
 
             #site_OBS_DIR_BUFR="/scratch3/NAGAPE/wof/kknopfmeier/prepbufr"
             #site_OBS_DIR_REF="/scratch3/NAGAPE/wof/kknopfmeier/MRMS/reflectivity"
+            #site_OBS_DIR_CWP="/scratch3/NAGAPE/wof/kknopfmeier/CWP"
+            #site_hrrr_dir="/scratch3/NAGAPE/wof/kknopfmeier/HRRRE"
+
             site_OBS_DIR_BUFR="/scratch4/BMC/rtrr/RRFS2_RETRO_DATA/May2024/obs_rap"
             site_OBS_DIR_REF="/scratch4/BMC/rtrr/RRFS2_RETRO_DATA/May2024/reflectivity"
             site_OBS_DIR_VEL="/scratch3/NAGAPE/wof/kknopfmeier/MRMS"
-            site_OBS_DIR_CWP="/scratch3/NAGAPE/wof/kknopfmeier/CWP"
+            site_OBS_DIR_CWP="/scratch3/NAGAPE/wof/ywang/rt_obs/CWP"
 
-            site_hrrr_dir="/scratch3/NAGAPE/wof/kknopfmeier/HRRRE"
+            site_hrrr_dir="/scratch3/NAGAPE/wof/ywang/HRRRE"
         fi
         ;;
     Hercules )
@@ -289,8 +292,8 @@ function default_site_settings {
         default_partition_fcst="u1-compute";   default_claim_cpu_fcst="--cpus-per-task=2"
         default_partition_post="u1-compute";   default_claim_cpu_post="--ntasks-per-node=${default_ncores_post}"
 
-        default_npefcst=96     ; default_nnodes_fcst=$(( default_npefcst/default_ncores_fcst ))
-        default_npepost=160    ; default_nnodes_post=$(( default_npepost/default_ncores_post ))
+        default_npefcst=96    ; default_nnodes_fcst=$(( default_npefcst/default_ncores_fcst ))
+        default_npepost=96    ; default_nnodes_post=$(( default_npepost/default_ncores_post ))
         ;;
 
     "Hercules" )
