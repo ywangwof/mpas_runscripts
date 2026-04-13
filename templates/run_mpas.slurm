@@ -52,6 +52,21 @@ rm -f namelist.atmosphere
 # first recover namelist parameters for possibly an old run.
 sed -e "/config_pio_num_iotasks/s/=.*/= $nnode/g;/config_pio_stride/s/=.*/= $ncores/" namelist.atmosphereAPPENDIX > namelist.atmosphere
 
+# Special environment suggested by GSL through Kent
+export I_MPI_ADJUST_ALLTOALL=3
+export I_MPI_ADJUST_ALLTOALLV=3
+export I_MPI_ADJUST_ALLREDUCE=2
+
+export I_MPI_ADJUST_BCAST=2
+export I_MPI_ADJUST_REDUCE=2
+export I_MPI_ADJUST_GATHER=2
+export I_MPI_ADJUST_GATHERV=2
+export I_MPI_ADJUST_SCATTER=2
+export I_MPI_ADJUST_SCATTERV=2
+
+export I_MPI_COLL_INTRANODE=pt2pt
+# End of special environments
+
 RUNMPCMD -n NOPART EXEDIR/atmosphere_model
 
 if [[ $? -eq 0 ]]; then

@@ -729,6 +729,10 @@ function run_static {
     mkwrkdir "$wrkdir" 0
     cd "$wrkdir" || return
 
+    if [[ -f $wrkdir/running.static || -f $wrkdir/done.static || -f $wrkdir/queue.static ]]; then
+        return   # skip
+    fi
+
     if [[ ! -f ${domname}.graph.info.part.${npepost} ]]; then
         # shellcheck disable=SC2154
         split_graph "${gpmetis}" "${domname}.graph.info" "${npepost}" "$wrkdir" "$dorun" "$verb"
@@ -828,8 +832,8 @@ EOF
 <immutable_stream name="ugwp_oro_data"
                   type="output"
                   filename_template="${domname}.ugwp_oro_data.nc"
+                  clobber_mode="replace_files"
                   output_interval="initial_only" />
-
 </streams>
 EOF
 
@@ -841,9 +845,9 @@ EOF
     sedfile=$(mktemp -t "static_${jobname}.sed_XXXX")
     cat <<EOF >"$sedfile"
 s/PARTION/${partition_static}/
-s/NOPART/$npepost/
+s/NOPART/${npestatic}/
 s/JOBNAME/static_${jobname}/
-s/CPUSPEC/${static_cpu}/
+s/CPUSPEC/${claim_cpu_static}/
 s#MPASDIR#${MPAS_DIR}#g
 s#MPASMODULE#${MPAS_MODULE}#g
 s/MACHINE/${machine}/g
@@ -2198,8 +2202,8 @@ function run_mpas {
     config_do_restart                = ${do_restart}
 /
 &printout
-    config_print_global_minmax_sca   = true
-    config_print_global_minmax_vel   = true
+    config_print_global_minmax_sca   = false
+    config_print_global_minmax_vel   = false
     config_print_detailed_minmax_vel = false
 /
 &IAU
@@ -2829,36 +2833,25 @@ relative_path=false
 mach="slurm"
 
 if [[ $machine == "Ursa" ]]; then
-    if [[ $hpcaccount == "rtwrfruc" ]]; then
-        #ncores_ics=5; ncores_fcst=6; ncores_post=6
-        partition="u1-compute"
-        claim_cpu="--cpus-per-task=2"
-        claim_cpu_ics="--cpus-per-task=2"
-        partition_static="${partition}"
-        static_cpu="--cpus-per-task=12"
-        partition_upp="kjet"
-        job_account_str="#SBATCH -A rtwrfruc"
-        job_exclusive_str="#SBATCH --exclusive\n#SBATCH -q rth\n#SBATCH --reservation=rrfsens"
-    else
-        #ncores_ics=5; ncores_fcst=6; ncores_post=6
-        partition="u1-compute"
-        claim_cpu="--ntasks-per-node=96"
-        claim_cpu_ics="--ntasks-per-node=48"
-        partition_static="${partition}"
-        static_cpu="--cpus-per-task=48"
-        partition_upp="u1-compute"
-        job_exclusive_str="#SBATCH --exclusive"
-        job_account_str="#SBATCH -A ${hpcaccount-wof}"
-    fi
+    #ncores_ics=5; ncores_fcst=6; ncores_post=6
+    partition="u1-compute"
+    claim_cpu="--ntasks-per-node=96"
+    claim_cpu_ics="--ntasks-per-node=48"
+    partition_static="${partition}"
+    static_cpu="--cpus-per-task=48"
+    partition_upp="u1-compute"
+    job_exclusive_str="#SBATCH --exclusive"
+    job_account_str="#SBATCH -A ${hpcaccount-wof}"
 
-    partition_static="u1-compute";             partition_create="u1-compute"
-    claim_cpu_static="--ntasks-per-node=2";    claim_cpu_create="--ntasks-per-node=1";
+    partition_static="u1-compute";              partition_create="u1-compute"
+    claim_cpu_static="--ntasks-per-node=40";    claim_cpu_create="--ntasks-per-node=1";
+    npestatic=80
 
     npepost=24   #; nnodes_post=$(( npepost/ncores_post ))
     claim_cpu_upp="--ntasks-per-node=${npepost}"
 
     npeics=192   #; nnodes_ics=$((  npeics/ncores_ics   ))
-    npefcst=384 #; nnodes_fcst=$(( npefcst/ncores_fcst ))
+    npefcst=384  #; nnodes_fcst=$(( npefcst/ncores_fcst ))
 
     mach="slurm"
     job_runmpexe_str="srun"
