@@ -212,7 +212,7 @@ observations:
           - name: CloudWaterPath_Zero
           threshold: 4.0
           action:
-          - name: reject
+            name: reject
 
         - filter: Domain Check
           where:
@@ -262,7 +262,7 @@ observations:
           - name: CloudWaterPath_Zero_Night
           threshold: 4.0
           action:
-          - name: reject
+            name: reject
 
         - filter: Domain Check
           where:
@@ -312,7 +312,7 @@ observations:
           - name: LiquidWaterPath
           threshold: 4.0
           action:
-          - name: reject
+            name: reject
 
         - filter: Domain Check
           where:
@@ -362,7 +362,7 @@ observations:
           - name: IceWaterPath
           threshold: 4.0
           action:
-          - name: reject
+            name: reject
 
         - filter: Domain Check
           where:

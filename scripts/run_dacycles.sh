@@ -535,12 +535,8 @@ function run_ioda_cwp {
     if [[ $icyc -le 0 ]]; then return; fi
 
     #------------------------------------------------------
-    # Run ioda_cwp for MRMS observation files
+    # Check conditions for the IODA_CWP processing
     #------------------------------------------------------
-
-    mkwrkdir $wrkdir/ioda_cwp 1      # 0: Keep existing directory as is
-                                     # 1: Remove existing same name directory
-    cd $wrkdir/ioda_cwp || exit $?
 
     anlys_eventtime=$(date -u -d @$iseconds  +%Y%m%d%H%M)
     #
@@ -558,22 +554,22 @@ function run_ioda_cwp {
         return
     fi
 
-    #
     #-----------------------------------------------------------------------
-    #
-    # link/copy observation files to working directory
-    #
+    # Link/Copy observation files to working directory
     #-----------------------------------------------------------------------
-    #
+
     for (( j=0; j < 5; $((j=j+1)) )); do
         #for l in -1 1; do
         l=-1            # looking back only
             curr_sec=$(( iseconds + l*j*60))
+            curr_year=$(date -u -d @$curr_sec +%Y)
             curr_date=$(date -u -d @$curr_sec +%Y%m%d)
             curr_datetime=$(date -u -d @$curr_sec +%Y%m%d%H%M)
-            if [[ $verb -eq 1 ]]; then mecho0 "Looking for CWP data valid: ${DARK}${curr_datetime}${NC}"; fi
 
-            cwpfile="${config_OBS_CWP_DIR}/${curr_date}/${curr_datetime}_GOES16_CWP_OBS.nc"
+            cwpfile="${config_OBS_CWP_DIR}/${curr_year}/${curr_datetime}_GOES16_CWP_OBS.nc"
+
+            if [[ $verb -eq 1 ]]; then mecho0 "Looking for CWP data valid: ${DARK}${curr_datetime}${NC} as ${cwpfile}"; fi
+
             if [[ -s "${cwpfile}" ]]; then
                 mecho0 "Using CWP file ${CYAN}${cwpfile}${NC}"
                 #break 2
@@ -588,16 +584,22 @@ function run_ioda_cwp {
         mecho0 "${YELLOW}INFO${NC}: No CWP file between ${DARK}${curr_datetime}${NC} and ${DARK}${anlys_eventtime}${NC}"
         return
     fi
-    #
+
+    #------------------------------------------------------
+    # Run ioda_cwp for the found observation file
+    #------------------------------------------------------
+
+    mkwrkdir $wrkdir/ioda_cwp 1      # 0: Keep existing directory as is
+                                     # 1: Remove existing same name directory
+    cd $wrkdir/ioda_cwp || exit $?
+
     #-----------------------------------------------------------------------
-    #
     # Process the GOES CWP data file
     #
     # 0: CWP_ZERO - cwp; 1: LWP        2: IWP     3: CWP_ZERO_NIGHT
     # 4: LWP_NIGHT; 5: IWP_NIGHT
-    #
     #-----------------------------------------------------------------------
-    #
+
     (
     module purge
     module use ${rrfs_dir}/modulefiles
@@ -1461,7 +1463,8 @@ function run_jedi_observer {
     # loop through and copy files
     for dst_file in "${obs_lists[@]}"; do
         if [[ -s "${mappings[${dst_file}]}" ]]; then
-            mecho0 "Will use ${CYAN}${mappings[${dst_file}]}${NC}"
+            display_name=$(realpath -m --relative-to=${WORKDIR} "${mappings[${dst_file}]}")
+            mecho0 "Will use ${CYAN}${display_name}${NC}"
             ${cpcmd} "${mappings[${dst_file}]}"  "obs/${dst_file}"
         else
             [[ ${verb} -eq 1 ]] && mecho0 "${PURPLE}WARNING${NC}: ${CYAN}${mappings[${dst_file}]}${NC} does not exist!"
