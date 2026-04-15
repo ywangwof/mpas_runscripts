@@ -1308,8 +1308,8 @@ function jedi_preparation {
 
         # Replace placeholders directly in the file
         # We use '|' as a delimiter in sed to avoid issues with slashes (though not strictly needed here)
-        sed -i "s/@MP_STATE_VARS@/${_mp_state_block//$'\n'/\\n}/" getkf.yaml
-        sed -i "s/@MP_INCREMENT_VARS@/${_mp_incr}/" getkf.yaml
+        sed -i "s/#@MP_STATE_VARS@/${_mp_state_block//$'\n'/\\n}/" getkf.yaml
+        sed -i "s/\"@MP_INCREMENT_VARS@\"/${_mp_incr}/" getkf.yaml
         sed -i "/add hail mixing ratio:/s/:.*/: ${cwp_hail}/" getkf.yaml
 
         #
@@ -1317,6 +1317,7 @@ function jedi_preparation {
         #
         [[ -s "${config_FIXDIR}/jedi/satinfo" ]] && cp "${config_FIXDIR}/jedi/satinfo" .
         export GETKF_TYPE="${taskname}"
+        export EMPTY_OBS_SPACE_ACTION='skip output'   # @emptyObsSpaceAction@
         mecho0 "yaml_finalize - $(${rrfs_dir}/ush/yaml_finalize getkf.yaml 2>&1)"        # manage output message
 
 

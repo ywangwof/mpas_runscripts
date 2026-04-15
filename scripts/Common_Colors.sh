@@ -31,6 +31,14 @@ CYAN='\033[0;36m'
 LIGHT_CYAN='\033[1;36m'
 LIGHT='\033[0;37m'
 WHITE='\033[1;37m'
+
+BOLD='\033[1m'
+DIM='\033[2m'
+UNDERLINE='\033[4m'
+BLINK='\033[5m'
+REVERSE='\033[7m'
+HIDDEN='\033[8m'
+
 #else
 #    NC=''
 #    BLACK='';     DARK=''

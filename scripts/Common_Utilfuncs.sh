@@ -1199,6 +1199,28 @@ function select_option() {
 
     echo -ne "${CURSOR_OFF}"
 
+    declare -A keyitems
+    declare -a mykeys
+
+    # --- Jump to character logic ---
+    for i in "${!options[@]}"; do
+        local item="${options[$i]}"
+        # Strip the note to get just the value (e.g., "azure" from "azure:cloud")
+        local val="${item%%:*}"
+
+        local j=0
+        local first_char="${val:$j:1}"          # Get the first character of the value
+        local key="${first_char,,}"
+        while [[ -v keyitems[${key}] ]]; do
+            (( j += 1 ))
+            first_char="${val:$j:1}"
+            key="${first_char,,}"
+        done
+
+        mykeys[i]="$j"
+        keyitems["${key}"]="$i"
+    done
+
     function draw_menu() {
         # Move cursor up: (number of options + 1 for the prompt message)
         local num_options=${#options[@]}
@@ -1209,24 +1231,25 @@ function select_option() {
 
         for i in "${!options[@]}"; do
             local item="${options[${i}]}"
-            local display_val=""
+            local dval=""
             local note=""
 
+            local j="${mykeys[$i]}"
             # Check if ":" exists to split into Value and Note
             if [[ "${item}" == *":"* ]]; then
-                display_val="${item%%:*}" # Everything before first ":"
+                dval="${item%%:*}" # Everything before first ":"
                 note=": ${item#*:}"      # Everything after first ":"
             else
-                display_val="${item}"
+                dval="${item}"
                 note=""
             fi
 
             if [[ "${i}" -eq "${selected}" ]]; then
                 # Selected: Green arrow and bright text
-                echo -e "  \033[32m❯ ● ${display_val}\033[0m\033[90m${note}\033[0m"
+                echo -e "  \033[32m❯ ● ${dval:0:$j}${UNDERLINE}${dval:$j:1}${NC}\033[32m${dval:$((j+1))}\033[0m\033[90m${note}\033[0m"
             else
                 # Unselected: Plain circle and dimmed note
-                echo -e "    ○ ${display_val}\033[90m${note}\033[0m"
+                echo -e "    ○ ${dval:0:$j}${UNDERLINE}${dval:$j:1}${NC}${dval:$((j+1))}\033[90m${note}\033[0m"
             fi
         done
     }
@@ -1236,7 +1259,16 @@ function select_option() {
     draw_menu
 
     while true; do
-        read -rsn3 key
+        #read -rsn3 key
+        # Read 1 character. -t 0.001 checks if more chars are in the buffer immediately
+        read -rsn1 key
+
+        # If the key is the Escape character, try to read the next two
+        if [[ "${key}" == "${ESC}" ]]; then
+            read -rsn2 -t 0.001 rest
+            key+="${rest}"
+        fi
+
         case "${key}" in
             "${ESC}[A" | "${ESC}[D") # Up or Left
                 ((selected--))
@@ -1252,7 +1284,14 @@ function select_option() {
                 break
                 ;;
             * )
-                continue
+                # Compare (case-insensitive)
+                if [[ -v keyitems[${key,,}] ]]; then
+                    selected=${keyitems[${key,,}]}
+                    draw_menu
+                    break # Jump to the first match and stop searching
+                else
+                    continue
+                fi
                 ;;
         esac
     done
