@@ -271,7 +271,7 @@ function run_ioda {
         exit 1
     fi
 
-    anlys_date=$(date -u -d @$iseconds  +%Y%m%d%H)
+    anlys_datehr=$(date -u -d @$iseconds  +%Y%m%d%H)
     anlys_hour=$(date -u -d @$iseconds  +%H)
     anlys_min=$(date -u -d @$iseconds   +%M)
 
@@ -279,7 +279,7 @@ function run_ioda {
     # Run ioda_bufr for all bufr observation files
     #------------------------------------------------------
 
-    if [[ ${anlys_min} == "00" && ${config_use_BUFR} == true ]]; then
+    if [[ ${anlys_min} == "15" && ${config_use_BUFR} == true ]]; then     # Use observations at :00
         run_ioda_bufr ${wrkdir} ${iseconds}
     fi
 
@@ -337,7 +337,7 @@ function run_ioda_bufr {
         [CPUSPEC]="${config_claim_cpu_ioda}"
         [EXEDIR]="${config_EXEDIR}/jedi"
         [CPCMD]="${cpcmd}"
-        [CURRDATE]="${anlys_date}"
+        [CURRDATE]="${anlys_datehr}"
         [CYCHR]="${anlys_hour}"
         [OBSDIR]="${config_OBS_BUFR_DIR}"
         [FIXDIR]="${config_FIXDIR}"
@@ -379,6 +379,11 @@ function run_ioda_mrms_refl {
     mkwrkdir $wrkdir/ioda_mrms_refl 1     # 0: Keep existing directory as is
                                      # 1: Remove existing same name directory
     cd $wrkdir/ioda_mrms_refl || exit $?
+
+    anlys_date=$(date -u -d @$iseconds  +%Y%m%d)
+    anlys_hour=$(date -u -d @$iseconds  +%H)
+    anlys_min=$(date -u -d @$iseconds   +%M)
+
     #
     #-----------------------------------------------------------------------
     #
@@ -450,7 +455,7 @@ function run_ioda_mrms_refl {
         obs_string="${obs_string},refl10cm"
     else
         echo ""
-        mecho0 "${RED}ERROR${NC}: Not enough radar reflectivity files available for cycle ${anlys_date}${anlys_min}."
+        mecho0 "${RED}ERROR${NC}: Not enough radar reflectivity files available for cycle ${anlys_date}${anlys_hour}${anlys_min}."
         exit 1
     fi
 
@@ -480,7 +485,7 @@ function run_ioda_mrms_refl {
 
     cat << EOF > namelist.mosaic
 &setup
-    analysis_time = ${anlys_date}${anlys_min},
+    analysis_time = ${anlys_date}${anlys_hour}${anlys_min},
     dataPath = './',
 /
 &setup_netcdf
@@ -510,7 +515,7 @@ EOF
         [JOBNAME]="ioda_refl_${eventtime}"
         [CPUSPEC]="${config_claim_cpu_ioda_refl}"
         [EXEDIR]="${config_EXEDIR}/jedi"
-        [CURRDATE]="${anlys_date}${anlys_min}"
+        [CURRDATE]="${anlys_date}${anlys_hour}${anlys_min}"
         [ROOTDIR]="${rootdir}"
         [RRFSDIR]="${rrfs_dir}"
         [MODULE]="${rrfs_modulename}"
@@ -2750,7 +2755,7 @@ function prepare_mpassit_onetime {
 
         rm -f core.*           # Maybe core-dumped, resubmission will solves the problem if the machine is unstable.
 
-        fcstmemdir=$(upnlevels $memdir 2)
+        fcstmemdir=$(get_parent_dir $memdir 2)
         histfile="$fcstmemdir/fcst_$memstr/${domname}_${memstr}.history.${fcst_time_str}.nc"
         diagfile="$fcstmemdir/fcst_$memstr/${domname}_${memstr}.diag.${fcst_time_str}.nc"
 

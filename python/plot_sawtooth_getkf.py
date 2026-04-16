@@ -11,11 +11,11 @@ import matplotlib.pyplot as plt
 ################
 
 # Experiment configuration and paths
-com_dir = '/mnt/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS/run_dirs'
+com_dir = '/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/run_dirs'
 #com_dir = '/mnt/lfs6/BMC/wrfruc/ddowell/MPAS_south_3.5km/radar_only_loc50_obs0.03_heavy_thinning/com'
 
-first_cycle = '202405081500'
-final_cycle = '202405082100'
+first_cycle = '202405061515'
+final_cycle = '202405062345'
 cycletime = 15 # min
 nmems = 36
 version = 'v2.1.1'
@@ -30,7 +30,7 @@ do_qc = True
 # List of obs to verify over
 # Currently works for t, q, uv, and dbz obs
 
-oblist = ['CWB_rw.nc']
+oblist = ['cwp.nc']
 #oblist = ['mrms_refl.nc']
 #oblist = ['adpupa_t120.nc']
 
@@ -54,8 +54,8 @@ while this_cycle_dt <= final_cycle_dt:
     hour = this_cycle_dt.strftime('%H')
     minute = this_cycle_dt.strftime('%M')
     cyclelist.append(this_cycle_dt)
-    dirlist.append(f'{com_dir}/{date}/dacycles_CADRE2_RUC_20251215/{hour}{minute}/getkf_observer/')
-    stmplist.append(f'{com_dir}/{date}/dacycles_CADRE2_RUC_20251215/{hour}{minute}/getkf_post/')
+    dirlist.append(f'{com_dir}/{date}/dacycles_CWP/{hour}{minute}/jedi_observer/')
+    stmplist.append(f'{com_dir}/{date}/dacycles_CWP/{hour}{minute}/jedi_post/')
 
     #dirlist.append(f'{com_dir}/rrfs/{version}/rrfs.{date}/{hour}/getkf_observer/enkf')
     #stmplist.append(f'{com_dir}/../stmp/{date}/rrfs_getkf_post_{hour}_{version}/enkf')
@@ -119,9 +119,9 @@ for iob, obfile in enumerate(oblist):
         obs_bg = obs_bg[~obs_errb.mask]
         obs_an = obs_an[~obs_erra.mask]
 
-        obsb_num0 = qc_maskb.shape[0]   #Number of observations where foreward operator worked and priors calculated 
+        obsb_num0 = qc_maskb.shape[0]   #Number of observations where foreward operator worked and priors calculated
         obsa_num0 = qc_maska.shape[0]   #As above, but with outliers now also removed. obsa should always be <= to obsb
- 
+
         obsb_num = obsb_num0
         obsa_num = obsa_num0
 
@@ -149,7 +149,7 @@ for iob, obfile in enumerate(oblist):
 
                 hofx = hofx[~obs_errb.mask]
                 hofxa = hofxa[~obs_erra.mask]
-            
+
                 if over_type == 'thresh':
                     hofx[obs_bg < obs_thresh] = np.nan
                     hofxa[obs_an < obs_thresh] = np.nan
@@ -167,7 +167,7 @@ for iob, obfile in enumerate(oblist):
 
             is_nan_maskb = np.isnan(sprdb)
             is_nan_maska = np.isnan(sprda)
-            
+
             #TOTAL SPREAD
             sprd_prior = np.sqrt( np.sum( np.nanmean(obs_errb)**2.0+(sprdb[~is_nan_maskb]*sprdb[~is_nan_maskb]) )/sprdb[~is_nan_maskb].shape[0])
             sprd_post =  np.sqrt( np.sum( np.nanmean(obs_erra)**2.0+(sprda[~is_nan_maska]*sprda[~is_nan_maska]) )/sprda[~is_nan_maska].shape[0])
@@ -209,6 +209,8 @@ for iob, obfile in enumerate(oblist):
     ### Plot for each observation type ###
     ######################################
 
+    ymax = 0.05
+    unit = 'g'
     if vartype == 'airTemperature':
         unit = 'K'
         ymax = 2.0
@@ -247,7 +249,9 @@ for iob, obfile in enumerate(oblist):
     plt.xticks(np.arange(0, np.amax(minutes) + cycletime, 60))
     plt.xlim([0,np.amax(minutes) + cycletime])
     plt.xlabel('Minutes into cycle period', fontsize=14)
-    plt.ylim([-5,ymax])
+
+    plt.ylim([-0.05, ymax])
+
     plt.grid(True)
     plt.ylabel('RMSD [%s]' % unit, fontsize=14)
 
@@ -255,10 +259,10 @@ for iob, obfile in enumerate(oblist):
     x0,x1 = ax1.get_xlim()
     y0,y1 = ax1.get_ylim()
     #ax1.set_aspect((x1-x0)/(y1-y0))
-    ax1.set_aspect(6.)
+    #ax1.set_aspect(6.)
     plt.tight_layout()
     obtype = obfile[0:-3]
     plt.title(obtype)
-    filename = f'sawtooth_{obtype}.png'
+    filename = f'sawtooth_{obtype}_orig.png'
     plt.savefig(filename,bbox_inches='tight',dpi=200,format='png') # Saves the figure with small margins
     plt.close()

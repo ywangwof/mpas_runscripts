@@ -26,7 +26,7 @@ ulimit -s unlimited
 mem=${SLURM_ARRAY_TASK_ID}
 memstr=$(printf "%02d" $mem)
 
-cd WRKDIR/mem${memstr}
+cd WRKDIR/mem_${memstr}
 
 rm -rf error.mpassitHHMINSTR_${memstr} queue.mpassitHHMINSTR_${memstr}
 

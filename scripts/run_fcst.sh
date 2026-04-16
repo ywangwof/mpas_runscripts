@@ -276,6 +276,7 @@ function parse_args {
 ########################################################################
 
 function run_intrp_bc {
+    # inherit environments from run_mpas
 
     #
     # Return if is running or is done
@@ -296,7 +297,7 @@ function run_intrp_bc {
         [JOBNAME]="intrpbc_${eventtime}"
         [CPUSPEC]="${config_claim_cpu_post}"
         [DOMNAME]="${domname}"
-        [CASEDIR]="${casedir}"
+        [CASEDIR]="${case_dir}"
         [LBCTIMESTR1]="${ext_lbc_time1[*]}"
         [LBCTIMESTR2]="${ext_lbc_time2[*]}"
         [LBCTIMESTR]="${exp_lbc_times[*]}"
@@ -324,6 +325,17 @@ function run_mpas {
     local isec jsec dawrkdir
 
     #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/running.fcst || -f $wrkdir/queue.fcst ]]; then
+        mecho0 "${YELLOW}INFO${NC}: FCST job is running or is already queued."
+        return
+    elif [[ -f $wrkdir/done.fcst ]]; then
+        mecho0 "${YELLOW}INFO${NC}: FCST job is already done."
+        return
+    fi
+
+    #
     # Build working directory
     #
     mkwrkdir ${wrkdir} 0
@@ -336,24 +348,7 @@ function run_mpas {
     #
     conditions=("${rundir}/lbc/done.${domname}" "${dawrkdir}/jedi_solver/done.solver")
 
-    if [[ $dorun == true ]]; then
-        for cond in "${conditions[@]}"; do
-            mecho0 "Checking $cond"
-            while [[ ! -e $cond ]]; do
-                #if [[ $verb -eq 1 ]]; then
-                #    echo "Waiting for file: $cond"
-                #fi
-                sleep 10
-            done
-        done
-    fi
-
-    #
-    # Return if is running or is done
-    #
-    if [[ -f $wrkdir/running.fcst || -f $wrkdir/done.fcst || -f $wrkdir/queue.fcst ]]; then
-        return
-    fi
+    wait_for_conditions "${conditions[*]}"
 
     #
     # Preparation for all members
@@ -381,6 +376,8 @@ function run_mpas {
     #
     # Preparation for each member
     #
+    local da_dir case_dir
+
     jobarrays=()
     for iens in $(seq 1 $config_ENS_SIZE); do
         memstr=$(printf "%02d" $iens)
@@ -400,11 +397,11 @@ function run_mpas {
         cd $memwrkdir || return
 
         if ${config_relative_path}; then
-            casedir=$(realpath -m --relative-to=. ${rundir})
-            dadir=$(realpath -m --relative-to=. $dawrkdir)
+            case_dir=$(realpath -m --relative-to=. ${rundir})
+            da_dir=$(realpath -m --relative-to=. ${dawrkdir})
         else
-            casedir=${rundir}
-            dadir=${dawrkdir}
+            case_dir=${rundir}
+            da_dir=${dawrkdir}
         fi
         #
         # init files
@@ -419,10 +416,10 @@ function run_mpas {
             do_dacyle="true"
         fi
 
-        initfile="${dadir}/jedi_solver/ana/mem0${memstr}.nc"
+        initfile="${da_dir}/jedi_solver/ana/mem0${memstr}.nc"
         ln -sf "${initfile}" "${domname}_${memstr}.${config_damode}.${currtime_fil}.nc"
-        ln -sf "${casedir}/init/${domname}.invariant.nc" .
-        ln -sf "${casedir}/${domname}/${domname}.ugwp_oro_data.nc" .
+        ln -sf "${case_dir}/init/${domname}.invariant.nc" .
+        ln -sf "${case_dir}/${domname}/${domname}.ugwp_oro_data.nc" .
 
         if [[ $verb -eq 1 ]]; then
             mecho0 "Member: $iens init file: ${initfile}";
@@ -435,7 +432,7 @@ function run_mpas {
         mlbcstr=$(printf "%02d" $jens)
 
         mpastime_str=$(date -u -d @$iseconds +%Y-%m-%d_%H.%M.%S)
-        lbc_dafile=${dadir}/fcst_${memstr}/${domname}_${memstr}.lbc.${mpastime_str}.nc
+        lbc_dafile=${da_dir}/fcst_${memstr}/${domname}_${memstr}.lbc.${mpastime_str}.nc
         lbc_myfile=${domname}_${memstr}.lbc.${mpastime_str}.nc
         if [[ $dorun == true ]]; then
             if [[ ! -e ${lbc_dafile} ]]; then     # impossible condition unless not actual run
@@ -450,18 +447,18 @@ function run_mpas {
 
         exp_lbc_times=(); ext_lbc_time1=(); ext_lbc_time2=()
         for ((i=icycle_lbcgap;i<=fcst_seconds;i+=icycle_lbcgap)); do
-            isec=$(( iseconds+i ))                # MPAS expects time string
-            jsec=$(( isec-isec%config_EXTINVL ))  # External GRIB file provided around to whole hour
+            isec=$(( iseconds+i ))                # MPAS expects time
+            jsec=$(( isec-isec%config_EXTINVL ))  # External model provided GRIB file time
             lbctime_str=$(date  -u -d @$jsec +%Y-%m-%d_%H.%M.%S)
             mpastime_str=$(date -u -d @$isec +%Y-%m-%d_%H.%M.%S)
-            lbc_file="${casedir}/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str}.nc"
+            lbc_file="${case_dir}/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str}.nc"
             if [[ ${isec} -eq ${jsec} ]]; then
                 ln -sf $lbc_file ${domname}_${memstr}.lbc.${mpastime_str}.nc
                 [[ $verb -eq 1 ]] && mecho0 "Member: $iens lbc file ${mpastime_str}: ${lbc_file}";
             else
                 nsec=$((jsec+config_EXTINVL))
                 ntime_str=$(date -u -d @$nsec +%Y-%m-%d_%H.%M.%S)
-                lbc_filen="${casedir}/lbc/${domname}_${mlbcstr}.lbc.${ntime_str}.nc"
+                lbc_filen="${case_dir}/lbc/${domname}_${mlbcstr}.lbc.${ntime_str}.nc"
                 [[ $verb -eq 1 ]] && mecho0 "Member: $iens lbc file ${mpastime_str} interpolate from:\n\t\t${lbc_file}\n\t\t${lbc_filen}"
                 exp_lbc_times+=("${mpastime_str}")
                 ext_lbc_time1+=("${lbctime_str}")
@@ -470,8 +467,8 @@ function run_mpas {
             fi
         done
 
-        ln -sf ${casedir}/${domname}/$domname.graph.info.part.${config_npefcst} .
-        ln -sf ${casedir}/${domname}/${domname}.ugwp_oro_data.nc .
+        ln -sf ${case_dir}/${domname}/$domname.graph.info.part.${config_npefcst} .
+        ln -sf ${case_dir}/${domname}/${domname}.ugwp_oro_data.nc .
 
         streamlists=(stream_list.atmosphere.diagnostics_fcst stream_list.atmosphere.output stream_list.atmosphere.surface stream_list.atmosphere.da_state)
         for fn in "${streamlists[@]}"; do
@@ -749,7 +746,7 @@ EOF
     if [[ ${#exp_lbc_times[@]} -gt 0 ]]; then
         run_intrp_bc     # jobarrays, exp_lbc_times, ext_lbc_time1, ext_lbc_time2
         while [[ ! -e done.intrp_bc ]]; do    # wait forever
-            check_job_status "intrp_bc fcst_" $wrkdir $config_ENS_SIZE "run_intrp_bc.${mach}" 1
+            check_job_status "intrp_bc fcst_ intrp_bc" $wrkdir $config_ENS_SIZE "run_intrp_bc.${mach}" 1
         done
     fi
 
@@ -783,9 +780,9 @@ function run_mpassit {
     #
     # Build working directory
     #
-    wrkdir=$wrkdir/mpassit
-    mkwrkdir $wrkdir 0
-    cd $wrkdir || return
+    wrkdir=${wrkdir}/mpassit
+    mkwrkdir ${wrkdir} 0
+    cd ${wrkdir} || return
 
     #
     # Check MPASSIT status
@@ -797,7 +794,7 @@ function run_mpassit {
 
     if [[ -f running.mpassit || -f queue.mpassit ]]; then
         mecho0 "MPASSIT is running/queued for all forecast minutes"
-        #check_job_status "mpassit mem" $wrkdir $config_ENS_SIZE run_mpassit.${mach} ${num_resubmit}
+        #check_job_status "mpassit mem mpassit" ${wrkdir} ${config_ENS_SIZE} run_mpassit.${mach} ${num_resubmit}
         #if [[ -f done.mpassit ]]; then
         #    mecho0 "MPASSIT done for all forecast minutes"
         #fi
@@ -814,7 +811,7 @@ function run_mpassit {
         minstr=$(printf "%03d" $((i/60)))
 
         if [[ -f running.mpassit$minstr || -f queue.mpassit$minstr ]]; then
-            check_job_status "mpassit$minstr mem" $wrkdir $config_ENS_SIZE run_mpassit_$minstr.${mach} ${num_resubmit}
+            check_job_status "mpassit$minstr mem mpassit$minstr" $wrkdir $config_ENS_SIZE run_mpassit_$minstr.${mach} ${num_resubmit}
             if [[ -f done.mpassit$minstr ]]; then
                 mecho0 "MPASSIT done for ensemble forecasts at ${minstr}"
                 (( n+=1 ))
@@ -863,9 +860,9 @@ function run_mpassit {
         jobarrays=()
         for mem in $(seq 1 $config_ENS_SIZE); do
             memstr=$(printf "%02d" $mem)
-            memdir=$wrkdir/mem$memstr
+            memdir="${wrkdir}/mem_${memstr}"
             mkwrkdir $memdir 0
-            cd $memdir || return
+            cd ${memdir} || return
 
             rm -f core.*           # Maybe core-dumped, resubmission will solves the problem if the machine is unstable.
 
@@ -891,6 +888,15 @@ function run_mpassit {
 
         cd $wrkdir || return
 
+        local fcst_dir case_dir
+        if ${config_relative_path}; then
+            case_dir=$(realpath -m --relative-to=${memdir} ${rundir})
+            fcst_dir="../.."
+        else
+            case_dir="${rundir}"
+            fcst_dir="$(dirname ${wrkdir})"
+        fi
+
         if [[ $rt_run == true ]]; then
             run_mpassit_onetime "${wrkdir}" "${iseconds}" "${fcst_minutes[*]}" "${jobarrays_str}"
         else
@@ -913,17 +919,22 @@ function run_mpassit_onetime {
 
     cd $wrkdir || return
 
+    local fcst_lauch_time=$(date -u -d @${iseconds} +%H%M)
+
     # Loop over forecast minutes
     for minstr in "${fcsttimes[@]}"; do
 
         (( i=10#${minstr}*60 ))
+
+        mecho0n "Checking forecast files at ${WHITE}${minstr}${NC} for all ${config_ENS_SIZE} memebers from fcst${daffix}/${fcst_lauch_time} ..."
+
         prepare_mpassit_onetime $wrkdir ${iseconds} $i 30
         local estatus=$?               # number of missing members
         if [[ ${estatus} -gt 0 ]]; then
-        #    echo -e " ${PURPLE}${estatus}${NC} files missing"
+            echo -e " ${PURPLE}${estatus}${NC} missing"
             continue
-        #else
-        #    echo -e " ${GREEN}Ready${NC}"
+        else
+            echo -e " ${GREEN}Ready${NC}"
         fi
 
         #
@@ -970,20 +981,27 @@ function run_mpassit_alltimes {
     local minsec=${fcst_seconds}
     local maxsec=0
 
+    local fcst_lauch_time=$(date -u -d @${iseconds} +%H%M)
+
+    mecho0 "Checking forecast files for all ${config_ENS_SIZE} memebers from fcst${daffix}/${fcst_lauch_time} ..."
+
+    local n=0
     for minstr in "${fcsttimes[@]}"; do
         (( i=10#${minstr}*60 ))
         (( i > maxsec )) && maxsec=$i
         (( i < minsec )) && minsec=$i
 
-        prepare_mpassit_onetime $wrkdir ${iseconds} $i 2
-        local estatus=$?               # number of missing members
-        if [[ ${estatus} -gt 0 ]]; then
-            #echo -e " ${PURPLE}${estatus}${NC} files missing"
-            missed=true
-            continue
-        #else
-        #    echo -e " ${GREEN}done${NC}"
+        if prepare_mpassit_onetime $wrkdir ${iseconds} $i 2; then
+            echo -ne "    ${minstr} (${GREEN}Ready${NC})"
+        else
+            local missing=$?               # number of missing members
+            echo -ne "    ${minstr} (${PURPLE}${missing}${NC} missing)"
+            if [[ ${missing} -gt 0 ]]; then
+                missed=true
+            fi
         fi
+        (( n += 1))
+        if (( n % 6 == 0)); then echo ""; fi
     done
 
     if [[ ${#fcsttimes[@]} -gt 0 && ${missed} == false ]]; then
@@ -1031,35 +1049,26 @@ function prepare_mpassit_onetime {
     cd $wrkdir || return
 
     minstr=$(printf "%03d" $((fctseconds/60)))
-    fcst_lauch_time=$(date -u -d @${iseconds} +%H%M)
 
     isec=$(( iseconds+fctseconds ))
     fcst_time_str=$(date -u -d @$isec +%Y-%m-%d_%H.%M.%S)
 
-    if [[ $dorun == true ]]; then
-        mecho0n "Checking forecast files at ${WHITE}$minstr${NC} for all $config_ENS_SIZE memebers from fcst${daffix}/${fcst_lauch_time} ..."
-    fi
+    #if [[ $dorun == true ]]; then
+    #    mecho0n "Checking forecast files at ${WHITE}$minstr${NC} for all $config_ENS_SIZE memebers from fcst${daffix}/${fcst_lauch_time} ..."
+    #fi
 
     jobarrays=()
     missing=0
     for mem in $(seq 1 $config_ENS_SIZE); do
         memstr=$(printf "%02d" $mem)
-        memdir=$wrkdir/mem$memstr
+        memdir="${wrkdir}/mem_${memstr}"
         mkwrkdir $memdir 0
         cd $memdir || return
 
-        if ${config_relative_path}; then
-            casedir=$(realpath -m --relative-to=. ${rundir})
-            fcstmemdir="../.."
-        else
-            casedir=${rundir}
-            fcstmemdir=$(upnlevels $memdir 2)
-        fi
-
         rm -f core.*           # Maybe core-dumped, resubmission will solves the problem if the machine is unstable.
 
-        histfile="$fcstmemdir/fcst_$memstr/${domname}_${memstr}.history.${fcst_time_str}.nc"
-        diagfile="$fcstmemdir/fcst_$memstr/${domname}_${memstr}.diag.${fcst_time_str}.nc"
+        histfile="${fcst_dir}/fcst_$memstr/${domname}_${memstr}.history.${fcst_time_str}.nc"
+        diagfile="${fcst_dir}/fcst_$memstr/${domname}_${memstr}.diag.${fcst_time_str}.nc"
 
         if [[ $dorun == true ]]; then
             for fn in $histfile $diagfile; do
@@ -1083,13 +1092,14 @@ function prepare_mpassit_onetime {
             done
         fi
 
-        nmlfile="namelist.fcst_$minstr"
-        cat << EOF > $nmlfile
+        if [[ $missing -eq 0 ]]; then
+            nmlfile="namelist.fcst_$minstr"
+            cat << EOF > $nmlfile
 &config
-    grid_file_input_grid = "${casedir}/init/${domname}_${memstr}.init.nc"
-    hist_file_input_grid = "$histfile"
-    diag_file_input_grid = "$diagfile"
-    file_target_grid     = "${casedir}/${domname/*_/geo_}/geo_em.d01.nc"
+    grid_file_input_grid = "${case_dir}/init/${domname}_${memstr}.init.nc"
+    hist_file_input_grid = "${histfile}"
+    diag_file_input_grid = "${diagfile}"
+    file_target_grid     = "${case_dir}/${domname/*_/geo_}/geo_em.d01.nc"
     target_grid_type     = "file"
     output_file          = "./MPASSIT_${memstr}.${fcst_time_str}.nc"
     interp_diag          = .true.
@@ -1098,15 +1108,16 @@ function prepare_mpassit_onetime {
     esmf_log             = .false.
 /
 EOF
+        fi
     done
 
-    if [[ $dorun == true ]]; then
-        if [[ $missing -gt 0 ]]; then
-            echo -e " ${PURPLE}${missing}${NC} files missing"
-        else
-            echo -e " ${GREEN}Ready${NC}"
-        fi
-    fi
+    #if [[ $dorun == true ]]; then
+    #    if [[ $missing -gt 0 ]]; then
+    #        echo -e " ${PURPLE}${missing}${NC} files missing"
+    #    else
+    #        echo -e " ${GREEN}Ready${NC}"
+    #    fi
+    #fi
 
     cd $wrkdir || return
 
@@ -1199,7 +1210,7 @@ function run_upp {
             # resubmission may solve the problem
         #fi
 
-        mpassitdir=$(upnlevels $wrkdir 1)
+        mpassitdir=$(get_parent_dir $wrkdir 1)
 
         donefile="$mpassitdir/mpassit/done.mpassit$minstr"
 
@@ -1223,9 +1234,9 @@ function run_upp {
         jobarrays=()
         for mem in $(seq 1 $config_ENS_SIZE); do
             memstr=$(printf "%02d" $mem)
-            memdir=$wrkdir/mem$memstr
-            mkwrkdir $memdir 0
-            cd $memdir || return
+            memdir="${wrkdir}/mem_${memstr}"
+            mkwrkdir "${memdir}" 0
+            cd "${memdir}" || return
 
             mpassitmemdir=${memdir/upp/mpassit}
 
@@ -1381,10 +1392,10 @@ function fcst_driver() {
                 for ((i=diag_start;i<=fcst_seconds;i+=config_OUTINVL)); do
                     minstr=$(printf "%03d" $((i/60)))
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                    check_job_status "mpassit$minstr mem" $fcstwrkdir/mpassit $config_ENS_SIZE run_mpassit_$minstr.${mach} ${num_resubmit}
+                    check_job_status "mpassit$minstr mem mpassit$minstr" $fcstwrkdir/mpassit $config_ENS_SIZE run_mpassit_$minstr.${mach} ${num_resubmit}
                 done
             else
-                check_job_status "mpassit mem" $fcstwrkdir/mpassit $config_ENS_SIZE run_mpassit.${mach} ${num_resubmit}
+                check_job_status "mpassit mem mpassit" $fcstwrkdir/mpassit $config_ENS_SIZE run_mpassit.${mach} ${num_resubmit}
             fi
         fi
 
@@ -1398,11 +1409,11 @@ function fcst_driver() {
                         minstr=$(printf "%03d" $((i/60)))
                         if [[ ! -e $fcstwrkdir/mpassit/done.mpassit$minstr ]]; then
                             #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-                            check_job_status "mpassit$minstr mem" $fcstwrkdir/mpassit $config_ENS_SIZE run_mpassit_$minstr.slurm
+                            check_job_status "mpassit$minstr mem mpassit$minstr" $fcstwrkdir/mpassit $config_ENS_SIZE run_mpassit_$minstr.slurm
                         fi
                     done
                 else
-                    check_job_status "mpassit mem" $fcstwrkdir/mpassit $config_ENS_SIZE run_mpassit.slurm
+                    check_job_status "mpassit mem mpassit" $fcstwrkdir/mpassit $config_ENS_SIZE run_mpassit.slurm
                 fi
             fi
 
@@ -1414,7 +1425,7 @@ function fcst_driver() {
                 for ((i=diag_start;i<=fcst_seconds;i+=config_OUTINVL)); do
                     minstr=$(printf "%03d" $((i/60)))
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                    check_job_status "upp$minstr mem" $fcstwrkdir/upp $config_ENS_SIZE run_upp_$minstr.slurm ${num_resubmit}
+                    check_job_status "upp$minstr mem upp$minstr" $fcstwrkdir/upp $config_ENS_SIZE run_upp_$minstr.slurm ${num_resubmit}
                 done
             fi
         fi
@@ -1540,7 +1551,7 @@ function run_clean {
                                 done=0
                                 for mem in $(seq 1 $config_ENS_SIZE); do
                                     memstr=$(printf "%02d" $mem)
-                                    memdir="$mywrkdir/mem$memstr"
+                                    memdir="$mywrkdir/mem_${memstr}"
 
                                     donefile="$memdir/done.mpassit${minstr}_$memstr"
                                     if [[ -e $donefile ]]; then
@@ -1711,9 +1722,9 @@ mach="${config_mach}"
 #
 # Check configurations reading in
 #
-if [[ "${config_fcstmode}" == "restart" || "${config_fcstmode}" == "mpasout" ]]; then
+if [[ "${config_fcstmode}" == "restart" ]]; then
     diag_start=${config_OUTINVL}
-elif [[ "${config_fcstmode}" == "init" ]]; then
+elif [[ "${config_fcstmode}" == "init" || "${config_fcstmode}" == "mpasout" ]]; then
     diag_start=0
 else
     echo -e "${RED}ERROR${NC}: fcstmode=${config_fcstmode} is not supported."
@@ -1800,8 +1811,8 @@ elif [[ " ${jobs[*]} " =~ " clean " ]]; then
 fi
 
 
-echo " "
-echo "==== Jobs done ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} ===="
-echo " "
+echo    " "
+echo -e "==== Jobs done ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} ===="
+echo    " "
 
 exit 0

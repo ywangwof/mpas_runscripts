@@ -243,7 +243,7 @@ for ((s=start_s;s<=end_s;s+=3600)); do
     evttime_dir="${fcst_root}/${eventdate}/${fcstdir}/${evtime}/mpassit"
     for mem in $(seq 1 "${fcstmems}"); do
         memstr=$(printf "%02d" "${mem}")
-        memdir="${evttime_dir}/mem${memstr}"
+        memdir="${evttime_dir}/mem_${memstr}"
 
         desdir="${dest_root}/${eventdate}${affix}/${evtime}/ENS_MEM_${memstr}"
         if [[ ! -d $desdir ]]; then

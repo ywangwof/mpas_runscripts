@@ -1350,7 +1350,7 @@ function write_config {
     MPASLSM='sf_ruc'
     MPASNFLS=9
 
-    mpscheme='mp_tempo'
+    mpscheme='mp_nssl2m'
     sfclayer_schemes=('sf_mynn' 'sf_mynn' 'sf_mynn')
     pbl_schemes=('bl_mynn' 'bl_mynn' 'bl_mynn')
 

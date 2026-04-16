@@ -18,6 +18,7 @@ if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules" || "MACHINE" == "Ursa" ]]; t
     module purge
     module use MPASDIR/modulefiles
     module load MODULE
+    module load impi-collective-settings/1.0.0
 else
     source ROOTDIR/modules/MODULE
 fi

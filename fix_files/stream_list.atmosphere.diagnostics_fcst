@@ -43,3 +43,8 @@ divergence
 pressure_p
 tend_sfc_pressure
 h_divergence
+vorticity_max_02
+wind_speed_80m_max
+hailnc
+max_hail_diameter_sfc_acc
+max_hail_diameter_column_acc

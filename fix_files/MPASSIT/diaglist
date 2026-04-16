@@ -36,3 +36,8 @@ wind_speed_10m_max             WSPD10MAX
 wind_speed_10m_mean            SPDUV10MEAN
 u10m_mean                      U10MEAN
 v10m_mean                      V10MEAN
+vorticity_max_02               REL_VORT_MAX
+wind_speed_80m_max             WSPD80
+hailnc                         HAILNC
+max_hail_diameter_sfc_acc      HAIL_DIA_ACC_SFC
+max_hail_diameter_column_acc   HAIL_DIA_ACC_COL

@@ -16,7 +16,7 @@
 # o validate_assignment      # Check whether a string is a valid Bash variable assignment statement (String, Number, Array, Bool, used in readconf)
 # o readconf                 # Read config file, written from "setup_mpas-wofs.sh"
 # o convertS2days            # Convert epoch seconds to days/seconds since 1601-01-01
-# o upnlevels                # get n level parent directory path
+# o get_parent_dir           # get n level parent directory path
 # o get_3char_order          # Get 3-character letters from 0 for GRIB file processing
 # o clean_mem_runfiles       # Clean the runtime files of an ensemble task
 # o wait_for_file_size       # Hold the task until the file size exceeds the give number of bytes
@@ -248,7 +248,7 @@ function check_job_status {
         local memname="${jobname}"
         local stfile=${jobname}
     else
-        mech1 "${RED}FATAL${NC}: The first string to ${YELLOW}check_job_status${NC} can only contains 1 or 3 elements."
+        mecho1 "${RED}FATAL${NC}: The first string to ${YELLOW}check_job_status${NC} can only contains 1 or 3 elements."
         exit
     fi
 
@@ -807,7 +807,7 @@ function convertS2days {
 
 ########################################################################
 
-function upnlevels {
+function get_parent_dir {
     local newndir=$1
     local n=$2
 
