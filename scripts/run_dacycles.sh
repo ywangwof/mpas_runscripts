@@ -975,7 +975,7 @@ function read_convinfo_initial {
         else
             read -ra fields <<< "${aline}"
             if [[ ${#fields[@]} -ne 9 ]]; then
-                mecho1 "${YELLOW}WARNING${NC}: get_convinfo expected 9 fields in ${PURPLE}${line}${NC}"
+                mecho1 "${YELLOW}WARNING${NC}: read_convinfo_initial expected 9 fields in ${PURPLE}${line}${NC}"
             fi
 
             atype="${fields[0]}"
@@ -1002,6 +1002,9 @@ function read_convinfo_initial {
 ########################################################################
 
 function get_convinfo {
+    #
+    # Create convinfo dynamically based on the Workflow initial file and obs_string
+    #
     local infile="$1"
     local outfile="$2"
     local obs_list
@@ -1085,43 +1088,80 @@ function jedi_preparation {
 
     #------------------------------------------------------
     # 1. Handle observation string
-    # Fix observation string in case run_ioda was not executed
     #------------------------------------------------------
 
-    if [[ ${config_use_REF} == true ]]; then
-        radar_reffile="${datetime_dir}/ioda_mrms_refl/ioda_mrms_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
-        if [[ -s ${radar_reffile} ]]; then
-            if [[ "${obs_string}" == *"refl10cm"* ]]; then
-                :
-            else
-                obs_string="${obs_string},refl10cm"
-            fi
-        fi
-    fi
+    case ${taskname} in
+    observer )
+        # Fix observation string in case run_ioda was not executed
 
-    if [[ ${config_use_VR} == true && $icycle -gt 0 ]]; then
-        radar_vrfile="${config_OBS_VEL_DIR}/${anlys_date}/ioda_VR_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
-        if [[ -s ${radar_vrfile} ]]; then
-            if [[ "${obs_string}" == *"rw"* ]]; then
-                :
-            else
-                obs_string="${obs_string},rw"
-            fi
-        fi
-    fi
-
-    if [[ ${config_use_CWP} == true ]]; then
-        if [[ "${obs_string}" == *"cwp"* ]]; then
-            :
-        else
-            for cwpobs in "${cwp_obses[@]}"; do
-                filename="${datetime_dir}/ioda_cwp/ioda_${cwpobs}_obs.nc"
-                if [[ -s ${filename} ]]; then
-                    obs_string="${obs_string},${cwpobs}"
+        if [[ ${config_use_REF} == true ]]; then
+            radar_reffile="${datetime_dir}/ioda_mrms_refl/ioda_mrms_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
+            if [[ -s ${radar_reffile} ]]; then
+                if [[ "${obs_string}" == *"refl10cm"* ]]; then
+                    :
+                else
+                    obs_string="${obs_string},refl10cm"
                 fi
-            done
+            fi
         fi
-    fi
+
+        if [[ ${config_use_VR} == true && $icycle -gt 0 ]]; then
+            radar_vrfile="${config_OBS_VEL_DIR}/${anlys_date}/ioda_VR_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
+            if [[ -s ${radar_vrfile} ]]; then
+                if [[ "${obs_string}" == *"rw"* ]]; then
+                    :
+                else
+                    obs_string="${obs_string},rw"
+                fi
+            fi
+        fi
+
+        if [[ ${config_use_CWP} == true ]]; then
+            if [[ "${obs_string}" == *"cwp"* ]]; then
+                :
+            else
+                for cwpobs in "${cwp_obses[@]}"; do
+                    filename="${datetime_dir}/ioda_cwp/ioda_${cwpobs}_obs.nc"
+                    if [[ -s ${filename} ]]; then
+                        obs_string="${obs_string},${cwpobs}"
+                    fi
+                done
+            fi
+        fi
+        ;;
+
+    solver | post )
+
+        #------------------------------------------------------
+        # Determine obs_string dynamically
+        #------------------------------------------------------
+        # 1. Expand the glob into an array
+        obs_files=("${datetime_dir}"/jedi_observer/jdiag_*.nc)
+
+        # 2. Process the array to strip prefixes and suffixes
+        # We create a new array called 'obs_list'
+        obs_list=()
+        for file in "${obs_files[@]}"; do
+            # Remove the path and prefix: ../jedi_observer/jdiag_
+            tmp="${file##*_}"
+            # Remove the suffix: .nc
+            name="${tmp%.nc}"
+            # Append to our new list
+            if [[ "${name}" == "refl" ]]; then name="refl10cm"; fi
+            obs_list+=("$name")
+        done
+
+        obs_string=$(IFS=','; echo "${obs_list[*]}")
+        # 3. Verify the result
+        #echo "Number of observers: ${#obs_list[@]}, obs_string=${obs_string}"
+        #printf '%s\n' "${obs_list[@]}"
+        #exit 0
+        ;;
+    * )
+        mecho1 "${RED}ERROR${NC}: Unsupported taskname = ${PURPLE}${taskname}${NC}."
+        exit 1
+    esac
+
 
     #------------------------------------------------------
     # 2. Prepare MPAS/JEDI runtime files

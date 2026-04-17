@@ -1460,7 +1460,7 @@ function write_config {
     claim_cpu_update="${default_claim_cpu_update}"
 
     claim_time_fcst="00:40:00"
-    claim_time_mpassit_alltimes="00:30:00"
+    claim_time_mpassit_alltimes="00:20:00"
 
     npepost=${default_npepost}; ncores_post=${default_ncores_post}; nnodes_post=${default_nnodes_post}
     claim_cpu_post="${default_claim_cpu_post}";
@@ -1485,8 +1485,8 @@ function write_config {
     npepost="${default_npepost}";    ncores_post="${default_ncores_post}";  nnodes_post="${default_nnodes_post}"
 
     claim_time_fcst="01:20:00"
-    claim_time_mpassit_alltimes="03:30:00"
-    claim_time_mpassit_onetime="00:50:00"
+    claim_time_mpassit_alltimes="00:20:00"
+    claim_time_mpassit_onetime="00:10:00"
 
 EOF
 

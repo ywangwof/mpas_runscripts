@@ -158,11 +158,20 @@ saved_args="$*"
 
 parse_args "$@"
 
-[[ -v args["verb"] ]]     && verb=${args["verb"]}         || verb=false
-[[ -v args["show"] ]]     && show=${args["show"]}         || show=""
+[[ -v args["verb"] ]]  && verb=${args["verb"]}   || verb=false
+[[ -v args["show"] ]]  && show=${args["show"]}   || show=""
 
 [[ -v args["post_machine"] ]] && post_machine=${args["post_machine"]^} || post_machine="Ursa"
 setup_machine "${post_machine}" "$rootdir" false false false
+
+if [[ -n $show ]]; then
+    runcmd="echo ${site_runcmd}"
+    dorun=false
+else
+    runcmd="${site_runcmd}"
+    dorun=true
+fi
+export runcmd dorun
 
 support_interactive_job=true
 if [[ ${post_machine} =~ ^(Ursa|Jet)$ ]]; then
@@ -449,11 +458,10 @@ post )
 
     if [[ ! -e ${donepost} ]]; then
 
-        #if [[ ${config_damode} == "restart" ]]; then
+        fcstbegs="0"
+        if [[ ${config_fcstmode} == "restart" ]]; then
             fcstbegs="$dt"
-        #else
-        #    fcstbegs="0"
-        #fi
+        fi
 
         if [[ ! -e ${run_dir}/FCST/${eventdate}${affix}/fcst_${enddatetime}_start ]]; then
             # To make sure the correct FCST files are used, "-c"

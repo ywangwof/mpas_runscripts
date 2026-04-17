@@ -328,10 +328,10 @@ function run_mpas {
     # Return if is running or is done
     #
     if [[ -f $wrkdir/running.fcst || -f $wrkdir/queue.fcst ]]; then
-        mecho0 "${YELLOW}INFO${NC}: FCST job is running or is already queued."
+        mecho0 "FCST job is running or is already queued."
         return
     elif [[ -f $wrkdir/done.fcst ]]; then
-        mecho0 "${YELLOW}INFO${NC}: FCST job is already done."
+        mecho0 "FCST job is already done."
         return
     fi
 
@@ -1003,6 +1003,7 @@ function run_mpassit_alltimes {
         (( n += 1))
         if (( n % 6 == 0)); then echo ""; fi
     done
+    echo ""
 
     if [[ ${#fcsttimes[@]} -gt 0 && ${missed} == false ]]; then
         #

@@ -186,9 +186,7 @@ function submit_a_job {
     #[[ -f ${config_EXEDIR}/bad_nodes.txt ]] && commandlist+=("--exclude=$(paste -sd "," ${config_EXEDIR}/bad_nodes.txt)")
     commandlist+=("${myjobscript}")
 
-    # shellcheck disable=SC2154
     if [[ ${dorun} == true ]]; then mecho1n "Submitting ${BROWN}${myjobscript}${NC} .... "; fi
-    # shellcheck disable=SC2154
     "${commandlist[@]}"
     if [[ ${dorun} == true && $? -eq 0 ]]; then touch ${mywrkdir}/queue.${myjobname}; fi
     echo " "
