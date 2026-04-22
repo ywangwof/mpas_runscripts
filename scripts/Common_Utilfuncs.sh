@@ -145,7 +145,7 @@ function submit_a_job {
     case ${config_relative_path} in
     true  ) jobdir="."         ;;
     false ) jobdir="${mywrkdir}" ;;
-    *     ) mecho0 "${RED}ERROR${NC}: Hi, what is this config_relative_path=<${config_relative_path}>?"; exit 1;;
+    *     ) mecho0 "${RED}ERROR${NC}: Hi, what is this config_relative_path=<${config_relative_path}>?"; jobdir="${mywrkdir}";; #exit 1;;
     esac
     #
     # Common parameters for all jobs

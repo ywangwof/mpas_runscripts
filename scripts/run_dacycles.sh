@@ -9,6 +9,8 @@ mpasworkdir="/scratch/wofs_mpas"     # platform dependent, it will be reset in S
 eventdateDF=$(date -u +%Y%m%d)
 eventtimeDF="1500"
 
+shopt -s nullglob
+
 #-----------------------------------------------------------------------
 #
 # This is the 4th step of th WOFS-MPAS workflow. It run program filter,
@@ -279,7 +281,7 @@ function run_ioda {
     # Run ioda_bufr for all bufr observation files
     #------------------------------------------------------
 
-    if [[ ${anlys_min} == "15" && ${config_use_BUFR} == true ]]; then     # Use observations at :00
+    if [[ ${config_use_BUFR} == true ]]; then     # Use observations at :00
         run_ioda_bufr ${wrkdir} ${iseconds}
     fi
 
@@ -319,14 +321,29 @@ function run_ioda_bufr {
         return
     fi
 
+    anlys_datetime_ref="$(date -u -d @${iseconds} +%Y-%m-%dT%H:%M:%SZ)"    # ${CDATE:0:4}-${CDATE:4:2}-${CDATE:6:2}T${CDATE:8:2}:00:00Z
+    anlys_date=$(date -u -d @$iseconds    +%Y%m%d)
+    anlys_datehr=$(date -u -d @$iseconds  +%Y%m%d%H)
+    anlys_time=$(date -u -d @$iseconds  +%H%M)
+
     #------------------------------------------------------
     # Run ioda_bufr for all bufr observation files
     #------------------------------------------------------
 
+    prepbufr="${config_OBS_BUFR_DIR}/${anlys_date}/${anlys_datehr}.rtma_ru.t${anlys_time}z.prepbufr.tm00"
+
+    if [[ -s ${prepbufr} ]]; then
+        mecho0 "${YELLOW}INFO${NC}: Use prepbufr file ${CYAN}${prepbufr}${NC}"
+        ${cpcmd} "${prepbufr}"       prepbufr
+    else
+        mecho0 "${YELLOW}INFO${NC}: No prepbufr file from ${LIGHT_BLUE}${config_OBS_BUFR_DIR}/${anlys_date}${NC}"
+        touch done.ioda_bufr
+        return
+    fi
+
     mkwrkdir $wrkdir/ioda_bufr 1     # 0: Keep existing directory as is
                                      # 1: Remove existing same name directory
     cd $wrkdir/ioda_bufr || exit $?
-
 
     jobscript="run_ioda_bufr.${mach}"
 
@@ -337,9 +354,13 @@ function run_ioda_bufr {
         [CPUSPEC]="${config_claim_cpu_ioda}"
         [EXEDIR]="${config_EXEDIR}/jedi"
         [CPCMD]="${cpcmd}"
-        [CURRDATE]="${anlys_datehr}"
-        [CYCHR]="${anlys_hour}"
-        [OBSDIR]="${config_OBS_BUFR_DIR}"
+        [ANALYSTIME]="${anlys_datetime_ref}"
+        #[CURRDATE]="${anlys_datehr}"
+        #[CYCHRMIN]="${anlys_hour}${anlys_min}"
+        #[OBSDIR]="${config_OBS_BUFR_DIR}/${anlys_date}"
+        #[CYCHRMIN]="${anlys_hour}"
+        #[OBSDIR]="${config_OBS_BUFR_DIR}"
+        [OBSSTR]="adpsfc"    # "adpsfc adpupa aircft aircar satwnd"
         [FIXDIR]="${config_FIXDIR}"
         [ROOTDIR]="${rootdir}"
         [GRIDFILE]="${rundir}/$domname/${domname}.grid.nc"
@@ -394,7 +415,7 @@ function run_ioda_mrms_refl {
     gridfile="${rundir}/$domname/${domname}.grid.nc"
 
     #mecho0 "meshgrid file is ${CYAN}${gridfile}${NC}"
-    ln -sf "${gridfile}" grid.nc
+    ${lncmd} "${gridfile}" grid.nc
 
     #
     #-----------------------------------------------------------------------
@@ -419,10 +440,10 @@ function run_ioda_mrms_refl {
             curr_sec=$(( iseconds + l*j*60))
             curr_time=$(date -u -d @$curr_sec +%Y%m%d-%H%M)
 
-            mapfile -t fileslist < <(compgen -G "${config_OBS_REF_DIR}/MergedReflectivityQC_*_${curr_time}??.${obs_appendix}" | sort -V)
+            mapfile -t fileslist < <(compgen -G "${config_OBS_REF_DIR}/${anlys_date}/*MergedReflectivityQC_*_${curr_time}??.${obs_appendix}" | sort -V)
             if [ ${#fileslist[@]} -ge 10 ] && [ ! -e filelist_mrms ]; then
                 echo -en " ${WHITE}${curr_time}${NC}\n"
-                mecho0 "Found ${YELLOW}${#fileslist[@]}${NC} GRIB-2 files from ${CYAN}${config_OBS_REF_DIR}${NC}"
+                mecho0 "Found ${YELLOW}${#fileslist[@]}${NC} GRIB-2 files from ${CYAN}${config_OBS_REF_DIR}/${anlys_date}${NC}"
                 for nsslfile in "${fileslist[@]}"; do
                     ${cpcmd}   "${nsslfile}" .
                     base_filename=$(basename "${nsslfile}")
@@ -455,7 +476,7 @@ function run_ioda_mrms_refl {
         obs_string="${obs_string},refl10cm"
     else
         echo ""
-        mecho0 "${RED}ERROR${NC}: Not enough radar reflectivity files available for cycle ${anlys_date}${anlys_hour}${anlys_min}."
+        mecho0 "${RED}ERROR${NC}: Not enough radar reflectivity files from ${LIGHT_BLUE}${config_OBS_REF_DIR}/${anlys_date}${NC} available for cycle ${anlys_date}${anlys_hour}${anlys_min}."
         exit 1
     fi
 
@@ -571,7 +592,7 @@ function run_ioda_cwp {
             curr_date=$(date -u -d @$curr_sec +%Y%m%d)
             curr_datetime=$(date -u -d @$curr_sec +%Y%m%d%H%M)
 
-            cwpfile="${config_OBS_CWP_DIR}/${curr_year}/${curr_datetime}_GOES16_CWP_OBS.nc"
+            cwpfile="${config_OBS_CWP_DIR}/${curr_date}/${curr_datetime}_GOES19_CWP_OBS.nc"
 
             if [[ $verb -eq 1 ]]; then mecho0 "Looking for CWP data valid: ${DARK}${curr_datetime}${NC} as ${cwpfile}"; fi
 
@@ -586,7 +607,7 @@ function run_ioda_cwp {
     done
 
     if [[ ! -s ${cwpfile} ]]; then
-        mecho0 "${YELLOW}INFO${NC}: No CWP file between ${DARK}${curr_datetime}${NC} and ${DARK}${anlys_eventtime}${NC}"
+        mecho0 "${YELLOW}INFO${NC}: No CWP file from ${LIGHT_BLUE}${config_OBS_CWP_DIR}/${curr_date}${NC} between ${DARK}${curr_datetime}${NC} and ${DARK}${anlys_eventtime}${NC}"
         return
     fi
 
@@ -1081,10 +1102,6 @@ function jedi_preparation {
     datetime_dir=$(dirname "${wrkdir}")
     parentdir=$(dirname "${datetime_dir}")
     casedir="${rundir}"
-    if ${config_relative_path}; then
-        parentdir=$(realpath -m --relative-to=${wrkdir} ${parentdir})
-        casedir=$(realpath -m --relative-to=${wrkdir} ${rundir})
-    fi
 
     #------------------------------------------------------
     # 1. Handle observation string
@@ -1113,6 +1130,10 @@ function jedi_preparation {
                 else
                     obs_string="${obs_string},rw"
                 fi
+            else
+                mecho0 "${YELLOW}INFO${NC}: radial velocity file ${RED}${radar_vrfile}${NC} not found"
+                # Remove rw
+                obs_string="${obs_string//rw/}"
             fi
         fi
 
@@ -1136,11 +1157,11 @@ function jedi_preparation {
         # Determine obs_string dynamically
         #------------------------------------------------------
         # 1. Expand the glob into an array
-        obs_files=("${datetime_dir}"/jedi_observer/jdiag_*.nc)
+        local obs_files=("${datetime_dir}"/jedi_observer/jdiag_*.nc)
 
         # 2. Process the array to strip prefixes and suffixes
         # We create a new array called 'obs_list'
-        obs_list=()
+        local obs_list=()
         for file in "${obs_files[@]}"; do
             # Remove the path and prefix: ../jedi_observer/jdiag_
             tmp="${file##*_}"
@@ -1162,6 +1183,10 @@ function jedi_preparation {
         exit 1
     esac
 
+    # Cleanup: replace double commas with one, and trim start/end commas
+    obs_string="${obs_string//,,/,}"
+    obs_string="${obs_string#,}"
+    obs_string="${obs_string%,}"
 
     #------------------------------------------------------
     # 2. Prepare MPAS/JEDI runtime files
@@ -1196,8 +1221,8 @@ function jedi_preparation {
             done
         fi
 
-        ln -sf "${casedir}/init/${domname}.invariant.nc" ./invariant.nc
-        ln -sf "${casedir}/${domname}/${domname}.ugwp_oro_data.nc" .
+        ${lncmd} "${casedir}/init/${domname}.invariant.nc" ./invariant.nc
+        ${lncmd} "${casedir}/${domname}/${domname}.ugwp_oro_data.nc" .
 
         #mkdir -p graphinfo stream_list
         #ln -snf "${FIXrrfs}"/graphinfo/* graphinfo/
@@ -1220,20 +1245,19 @@ function jedi_preparation {
         ;;
     post )
         mkdir -p jdiag
+        ln -snfr "${datetime_dir}"/jedi_solver/ana ana
         ;;
     * )
         mecho1 "${RED}ERROR${NC}: Unsupported taskname = ${PURPLE}${taskname}${NC}."
         exit 1
     esac
 
-    if [[ "${taskname}" != "post" ]]; then
-        # link ensembles to ens/
+    if [[ -d "ens" ]]; then           # Link ensembles to ens/ for tasks observer and solver
         currtime_fil=${currtime_str//:/.}
 
         for mem in $(seq -w 01 "${config_ENS_SIZE}"); do
             if [[ $icycle -eq 0 ]]; then
                 input_file_="${casedir}/init/${domname}_${mem}.init.nc"
-                #mkdir -p ana
             else
                 input_file_="${parentdir}/${event_pre}/fcst_${mem}/${domname}_${mem}.mpasout.${currtime_fil}.nc"
             fi
@@ -1241,6 +1265,13 @@ function jedi_preparation {
             ( ${cpcmd} "${input_file_}" "ens/mem0${mem}.nc" ) &
         done
         wait
+    fi
+
+    if [[ -d "jdiag" ]]; then        # Link observations for jdiag/ for task solver and post
+        for file in "${obs_files[@]}"; do
+            mecho0 "Linking ${file} to $(pwd)/jdiag ..."
+            ln -snfr "${file}" jdiag/
+        done
     fi
 
     #if [[ "${taskname}" == "solver" && ${icycle} -gt 0 ]]; then
@@ -1284,10 +1315,6 @@ function jedi_preparation {
         #cp "${config_FIXDIR}/jedi/streams.atmosphere.getkf" streams.atmosphere
         create_streams "GETKF" "streams.atmosphere"
 
-        if ${config_relative_path}; then
-            casedir=$(realpath -m --relative-to=${wrkdir} ${rundir})
-        fi
-
         local num_processors
         if [[ "${taskname}" == "post" ]]; then
             num_processors=${config_npepost}
@@ -1298,7 +1325,7 @@ function jedi_preparation {
         if [[ ! -f $casedir/$domname/$domname.graph.info.part.${num_processors} ]]; then
             split_graph "${config_gpmetis}" "${domname}.graph.info" "${num_processors}" "$rundir/$domname" "$dorun" "$verb"
         fi
-        ln -sf $casedir/$domname/$domname.graph.info.part.${num_processors} .
+        ${lncmd} $casedir/$domname/$domname.graph.info.part.${num_processors} .
 
         ln -sf "${config_FIXDIR}"/jedi/stream_list/* .
 
@@ -1308,15 +1335,16 @@ function jedi_preparation {
 
         # Prepare convinfo file based on obsvations
 
-        mecho0 "task = ${CYAN}${taskname}${NC}, obs_string = ${YELLOW}${obs_string#,}${NC}"
+        local num_observers=$(IFS=','; set -- ${obs_string#,}; echo $#)
+        mecho0 "task = ${PURPLE}${taskname}${NC}, obs_string = ${obs_string#,} (${YELLOW}${num_observers}${NC})"
         get_convinfo "${config_FIXDIR}/jedi/convinfo" ./convinfo "${obs_string}"
 
         # generate getkf.yaml based on how YAML_GEN_METHOD is set
         local analysisDate bseconds beginDate lenwind
         analysisDate="$(date -u -d @${iseconds} +%Y-%m-%dT%H:%M:%SZ)"
-        bseconds=$((iseconds - 600))
+        bseconds=$((iseconds - 1800))
         beginDate="$(date -u -d @${bseconds} +%Y-%m-%dT%H:%M:%SZ)"
-        lenwind="PT15M"
+        lenwind="PT30M"
 
         # generate the JEDI yaml files using templates from the parm/ directory
         #source "${USHrrfs}"/yaml_from_parm.sh "getkf"
@@ -1418,16 +1446,12 @@ function run_jedi_observer {
                                     # 1: Remove existing same name directory
     cd $wrkdir || return
 
-    if ${config_relative_path}; then
-        datimedir=$(realpath -m --relative-to=. ${datimedir})
-    fi
-
     #
     # Waiting for job conditions
     #
     local -a conditions
     [[ "${obs_string}" == *refl10cm* ]] && conditions=("${datimedir}/ioda_mrms_refl/done.ioda_mrms_refl")
-    [[ "${obs_string}" == *t129*     ]] && conditions+=("${datimedir}/ioda_bufr/done.ioda_bufr")
+    [[ "${obs_string}" == *t181*     ]] && conditions+=("${datimedir}/ioda_bufr/done.ioda_bufr")
     [[ "${obs_string}" == *cwp*      ]] && conditions+=("${datimedir}/ioda_cwp/done.ioda_cwp")
 
     wait_for_conditions "${conditions[*]}"
@@ -1454,16 +1478,16 @@ function run_jedi_observer {
     declare -A mappings  # Declare an associative array
 
     mappings=(  ["ioda_adpsfc.nc"]="${bufr_obspath}/ioda_adpsfc.nc"          \
-                ["ioda_adpupa.nc"]="${bufr_obspath}/ioda_adpupa.nc"          \
-                ["ioda_aircar.nc"]="${bufr_obspath}/ioda_aircar.nc"          \
-                ["ioda_aircft.nc"]="${bufr_obspath}/ioda_aircft.nc"          \
-                ["ioda_ascatw.nc"]="${bufr_obspath}/ioda_ascatw.nc"          \
-                ["ioda_msonet.nc"]="${bufr_obspath}/ioda_msonet.nc"          \
-                ["ioda_proflr.nc"]="${bufr_obspath}/ioda_proflr.nc"          \
-                ["ioda_rassda.nc"]="${bufr_obspath}/ioda_rassda.nc"          \
-                ["ioda_sfcshp.nc"]="${bufr_obspath}/ioda_sfcshp.nc"          \
-                ["ioda_vadwnd.nc"]="${bufr_obspath}/ioda_vadwnd.nc"          \
-                ["ioda_gnss_ztd.nc"]="${bufr_obspath}/ioda_gnss_ztd.nc"      \
+                #["ioda_adpupa.nc"]="${bufr_obspath}/ioda_adpupa.nc"          \
+                #["ioda_aircar.nc"]="${bufr_obspath}/ioda_aircar.nc"          \
+                #["ioda_aircft.nc"]="${bufr_obspath}/ioda_aircft.nc"          \
+                #["ioda_ascatw.nc"]="${bufr_obspath}/ioda_ascatw.nc"          \
+                #["ioda_msonet.nc"]="${bufr_obspath}/ioda_msonet.nc"          \
+                #["ioda_proflr.nc"]="${bufr_obspath}/ioda_proflr.nc"          \
+                #["ioda_rassda.nc"]="${bufr_obspath}/ioda_rassda.nc"          \
+                #["ioda_sfcshp.nc"]="${bufr_obspath}/ioda_sfcshp.nc"          \
+                #["ioda_vadwnd.nc"]="${bufr_obspath}/ioda_vadwnd.nc"          \
+                #["ioda_gnss_ztd.nc"]="${bufr_obspath}/ioda_gnss_ztd.nc"      \
                 # satellite observations
                 #["ioda_abi_g16.nc"]="${bufr_obspath}/ioda_abi_g16.nc"        \
                 #["ioda_abi_g18.nc"]="${bufr_obspath}/ioda_abi_g18.nc"        \
@@ -1474,16 +1498,16 @@ function run_jedi_observer {
                 #["ioda_crisf4_n21.nc"]="${bufr_obspath}/ioda_crisf4_n21.nc"  \
             )
     obs_lists=(  "ioda_adpsfc.nc"      \
-                 "ioda_adpupa.nc"      \
-                 "ioda_aircar.nc"      \
-                 "ioda_aircft.nc"      \
-                 "ioda_ascatw.nc"      \
-                 "ioda_msonet.nc"      \
-                 "ioda_proflr.nc"      \
-                 "ioda_rassda.nc"      \
-                 "ioda_sfcshp.nc"      \
-                 "ioda_vadwnd.nc"      \
-                 "ioda_gnss_ztd.nc"
+                 #"ioda_adpupa.nc"      \
+                 #"ioda_aircar.nc"      \
+                 #"ioda_aircft.nc"      \
+                 #"ioda_ascatw.nc"      \
+                 #"ioda_msonet.nc"      \
+                 #"ioda_proflr.nc"      \
+                 #"ioda_rassda.nc"      \
+                 #"ioda_sfcshp.nc"      \
+                 #"ioda_vadwnd.nc"      \
+                 #"ioda_gnss_ztd.nc"
             )                # Just to ensure output order
 
     if [[ "${obs_string}" == *"refl10cm"* ]]; then
@@ -1506,13 +1530,16 @@ function run_jedi_observer {
     fi
 
     # loop through and copy files
+    #pwd
     for dst_file in "${obs_lists[@]}"; do
-        if [[ -s "${mappings[${dst_file}]}" ]]; then
-            display_name=$(realpath -m --relative-to=${WORKDIR} "${mappings[${dst_file}]}")
+        obs_file="${mappings[${dst_file}]}"
+        #mecho0 "Looking for file ${obs_file}"
+        if [[ -s "${obs_file}" ]]; then
+            display_name=$(realpath -m --relative-to=${WORKDIR} "${obs_file}")
             mecho0 "Will use ${CYAN}${display_name}${NC}"
-            ${cpcmd} "${mappings[${dst_file}]}"  "obs/${dst_file}"
+            ${cpcmd} "${obs_file}"  "obs/${dst_file}"
         else
-            [[ ${verb} -eq 1 ]] && mecho0 "${PURPLE}WARNING${NC}: ${CYAN}${mappings[${dst_file}]}${NC} does not exist!"
+            [[ ${verb} -eq 1 ]] && mecho0 "${PURPLE}WARNING${NC}: ${CYAN}${obs_file}${NC} does not exist!"
         fi
     done
 
@@ -1578,10 +1605,6 @@ function run_jedi_solver {
                                      # 1: Remove existing same name directory
     cd $wrkdir || return
 
-    if ${config_relative_path}; then
-        datimedir=$(realpath -m --relative-to=. ${datimedir})
-    fi
-
     #
     # Waiting for job conditions
     #
@@ -1610,11 +1633,6 @@ function run_jedi_solver {
         touch done.solver
         return
     fi
-
-    #
-    # Copy ioda observation files
-
-    ln -snfr "${datimedir}"/jedi_observer/jdiag* jdiag/
 
     #------------------------------------------------------
     # Run mpasjedi_enkf.x
@@ -1660,7 +1678,13 @@ function run_jedi_post {
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/running.post || -f $wrkdir/done.post || -f $wrkdir/queue.post ]]; then
+    if [[ -f $wrkdir/done.post ]]; then
+        mecho0 "POST job is already done."
+        return
+    fi
+
+    if [[ -f $wrkdir/running.post || -f $wrkdir/queue.jedi_post ]]; then
+        mecho0 "POST job is running or is queued."
         return
     fi
 
@@ -1676,10 +1700,6 @@ function run_jedi_post {
     mkwrkdir $wrkdir 0               # 0: Keep existing directory as is
                                      # 1: Remove existing same name directory
     cd $wrkdir || return
-
-    if ${config_relative_path}; then
-        datimedir=$(realpath -m --relative-to=. ${datimedir})
-    fi
 
     #
     # Waiting for job conditions
@@ -1699,10 +1719,6 @@ function run_jedi_post {
 
     #
     # Copy ioda observation files
-    ln -snfr "${datimedir}"/jedi_solver/ana ana
-
-    ln -snfr "${datimedir}"/jedi_observer/jdiag* jdiag/
-
     if [[ -z ${obs_string} ]]; then
         touch done.post
         return
@@ -1929,9 +1945,7 @@ function run_update_bc {
     fi
 
     local casedir="${rundir}"
-    if ${config_relative_path}; then
-        casedir=$(realpath -m --relative-to=${wrkdir} ${rundir})
-    fi
+
     #
     # Waiting for job conditions
     #
@@ -1973,10 +1987,6 @@ function run_update_bc {
         # MPAS expected boundary file times
         mpastime_str1=$(date -u -d @${iseconds}   +%Y-%m-%d_%H.%M.%S)
         mpastime_str2=$(date -u -d @${isec_elbc}  +%Y-%m-%d_%H.%M.%S)
-
-        if ${config_relative_path}; then
-            casedir=$(realpath -m --relative-to=${memwrkdir} ${rundir})
-        fi
 
         if [[ $verb -eq 1 ]]; then
             mecho0 "Member: $iens use lbc files from $casedir/lbc:"
@@ -2127,9 +2137,6 @@ function run_mpas {
         fi
 
         local casedir="${rundir}"
-        if ${config_relative_path}; then
-            casedir=$(realpath -m --relative-to=. ${rundir})
-        fi
 
         if [[ $icycle -eq 0 && ${init_da} == false ]]; then
             ln -sf "${casedir}/init/${domname}_${memstr}.init.nc" "${initfile}"
@@ -2323,7 +2330,7 @@ function dacycle_driver() {
         #------------------------------------------------------
 
         obs_string=""
-        if [[ ${eventtime} == ??00 && ${icyc} -gt 0 && ${config_use_BUFR} == true ]]; then
+        if [[ ${icyc} -gt 0 && ${config_use_BUFR} == true ]]; then
             #obs_string="t120,t133,q120,q133,uv220,uv233"
             obs_string=$(read_convinfo_initial "${config_FIXDIR}/jedi/convinfo")
             #echo "obs_string=$obs_string"
@@ -3089,10 +3096,11 @@ esac
 
 if [[ ${config_update_in_place} == true ]]; then
     if ${config_relative_path}; then
-        cpcmd="ln -sfnr"
+        lncmd="ln -sfnr"
     else
-        cpcmd="ln -sf"
+        lncmd="ln -sf"
     fi
+    cpcmd="${lncmd}"
 else
     cpcmd="cp"
     #cpcmd="rsync -a"

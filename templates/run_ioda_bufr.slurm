@@ -24,9 +24,9 @@ fi
 
 ulimit -s unlimited
 
-    CDATE=CURRDATE
-    export PDY=${CDATE:0:8}
-    export cyc=CYCHR
+    #CDATE=CURRDATE
+    #export PDY=${CDATE:0:8}
+    #export cyc=CYCHRMIN
 
     cd WRKDIR || exit $?
 
@@ -34,36 +34,43 @@ ulimit -s unlimited
     rm -rf error.ioda_bufr queue.ioda_bufr
 
     cpreq="CPCMD"
+    obs_list=("OBSSTR")
 
     #-------------------------------------------------------------------
-    OBSPATH=OBSDIR
+    #OBSPATH=OBSDIR
     # link the prepbufr file
-    ${cpreq} "${OBSPATH}/${CDATE}.rap.t${cyc}z.prepbufr.tm00"       prepbufr
-    ${cpreq} "${OBSPATH}/${CDATE}.rap.t${cyc}z.gpsipw.tm00.bufr_d"  ztdbufr
-    ${cpreq} "${OBSPATH}/${CDATE}.rap.t${cyc}z.satwnd.tm00.bufr_d"  satwndbufr
-    ${cpreq} "${OBSPATH}/${CDATE}.rap.t${cyc}z.gsrcsr.tm00.bufr_d"  abibufr
-    ${cpreq} "${OBSPATH}/${CDATE}.rap.t${cyc}z.atms.tm00.bufr_d"    atmsbufr
-    ${cpreq} "${OBSPATH}/${CDATE}.rap.t${cyc}z.crisf4.tm00.bufr_d"  crisfsbufr
-    #${cpreq} "EXEDIR/bufr2ioda.x" .
-    #${cpreq} "EXEDIR/bufr2netcdf.x" .
+    #${cpreq} "${OBSPATH}/${CDATE}.rtma_ru.t${cyc}z.prepbufr.tm00"       prepbufr
+    #${cpreq} "${OBSPATH}/${CDATE}.rap.t${cyc}z.prepbufr.tm00"       prepbufr
+    #${cpreq} "${OBSPATH}/${CDATE}.rap.t${cyc}z.gpsipw.tm00.bufr_d"  ztdbufr
+    #${cpreq} "${OBSPATH}/${CDATE}.rap.t${cyc}z.satwnd.tm00.bufr_d"  satwndbufr
+    #${cpreq} "${OBSPATH}/${CDATE}.rap.t${cyc}z.gsrcsr.tm00.bufr_d"  abibufr
+    #${cpreq} "${OBSPATH}/${CDATE}.rap.t${cyc}z.atms.tm00.bufr_d"    atmsbufr
+    #${cpreq} "${OBSPATH}/${CDATE}.rap.t${cyc}z.crisf4.tm00.bufr_d"  crisfsbufr
+    ##${cpreq} "EXEDIR/bufr2ioda.x" .
+    ##${cpreq} "EXEDIR/bufr2netcdf.x" .
 
     #-------------------------------------------------------------------
     # generate the namelist on the fly
-    REFERENCE_TIME="${CDATE:0:4}-${CDATE:4:2}-${CDATE:6:2}T${CDATE:8:2}:00:00Z"
+    REFERENCE_TIME="ANALYSTIME"   #"${CDATE:0:4}-${CDATE:4:2}-${CDATE:6:2}T${CDATE:8:2}:00:00Z"
 
-    yaml_list=(
-        "prepbufr_adpsfc.yaml"
+    yaml_list=()
+    for obs in "${obs_list[@]}"; do
+        yaml_list+=("prepbufr_${obs}.yaml")
+    done
+
+    #yaml_list=(
+        #"prepbufr_adpsfc.yaml"
         #"prepbufr_adpupa.yaml"
-        "prepbufr_aircar.yaml"
-        "prepbufr_aircft.yaml"
-        "prepbufr_ascatw.yaml"
-        "prepbufr_msonet.yaml"
-        "prepbufr_proflr.yaml"
-        "prepbufr_rassda.yaml"
-        "prepbufr_sfcshp.yaml"
-        "prepbufr_vadwnd.yaml"
+        #"prepbufr_aircar.yaml"
+        #"prepbufr_aircft.yaml"
+        #"prepbufr_ascatw.yaml"
+        #"prepbufr_msonet.yaml"
+        #"prepbufr_proflr.yaml"
+        #"prepbufr_rassda.yaml"
+        #"prepbufr_sfcshp.yaml"
+        #"prepbufr_vadwnd.yaml"
         #"bufr2ioda_cris-fsr.yaml"
-    )
+    #)
 
     FIXrrfs=FIXDIR
 
@@ -73,18 +80,21 @@ ulimit -s unlimited
         # Copy empty ioda file to data/obs.
         # Use these as the default when bufr2ioda doesn't create a ioda.
         # Otherwise JEDI will crash due to missing ioda file
-        ${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_adpsfc.nc
-        ${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_adpupa.nc
-        ${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_aircar.nc
-        ${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_aircft.nc
-        ${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_ascatw.nc
-        ${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_gpsipw.nc
-        ${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_msonet.nc
-        ${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_proflr.nc
-        ${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_rassda.nc
-        ${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_satwnd.nc
-        ${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_sfcshp.nc
-        ${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_vadwnd.nc
+        for obs in "${obs_list[@]}"; do
+            ${cpreq} "${FIXrrfs}/jedi/ioda_empty.nc" "ioda_${obs}.nc"
+        done
+        #${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_adpsfc.nc
+        #${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_adpupa.nc
+        #${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_aircar.nc
+        #${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_aircft.nc
+        #${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_ascatw.nc
+        #${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_gpsipw.nc
+        #${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_msonet.nc
+        #${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_proflr.nc
+        #${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_rassda.nc
+        #${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_satwnd.nc
+        #${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_sfcshp.nc
+        #${cpreq} "${FIXrrfs}"/jedi/ioda_empty.nc ioda_vadwnd.nc
     fi
 
     # run bufr2ioda.x
@@ -95,79 +105,87 @@ ulimit -s unlimited
          # some data may not be available at all cycles, so we don't check whether bufr2ioda.x runs successfully
     done
 
-    # --------------------------------------------------
-    # run  bufr2netcdf tool for atms bufr obs
-    # --------------------------------------------------
-    ${cpreq} "${FIXrrfs}/jedi/atms_beamwidth.txt" .
-    ${cpreq} "${FIXrrfs}/jedi/bufr_atms_mapping.yaml" .
-    input_file="atmsbufr"
-    output_file="ioda.atms_{splits/satId}.nc"
-    yaml="bufr_atms_mapping.yaml"
-    if [[ -f "$input_file" ]]; then
-        RUNMPCMD EXEDIR/bufr2netcdf.x "$input_file" "$yaml" "$output_file"
-    else
-        echo "Input file $input_file does not exist."
-    fi
+    ## --------------------------------------------------
+    ## run  bufr2netcdf tool for atms bufr obs
+    ## --------------------------------------------------
+    #${cpreq} "${FIXrrfs}/jedi/atms_beamwidth.txt" .
+    #${cpreq} "${FIXrrfs}/jedi/bufr_atms_mapping.yaml" .
+    #input_file="atmsbufr"
+    #output_file="ioda.atms_{splits/satId}.nc"
+    #yaml="bufr_atms_mapping.yaml"
+    #if [[ -f "$input_file" ]]; then
+    #    RUNMPCMD EXEDIR/bufr2netcdf.x "$input_file" "$yaml" "$output_file"
+    #else
+    #    echo "Input file $input_file does not exist."
+    #fi
 
-    # --------------------------------------------------
-    # run  bufr2netcdf tool for cris-fsr bufr obs
-    # --------------------------------------------------
-    ${cpreq} "${PARMrrfs}/bufr2netcdf_cris-fsr.yaml" .
-    input_file="crisfsbufr"
-    output_file="ioda_crisf4_{splits/satId}.nc"
-    yaml="bufr2netcdf_cris-fsr.yaml"
-    if [[ -f "$input_file" ]]; then
-      ./bufr2netcdf.x "$input_file" "$yaml" "$output_file"
-    else
-      echo "Input file $input_file does not exist."
-    fi
+    ## --------------------------------------------------
+    ## run  bufr2netcdf tool for cris-fsr bufr obs
+    ## --------------------------------------------------
+    #${cpreq} "${PARMrrfs}/bufr2netcdf_cris-fsr.yaml" .
+    #input_file="crisfsbufr"
+    #output_file="ioda_crisf4_{splits/satId}.nc"
+    #yaml="bufr2netcdf_cris-fsr.yaml"
+    #if [[ -f "$input_file" ]]; then
+    #  ./bufr2netcdf.x "$input_file" "$yaml" "$output_file"
+    #else
+    #  echo "Input file $input_file does not exist."
+    #fi
 
     # --------------------------------------------------
     # run python bufr2ioda tool for ZTD and AMV bufr obs
-    ${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/bufr2ioda_adpupa_prepbufr.json" .
-    ${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/bufr2ioda_adpupa_prepbufr.py" .
-    ${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/bufr2ioda_ztd.py" .
-    #${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/bufr2ioda_satwnd.py" .
-    ${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/bufr2ioda.json" .
-    ${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/bufr2ioda_gsrcsr.json" .
-    ${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/bufr2ioda_gsrcsr.py" .
-    ${cpreq} "${HOMErrfs}/ush/run_bufr2ioda_gsrcsr.sh" .
+    #${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/bufr2ioda_gsrcsr.json" .
+    #${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/bufr2ioda_gsrcsr.py" .
+    #${cpreq} "${HOMErrfs}/ush/run_bufr2ioda_gsrcsr.sh" .
 
     # pyioda libraries
     PYIODALIB=$(echo "${HOMErrfs}"/sorc/RDASApp/build/lib/python3.*)
     WXFLOWLIB=${HOMErrfs}/ush/wxflow/src
     export PYTHONPATH="${WXFLOWLIB}:${PYIODALIB}:${PYTHONPATH}"
 
-    # generate a JSON w CDATE from the template and convert to IODA
     ${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/gen_bufr2ioda_json.py" .
-    # ADPUPA
-    ./gen_bufr2ioda_json.py -t bufr2ioda_adpupa_prepbufr.json -o bufr2ioda_adpupa_prepbufr_0.json
-    ./bufr2ioda_adpupa_prepbufr.py -c bufr2ioda_adpupa_prepbufr_0.json
+    if [[ " ${obs_list[*]} " =~ " adpupa " ]]; then
+        # generate a JSON w CDATE from the template and convert to IODA
+        # ADPUPA
+        ${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/bufr2ioda_adpupa_prepbufr.json" .
+        ${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/bufr2ioda_adpupa_prepbufr.py" .
+        ./gen_bufr2ioda_json.py -t bufr2ioda_adpupa_prepbufr.json -o bufr2ioda_adpupa_prepbufr_0.json
+        ./bufr2ioda_adpupa_prepbufr.py -c bufr2ioda_adpupa_prepbufr_0.json
+    fi
 
-    # ZTD
-    ./gen_bufr2ioda_json.py -t bufr2ioda.json -o bufr2ioda_0.json
-    ./bufr2ioda_ztd.py -c bufr2ioda_0.json
+    if [[ " ${obs_list[*]} " =~ " ztd " || " ${obs_list[*]} " =~ " satwnd " ]]; then
+        ${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/bufr2ioda.json" .
+        ./gen_bufr2ioda_json.py -t bufr2ioda.json -o bufr2ioda_0.json
+    fi
 
-    # SATWND
-    #./bufr2ioda_satwnd.py -c bufr2ioda_0.json
+    if [[ " ${obs_list[*]} " =~ " ztd " ]]; then
+        # ZTD
+        ${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/bufr2ioda_ztd.py" .
+        ./bufr2ioda_ztd.py -c bufr2ioda_0.json
+    fi
 
-    # GSRCSR
-    DATA=WRKDIR
-    ln -sf abibufr "rap.t${cyc}z.gsrcsr.tm00.bufr_d"
-    ./run_bufr2ioda_gsrcsr.sh "${CDATE}" rap "${DATA}" "${DATA}" "${DATA}" "${HOMErrfs}/sorc/RDASApp"
-    cp "rap.t${cyc}z.abi_g16.tm00.nc" "ioda_abi_g16.nc"
-    cp "rap.t${cyc}z.abi_g18.tm00.nc" "ioda_abi_g18.nc"
+    if [[ " ${obs_list[*]} " =~ " satwnd " ]]; then
+        # SATWND
+        ${cpreq} "${HOMErrfs}/sorc/RDASApp/rrfs-test/IODA/python/bufr2ioda_satwnd.py" .
+        ./bufr2ioda_satwnd.py -c bufr2ioda_0.json
+    fi
+
+    ## GSRCSR
+    #DATA=WRKDIR
+    #ln -sf abibufr "rap.t${cyc}z.gsrcsr.tm00.bufr_d"
+    #./run_bufr2ioda_gsrcsr.sh "${CDATE}" rap "${DATA}" "${DATA}" "${DATA}" "${HOMErrfs}/sorc/RDASApp"
+    #cp "rap.t${cyc}z.abi_g16.tm00.nc" "ioda_abi_g16.nc"
+    #cp "rap.t${cyc}z.abi_g18.tm00.nc" "ioda_abi_g18.nc"
 
     # run offline IODA tools
     ${cpreq} "${HOMErrfs}/ush"/offline_domain_check.py .
-    ${cpreq} "${HOMErrfs}/ush"/offline_domain_check_satrad.py .
     ${cpreq} "${HOMErrfs}/ush"/offline_ioda_tweak.py .
-    ${cpreq} "${HOMErrfs}/ush"/offline_vad_thinning.py .
 
     for ioda_file in ioda*nc; do
         grid_file="GRIDFILE"
         #if [[ "${ioda_file}" == *abi* || "${ioda_file}" == *atms* || "${ioda_file}" == *cris* ]]; then
         if [[ "${ioda_file}" == *abi* ]]; then
+            ${cpreq} "${HOMErrfs}/ush"/offline_domain_check_satrad.py .
             echo " ${ioda_file} ioda file detected: running offline_domain_check_satrad.py"
             ./offline_domain_check_satrad.py -o "${ioda_file}" -g "${grid_file}" -s 0.005
             base_name=$(basename "$ioda_file" .nc)
@@ -184,9 +202,12 @@ ulimit -s unlimited
         fi
     done
 
-    # Run vadwnd superobbing and thinning offline tool.
-    ./offline_vad_thinning.py -i ioda_vadwnd.nc -o ioda_vadwnd_thinned.nc
-    mv ioda_vadwnd_thinned.nc ioda_vadwnd.nc
+    if [[ " ${obs_list[*]} " =~ " vadwnd " ]]; then
+        # Run vadwnd superobbing and thinning offline tool.
+        ${cpreq} "${HOMErrfs}/ush"/offline_vad_thinning.py .
+        ./offline_vad_thinning.py -i ioda_vadwnd.nc -o ioda_vadwnd_thinned.nc
+        mv ioda_vadwnd_thinned.nc ioda_vadwnd.nc
+    fi
 
     # file count sanity check and copy to COMOUT
     if ls ./ioda*nc; then

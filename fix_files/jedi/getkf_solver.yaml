@@ -51,7 +51,7 @@ output: # for outputting mean posterior
 
 time window:
   begin: '@beginDate@'
-  length: PT15M
+  length: '@lenWin@'
 
 geometry:
   nml_file: ./namelist.atmosphere
@@ -250,7 +250,7 @@ observations:
       obs error:
         covariance model: diagonal
       obs operator:
-        name: GOESCloudWaterPath
+        name: GOESCloudWaterPath_night
         goes obs type: CWP_NIGHT
         add hail mixing ratio: true
         set maximum hofx value: 6.0

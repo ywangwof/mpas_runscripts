@@ -515,6 +515,19 @@ EOF
 ########################################################################
 
 function run_lbc {
+    wrkdir=${rundir}/lbc
+
+    if [[ -f ${wrkdir}/done.${domname} ]]; then
+        mecho0 "Job lbc is already done"
+        return 0
+    fi
+
+    if [[ -f ${wrkdir}/running.${domname} || -f ${wrkdir}/queue.${domname} ]]; then
+        mecho0 "Job lbc is running or is already queued."
+        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
+        check_job_status "${domname}" "${wrkdir}" "${config_nenslbc}"
+        return 0
+    fi
 
     conditions=()
     while [[ $# -gt 0 ]]; do
@@ -531,7 +544,8 @@ function run_lbc {
 
     if [[ ${dorun} == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking: ${CYAN}${cond}${NC} ...."
+            rcond=$(realpath --relative-to "${WORKDIR}" "${cond}")
+            mecho0 "Checking: ${CYAN}${rcond}${NC} ...."
             while [[ ! -e ${cond} ]]; do
                 if [[ ${verb} -eq 1 ]]; then
                     mecho0 "Waiting for file: ${CYAN}${cond}${NC}"
@@ -545,18 +559,6 @@ function run_lbc {
         done
         cd ${rundir}/init || return
         ln -sf ${domname}_01.init.nc ${domname}.invariant.nc
-    fi
-
-    wrkdir=${rundir}/lbc
-
-    if [[ -f ${wrkdir}/done.${domname} ]]; then
-        return 0
-    fi
-
-    if [[ -f ${wrkdir}/running.${domname} || -f ${wrkdir}/queue.${domname} ]]; then
-        #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-        check_job_status "${domname}" "${wrkdir}" "${config_nenslbc}"
-        return 0
     fi
 
     mkwrkdir ${wrkdir} ${overwrite}
@@ -635,7 +637,8 @@ function run_time_intrp {
 
     if [[ ${dorun} == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking: ${CYAN}${cond}${NC} ...."
+            rcond=$(realpath --relative-to "${WORKDIR}" "${cond}")
+            mecho0 "Checking: ${CYAN}${rcond}${NC} ...."
             while [[ ! -e ${cond} ]]; do
                 if [[ ${verb} -eq 1 ]]; then
                     mecho0 "Waiting for file: ${CYAN}${cond}${NC}"
@@ -898,13 +901,13 @@ if [[ ! -d ${rundir} ]]; then
 fi
 
 echo    ""
-echo -e "---- Jobs (${YELLOW}$$${NC}) started at $(date +'%m-%d %H:%M:%S (%Z)') on host ${LIGHT_RED}$(hostname)${NC} ----\n"
+echo -e "---- Jobs (${YELLOW}$$${NC}) started at ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} on host ${LIGHT_RED}$(hostname)${NC} ----\n"
 echo -e "  Event  date: ${WHITE}${startdatetime}${NC} --> ${WHITE}${enddatetime:0:8}${NC} ${YELLOW}${enddatetime:8:4}${NC}"
-echo -e "  ROOT    dir: ${rootdir}${BROWN}/scripts${NC}"
-echo -e "  TEMP    dir: ${PURPLE}${config_TEMPDIR}${NC}"
-echo -e "  FIXED   dir: ${DARK}${config_FIXDIR}${NC}"
-echo -e "  EXEC    dir: ${GREEN}${config_EXEDIR}${NC}"
-echo -e "  Working dir: ${WHITE}${WORKDIR}${LIGHT_BLUE}/${eventdate}/lbc${NC}"
+echo -e "  ROOT    dir: ${rootdir}/${BROWN}scripts${NC}"
+echo -e "  TEMP    dir: ${config_TEMPDIR}"
+echo -e "  FIXED   dir: ${config_FIXDIR}"
+echo -e "  EXEC    dir: ${config_EXEDIR}"
+echo -e "  Working dir: ${WORKDIR}/${WHITE}${eventdate}/lbc${NC}"
 echo -e "  Domain name: ${RED}${domname}${NC}; HRRRE time: ${DARK}${config_hrrr_time}${NC}; NENSLBC: ${WHITE}${config_nenslbc}${NC}"
 echo    " "
 
@@ -935,8 +938,6 @@ for job in "${jobs[@]}"; do
     run_${job} ${jobargs[${job}]}
 done
 
-echo " "
-echo "==== Jobs done $(date +'%m-%d %H:%M:%S (%Z)') ===="
-echo " "
+echo -e "\n==== Jobs done ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} ====\n"
 
 exit 0

@@ -59,7 +59,7 @@ function setup_machine {
         jedi_modulename="RDAS/ursa.intel"      # RRFS
 
         site_workdir="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/run_dirs"
-        site_postdir="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/frdd-wofs-post"
+        site_postdir="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/frdd-wofs-post.mpas"
         RT_OBSDIR="/scratch3/NAGAPE/wof/ywang/rt_obs"
 
         if [[ ${set_up} == true ]]; then
@@ -91,17 +91,18 @@ function setup_machine {
             site_nckspath="/apps/spack-2024-12/linux-rocky9-x86_64/gcc-11.4.1/nco-5.2.4-h2xd52tl4efe2ga4ayd6rjr3t5elfe6v/bin/ncks"
             site_gpmetis="/scratch3/NAGAPE/wof/ywang/tools/bin/gpmetis"
 
-            #site_OBS_DIR_BUFR="/scratch3/NAGAPE/wof/kknopfmeier/prepbufr"
-            #site_OBS_DIR_REF="/scratch3/NAGAPE/wof/kknopfmeier/MRMS/reflectivity"
-            #site_OBS_DIR_CWP="/scratch3/NAGAPE/wof/kknopfmeier/CWP"
-            #site_hrrr_dir="/scratch3/NAGAPE/wof/kknopfmeier/HRRRE"
-
-            site_OBS_DIR_BUFR="/scratch4/BMC/rtrr/RRFS2_RETRO_DATA/May2024/obs_rap"
-            site_OBS_DIR_REF="/scratch4/BMC/rtrr/RRFS2_RETRO_DATA/May2024/reflectivity"
+            site_OBS_DIR_BUFR="/scratch3/NAGAPE/wof/kknopfmeier/PB"
+            site_OBS_DIR_REF="/scratch3/NAGAPE/wof/kknopfmeier/MRMS"
             site_OBS_DIR_VEL="/scratch3/NAGAPE/wof/kknopfmeier/MRMS"
-            site_OBS_DIR_CWP="/scratch3/NAGAPE/wof/ywang/rt_obs/CWP"
+            site_OBS_DIR_CWP="/scratch3/NAGAPE/wof/kknopfmeier/CWP"
+            site_hrrr_dir="/scratch3/NAGAPE/wof/kknopfmeier/HRRRE"
 
-            site_hrrr_dir="/scratch3/NAGAPE/wof/ywang/HRRRE"
+            #site_OBS_DIR_BUFR="/scratch4/BMC/rtrr/RRFS2_RETRO_DATA/May2024/obs_rap"
+            #site_OBS_DIR_REF="/scratch4/BMC/rtrr/RRFS2_RETRO_DATA/May2024/reflectivity"
+            #site_OBS_DIR_VEL="/scratch3/NAGAPE/wof/kknopfmeier/MRMS"
+            #site_OBS_DIR_CWP="/scratch3/NAGAPE/wof/ywang/rt_obs/CWP"
+
+            #site_hrrr_dir="/scratch3/NAGAPE/wof/ywang/HRRRE"
         fi
         ;;
     Hercules )

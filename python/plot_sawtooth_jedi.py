@@ -58,7 +58,7 @@ def get_sawtooth_metadata(args):
 
 ################################################################################
 def process_single_cycle(meta, obname, args):
-    """Worker function to process a single cycle's data for a specific observation."""
+    """Worker function with robust dimension checking for ensemble members."""
     path_b = os.path.join(meta['dir_b'], f'jdiag_{obname}.nc')
     path_a = os.path.join(meta['dir_a'], f'jdiag_{obname}.nc')
 
@@ -67,20 +67,17 @@ def process_single_cycle(meta, obname, args):
 
     try:
         with Dataset(path_b, 'r') as nc_b, Dataset(path_a, 'r') as nc_a:
-            required_groups = ['ombg', 'ObsValue', 'ObsError']
-            if not all(g in nc_b.groups for g in required_groups):
-                return [np.nan]*2, [np.nan]*2, [np.nan]*2, None
-
+            # Identify the variable name (e.g., equivalentReflectivityFactor) [cite: 4, 30]
             vartype = list(nc_b.groups['ombg'].variables.keys())[0]
-            if vartype not in nc_b.groups['ObsValue'].variables:
-                return [np.nan]*2, [np.nan]*2, [np.nan]*2, None
 
+            # Load primary arrays
             ombg = nc_b.groups['ombg'].variables[vartype][:]
             oman = nc_a.groups['oman'].variables[vartype][:]
             obs_val_b = nc_b.groups['ObsValue'].variables[vartype][:]
             err_b = nc_b.groups['ObsError'].variables[vartype][:]
             err_a = nc_a.groups['ObsError'].variables[vartype][:]
 
+            # Create the mask based on the main observation group [cite: 303]
             valid_mask = (~err_b.mask) & (~err_a.mask)
             if args.type == 'thresh':
                 valid_mask = valid_mask & (obs_val_b > args.thresh)
@@ -88,51 +85,106 @@ def process_single_cycle(meta, obname, args):
             if not np.any(valid_mask):
                 return [np.nan]*2, [np.nan]*2, [np.nan]*2, vartype
 
+            # Calculate RMSD and Bias
             rmsd = [np.sqrt(np.mean(ombg[valid_mask]**2)), np.sqrt(np.mean(oman[valid_mask]**2))]
             innov = [np.mean(ombg[valid_mask]), np.mean(oman[valid_mask])]
 
-            h_b = np.stack([nc_b.groups[f'hofx0_{m}'].variables[vartype][valid_mask] for m in range(1, args.mems+1)])
-            h_a = np.stack([nc_a.groups[f'hofx0_{m}'].variables[vartype][valid_mask] for m in range(1, args.mems+1)])
+            # --- ROBUST ENSEMBLE PROCESSING ---
+            ens_groups_b = sorted([g for g in nc_b.groups.keys() if g.startswith('hofx0_')])[:args.mems]
+            ens_groups_a = sorted([g for g in nc_a.groups.keys() if g.startswith('hofx0_')])[:args.mems]
 
+            def get_valid_hofx(nc_obj, groups, mask):
+                member_data = []
+                for g in groups:
+                    data = nc_obj.groups[g].variables[vartype][:]
+                    # CRITICAL: Check if this member's size matches the mask size [cite: 284, 321]
+                    if data.shape == mask.shape:
+                        member_data.append(data[mask])
+                    else:
+                        if args.verbose:
+                            print(f"Warning: Member {g} shape {data.shape} mismatch with mask {mask.shape}. Skipping member.")
+                return np.stack(member_data) if member_data else None
+
+            h_b = get_valid_hofx(nc_b, ens_groups_b, valid_mask)
+            h_a = get_valid_hofx(nc_a, ens_groups_a, valid_mask)
+
+            if h_b is None or h_a is None:
+                return rmsd, innov, [np.nan]*2, vartype
+
+            # Total Spread calculation [cite: 303]
             spread = [
                 np.sqrt(np.mean(err_b[valid_mask]**2 + np.var(h_b, axis=0))),
                 np.sqrt(np.mean(err_a[valid_mask]**2 + np.var(h_a, axis=0)))
             ]
 
             return rmsd, innov, spread, vartype
+
     except Exception as e:
-        if args.verbose: print(f"Error processing {meta['hm_str']}: {e}")
+        if args.verbose:
+            print(f"Error processing {meta['hm_str']}: {e}")
         return [np.nan]*2, [np.nan]*2, [np.nan]*2, None
 
 ################################################################################
+
 def process_gross_error_cycle(meta, obname, args):
-    """Worker function to process gross error check data for a single cycle."""
+    """
+    Worker function to process gross error check data.
+    Now includes verbose path logging and flexible variable detection.
+    """
     path_b = os.path.join(meta['dir_b'], f'jdiag_{obname}.nc')
 
+    # Verbose message before reading the file
+    if args.verbose:
+        print(f"DEBUG: Attempting to read diagnostic file: {path_b}")
+
     if not os.path.exists(path_b):
+        if args.verbose:
+            print(f"DEBUG: File not found: {path_b}")
         return np.nan, np.nan, np.nan
 
     try:
         with Dataset(path_b, 'r') as nc_b:
-            if 'DiagnosticFlags' not in nc_b.groups or 'gross_error_check' not in nc_b.groups['DiagnosticFlags'].groups:
+            # Navigate to the DiagnosticFlags group [cite: 1, 4]
+            if 'DiagnosticFlags' not in nc_b.groups:
                 return np.nan, np.nan, np.nan
 
-            vartype = list(nc_b.groups['DiagnosticFlags'].groups['gross_error_check'].variables.keys())[0]
-            if vartype not in nc_b.groups['DiagnosticFlags'].groups['gross_error_check'].variables:
+            diag_group = nc_b.groups['DiagnosticFlags']
+            if 'gross_error_check' not in diag_group.groups:
                 return np.nan, np.nan, np.nan
 
-            var = nc_b.groups['DiagnosticFlags'].groups['gross_error_check'].variables[vartype]
+            gec_group = diag_group.groups['gross_error_check']
+
+            # Flexible Variable Detection:
+            # This looks for any variable name present in the group
+            avail_vars = list(gec_group.variables.keys())
+            if not avail_vars:
+                if args.verbose:
+                    print(f"DEBUG: No variables found in gross_error_check group for {path_b}")
+                return np.nan, np.nan, np.nan
+
+            # Select the first available variable (e.g., equivalentReflectivityFactor)
+            vartype = avail_vars[0]
+            var = gec_group.variables[vartype]
+
+            # Disable auto-masking to read raw integer flags [cite: 2]
             var.set_auto_mask(False)
-            gec = var[:]
-            total = len(gec)
-            assimilated = np.sum(gec != 1)
-            rejected = np.sum(gec == 1)
+            gec_data = var[:]
+
+            total = len(gec_data)
+
+            # JEDI Logic: 0 is Passed, non-zero is Rejected
+            rejected = int(np.sum(gec_data != 0))
+            assimilated = int(total - rejected)
+
+            if args.verbose:
+                print(f"DEBUG {meta['hm_str']}: Variable '{vartype}' | Total: {total} | Rej: {rejected}")
 
             return total, assimilated, rejected
-    except Exception as e:
-        if args.verbose: print(f"Error processing gross error {meta['hm_str']}: {e}")
-        return np.nan, np.nan, np.nan
 
+    except Exception as e:
+        if args.verbose:
+            print(f"ERROR: Failed to process {path_b}: {e}")
+        return np.nan, np.nan, np.nan
 ################################################################################
 def plot_ob_type(obname, cycle_meta, args):
     """Aggregates parallel results and generates the sawtooth plot with dynamic y-limits."""
@@ -297,6 +349,7 @@ if __name__ == "__main__":
     meta_list = get_sawtooth_metadata(cli_args)
 
     for ob in cli_args.obs:
-        plot_ob_type(ob, meta_list, cli_args)
         if cli_args.number:
             plot_gross_error(ob, meta_list, cli_args)
+        else:
+            plot_ob_type(ob, meta_list, cli_args)

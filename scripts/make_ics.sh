@@ -525,7 +525,8 @@ function run_init4invariant {
 
     if [[ ${dorun} == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking: ${CYAN}${cond}${NC} ...."
+            rcond=$(realpath --relative-to "${WORKDIR}" "${cond}")
+            mecho0 "Checking: ${CYAN}${rcond}${NC} ...."
             while [[ ! -e ${cond} ]]; do
                 check_job_status "ungrib" "${rundir}/init/ungrib" "${config_nensics}"
                 if [[ ${verb} -eq 1 ]]; then
@@ -695,6 +696,18 @@ EOF
 ########################################################################
 
 function run_init {
+    wrkdir=${rundir}/init
+    if [[ -f ${wrkdir}/done.${domname} ]]; then
+        mecho0 "Job init is already done"
+        ln -sf ${domname}_01.init.nc ${domname}.invariant.nc
+        return 0
+    fi
+
+    if [[ -f ${wrkdir}/running.${domname} || -f ${wrkdir}/queue.${domname} ]]; then
+        mecho0 "Job init is running or is already queued."
+        check_job_status "${domname}" "${wrkdir}" "${config_nensics}"
+        return 0
+    fi
 
     # Otherwise, run init normally
     conditions=()
@@ -712,7 +725,8 @@ function run_init {
 
     if [[ ${dorun} == true ]]; then
         for cond in "${conditions[@]}"; do
-            mecho0 "Checking: ${CYAN}${cond}${NC} ...."
+            rcond=$(realpath --relative-to "${WORKDIR}" "${cond}")
+            mecho0 "Checking: ${CYAN}${rcond}${NC} ...."
             while [[ ! -e ${cond} ]]; do
                 check_job_status "ungrib" "${rundir}/init/ungrib" "${config_nensics}"
                 if [[ ${verb} -eq 1 ]]; then
@@ -721,17 +735,6 @@ function run_init {
                 sleep 10
             done
         done
-    fi
-
-    wrkdir=${rundir}/init
-    if [[ -f ${wrkdir}/done.${domname} ]]; then
-        ln -sf ${domname}_01.init.nc ${domname}.invariant.nc
-        return 0
-    fi
-
-    if [[ -f ${wrkdir}/running.${domname} || -f ${wrkdir}/queue.${domname} ]]; then
-        check_job_status "${domname}" "${wrkdir}" "${config_nensics}"
-        return 0
     fi
 
     mkwrkdir "${wrkdir}" "${overwrite}"
@@ -932,14 +935,13 @@ if [[ ! -d ${rundir} ]]; then
 fi
 
 echo    ""
-# trunk-ignore(shellcheck/SC2312)
-echo -e "---- Jobs (${YELLOW}$$${NC}) started at $(date +'%m-%d %H:%M:%S (%Z)') on host ${LIGHT_RED}$(hostname)${NC} ----\n"
+echo -e "---- Jobs (${YELLOW}$$${NC}) started at ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} on host ${LIGHT_RED}$(hostname)${NC} ----\n"
 echo -e "  Event  date: ${WHITE}${eventdate}${NC} ${YELLOW}${eventtime}${NC}"
-echo -e "  ROOT    dir: ${rootdir}${BROWN}/scripts${NC}"
-echo -e "  TEMP    dir: ${PURPLE}${config_TEMPDIR}${NC}"
-echo -e "  FIXED   dir: ${DARK}${config_FIXDIR}${NC}"
-echo -e "  EXEC    dir: ${GREEN}${config_EXEDIR}${NC}"
-echo -e "  Working dir: ${WHITE}${WORKDIR}${LIGHT_BLUE}/${eventdate}/init${NC}"
+echo -e "  ROOT    dir: ${rootdir}/${BROWN}scripts${NC}"
+echo -e "  TEMP    dir: ${config_TEMPDIR}"
+echo -e "  FIXED   dir: ${config_FIXDIR}"
+echo -e "  EXEC    dir: ${config_EXEDIR}"
+echo -e "  Working dir: ${WORKDIR}/${WHITE}${eventdate}/init${NC}"
 echo -e "  Domain name: ${RED}${domname}${NC}; HRRRE time: ${DARK}${config_hrrr_time}${NC}; NENSIC: ${WHITE}${config_nensics}${NC}"
 echo    " "
 
@@ -970,9 +972,6 @@ for job in "${jobs[@]}"; do
     run_${job} ${jobargs[${job}]}
 done
 
-echo " "
-# trunk-ignore(shellcheck/SC2312)
-echo "==== Jobs done $(date +'%m-%d %H:%M:%S (%Z)') ===="
-echo " "
+echo -e "\n==== Jobs done ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} ====\n"
 
 exit 0

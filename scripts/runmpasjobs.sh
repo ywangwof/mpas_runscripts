@@ -465,8 +465,9 @@ post )
 
         if [[ ! -e ${run_dir}/FCST/${eventdate}${affix}/fcst_${enddatetime}_start ]]; then
             # To make sure the correct FCST files are used, "-c"
-            cmds=("${script_dir}/lnmpasfcst.sh" -c -b "$fcstbegs" -s "${startdatetime}" -e "${enddatetime}" "${config_file}" "${eventdate}")
+            cmds=("${script_dir}/lnmpasfcst.sh" -c -b "$fcstbegs" -s "${startdatetime}" -e "${enddatetime}" "${config_file}")
             cmds+=("${eventdate}")
+            if [[ -z ${show} ]]; then echo -e "${GREEN}${cmds[*]}${NC}"; fi
             ${show} "${cmds[@]}"
         fi
 
@@ -488,7 +489,7 @@ post )
                 [PYTHONSCRIPT]="./wofs_${task}_summary_files_MPAS.py"
                 [CONFIGFILE]="${post_config}"
             )
-            submit_a_job "$wrkdir" "${task}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" ""
+            cmds=(submit_a_job "$wrkdir" "${task}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" "")
         fi
     else
         echo -e "${DARK}File ${CYAN}$donepost${NC} exist"
@@ -522,7 +523,7 @@ plot )
                 [PYTHONSCRIPT]="./wofs_${task}_summary_files_MPAS.py"
                 [CONFIGFILE]="${post_config}"
             )
-            submit_a_job "$wrkdir" "${task}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" ""
+            cmds=(submit_a_job "$wrkdir" "${task}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" "")
         fi
 
     else
@@ -556,7 +557,7 @@ verif )
                 [PYTHONSCRIPT]="./wofs_plot_verification_MPAS.py"
                 [CONFIGFILE]="${post_config}"
             )
-            submit_a_job "$wrkdir" "${task}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" ""
+            cmds=(submit_a_job "$wrkdir" "${task}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" "")
         fi
 
     else
@@ -590,7 +591,7 @@ snd )
                 [PYTHONSCRIPT]="./wofs_plot_sounding_MPAS.py"
                 [CONFIGFILE]="${post_config}"
             )
-            submit_a_job "$wrkdir" "${task}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" ""
+            cmds=(submit_a_job "$wrkdir" "${task}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" "")
         fi
 
     else
@@ -625,9 +626,7 @@ diag )
             [PYTHONSCRIPT]="${cmds[*]}"
             [CONFIGFILE]=""
         )
-        submit_a_job "${wrkdir}" "${task}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" ""
-
-        cmds=()
+        cmds=(submit_a_job "${wrkdir}" "${task}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" "")
     fi
     ;;
 

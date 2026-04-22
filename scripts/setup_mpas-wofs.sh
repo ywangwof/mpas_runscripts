@@ -102,8 +102,6 @@ function usage {
     echo -e "              -m             Machine     Machine name to run on, [Jet, Derecho, Vecna]."
     echo -e "              --template|--fix|--exec=DIR"
     echo -e "                                         Directories for runtime files, job templates/fixed static files/executable programs respectively."
-    echo -e "              --filter=FILENAME"
-    echo -e "                                         Filter file name that control variable control about whether to use Rank Histogram filter or not. For example, bnrhf_qceff_table_wofs.csv"
     echo -e "              -a             wof         Account name for job submission."
     echo -e "              -M             init        DA cycles mode, either init or restart. default: init"
     echo -e "              -F             init        FCST launch mode, either init or restart. default same as ${BROWN}\${damode}${NC}"
@@ -187,17 +185,6 @@ function parse_args {
                     echo -e "${RED}ERROR${NC}: ${keyname^} directory ${BLUE}${keydir}${NC} does not exist."
                     usage 1
                 fi
-                ;;
-            --filter )
-                if [[ "${key}" =~ ^--filter(=(.*))?$ ]]; then
-                    if [[ -n ${BASH_REMATCH[2]} ]]; then
-                        keyfile="${BASH_REMATCH[2]}"
-                    else
-                        keyfile="$2"
-                        shift
-                    fi
-                fi
-                args["filter"]="${keyfile}"
                 ;;
             -m )
                 case ${2^^} in
@@ -1274,8 +1261,8 @@ function write_config {
         local options selected result
         options=(
                  "abort:     Exit the workflow"
-                 "overwrite: Replace existing config"
-                 "skip:      Keep existing and continue"
+                 "overwrite: Replace existing ${YELLOW}${configname}${NC}"
+                 "skip:      Keep existing file and continue"
                  "backup:    Create new & save original (timestamped)"
         )
 
@@ -1771,8 +1758,6 @@ function check_obs_files {
 
 source "${scpdir}/Common_Utilfuncs.sh" || exit $?
 
-relative_path=false
-
 #-----------------------------------------------------------------------
 #
 # Handle command line arguments (override default settings)
@@ -1825,19 +1810,6 @@ export runcmd
 [[ -v args["EXEDIR"] ]]  && EXEDIR=${args["EXEDIR"]}   || EXEDIR="${rootdir}/exec"
 
 [[ -v args["level_file"] ]] && fixed_level="${args['level_file']}"  || fixed_level="${FIXDIR}/L60.txt"
-if [[ -v args["filter"] ]]; then
-    if [[ -f ${args["filter"]} ]]; then
-        filter_file="${args['filter']}"
-    else
-        filter_file="${FIXDIR}/${args['filter']}"
-        if [[ ! -f "${filter_file}" ]]; then
-            echo -e "${RED}ERROR${NC}: File ${PURPLE}${filter_file}${NC} does not exist."
-            usage 1
-        fi
-    fi
-else
-    filter_file=""
-fi
 
 #-----------------------------------------------------------------------
 #
@@ -1852,6 +1824,14 @@ fi
 
 [[ -v args["caseconfig"] ]] && caseconfig="${args['caseconfig']}" || caseconfig="${WORKDIR}/config.${eventdate}${affix}"
 
+relative_path=false
+config_relative_path=${relative_path}
+config_job_account_str="${site_job_account_str}"
+config_job_exclusive_str="${site_job_exclusive_str}"
+config_job_runexe_str="${site_job_runexe_str}"
+config_job_runmpexe_str="${site_job_runmpexe_str}"
+config_EXEDIR="${EXEDIR}"
+
 #
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
@@ -1861,13 +1841,13 @@ fi
 #% ENTRY
 
 echo    ""
-echo -e "---- Jobs (${YELLOW}$$${NC}) started at $(date +'%m-%d %H:%M:%S (%Z)') on host ${LIGHT_RED}$(hostname)${NC} ----\n"
+echo -e "---- Jobs (${YELLOW}$$${NC}) started at ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} on host ${LIGHT_RED}$(hostname)${NC} ----\n"
 echo -e "  Event  date: ${WHITE}${eventdate}${NC} ${YELLOW}${eventtime}${NC}"
-echo -e "  ROOT    dir: ${rootdir}${BROWN}/scripts${NC}"
+echo -e "  ROOT    dir: ${rootdir}/${BROWN}scripts${NC}"
 echo -e "  TEMP    dir: ${PURPLE}${TEMPDIR}${NC}"
 echo -e "  FIXED   dir: ${DARK}${FIXDIR}${NC}"
 echo -e "  EXEC    dir: ${GREEN}${EXEDIR}${NC}"
-echo -e "  Working dir: ${WHITE}${WORKDIR}${LIGHT_BLUE}/${eventdate}${NC}"
+echo -e "  Working dir: ${WORKDIR}/${WHITE}${eventdate}${NC}"
 echo -ne "  Domain name: ${RED}${domname}${NC};  MP scheme: ${CYAN}mp_nssl2m${NC}"
 
 if [[ -n ${cen_lat} || -n ${cen_lon} ]]; then
@@ -1962,8 +1942,6 @@ for job in "${jobs[@]}"; do
     "run_${job}" ${jobargs[${job}]}
 done
 
-echo " "
-echo "==== $0 done $(date +'%m-%d %H:%M:%S (%Z)') ===="
-echo " "
+echo -e "\n==== Jobs done ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} ====\n"
 
 exit 0
