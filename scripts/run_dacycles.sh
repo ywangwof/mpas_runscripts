@@ -293,7 +293,7 @@ function run_ioda {
     fi
 
     if [[ ${config_use_VR} == true ]]; then
-        obs_string="${obs_string},rw"
+        obs_ids+=("rw")
     fi
 
     #------------------------------------------------------
@@ -360,7 +360,7 @@ function run_ioda_bufr {
         #[OBSDIR]="${config_OBS_BUFR_DIR}/${anlys_date}"
         #[CYCHRMIN]="${anlys_hour}"
         #[OBSDIR]="${config_OBS_BUFR_DIR}"
-        [OBSSTR]="adpsfc"    # "adpsfc adpupa aircft aircar satwnd"
+        [OBSSTR]="${obs_categories[*]}"    # "adpsfc adpupa aircft aircar satwnd"
         [FIXDIR]="${config_FIXDIR}"
         [ROOTDIR]="${rootdir}"
         [GRIDFILE]="${rundir}/$domname/${domname}.grid.nc"
@@ -473,7 +473,7 @@ function run_ioda_mrms_refl {
         #mecho0 "Using radar data from: ${LIGHT_BLUE}$(head -n 1 filelist_mrms | xargs dirname)${NC}"
         #mecho0 "NSSL grib2 file levels = ${YELLOW}$numgrib2${NC}"
 
-        obs_string="${obs_string},refl10cm"
+        obs_ids+=("refl10cm")
     else
         echo ""
         mecho0 "${RED}ERROR${NC}: Not enough radar reflectivity files from ${LIGHT_BLUE}${config_OBS_REF_DIR}/${anlys_date}${NC} available for cycle ${anlys_date}${anlys_hour}${anlys_min}."
@@ -573,7 +573,7 @@ function run_ioda_cwp {
             filename="ioda_${cwpobs}_obs.nc"
             if [[ -s ${filename} ]]; then
                 mecho0 "Using CWP observations ${YELLOW}${cwpobs}${NC}"
-                obs_string="${obs_string},${cwpobs}"
+                obs_ids+=("${cwpobs}")
             fi
         done
 
@@ -646,7 +646,7 @@ function run_ioda_cwp {
             filename="ioda_${cwpobs}_obs.nc"
             if [[ -s ${filename} ]]; then
                 mecho0 "Using CWP observations ${YELLOW}${cwpobs}${NC}"
-                obs_string="${obs_string},${cwpobs}"
+                obs_ids+=("${cwpobs}")
             fi
         done
     else
@@ -980,7 +980,8 @@ EOF_GETKF
 
 function read_convinfo_initial {
     local infile="$1"
-    local obs_list
+    local -n obs_list=$2
+    local -n obs_category=$3
 
     #file_content=$(< "${config_FIXDIR}/jedi/convinfo") # read in all content
     while read -r line; do
@@ -1000,24 +1001,35 @@ function read_convinfo_initial {
             fi
 
             atype="${fields[0]}"
-            if [[ ${fields[1]} -ne 0 ]]; then
+            itype="${fields[1]}"
+            isub="${fields[2]}"
+            iuse="${fields[3]}"
+            icat="${fields[8]}"
+
+            if [[ ${itype} -ne 0 ]]; then
                 type=$(printf "%03d" ${fields[1]})
                 atype="${atype}${type}"
             fi
-            if [[ ${fields[2]} -ne 0 ]]; then
+            if [[ ${sub} -ne 0 ]]; then
                 type=$(printf "%03d" ${fields[2]})
                 atype="${atype}_${type}"
             fi
 
-            iuse=${fields[3]}
 
             if [[ $iuse -eq 1 ]]; then
                 obs_list+=("$atype")
+                if [[ ${itype} -ne 0 ]]; then
+                    icategory="${icat%%,*}"
+                    if [[ ! " ${obs_category[*]} " =~ " ${icategory,,} " ]]; then
+                        obs_category+=("${icategory,,}")
+                    fi
+                fi
             fi
         fi
     done < "${infile}"
 
-    join_by , "${obs_list[@]}"
+    #obs_id_string=$(join_by , "${obs_list[@]}")
+    #obs_category_str=$(join_by , "${obs_category[@]}")
 }
 
 ########################################################################
@@ -1028,9 +1040,9 @@ function get_convinfo {
     #
     local infile="$1"
     local outfile="$2"
-    local obs_list
+    local -n obs_list="$3"
 
-    IFS=',' read -ra obs_list <<<"$3"
+    #IFS=',' read -ra obs_list <<<"$3"
 
     if [[ -s ${outfile} ]]; then
         rm -f ${outfile}
@@ -1114,10 +1126,10 @@ function jedi_preparation {
         if [[ ${config_use_REF} == true ]]; then
             radar_reffile="${datetime_dir}/ioda_mrms_refl/ioda_mrms_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
             if [[ -s ${radar_reffile} ]]; then
-                if [[ "${obs_string}" == *"refl10cm"* ]]; then
+                if [[ " ${obs_ids[*]} " =~ " refl10cm " ]]; then
                     :
                 else
-                    obs_string="${obs_string},refl10cm"
+                    obs_ids+=("refl10cm")
                 fi
             fi
         fi
@@ -1125,26 +1137,32 @@ function jedi_preparation {
         if [[ ${config_use_VR} == true && $icycle -gt 0 ]]; then
             radar_vrfile="${config_OBS_VEL_DIR}/${anlys_date}/ioda_VR_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
             if [[ -s ${radar_vrfile} ]]; then
-                if [[ "${obs_string}" == *"rw"* ]]; then
+                if [[ " ${obs_ids[*]} " =~ " rw " ]]; then
                     :
                 else
-                    obs_string="${obs_string},rw"
+                    obs_ids+=("rw")
                 fi
             else
                 mecho0 "${YELLOW}INFO${NC}: radial velocity file ${RED}${radar_vrfile}${NC} not found"
                 # Remove rw
-                obs_string="${obs_string//rw/}"
+                local new_list=()
+                for item in "${obs_ids[@]}"; do
+                    if [[ "${item}" != "rw" ]]; then
+                        new_list+=("${item}")
+                    fi
+                done
+                obs_ids=("${new_list[@]}")
             fi
         fi
 
         if [[ ${config_use_CWP} == true ]]; then
-            if [[ "${obs_string}" == *"cwp"* ]]; then
+            if [[ " ${obs_ids[*]} " =~ [[:space:]](cwp|lwp|iwp|cwp_night)[[:space:]] ]]; then
                 :
             else
                 for cwpobs in "${cwp_obses[@]}"; do
                     filename="${datetime_dir}/ioda_cwp/ioda_${cwpobs}_obs.nc"
                     if [[ -s ${filename} ]]; then
-                        obs_string="${obs_string},${cwpobs}"
+                        obs_ids+=("${cwpobs}")
                     fi
                 done
             fi
@@ -1161,7 +1179,7 @@ function jedi_preparation {
 
         # 2. Process the array to strip prefixes and suffixes
         # We create a new array called 'obs_list'
-        local obs_list=()
+        obs_ids=()
         for file in "${obs_files[@]}"; do
             # Remove the path and prefix: ../jedi_observer/jdiag_
             tmp="${file##*_}"
@@ -1169,13 +1187,12 @@ function jedi_preparation {
             name="${tmp%.nc}"
             # Append to our new list
             if [[ "${name}" == "refl" ]]; then name="refl10cm"; fi
-            obs_list+=("$name")
+            obs_ids+=("${name}")
         done
 
-        obs_string=$(IFS=','; echo "${obs_list[*]}")
         # 3. Verify the result
-        #echo "Number of observers: ${#obs_list[@]}, obs_string=${obs_string}"
-        #printf '%s\n' "${obs_list[@]}"
+        #echo "Number of observers: ${#obs_ids[@]}, obs_string=${obs_ids[*]}"
+        #printf '%s\n' "${obs_ids[@]}"
         #exit 0
         ;;
     * )
@@ -1183,16 +1200,11 @@ function jedi_preparation {
         exit 1
     esac
 
-    # Cleanup: replace double commas with one, and trim start/end commas
-    obs_string="${obs_string//,,/,}"
-    obs_string="${obs_string#,}"
-    obs_string="${obs_string%,}"
-
     #------------------------------------------------------
     # 2. Prepare MPAS/JEDI runtime files
     #------------------------------------------------------
     # DATA=wrkdir
-    if [[ -n ${obs_string} ]]; then
+    if [[ ${#obs_ids[@]} -gt 0 ]]; then
         physics_convection_permitting=( CAM_ABS_DATA.DBL CAM_AEROPT_DATA.DBL CCN_ACTIVATE_DATA   \
                                         GENPARM.TBL      LANDUSE.TBL                             \
                                         OZONE_DAT.TBL    OZONE_LAT.TBL      OZONE_PLEV.TBL \
@@ -1292,7 +1304,7 @@ function jedi_preparation {
     # 4. MPAS runtime files
     #------------------------------------------------------
 
-    if [[ -n ${obs_string} ]]; then
+    if [[ ${#obs_ids[@]} -gt 0 ]]; then
         #
         # generate namelist, streams, and getkf.yaml on the fly
         #file_content=$(< "${config_FIXDIR}/jedi/namelist.atmosphere") # read in all content
@@ -1335,9 +1347,9 @@ function jedi_preparation {
 
         # Prepare convinfo file based on obsvations
 
-        local num_observers=$(IFS=','; set -- ${obs_string#,}; echo $#)
-        mecho0 "task = ${PURPLE}${taskname}${NC}, obs_string = ${obs_string#,} (${YELLOW}${num_observers}${NC})"
-        get_convinfo "${config_FIXDIR}/jedi/convinfo" ./convinfo "${obs_string}"
+        local num_observers=${#obs_ids[@]}
+        mecho0 "task = ${PURPLE}${taskname}${NC}, obs_string = ${obs_ids[*]} (${YELLOW}${num_observers}${NC})"
+        get_convinfo "${config_FIXDIR}/jedi/convinfo" ./convinfo obs_ids
 
         # generate getkf.yaml based on how YAML_GEN_METHOD is set
         local analysisDate bseconds beginDate lenwind
@@ -1450,9 +1462,9 @@ function run_jedi_observer {
     # Waiting for job conditions
     #
     local -a conditions
-    [[ "${obs_string}" == *refl10cm* ]] && conditions=("${datimedir}/ioda_mrms_refl/done.ioda_mrms_refl")
-    [[ "${obs_string}" == *t181*     ]] && conditions+=("${datimedir}/ioda_bufr/done.ioda_bufr")
-    [[ "${obs_string}" == *cwp*      ]] && conditions+=("${datimedir}/ioda_cwp/done.ioda_cwp")
+    [[ " ${obs_ids[*]} " =~ " refl10cm " ]] && conditions=("${datimedir}/ioda_mrms_refl/done.ioda_mrms_refl")
+    [[ "${#obs_categories[@]}" -gt 0     ]] && conditions+=("${datimedir}/ioda_bufr/done.ioda_bufr")
+    [[ " ${obs_ids[*]} " =~ [[:space:]](cwp|lwp|iwp|cwp_night)[[:space:]] ]] && conditions+=("${datimedir}/ioda_cwp/done.ioda_cwp")
 
     wait_for_conditions "${conditions[*]}"
 
@@ -1465,7 +1477,7 @@ function run_jedi_observer {
 
     jedi_preparation "${taskname}" "${wrkdir}" $2 $3
 
-    if [[ -z ${obs_string} ]]; then
+    if [[ ${#obs_ids[@]} -le 0 ]]; then
         touch done.observer
         return
     fi
@@ -1476,8 +1488,13 @@ function run_jedi_observer {
     bufr_obspath="${datimedir}/ioda_bufr"
 
     declare -A mappings  # Declare an associative array
+    declare -a obs_lists
 
-    mappings=(  ["ioda_adpsfc.nc"]="${bufr_obspath}/ioda_adpsfc.nc"          \
+    for acat in "${obs_categories[@]}"; do
+        mappings["ioda_${acat}.nc"]="${bufr_obspath}/ioda_${acat}.nc"
+        obs_lists=("ioda_${acat}.nc")       # Just to ensure output order
+    done
+    #mappings=(  ["ioda_adpsfc.nc"]="${bufr_obspath}/ioda_adpsfc.nc"          \
                 #["ioda_adpupa.nc"]="${bufr_obspath}/ioda_adpupa.nc"          \
                 #["ioda_aircar.nc"]="${bufr_obspath}/ioda_aircar.nc"          \
                 #["ioda_aircft.nc"]="${bufr_obspath}/ioda_aircft.nc"          \
@@ -1496,8 +1513,8 @@ function run_jedi_observer {
                 #["ioda_atms_n21.nc"]="${bufr_obspath}/ioda_atms_n21.nc"      \
                 #["ioda_crisf4_n20.nc"]="${bufr_obspath}/ioda_crisf4_n20.nc"  \
                 #["ioda_crisf4_n21.nc"]="${bufr_obspath}/ioda_crisf4_n21.nc"  \
-            )
-    obs_lists=(  "ioda_adpsfc.nc"      \
+    #        )
+    #obs_lists=(  "ioda_adpsfc.nc"      \
                  #"ioda_adpupa.nc"      \
                  #"ioda_aircar.nc"      \
                  #"ioda_aircft.nc"      \
@@ -1508,21 +1525,21 @@ function run_jedi_observer {
                  #"ioda_sfcshp.nc"      \
                  #"ioda_vadwnd.nc"      \
                  #"ioda_gnss_ztd.nc"
-            )                # Just to ensure output order
+    #        )                # Just to ensure output order
 
-    if [[ "${obs_string}" == *"refl10cm"* ]]; then
+    if [[ " ${obs_ids[*]} " =~ " refl10cm " ]]; then
         mappings["ioda_mrms_refl.nc"]="${radar_reffile}"
         obs_lists+=("ioda_mrms_refl.nc")
     fi
 
-    if [[ "${obs_string}" == *"rw"* ]]; then
+    if [[ " ${obs_ids[*]} " =~ " rw " ]]; then
         mappings["ioda_rw_obs.nc"]="${radar_vrfile}"
         obs_lists+=("ioda_rw_obs.nc")
     fi
 
-    if [[ "${obs_string}" =~ (cwp|lwp|iwp|cwp_night) ]]; then
+    if [[ " ${obs_ids[*]} " =~ [[:space:]](cwp|lwp|iwp|cwp_night)[[:space:]] ]]; then
         for cwpobs in "${cwp_obses[@]}"; do
-            if [[ "${obs_string}" == *${cwpobs}* ]]; then
+            if [[ " ${obs_ids[*]} " =~ " ${cwpobs} " ]]; then
                 mappings["ioda_${cwpobs}_obs.nc"]="${datimedir}/ioda_cwp/ioda_${cwpobs}_obs.nc"
                 obs_lists+=("ioda_${cwpobs}_obs.nc")
             fi
@@ -1626,7 +1643,7 @@ function run_jedi_solver {
     #
     cd "${wrkdir}" || exit 1
 
-    if [[ -z $obs_string ]]; then
+    if [[ ${#obs_ids[@]} -le 0 ]]; then
         cd ana || exit $?
         ln -sf ../ens/* .
         cd .. || exit $?
@@ -1719,7 +1736,7 @@ function run_jedi_post {
 
     #
     # Copy ioda observation files
-    if [[ -z ${obs_string} ]]; then
+    if [[ ${#obs_ids[@]} -le 0 ]]; then
         touch done.post
         return
     fi
@@ -2307,7 +2324,7 @@ function dacycle_driver() {
             if [[ $icyc -eq 0 ]]; then
                 if [[ ! -e $rundir/lbc/done.lbc ]]; then
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-                    check_job_status "${domname}" $rundir/lbc ${config_nenslbc} run_lbc.${mach}
+                    check_job_status "lbc ${domname} ${domname}" $rundir/lbc ${config_nenslbc} run_lbc.${mach}
                 fi
             else   #if [[ $icyc -gt 0 ]]; then
                 timesec_pre=$((isec-config_intvl_sec))
@@ -2329,11 +2346,11 @@ function dacycle_driver() {
         # 1. Retrieve observation string
         #------------------------------------------------------
 
-        obs_string=""
+        declare -a -g obs_ids obs_categories
         if [[ ${icyc} -gt 0 && ${config_use_BUFR} == true ]]; then
             #obs_string="t120,t133,q120,q133,uv220,uv233"
-            obs_string=$(read_convinfo_initial "${config_FIXDIR}/jedi/convinfo")
-            #echo "obs_string=$obs_string"
+            read_convinfo_initial "${config_FIXDIR}/jedi/convinfo" obs_ids obs_categories
+            #echo "obs_string=\"${obs_ids[*]}\", obs_category=\"${obs_categories[*]}\""
             #exit 0
         fi
 

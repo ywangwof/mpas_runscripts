@@ -240,8 +240,8 @@ function check_job_status {
     read -r -a jobnames <<< "$1"
     local jobname=${jobnames[0]}
     if [[ ${#jobnames[@]} -eq 3 ]]; then     # if it is an array, the 2nd element denotes the member dirname
-        local memname=${jobnames[1]}
-        local stfile=${jobnames[2]}
+        local memname=${jobnames[1]}         # The 1st element is just the job name
+        local stfile=${jobnames[2]}          # the 3rd element is the done file name to be checked
     elif [[ ${#jobnames[@]} -eq 1 ]]; then
         local memname="${jobname}"
         local stfile=${jobname}
@@ -775,7 +775,7 @@ function readconf {
 
     if [[ ${debug} -eq 1 ]]; then mecho0 ""; fi
 
-    mecho0 "Successfully read sections: ${YELLOW}${read_sections[*]}${NC}."
+    mecho0 "Successfully read sections: ${WHITE}${read_sections[*]}${NC}."
 }
 
 ########################################################################

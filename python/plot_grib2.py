@@ -244,6 +244,7 @@ if __name__ == "__main__":
     if args.typeOfLevel in typeoflevels:
         typeoflevel = args.typeOfLevel
     filters['typeOfLevel'] = typeoflevel
+    filters['stepType']='instant'  # 'accum' , 'max', 'instant'
 
     if os.path.lexists(fcstfile):
 
@@ -413,13 +414,22 @@ if __name__ == "__main__":
 
         figure = plt.figure(figsize = (12,12) )
 
+        lon_min = -130.0  # np.nanmin(glons)
+        lon_max = -115.0  # np.nanmax(glons)
+        lat_min = 40.0    # np.nanmin(glats)
+        lat_max = np.nanmax(glats)
         if basmap == "latlon":
             carr._threshold = carr._threshold/10.
             ax = plt.axes(projection=carr)
-            ax.set_extent([-135.0,-60.0,20.0,55.0],crs=carr)
+            #ax.set_extent([-135.0,-60.0,20.0,55.0],crs=carr)
         else:
             ax = plt.axes(projection=proj_hrrr)
-            ax.set_extent([-125.0,-70.0,22.0,52.0],crs=carr)
+            #ax.set_extent([-125.0,-70.0,22.0,52.0],crs=carr)
+        ax.set_extent([lon_min,lon_max,lat_min,lat_max],crs=carr)
+
+        # Statistics for Title (5 significant digits)
+        data_min = float(f"{np.nanmin(varplt):.5g}")
+        data_max = float(f"{np.nanmax(varplt):.5g}")
 
         #
         # Use tricontourf
@@ -452,7 +462,7 @@ if __name__ == "__main__":
         gl.bottom_labels = True
 
         # Create the title as you see fit
-        ax.set_title(outtlt)
+        ax.set_title(f"{outtlt} (min: {data_min}, max: {data_max})")
         plt.style.use(style) # Set the style that we choose above
 
         #

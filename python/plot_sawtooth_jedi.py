@@ -27,6 +27,7 @@ def parse_args():
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose path debugging")
     parser.add_argument("-p", "--nprocs", type=int, default=8, help="Number of processes for parallel reading")
     parser.add_argument("-n", "--number", action="store_true", help="Plot gross error check counts")
+    parser.add_argument("--cr", action="store_true", help="Plot Consistency Ratio (RMSD / Total Spread)") # Added
 
     return parser.parse_args()
 
@@ -117,7 +118,14 @@ def process_single_cycle(meta, obname, args):
                 np.sqrt(np.mean(err_a[valid_mask]**2 + np.var(h_a, axis=0)))
             ]
 
-            return rmsd, innov, spread, vartype
+            # --- NEW: Consistency Ratio calculation ---
+            # Avoid division by zero
+            cr = [
+                rmsd[0] / spread[0] if spread[0] > 0 else np.nan,
+                rmsd[1] / spread[1] if spread[1] > 0 else np.nan
+            ]
+
+            return rmsd, innov, spread, vartype, cr
 
     except Exception as e:
         if args.verbose:
@@ -194,7 +202,7 @@ def plot_ob_type(obname, cycle_meta, args):
         results = [f.result() for f in futures]
 
     raw_minutes, raw_labels = [], []
-    raw_rmsd, raw_innov, raw_spread = [], [], []
+    raw_rmsd, raw_innov, raw_spread, raw_cr = [], [], [], []
     found_vartypes = []
 
     for i, res in enumerate(results):
@@ -204,6 +212,7 @@ def plot_ob_type(obname, cycle_meta, args):
         raw_rmsd.extend(res[0])
         raw_innov.extend(res[1])
         raw_spread.extend(res[2])
+        raw_cr.extend(res[4]) # Added
         if res[3]: found_vartypes.append(res[3])
 
     valid_mask = [not np.isnan(v) for v in raw_rmsd]
@@ -226,10 +235,23 @@ def plot_ob_type(obname, cycle_meta, args):
     }
     unit = unit_map.get(vartype, 'units')
 
+    cr = [raw_cr[i] for i, v in enumerate(valid_mask) if v]
+
     fig, ax = plt.subplots(figsize=(10, 5))
-    ax.plot(minutes, rmsd, color='tab:red', label='RMSD (O-F/A)', lw=2)
-    ax.plot(minutes, innov, color='tab:blue', label='Bias', lw=2)
-    ax.plot(minutes, spread, color='tab:green', linestyle='--', label='Total Spread', lw=2)
+    ln1 = ax.plot(minutes, rmsd, color='tab:red', label='RMSD (O-F/A)', lw=2)
+    ln2 = ax.plot(minutes, innov, color='tab:blue', label='Bias', lw=2)
+    ln3 = ax.plot(minutes, spread, color='tab:green', linestyle='--', label='Total Spread', lw=2)
+
+    lines = ln1 + ln2 +ln3
+
+    # --- ADDED: Consistency Ratio Secondary Axis ---
+    if args.cr:
+        ax_cr = ax.twinx()
+        ln4 = ax_cr.plot(minutes, cr, color='black', linestyle=':', label='Consistency Ratio', lw=1.5)
+        ax_cr.set_ylabel("Consistency Ratio [RMSD / Spread]", fontsize=12)
+        ax_cr.axhline(1.0, color='gray', lw=1, alpha=0.5, linestyle='-')
+        ax_cr.set_ylim([0, 2.5]) # CR usually hovers around 1.0
+        lines += ln4
 
     # --- Dynamic Y-Axis Scaling ---
     all_values = np.array(rmsd + innov + spread)
@@ -265,7 +287,10 @@ def plot_ob_type(obname, cycle_meta, args):
 
     ax.xaxis.set_major_formatter(ticker.FuncFormatter(formatter))
     plt.setp(ax.get_xticklabels(), rotation=45)
-    ax.legend(loc='upper right', frameon=True, shadow=True)
+    # Consolidated Legend for both axes
+    labs = [l.get_label() for l in lines]
+    ax.legend(lines, labs, loc='upper right', frameon=True, shadow=True)
+    #ax.legend(loc='upper right', frameon=True, shadow=True)
     ax.grid(True, alpha=0.3)
 
     out_name = f"{obname}_sawtooth_{args.eventdate}.png"

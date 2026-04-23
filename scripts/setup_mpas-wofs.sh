@@ -1908,6 +1908,7 @@ jobname="${eventdate:4:4}"
 # write runtime configuration file
 #
 if [[ " ${jobs[*]} " != " clean " ]]; then
+    mecho0 "Generating configuration file: ${YELLOW}${caseconfig}${NC} ...."
     write_config "${caseconfig}"
 fi
 

@@ -93,7 +93,7 @@ function setup_machine {
 
             site_OBS_DIR_BUFR="/scratch3/NAGAPE/wof/kknopfmeier/PB"
             site_OBS_DIR_REF="/scratch3/NAGAPE/wof/kknopfmeier/MRMS"
-            site_OBS_DIR_VEL="/scratch3/NAGAPE/wof/kknopfmeier/MRMS"
+            site_OBS_DIR_VEL="/scratch3/NAGAPE/wof/kknopfmeier/VR"
             site_OBS_DIR_CWP="/scratch3/NAGAPE/wof/kknopfmeier/CWP"
             site_hrrr_dir="/scratch3/NAGAPE/wof/kknopfmeier/HRRRE"
 

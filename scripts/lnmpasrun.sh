@@ -186,7 +186,7 @@ for fn in "${cpfiles[@]}"; do
     ${show} cp "$srcdir/$fn" .
 done
 
-cpanyone=(stream_list.atmosphere.diagnostics stream_list.atmosphere.diagnostics_fcst stream_list.atmosphere.diagnostics_da )
+cpanyone=(stream_list.atmosphere.diagnostics stream_list.atmosphere.diagnostics_fcst stream_list.atmosphere.diagnostics_da stream_list.atmosphere.da_state)
 for fn in "${cpanyone[@]}"; do
    if [[ -e "$srcdir/$fn" ]]; then
        echo "Copying $fn ..."
@@ -223,6 +223,12 @@ if compgen -G ./*.graph.info.part.* > /dev/null; then
     :
 else
     ${show} ln -sf $srcdir/*.graph.info.part.* .
+fi
+
+if compgen -G ./*.ugwp_oro_data.nc > /dev/null; then
+    :
+else
+    ${show} ln -sf $srcdir/*.ugwp_oro_data.nc .
 fi
 
 #
