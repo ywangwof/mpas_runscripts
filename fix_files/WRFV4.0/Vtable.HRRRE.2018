@@ -24,7 +24,6 @@ Param| Type |Level1|Level2| Name     |  Units   | Description                   
    1 |   1  |   0  |      | PSFC     | Pa       | Surface Pressure                        |  0  |  3  |  0  |   1 |
  129 | 102  |   0  |      | PMSL     | Pa       | Sea-level Pressure                      |  0  |  3  | 198 | 101 |
   65 |   1  |   0  |      | SNOW     | kg m-2   | Water equivalent snow depth             |  0  |  1  | 13  |   1 |
-  66 |   1  |   0  |      | SNOWH    | m        | Snow depth                              |  0  |  1  | 11  |   1 |
   11 |   1  |   0  |      | SKINTEMP | K        | Skin Temp ( = TSK )                     |  0  |  0  |  0  |   1 |
  223 |   1  |   0  |      | CANWAT   | kg m-2   | Plant Canopy Surface Water              |  2  |  0  |  13 |   1 |
  144 | 111  |   0  |      | SOILM000 | fraction | Soil Moist   0 cm below ground          |  2  |  0  | 192 | 106 | 
