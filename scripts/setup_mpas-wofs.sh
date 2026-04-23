@@ -1328,7 +1328,7 @@ function write_config {
 [COMMON]
     nensics=36
     nenslbc=18
-    EXTINVL=3600
+    EXTINVL=${EXTINVL}
 
     domname="${domname}"
     damode="${damode}"
@@ -1603,150 +1603,105 @@ function check_hrrr_files {
 ########################################################################
 
 function check_obs_files {
+
+    nextdate=$(date -d "${eventdate} 1 day" +%Y%m%d)
     #
     # Check the PrepBufr files availability
     #
-    echo ""
-    eval "$(sed -n "/BUFR_DIR=/p" ${rootdir}/observations/prepbufr_wofs.sh)"
-    #echo ${rootdir}/observations/prepbufr_wofs.sh -f "config.${eventdate}${affix}" check ${eventdate}
-    mapfile -t my_array < <( ${rootdir}/observations/prepbufr_wofs.sh -f "config.${eventdate}${affix}" check ${eventdate} )
-    #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/prepbufr_wofs.sh check ${eventdate} && printf '\0')
-    read -r -a obsfiles <<< "${my_array[-1]}"
-    echo -ne "${DARK}observations/prepbufr_wofs.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} PrepBufr files"
-    echo -e  " from ${LIGHT_BLUE}${MESO_DIR}${NC}/${BROWN}${eventdate:0:4}/${eventdate:4:2}/${eventdate:6:2}${NC} ...."
-    n=0
-    for fn in "${obsfiles[@]}"; do
-        if (( n%4 == 0 )); then echo ""; fi
-        if [[ "${fn}" =~ "miss" ]]; then
-            echo -ne "    ${RED}${fn}${NC}"
-        else
-            echo -n "    ${fn}"
-        fi
-        ((n++))
+    mapfile -d $'\0' bufr_files < <(find "${site_OBS_DIR_BUFR}/${eventdate}" -maxdepth 1 -name "${eventdate}[12]*.tm00" -print0 2>/dev/null | sort -z )
+    mapfile -d $'\0' -O "${#bufr_files[@]}" bufr_files < <(find  "${site_OBS_DIR_BUFR}/${nextdate}" -maxdepth 1 -name "${nextdate}0*.tm00" -print0  2>/dev/null | sort -z)
+
+    mecho0 "Found ${GREEN}${#bufr_files[@]}${NC} PrepBufr files from ${LIGHT_BLUE}${site_OBS_DIR_BUFR}/{${eventdate},${nextdate}}${NC}"
+    mecho0n "    "
+    i=0
+    for bufrf in "${bufr_files[@]}"; do
+        echo -n "$(basename ${bufrf})    "
+        (( i += 1))
+        if (( i%2 == 0 )); then echo ""; mecho0n "    "; fi
     done
     echo -e "\n"
 
     #
-    # Check the Mesonet files availability
+    # Check the MRMS files availability
     #
-    eval "$(sed -n "/MESO_DIR=/p" ${rootdir}/observations/okmeso_15min.sh)"
-    mapfile -t my_array < <( ${rootdir}/observations/okmeso_15min.sh check ${eventdate} )
-    #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/okmeso_15min.sh check ${eventdate} && printf '\0')
-    read -r -a obsfiles <<< "${my_array[-1]}"
-    echo -ne "${DARK}observations/okmeso_15min.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} Mesonet files"
-    echo -e  " from ${LIGHT_BLUE}${MESO_DIR}${NC}/${BROWN}${eventdate:0:4}/${eventdate:4:2}/${eventdate:6:2}${NC} ...."
-    n=0
-    for fn in "${obsfiles[@]}"; do
-        if (( n%3 == 0 )); then echo ""; fi
-        if [[ "${fn}" =~ "miss" ]]; then
-            echo -ne "    ${RED}${fn}${NC}"
-        else
-            echo -n "    ${fn}"
+    mapfile -d $'\0' ref_files < <(find "${site_OBS_DIR_REF}/${eventdate}" -maxdepth 1 -name "${eventdate}-[12]*.grib2" -print0 2>/dev/null | sort -z)
+    mapfile -d $'\0' -O "${#ref_files[@]}" ref_files < <(find  "${site_OBS_DIR_REF}/${nextdate}" -maxdepth 1 -name "${nextdate}-0*.grib2" -print0 2>/dev/null | sort -z)
+
+    # Assume 'files' array is already populated and sorted
+    shrunk_files=(); counts=(); heights=()
+    current_header=""
+    match_count=0
+
+    for (( i=0; i<${#ref_files[@]}; i++ )); do
+        filename=$(basename "${ref_files[$i]}")
+
+        # On the first iteration, just initialize
+        if [[ $i -eq 0 ]]; then
+            shrunk_files+=("${filename}")
+            current_header="${filename:0:13}" # Take first 42 chars as initial guess
+            heights["${current_header}"]="${filename:42:5}"
+            match_count=1
+            continue
         fi
-        ((n++))
+
+        # Check if this file shares the same first 42 characters as the current group
+        if [[ "${filename:0:13}" == "${current_header}" ]]; then
+            ((match_count++))
+            heights["${current_header}"]="${heights[${current_header}]},${filename:42:5}"
+            counts["${current_header}"]=${match_count}
+        else
+            # New group found!
+            # First, print the stats for the group we just finished
+            #echo "Header: ${current_header}... | Files: ${match_count}"
+
+            # Start a new group
+            shrunk_files+=("${filename}")
+            current_header="${filename:0:13}"
+
+            heights["${current_header}"]="${filename:42:5}"
+            match_count=1
+        fi
+    done
+
+    mecho0 "Found ${GREEN}${#shrunk_files[@]}${NC} reflectivity files from ${LIGHT_BLUE}${site_OBS_DIR_REF}/{${eventdate},${nextdate}}${NC}"
+    for reff in "${shrunk_files[@]}"; do
+        filename=$(basename "${reff}")
+        current_header="${filename:0:13}"
+        mecho0 "    ${current_header}: ${DARK}${heights[${current_header}]}${NC} (${GREEN}${counts[${current_header}]}${NC})"
+    done
+    echo -e ""
+
+    #
+    # Check the VEL files availability
+    #
+    mapfile -d $'\0' vel_files < <(find "${site_OBS_DIR_VEL}/${eventdate}" -maxdepth 1 -name "ioda_VR_${eventdate}_[12]*.nc4" -print0 2>/dev/null | sort -z)
+    mapfile -d $'\0' -O "${#vel_files[@]}" vel_files < <(find  "${site_OBS_DIR_VEL}/${nextdate}" -maxdepth 1 -name "ioda_VR_${nextdate}_0*.nc4" -print0 2>/dev/null | sort -z)
+
+    mecho0 "Found ${GREEN}${#vel_files[@]}${NC} radial velocity files from ${LIGHT_BLUE}${site_OBS_DIR_VEL}/{${eventdate},${nextdate}}${NC}"
+    mecho0n "    "
+    i=0
+    for velf in "${vel_files[@]}"; do
+        echo -n "$(basename ${velf})    "
+        (( i += 1))
+        if (( i%2 == 0 )); then echo ""; mecho0n "    "; fi
     done
     echo -e "\n"
 
     #
     # Check the CWP files availability
     #
-    eval "$(sed -n "/srcdir=/p" ${rootdir}/observations/run_cwpobs.sh)"
-    mapfile -t my_array < <( ${rootdir}/observations/run_cwpobs.sh -d /${domname##*_} check ${eventdate} )
-    #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/prepbufr_wofs.sh check ${eventdate} && printf '\0')
-    read -r -a obsfiles <<< "${my_array[-1]}"
-    echo -ne "${DARK}observations/run_cwpobs.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} CWP files"
-    # shellcheck disable=SC2154
-    echo -e " from ${LIGHT_BLUE}${srcdir}/${BROWN}${eventdate}${NC}/${domname##*_}${NC} ..."
-    n=0
-    for fn in "${obsfiles[@]}"; do
-        if (( n%4 == 0 )); then echo ""; fi
-        if [[ "${fn}" =~ "-missing" ]]; then
-            echo -ne "    ${RED}${fn}${NC}  "
-        else
-            echo -n "    ${fn}"
-        fi
-        ((n++))
+    mapfile -d $'\0' cwp_files < <(find "${site_OBS_DIR_CWP}/${eventdate}" -maxdepth 1 -name "${eventdate}[12]*_CWP_OBS.nc" -print0 2>/dev/null | sort -z)
+    mapfile -d $'\0' -O "${#cwp_files[@]}" cwp_files < <(find  "${site_OBS_DIR_CWP}/${nextdate}" -maxdepth 1 -name "${nextdate}0*_CWP_OBS.nc" -print0 2>/dev/null | sort -z)
+
+    mecho0 "Found ${GREEN}${#cwp_files[@]}${NC} CWP files from ${LIGHT_BLUE}${site_OBS_DIR_CWP}/{${eventdate},${nextdate}}${NC}"
+    mecho0n "    "
+    i=0
+    for cwpf in "${cwp_files[@]}"; do
+        echo -n "$(basename ${cwpf})    "
+        (( i += 1))
+        if (( i%2 == 0 )); then echo ""; mecho0n "    "; fi
     done
     echo -e "\n"
-
-    #
-    # Check the GOES files availability
-    #
-    eval "$(sed -n "/srcdir=/p" ${rootdir}/observations/run_radiance.sh)"
-    mapfile -t my_array < <( ${rootdir}/observations/run_radiance.sh -d /${domname##*_} check ${eventdate} )
-    #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/run_radiance.sh check ${eventdate} && printf '\0')
-    read -r -a obsfiles <<< "${my_array[-1]}"
-    echo -ne "${DARK}observations/run_radiance.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} Radiance files"
-    echo -e " from ${LIGHT_BLUE}${srcdir}/${BROWN}${eventdate}${NC}/${domname##*_}${NC} ..."
-    n=0
-    for fn in "${obsfiles[@]}"; do
-        if (( n%4 == 0 )); then echo ""; fi
-        if [[ "${fn}" =~ "-missing" ]]; then
-            echo -ne "    ${RED}${fn}${NC}"
-        else
-            echo -n "    ${fn}"
-        fi
-        ((n++))
-    done
-    echo -e "\n"
-
-    #
-    # Check the radar files availability
-    #
-    eval "$(sed -n "/srcdir=/p" ${rootdir}/observations/link_radar.sh)"
-    mapfile -t my_array < <( ${rootdir}/observations/link_radar.sh -d /${domname##*_}/DART check ${eventdate} )
-    #IFS=$'\n' read -r -d '' -a obsfiles < <(${rootdir}/observations/link_radar.sh check ${eventdate} && printf '\0')
-    read -r -a obsfiles <<< "${my_array[-3]}"
-    echo -ne "${DARK}observations/link_radar.sh${NC}: Found ${GREEN}${my_array[-4]}${NC} Reflectivity files "
-    echo -e " from ${LIGHT_BLUE}${srcdir}${NC}/${BROWN}${eventdate}${NC}/${domname##*_}/DART ...."
-    n=0
-    for fn in "${obsfiles[@]}"; do
-        if (( n%4 == 0 )); then echo ""; fi
-        if [[ "${fn}" =~ "missing:" ]]; then
-            echo -ne "    ${RED}${fn}${NC}"
-        else
-            echo -n "    $(basename ${fn})"
-        fi
-        ((n++))
-    done
-    echo -e "\n"
-
-    #
-    # Check the radial velocity files availability
-    #
-
-    declare -A velfiles=()
-    typeset2array "${my_array[-1]}" "velfiles"
-
-    echo -ne "${DARK}observations/link_radar.sh${NC}: Found ${GREEN}${my_array[-2]}${NC} Radial Velocity files"
-    echo -e " from ${LIGHT_BLUE}${srcdir}${NC}/${BROWN}${eventdate}${NC}/${domname##*_}/DART ...."
-    echo ""
-
-    declare -a radnames
-    for fn in "${!velfiles[@]}"; do
-        string2array "${velfiles[${fn}]}" "radnames"
-        if [[ ${#radnames[@]} -ne 0 ]]; then
-            if [[ -z ${common} ]]; then
-                common=("${radnames[@]}")
-            else
-                mapfile -t common < <( intersection "${common[*]}" "${radnames[*]}" )
-            fi
-        fi
-    done
-
-    echo -e "    Common Radars: ${CYAN}${common[*]}${NC} (${GREEN}${#common[@]}${NC})"
-    echo ""
-
-    for fn in "${!velfiles[@]}"; do
-        string2array "${velfiles[${fn}]}" "radnames"
-
-        if [[ ${#radnames[@]} -eq 0 ]]; then
-            echo -e "    ${fn}: ${RED}Missing${NC}"
-        else
-            mapfile -t radunique < <(setsubtract "${radnames[*]}" "${common[*]}" )
-            echo -e "    ${fn}: ${radunique[*]} (${GREEN}${#radnames[@]}${NC})"
-        fi
-    done | sort -n -k3
 }
 
 #%%%#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1862,14 +1817,14 @@ echo " "
 #
 #[static]
 STATICIOTYPE="pnetcdf,cdf5"
-EXTINVL=10800
+EXTINVL=3600
 EXTHEAD="HRRRE"  #"GEFS"
 #hrrrvtable="Vtable.raphrrr"
 hrrrvtable="Vtable.HRRRE.2018"    #"Vtable.GEFS_withSpechum"
 hrrr_time_ics="${inittime}"
 hrrr_time_lbc="${lbctime}"
-hrrr_sub_ics="postprd_mem00"         # + 2-digit member string
-hrrr_sub_lbc="postprd_mem00"         # + 2-digit member string
+hrrr_sub_ics="mem"         # + 2-digit member string
+hrrr_sub_lbc="mem"         # + 2-digit member string
 
 hrrrfile0="${site_hrrr_dir}/${eventdate}/${hrrr_time_ics}/${hrrr_sub_ics}01/wrfnat_hrrre_newse_mem0001_01.grib2"
 #hrrrfile0="/lfs5/NAGAPE/hpc-wof1/ywang/NCAR_JEDI/fix_files/GEFS_0p5_degree_grib_files/2022062218/ens_1/gep01.t18z.pgrb2.0p50.f000"

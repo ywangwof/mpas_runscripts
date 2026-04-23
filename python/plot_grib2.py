@@ -184,6 +184,10 @@ if __name__ == "__main__":
     'lowCloudLayer', 'middleCloudLayer',    'highCloudLayer',  'cloudCeiling',
     'cloudBase',   'nominalTop',            'isothermZero',    'highestTroposphericFreezing',
     'adiabaticCondensation',                'equilibrium',     'unknown']
+
+    # New list for step types
+    steptypes = ['accum', 'max', 'instant']
+
     parser.add_argument('fcstfiles',nargs='+', help='GRIB2 files')
     parser.add_argument('varname', help='Name of variable to be plotted',type=str, default=None)
 
@@ -192,11 +196,13 @@ if __name__ == "__main__":
     parser.add_argument('--latlon',         help='Base map latlon',                action='store_true')
     parser.add_argument('--no-latlon',      help='Base map lambert',dest='latlon', action='store_false')
     parser.set_defaults(latlon=True)
-    parser.add_argument('-t','--typeOfLevel',help=f'Vertical level type, one of {typeoflevels}',  type=str, default=None)
-    parser.add_argument('-f','--filter',     help=f'grib2 field filter',  type=str, default=None)
-    parser.add_argument('-l','--vertLevels',help='Vertical levels to be plotted [l1,l2,l3,...]',  type=str, default=None)
-    parser.add_argument('-c','--cntLevels', help='Contour levels [cmin,cmin,cinc]',               type=str, default=None)
-    parser.add_argument('-o','--outfile',   help='Name of output image or output directory',      type=str, default=None)
+    parser.add_argument('-t', '--typeOfLevel',help=f'Vertical level type, one of {typeoflevels}',  type=str, default=None)
+    parser.add_argument('-s', '--stepType',   help=f'Step type, one of {steptypes}, required for typeOfLevel="surface"',
+                                              type=str, choices=steptypes, default='instant')
+    parser.add_argument('-f', '--filter',     help=f'grib2 field filter',  type=str, default=None)
+    parser.add_argument('-l', '--vertLevels', help='Vertical levels to be plotted [l1,l2,l3,...]',  type=str, default=None)
+    parser.add_argument('-c', '--cntLevels',  help='Contour levels [cmin,cmax,cinc]',               type=str, default=None)
+    parser.add_argument('-o', '--outfile',    help='Name of output image or output directory',      type=str, default=None)
 
     args = parser.parse_args()
 
@@ -244,8 +250,17 @@ if __name__ == "__main__":
     if args.typeOfLevel in typeoflevels:
         typeoflevel = args.typeOfLevel
     filters['typeOfLevel'] = typeoflevel
-    filters['stepType']='instant'  # 'accum' , 'max', 'instant'
 
+    if typeoflevel == 'surface':
+        # Requirement Check: If level is 'surface', stepType is often specific.
+        # We apply the user's choice (defaulting to 'instant')
+        filters['stepType'] = args.stepType
+
+        if args.stepType not in steptypes:
+            print(f"ERROR: stepType must be one of {steptypes} when typeOfLevel is 'surface'.")
+            sys.exit(-1)
+
+    #-------------------------------------------------------------------
     if os.path.lexists(fcstfile):
 
         with xr.open_dataset(fcstfile, engine='cfgrib', filter_by_keys=filters) as mesh:
@@ -425,7 +440,8 @@ if __name__ == "__main__":
         else:
             ax = plt.axes(projection=proj_hrrr)
             #ax.set_extent([-125.0,-70.0,22.0,52.0],crs=carr)
-        ax.set_extent([lon_min,lon_max,lat_min,lat_max],crs=carr)
+        #ax.set_extent([lon_min,lon_max,lat_min,lat_max],crs=carr)
+        ax.set_extent([-127.39111328125, -114.6075439453125, 32.648162841796875, 42.530086517333984])
 
         # Statistics for Title (5 significant digits)
         data_min = float(f"{np.nanmin(varplt):.5g}")

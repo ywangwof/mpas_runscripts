@@ -334,16 +334,18 @@ function run_ioda_bufr {
 
     if [[ -s ${prepbufr} ]]; then
         mecho0 "${YELLOW}INFO${NC}: Use prepbufr file ${CYAN}${prepbufr}${NC}"
-        ${cpcmd} "${prepbufr}"       prepbufr
     else
         mecho0 "${YELLOW}INFO${NC}: No prepbufr file from ${LIGHT_BLUE}${config_OBS_BUFR_DIR}/${anlys_date}${NC}"
-        touch done.ioda_bufr
+        #touch done.ioda_bufr
+        obs_categories=()    # Clear prepbufr observation dependency
         return
     fi
 
     mkwrkdir $wrkdir/ioda_bufr 1     # 0: Keep existing directory as is
                                      # 1: Remove existing same name directory
     cd $wrkdir/ioda_bufr || exit $?
+
+    ${cpcmd} "${prepbufr}"       prepbufr
 
     jobscript="run_ioda_bufr.${mach}"
 
@@ -476,8 +478,8 @@ function run_ioda_mrms_refl {
         obs_ids+=("refl10cm")
     else
         echo ""
-        mecho0 "${RED}ERROR${NC}: Not enough radar reflectivity files from ${LIGHT_BLUE}${config_OBS_REF_DIR}/${anlys_date}${NC} available for cycle ${anlys_date}${anlys_hour}${anlys_min}."
-        exit 1
+        mecho0 "${YELLOW}INFO${NC}: Not enough radar reflectivity files from ${LIGHT_BLUE}${config_OBS_REF_DIR}/${anlys_date}${NC} available for cycle ${anlys_date}${anlys_hour}${anlys_min}."
+        return   #exit 1
     fi
 
     #-----------------------------------------------------------------------
@@ -1280,8 +1282,10 @@ function jedi_preparation {
     fi
 
     if [[ -d "jdiag" ]]; then        # Link observations for jdiag/ for task solver and post
+        currdir=$(realpath -m --relative-to ${WORKDIR} $(pwd))
         for file in "${obs_files[@]}"; do
-            mecho0 "Linking ${file} to $(pwd)/jdiag ..."
+            display_filename=$(realpath -m --relative-to ${WORKDIR} ${file})
+            mecho0 "Linking ${display_filename} to ${currdir}/jdiag ..."
             ln -snfr "${file}" jdiag/
         done
     fi
@@ -1462,6 +1466,7 @@ function run_jedi_observer {
     # Waiting for job conditions
     #
     local -a conditions
+    echo "${obs_categories[*]}"
     [[ " ${obs_ids[*]} " =~ " refl10cm " ]] && conditions=("${datimedir}/ioda_mrms_refl/done.ioda_mrms_refl")
     [[ "${#obs_categories[@]}" -gt 0     ]] && conditions+=("${datimedir}/ioda_bufr/done.ioda_bufr")
     [[ " ${obs_ids[*]} " =~ [[:space:]](cwp|lwp|iwp|cwp_night)[[:space:]] ]] && conditions+=("${datimedir}/ioda_cwp/done.ioda_cwp")
