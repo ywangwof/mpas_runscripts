@@ -9,7 +9,7 @@ mpasworkdir="/scratch/wofs_mpas"     # platform dependent, it will be reset in S
 eventdateDF=$(date -u +%Y%m%d)
 eventtimeDF="1500"
 
-shopt -s nullglob
+shopt -s nullglob extglob
 
 #-----------------------------------------------------------------------
 #
@@ -333,7 +333,7 @@ function run_ioda_bufr {
     prepbufr="${config_OBS_BUFR_DIR}/${anlys_date}/${anlys_datehr}.rtma_ru.t${anlys_time}z.prepbufr.tm00"
 
     if [[ -s ${prepbufr} ]]; then
-        mecho0 "${YELLOW}INFO${NC}: Use prepbufr file ${CYAN}${prepbufr}${NC}"
+        mecho0 "Use prepbufr file ${CYAN}${prepbufr}${NC}"
     else
         mecho0 "${YELLOW}INFO${NC}: No prepbufr file from ${LIGHT_BLUE}${config_OBS_BUFR_DIR}/${anlys_date}${NC}"
         #touch done.ioda_bufr
@@ -345,7 +345,7 @@ function run_ioda_bufr {
                                      # 1: Remove existing same name directory
     cd $wrkdir/ioda_bufr || exit $?
 
-    ${cpcmd} "${prepbufr}"       prepbufr
+    ${cpcmd} "${prepbufr}" prepbufr
 
     jobscript="run_ioda_bufr.${mach}"
 
@@ -409,9 +409,7 @@ function run_ioda_mrms_refl {
 
     #
     #-----------------------------------------------------------------------
-    #
     # link or copy background files
-    #
     #-----------------------------------------------------------------------
     #
     gridfile="${rundir}/$domname/${domname}.grid.nc"
@@ -419,21 +417,12 @@ function run_ioda_mrms_refl {
     #mecho0 "meshgrid file is ${CYAN}${gridfile}${NC}"
     ${lncmd} "${gridfile}" grid.nc
 
-    #
     #-----------------------------------------------------------------------
-    #
-    # link/copy observation files to working directory
-    #
+    # Link the MRMS  data file
     #-----------------------------------------------------------------------
     #
     obs_appendix="grib2"
-    #
-    #-----------------------------------------------------------------------
-    #
-    # Link to the MRMS operational data
-    #
-    #-----------------------------------------------------------------------
-    #
+
     if [ -f filelist_mrms ]; then rm -f filelist_mrms; fi
 
     mecho0n "Looking for reflectivity data valid:"
@@ -441,11 +430,12 @@ function run_ioda_mrms_refl {
         for l in -1 1; do
             curr_sec=$(( iseconds + l*j*60))
             curr_time=$(date -u -d @$curr_sec +%Y%m%d-%H%M)
+            curr_date=$(date -u -d @$curr_sec +%Y%m%d)
 
-            mapfile -t fileslist < <(compgen -G "${config_OBS_REF_DIR}/${anlys_date}/*MergedReflectivityQC_*_${curr_time}??.${obs_appendix}" | sort -V)
+            mapfile -t fileslist < <(compgen -G "${config_OBS_REF_DIR}/${curr_date}/*MergedReflectivityQC_*_${curr_time}??.${obs_appendix}" | sort -V)
             if [ ${#fileslist[@]} -ge 10 ] && [ ! -e filelist_mrms ]; then
                 echo -en " ${WHITE}${curr_time}${NC}\n"
-                mecho0 "Found ${YELLOW}${#fileslist[@]}${NC} GRIB-2 files from ${CYAN}${config_OBS_REF_DIR}/${anlys_date}${NC}"
+                mecho0 "Found ${YELLOW}${#fileslist[@]}${NC} GRIB-2 files from ${CYAN}${config_OBS_REF_DIR}/${curr_date}${NC}"
                 for nsslfile in "${fileslist[@]}"; do
                     ${cpcmd}   "${nsslfile}" .
                     base_filename=$(basename "${nsslfile}")
@@ -483,9 +473,7 @@ function run_ioda_mrms_refl {
     fi
 
     #-----------------------------------------------------------------------
-    #
     # Create namelist file
-    #
     #-----------------------------------------------------------------------
 
     RADAR_REF_THINNING=1
@@ -532,9 +520,14 @@ EOF
 
     jobscript="run_ioda_mrms_refl.${mach}"
 
+    nopart=13
+    if [[ ${numgrib2} -gt ${nopart} ]]; then
+        nopart=${numgrib2}
+    fi
+
     declare -A jobParms=(
         [PARTION]="${config_partition_filter}"
-        [NOPART]="${numgrib2}"
+        [NOPART]="${nopart}"
         [JOBNAME]="ioda_refl_${eventtime}"
         [CPUSPEC]="${config_claim_cpu_ioda_refl}"
         [EXEDIR]="${config_EXEDIR}/jedi"
@@ -566,18 +559,23 @@ function run_ioda_cwp {
     # Check conditions for the IODA_CWP processing
     #------------------------------------------------------
 
+    local cwpobs_list=()
+
     anlys_eventtime=$(date -u -d @$iseconds  +%Y%m%d%H%M)
     #
     # Return if is running or is done
     #
     if [[ -f $wrkdir/ioda_cwp/done.ioda_cwp ]]; then
-        for cwpobs in "${cwp_obses[@]}"; do
-            filename="ioda_${cwpobs}_obs.nc"
+
+        for cwpobs in "${cwp_obs_initial[@]}"; do
+            filename="${wrkdir}/ioda_cwp/ioda_${cwpobs}_obs.nc"
             if [[ -s ${filename} ]]; then
-                mecho0 "Using CWP observations ${YELLOW}${cwpobs}${NC}"
-                obs_ids+=("${cwpobs}")
+                cwpobs_list+=("${cwpobs}")
             fi
         done
+        # mecho0 "Using CWP observations ${WHITE}${cwpobs_list[*]}${NC}"
+        # To join an array while ensuring you only add elements that don't already exist in the target (finding the union of the two sets)
+        join_arrays obs_ids cwpobs_list
 
         return
     fi
@@ -610,6 +608,11 @@ function run_ioda_cwp {
 
     if [[ ! -s ${cwpfile} ]]; then
         mecho0 "${YELLOW}INFO${NC}: No CWP file from ${LIGHT_BLUE}${config_OBS_CWP_DIR}/${curr_date}${NC} between ${DARK}${curr_datetime}${NC} and ${DARK}${anlys_eventtime}${NC}"
+
+        # drop CWP related obs_id (must enable extglob)
+        filtered_obsIDs=( "${obs_ids[@]/#(cwp|iwp|lwp|cwp_night)}" )    # This removes any element that EXACTLY matches cwp, iwp, or lwp
+        obs_ids=( "${filtered_obsIDs[@]}" )                             # Remove empty elements resulting from the replacement
+
         return
     fi
 
@@ -644,13 +647,15 @@ function run_ioda_cwp {
     # shellcheck disable=SC2181
     if [ $istatus -eq 0 ]; then
         touch done.ioda_cwp
-        for cwpobs in "${cwp_obses[@]}"; do
+        for cwpobs in "${cwp_obs_initial[@]}"; do
             filename="ioda_${cwpobs}_obs.nc"
-            if [[ -s ${filename} ]]; then
-                mecho0 "Using CWP observations ${YELLOW}${cwpobs}${NC}"
-                obs_ids+=("${cwpobs}")
+            if [[ -s ${wrkdir}/ioda_cwp/${filename} ]]; then
+                cwpobs_list+=("${cwpobs}")
             fi
         done
+        mecho0 "Using CWP observations ${WHITE}${cwpobs_list[*]}${NC}"
+        # To join an array while ensuring you only add elements that don't already exist in the target (finding the union of the two sets)
+        join_arrays obs_ids cwpobs_list
     else
         mecho0 "${RED}ERROR${NC}: ${BROWN}${rootdir}/observations/GOESCWP2ioda.py${NC} failed."
         touch error.ioda_cwp
@@ -1121,6 +1126,10 @@ function jedi_preparation {
     # 1. Handle observation string
     #------------------------------------------------------
 
+    declare -a observer_obs_use=()
+    declare -a observer_obs_del=()
+    declare -a solver_obs_found=()
+
     case ${taskname} in
     observer )
         # Fix observation string in case run_ioda was not executed
@@ -1128,47 +1137,34 @@ function jedi_preparation {
         if [[ ${config_use_REF} == true ]]; then
             radar_reffile="${datetime_dir}/ioda_mrms_refl/ioda_mrms_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
             if [[ -s ${radar_reffile} ]]; then
-                if [[ " ${obs_ids[*]} " =~ " refl10cm " ]]; then
-                    :
-                else
-                    obs_ids+=("refl10cm")
-                fi
+                observer_obs_use+=("refl10cm")
+            else
+                observer_obs_del+=("refl10cm")
             fi
         fi
 
-        if [[ ${config_use_VR} == true && $icycle -gt 0 ]]; then
+        if [[ ${config_use_VR} == true && ${icycle} -gt 0 ]]; then
             radar_vrfile="${config_OBS_VEL_DIR}/${anlys_date}/ioda_VR_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
             if [[ -s ${radar_vrfile} ]]; then
-                if [[ " ${obs_ids[*]} " =~ " rw " ]]; then
-                    :
-                else
-                    obs_ids+=("rw")
-                fi
+                observer_obs_use+=("rw")
             else
                 mecho0 "${YELLOW}INFO${NC}: radial velocity file ${RED}${radar_vrfile}${NC} not found"
-                # Remove rw
-                local new_list=()
-                for item in "${obs_ids[@]}"; do
-                    if [[ "${item}" != "rw" ]]; then
-                        new_list+=("${item}")
-                    fi
-                done
-                obs_ids=("${new_list[@]}")
+                observer_obs_del+=("rw")
             fi
         fi
 
         if [[ ${config_use_CWP} == true ]]; then
-            if [[ " ${obs_ids[*]} " =~ [[:space:]](cwp|lwp|iwp|cwp_night)[[:space:]] ]]; then
-                :
-            else
-                for cwpobs in "${cwp_obses[@]}"; do
-                    filename="${datetime_dir}/ioda_cwp/ioda_${cwpobs}_obs.nc"
-                    if [[ -s ${filename} ]]; then
-                        obs_ids+=("${cwpobs}")
-                    fi
-                done
-            fi
+            for cwpobs in "${cwp_obs_initial[@]}"; do
+                filename="${datetime_dir}/ioda_cwp/ioda_${cwpobs}_obs.nc"
+                if [[ -s ${filename} ]]; then
+                    observer_obs_use+=("${cwpobs}")
+                else
+                    observer_obs_del+=("${cwpobs}")
+                fi
+            done
         fi
+        delete_array obs_ids observer_obs_del
+        join_arrays  obs_ids observer_obs_use
         ;;
 
     solver | post )
@@ -1181,17 +1177,14 @@ function jedi_preparation {
 
         # 2. Process the array to strip prefixes and suffixes
         # We create a new array called 'obs_list'
-        obs_ids=()
         for file in "${obs_files[@]}"; do
-            # Remove the path and prefix: ../jedi_observer/jdiag_
-            tmp="${file##*_}"
-            # Remove the suffix: .nc
-            name="${tmp%.nc}"
-            # Append to our new list
+            tmp="${file##*_}"    # Remove the path and prefix: ../jedi_observer/jdiag_
+            name="${tmp%.nc}"    # Remove the suffix: .nc
             if [[ "${name}" == "refl" ]]; then name="refl10cm"; fi
-            obs_ids+=("${name}")
+            solver_obs_found+=("${name}")   # Append to our new list
         done
 
+        obs_ids=("${solver_obs_found[@]}")
         # 3. Verify the result
         #echo "Number of observers: ${#obs_ids[@]}, obs_string=${obs_ids[*]}"
         #printf '%s\n' "${obs_ids[@]}"
@@ -1283,9 +1276,10 @@ function jedi_preparation {
 
     if [[ -d "jdiag" ]]; then        # Link observations for jdiag/ for task solver and post
         currdir=$(realpath -m --relative-to ${WORKDIR} $(pwd))
+        mecho0 "Linking observer output files to ${currdir}/jdiag for task = ${PURPLE}${taskname}${NC} ..."
         for file in "${obs_files[@]}"; do
             display_filename=$(realpath -m --relative-to ${WORKDIR} ${file})
-            mecho0 "Linking ${display_filename} to ${currdir}/jdiag ..."
+            mecho0 "    ${display_filename}"
             ln -snfr "${file}" jdiag/
         done
     fi
@@ -1352,7 +1346,7 @@ function jedi_preparation {
         # Prepare convinfo file based on obsvations
 
         local num_observers=${#obs_ids[@]}
-        mecho0 "task = ${PURPLE}${taskname}${NC}, obs_string = ${obs_ids[*]} (${YELLOW}${num_observers}${NC})"
+        mecho0 "task = ${taskname}, obs_string = ${obs_ids[*]} (${YELLOW}${num_observers}${NC})"
         get_convinfo "${config_FIXDIR}/jedi/convinfo" ./convinfo obs_ids
 
         # generate getkf.yaml based on how YAML_GEN_METHOD is set
@@ -1466,7 +1460,6 @@ function run_jedi_observer {
     # Waiting for job conditions
     #
     local -a conditions
-    echo "${obs_categories[*]}"
     [[ " ${obs_ids[*]} " =~ " refl10cm " ]] && conditions=("${datimedir}/ioda_mrms_refl/done.ioda_mrms_refl")
     [[ "${#obs_categories[@]}" -gt 0     ]] && conditions+=("${datimedir}/ioda_bufr/done.ioda_bufr")
     [[ " ${obs_ids[*]} " =~ [[:space:]](cwp|lwp|iwp|cwp_night)[[:space:]] ]] && conditions+=("${datimedir}/ioda_cwp/done.ioda_cwp")
@@ -1543,7 +1536,7 @@ function run_jedi_observer {
     fi
 
     if [[ " ${obs_ids[*]} " =~ [[:space:]](cwp|lwp|iwp|cwp_night)[[:space:]] ]]; then
-        for cwpobs in "${cwp_obses[@]}"; do
+        for cwpobs in "${cwp_obs_initial[@]}"; do
             if [[ " ${obs_ids[*]} " =~ " ${cwpobs} " ]]; then
                 mappings["ioda_${cwpobs}_obs.nc"]="${datimedir}/ioda_cwp/ioda_${cwpobs}_obs.nc"
                 obs_lists+=("ioda_${cwpobs}_obs.nc")
@@ -1552,13 +1545,12 @@ function run_jedi_observer {
     fi
 
     # loop through and copy files
-    #pwd
+    mecho0 "Will use the following IODA files for task = ${PURPLE}observer${NC}:"
     for dst_file in "${obs_lists[@]}"; do
         obs_file="${mappings[${dst_file}]}"
-        #mecho0 "Looking for file ${obs_file}"
         if [[ -s "${obs_file}" ]]; then
             display_name=$(realpath -m --relative-to=${WORKDIR} "${obs_file}")
-            mecho0 "Will use ${CYAN}${display_name}${NC}"
+            mecho0 "    ${CYAN}${display_name}${NC}"
             ${cpcmd} "${obs_file}"  "obs/${dst_file}"
         else
             [[ ${verb} -eq 1 ]] && mecho0 "${PURPLE}WARNING${NC}: ${CYAN}${obs_file}${NC} does not exist!"
@@ -1701,7 +1693,7 @@ function run_jedi_post {
     # Return if is running or is done
     #
     if [[ -f $wrkdir/done.post ]]; then
-        mecho0 "POST job is already done."
+        #mecho0 "POST job is already done."
         return
     fi
 
@@ -2261,9 +2253,9 @@ function dacycle_driver() {
     #       atmosphere_model
     #       jedi/mpasjedi_enkf.x
     #
-    ##############################################################################################
+    ####################################################################
     # USER SPECIFIED PARAMETERS
-    ##############################################################################################
+    ####################################################################
     # $1    $2    $3
     # init start  end
     local init_sec=$1
@@ -2286,13 +2278,27 @@ function dacycle_driver() {
     intvl_min=$((config_intvl_sec/60))
     n_cycles=$(( (end_sec-start_sec)/config_intvl_sec+1 ))
 
-    echo -e "Total ${n_cycles} cycles from ${GREEN}$date_beg${NC} to ${LIGHT_BLUE}$date_end${NC} will be run every $intvl_min minutes."
+    echo -e "Total ${n_cycles} cycles from ${WHITE}${date_beg}${NC} to ${WHITE}${date_end}${NC} will be run every ${YELLOW}${intvl_min}${NC} minutes."
 
     if [[ $dorun == true ]]; then
         num_resubmit=2               # resubmit failed jobs
     else
         num_resubmit=0               # Just check job status
     fi
+
+    declare -a -g obs_ids_initial obs_categories_initial
+
+    #obs_string="t120,t133,q120,q133,uv220,uv233"
+    read_convinfo_initial "${config_FIXDIR}/jedi/convinfo" obs_ids_initial obs_categories_initial
+    #echo "obs_string=\"${obs_ids_initial[*]}\", obs_category=\"${obs_categories_initial[*]}\""
+    #exit 0
+
+    declare -a -g cwp_obs_initial=("cwp" "lwp" "iwp" "cwp_night")
+
+    DO_RADAR_REF="true"   # To prevent yaml_finalize from changing the increment variables
+    export DO_RADAR_REF
+
+    declare -a obs_ids obs_categories
 
     local icyc=$(( (start_sec-init_sec)/config_intvl_sec ))
     for isec in $(seq $start_sec $config_intvl_sec $end_sec ); do
@@ -2327,7 +2333,7 @@ function dacycle_driver() {
         #------------------------------------------------------
         if [[ $dorun == true ]]; then
             if [[ $icyc -eq 0 ]]; then
-                if [[ ! -e $rundir/lbc/done.lbc ]]; then
+                if [[ ! -e ${rundir}/lbc/done.${domname} ]]; then
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
                     check_job_status "lbc ${domname} ${domname}" $rundir/lbc ${config_nenslbc} run_lbc.${mach}
                 fi
@@ -2348,22 +2354,13 @@ function dacycle_driver() {
         fcstmin_str=$(printf "%02d" "${intvl_min}")
 
         #------------------------------------------------------
-        # 1. Retrieve observation string
+        # 0.1. Retrieve observation string
         #------------------------------------------------------
 
-        declare -a -g obs_ids obs_categories
         if [[ ${icyc} -gt 0 && ${config_use_BUFR} == true ]]; then
-            #obs_string="t120,t133,q120,q133,uv220,uv233"
-            read_convinfo_initial "${config_FIXDIR}/jedi/convinfo" obs_ids obs_categories
-            #echo "obs_string=\"${obs_ids[*]}\", obs_category=\"${obs_categories[*]}\""
-            #exit 0
+            obs_ids=("${obs_ids_initial[@]}")
+            obs_categories=("${obs_categories_initial[@]}")
         fi
-
-        declare -a -g cwp_obses
-        cwp_obses=("cwp" "lwp" "iwp" "cwp_night")
-
-        DO_RADAR_REF="true"   # To prevent yaml_finalize from changing the increment variables
-        export DO_RADAR_REF
 
         #------------------------------------------------------
         # 1. Run ioda

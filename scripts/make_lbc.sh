@@ -544,7 +544,7 @@ function run_lbc {
 
     if [[ ${dorun} == true ]]; then
         for cond in "${conditions[@]}"; do
-            rcond=$(realpath --relative-to "${WORKDIR}" "${cond}")
+            rcond=$(realpath -m --relative-to "${WORKDIR}" "${cond}")
             mecho0 "Checking: ${CYAN}${rcond}${NC} ...."
             while [[ ! -e ${cond} ]]; do
                 if [[ ${verb} -eq 1 ]]; then
@@ -637,7 +637,7 @@ function run_time_intrp {
 
     if [[ ${dorun} == true ]]; then
         for cond in "${conditions[@]}"; do
-            rcond=$(realpath --relative-to "${WORKDIR}" "${cond}")
+            rcond=$(realpath -m --relative-to "${WORKDIR}" "${cond}")
             mecho0 "Checking: ${CYAN}${rcond}${NC} ...."
             while [[ ! -e ${cond} ]]; do
                 if [[ ${verb} -eq 1 ]]; then

@@ -9,7 +9,9 @@
 # o get_jobarray_str         # Retrieve job array option string based on job scheduler
 # o group_numbers_by_steps   # Group job numbers for PBS job array option "-J X-Y[:Z]%num"
 # o join_by                  # Join array into a string by a separator
+# o join_arrays              # To join an array while ensuring you only add elements that don't already exist in the target (finding the union of the two sets)
 # o intersection             # Intersection of two arrays, pass in as two strings and pass out as one intersected string
+# o delete_array             # To remove elements from array1 that are present in array2 (essentially performing a set difference)
 # o typeset2array            # Typeset output to an associative array
 # o string2array             # '_' separated string to an array
 # o is_balanced              # Check whether quote character is balanced  (used in readconf)
@@ -508,6 +510,82 @@ function join_by {
 
 ########################################################################
 
+function join_arrays {
+    local -n array1="$1"
+    local -n array2="$2"
+
+    # Initialize arrays
+    #array1=("1500" "1515" "1530")
+    #array2=("1530" "1545" "1600")
+
+    # 0. Safety Check: If the second array is empty, nothing to do
+    if [[ ${#array2[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    # 1. Create an associative array to track what's in array1
+    declare -A seen
+    for item in "${array1[@]}"; do
+        seen["$item"]=1
+    done
+
+    # 2. Iterate through array2 and append only if not seen
+    for item in "${array2[@]}"; do
+        if [[ -z "${seen["$item"]}" ]]; then
+            array1+=("$item")
+            seen["$item"]=1 # Mark as seen so we don't add duplicates from array2 itself
+        fi
+    done
+
+    # Result: array1 will be ("1500" "1515" "1530" "1545" "1600")
+}
+
+########################################################################
+
+function delete_array {
+    # To remove elements from array1 that are present in array2
+    # (essentially performing a set difference),
+    # the most efficient approach in Bash uses an associative array as a lookup table.
+    [[ $# -lt 2 ]] && return 1
+
+    local -n array1="$1"
+    local -n array2="$2"
+
+    # 0. Safety Check: If target is empty or exclude is empty, nothing to do
+    if [[ ${#array1[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    if [[ ${#array2[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    # Example setup
+    #array1=("1500" "1515" "1530" "1545" "1600")
+    #array2=("1515" "1545")
+
+    # 1. Declare a lookup table (associative array) for array2
+    declare -A to_remove
+    for item in "${array2[@]}"; do
+        to_remove["$item"]=1
+    done
+
+    # 2. Rebuild array1 by only keeping items NOT in the lookup table
+    local new_array1=()
+    for item in "${array1[@]}"; do
+        if [[ -z "${to_remove["$item"]}" ]]; then
+            new_array1+=("$item")
+        fi
+    done
+
+    # 3. Finalize the change
+    array1=("${new_array1[@]}")
+
+    # Result: ("1500" "1530" "1600")
+}
+
+########################################################################
+
 function intersection {
     read -r -a array_one <<< "$1"
     read -r -a array_two <<< "$2"
@@ -873,15 +951,15 @@ wait_for_conditions () {
     if [[ ${dorun} == true ]]; then
         for cond in "${conditions[@]}"; do
             if [[ "$cond" =~ (.+)"|"(.+) ]]; then
-                cond1=${BASH_REMATCH[1]}; rcond1=$(realpath --relative-to "${WORKDIR}" "${cond1}")
-                cond2=${BASH_REMATCH[2]}; rcond2=$(realpath --relative-to "${WORKDIR}" "${cond1}")
+                cond1=${BASH_REMATCH[1]}; rcond1=$(realpath -m --relative-to "${WORKDIR}" "${cond1}")
+                cond2=${BASH_REMATCH[2]}; rcond2=$(realpath -m --relative-to "${WORKDIR}" "${cond1}")
                 mecho1 "Checking ${rcond1} or ${rcond2} ...."
                 while [[ ! -e "${cond1}" && ! -e "${cond2}" ]]; do
                     [[ $verb -eq 1 ]] && mecho0 "Waiting for file: ${LIGHT_BLUE}${rcond1}${NC} or ${LIGHT_BLUE}${rcond2}${NC}"
                     sleep 10
                 done
             else
-                rcond1=$(realpath --relative-to "${WORKDIR}" "${cond}")
+                rcond1=$(realpath -m --relative-to "${WORKDIR}" "${cond}")
                 mecho1 "Checking ${rcond1} ...."
                 while [[ ! -e ${cond} ]]; do
                     if [[ $verb -eq 1 ]]; then

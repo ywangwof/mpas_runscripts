@@ -525,7 +525,7 @@ function run_init4invariant {
 
     if [[ ${dorun} == true ]]; then
         for cond in "${conditions[@]}"; do
-            rcond=$(realpath --relative-to "${WORKDIR}" "${cond}")
+            rcond=$(realpath -m --relative-to "${WORKDIR}" "${cond}")
             mecho0 "Checking: ${CYAN}${rcond}${NC} ...."
             while [[ ! -e ${cond} ]]; do
                 check_job_status "ungrib" "${rundir}/init/ungrib" "${config_nensics}"
@@ -725,7 +725,7 @@ function run_init {
 
     if [[ ${dorun} == true ]]; then
         for cond in "${conditions[@]}"; do
-            rcond=$(realpath --relative-to "${WORKDIR}" "${cond}")
+            rcond=$(realpath -m --relative-to "${WORKDIR}" "${cond}")
             mecho0 "Checking: ${CYAN}${rcond}${NC} ...."
             while [[ ! -e ${cond} ]]; do
                 check_job_status "ungrib" "${rundir}/init/ungrib" "${config_nensics}"

@@ -435,10 +435,11 @@ function run_mpas {
         lbc_dafile=${da_dir}/fcst_${memstr}/${domname}_${memstr}.lbc.${mpastime_str}.nc
         lbc_myfile=${domname}_${memstr}.lbc.${mpastime_str}.nc
         if [[ $dorun == true ]]; then
-            if [[ ! -e ${lbc_dafile} ]]; then     # impossible condition unless not actual run
-                mecho0 "File: ${lbc_dafile} not exist."
-                exit 1
-            fi
+            while [[ ! -e ${lbc_dafile} ]]; do     # Maybe forward forecast and this forecast start simultanously
+                lbs_1stfile=$(realpath -m --relative-to "${WORKDIR}" "${lbc_dafile}")
+                mecho0 "${YELLOW}INFO${NC}: Waiting for ${lbs_1stfile} ...."
+                sleep 10
+            done
         fi
         ln -sf ${lbc_dafile} ${lbc_myfile}
         if [[ $verb -eq 1 ]]; then
