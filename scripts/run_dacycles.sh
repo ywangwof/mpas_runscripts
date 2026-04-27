@@ -325,12 +325,23 @@ function run_ioda_bufr {
     anlys_date=$(date -u -d @$iseconds    +%Y%m%d)
     anlys_datehr=$(date -u -d @$iseconds  +%Y%m%d%H)
     anlys_time=$(date -u -d @$iseconds  +%H%M)
+    anlys_hour=$(date -u -d @$iseconds  +%H)
 
-    #------------------------------------------------------
-    # Run ioda_bufr for all bufr observation files
-    #------------------------------------------------------
+    #-------------------------------------------------------------------
+    # Run ioda_bufr for all bufr observation files (only assimilates
+    # prepbufr observation currently)
+    #
+    # To assimilate other observations in the RAP file than "adpsfc",
+    # make sure to turn the corresponding categories on in file 'convinfo'
+    # Currently, only "adpsfc" in 'rmta_ru' is tested.
+    #
+    #    adpsfc adpupa aircar aircft satwnd sfcshp vadwnd
+    #    gpsipw msonet proflr rassda ascatw
+    #
+    #-------------------------------------------------------------------
 
     prepbufr="${config_OBS_BUFR_DIR}/${anlys_date}/${anlys_datehr}.rtma_ru.t${anlys_time}z.prepbufr.tm00"
+    #prepbufr="${config_OBS_BUFR_DIR}/${anlys_date}.rap.t${anlys_hour}z.prepbufr.tm00"
 
     if [[ -s ${prepbufr} ]]; then
         mecho0 "Use prepbufr file ${CYAN}${prepbufr}${NC}"
@@ -341,11 +352,18 @@ function run_ioda_bufr {
         return
     fi
 
-    mkwrkdir $wrkdir/ioda_bufr 1     # 0: Keep existing directory as is
-                                     # 1: Remove existing same name directory
+    mkwrkdir $wrkdir/ioda_bufr 1        # 0: Keep existing directory as is
+                                        # 1: Remove existing same name directory
     cd $wrkdir/ioda_bufr || exit $?
 
     ${cpcmd} "${prepbufr}" prepbufr
+
+    #${cpcmd} "${config_OBS_BUFR_DIR}/${anlys_date}.rap.t${anlys_hour}z.prepbufr.tm00"       prepbufr
+    #${cpcmd} "${config_OBS_BUFR_DIR}/${anlys_date}.rap.t${anlys_hour}z.gpsipw.tm00.bufr_d"  ztdbufr
+    #${cpcmd} "${config_OBS_BUFR_DIR}/${anlys_date}.rap.t${anlys_hour}z.satwnd.tm00.bufr_d"  satwndbufr
+    #${cpcmd} "${config_OBS_BUFR_DIR}/${anlys_date}.rap.t${anlys_hour}z.gsrcsr.tm00.bufr_d"  abibufr
+    #${cpcmd} "${config_OBS_BUFR_DIR}/${anlys_date}.rap.t${anlys_hour}z.atms.tm00.bufr_d"    atmsbufr
+    #${cpreq} "${config_OBS_BUFR_DIR}/${anlys_date}.rap.t${anlys_hour}z.crisf4.tm00.bufr_d"  crisfsbufr
 
     jobscript="run_ioda_bufr.${mach}"
 
@@ -609,9 +627,8 @@ function run_ioda_cwp {
     if [[ ! -s ${cwpfile} ]]; then
         mecho0 "${YELLOW}INFO${NC}: No CWP file from ${LIGHT_BLUE}${config_OBS_CWP_DIR}/${curr_date}${NC} between ${DARK}${curr_datetime}${NC} and ${DARK}${anlys_eventtime}${NC}"
 
-        # drop CWP related obs_id (must enable extglob)
-        filtered_obsIDs=( "${obs_ids[@]/#(cwp|iwp|lwp|cwp_night)}" )    # This removes any element that EXACTLY matches cwp, iwp, or lwp
-        obs_ids=( "${filtered_obsIDs[@]}" )                             # Remove empty elements resulting from the replacement
+        # drop CWP related obs_id
+        delete_array obs_ids cwp_obs_initial
 
         return
     fi
@@ -986,9 +1003,22 @@ EOF_GETKF
 ########################################################################
 
 function read_convinfo_initial {
+    # Read convinfo to determine whether to use observations by default generally. (use or not)
+    #
+    # USE_xxx in the configuration file to determine whether the observation
+    # will be processed for a specific run.                                        (spcific test)
+    #
+    # The workflow (jedi_preparation) will check whether the used observations
+    # will be available dynamically for each cycle.                                (have or not)
+    #
+
     local infile="$1"
-    local -n obs_list=$2
-    local -n obs_category=$3
+    local -n obs_list=$2           # for prepbufr observations
+    local -n cwp_list=$3           # for CWP observations
+    local -n obs_category=$4       # for prepbufr observations
+
+    declare -a  cwp_local_initial=("cwp" "lwp" "iwp" "cwp_night" "lwp_night" "iwp_night")
+    declare -a  cwp_local_regex=$(IFS='|'; echo "${cwp_local_initial[*]}")
 
     #file_content=$(< "${config_FIXDIR}/jedi/convinfo") # read in all content
     while read -r line; do
@@ -1022,13 +1052,16 @@ function read_convinfo_initial {
                 atype="${atype}_${type}"
             fi
 
-
             if [[ $iuse -eq 1 ]]; then
-                obs_list+=("$atype")
-                if [[ ${itype} -ne 0 ]]; then
-                    icategory="${icat%%,*}"
-                    if [[ ! " ${obs_category[*]} " =~ " ${icategory,,} " ]]; then
-                        obs_category+=("${icategory,,}")
+                if [[ " ${atype} " =~ [[:space:]](${cwp_local_regex})[[:space:]] ]]; then
+                    cwp_list+=("${atype}")
+                else
+                    obs_list+=("$atype")
+                    if [[ ${itype} -ne 0 ]]; then
+                        icategory="${icat%%,*}"
+                        if [[ ! " ${obs_category[*]} " =~ " ${icategory,,} " ]]; then
+                            obs_category+=("${icategory,,}")
+                        fi
                     fi
                 fi
             fi
@@ -1180,7 +1213,11 @@ function jedi_preparation {
         for file in "${obs_files[@]}"; do
             tmp="${file##*_}"    # Remove the path and prefix: ../jedi_observer/jdiag_
             name="${tmp%.nc}"    # Remove the suffix: .nc
-            if [[ "${name}" == "refl" ]]; then name="refl10cm"; fi
+            if [[ "${name}" == "refl" ]];  then name="refl10cm";  fi
+            if [[ "${name}" == "night" ]]; then
+                tmp="${file##*jdiag_}"
+                name="${tmp%.nc}"
+            fi
             solver_obs_found+=("${name}")   # Append to our new list
         done
 
@@ -1276,7 +1313,7 @@ function jedi_preparation {
 
     if [[ -d "jdiag" ]]; then        # Link observations for jdiag/ for task solver and post
         currdir=$(realpath -m --relative-to ${WORKDIR} $(pwd))
-        mecho0 "Linking observer output files to ${currdir}/jdiag for task = ${PURPLE}${taskname}${NC} ..."
+        [[ ${#obs_files[@]} -gt 0 ]] && mecho0 "Linking observer output files to ${currdir}/jdiag for task = ${PURPLE}${taskname}${NC} ..."
         for file in "${obs_files[@]}"; do
             display_filename=$(realpath -m --relative-to ${WORKDIR} ${file})
             mecho0 "    ${display_filename}"
@@ -1462,7 +1499,7 @@ function run_jedi_observer {
     local -a conditions
     [[ " ${obs_ids[*]} " =~ " refl10cm " ]] && conditions=("${datimedir}/ioda_mrms_refl/done.ioda_mrms_refl")
     [[ "${#obs_categories[@]}" -gt 0     ]] && conditions+=("${datimedir}/ioda_bufr/done.ioda_bufr")
-    [[ " ${obs_ids[*]} " =~ [[:space:]](cwp|lwp|iwp|cwp_night)[[:space:]] ]] && conditions+=("${datimedir}/ioda_cwp/done.ioda_cwp")
+    [[ " ${obs_ids[*]} " =~ [[:space:]](${cwp_obs_regex})[[:space:]] ]] && conditions+=("${datimedir}/ioda_cwp/done.ioda_cwp")
 
     wait_for_conditions "${conditions[*]}"
 
@@ -1535,7 +1572,7 @@ function run_jedi_observer {
         obs_lists+=("ioda_rw_obs.nc")
     fi
 
-    if [[ " ${obs_ids[*]} " =~ [[:space:]](cwp|lwp|iwp|cwp_night)[[:space:]] ]]; then
+    if [[ " ${obs_ids[*]} " =~ [[:space:]](${cwp_obs_regex})[[:space:]] ]]; then
         for cwpobs in "${cwp_obs_initial[@]}"; do
             if [[ " ${obs_ids[*]} " =~ " ${cwpobs} " ]]; then
                 mappings["ioda_${cwpobs}_obs.nc"]="${datimedir}/ioda_cwp/ioda_${cwpobs}_obs.nc"
@@ -2286,14 +2323,15 @@ function dacycle_driver() {
         num_resubmit=0               # Just check job status
     fi
 
-    declare -a -g obs_ids_initial obs_categories_initial
+    declare -a -g obs_ids_initial obs_categories_initial cwp_obs_initial
 
     #obs_string="t120,t133,q120,q133,uv220,uv233"
-    read_convinfo_initial "${config_FIXDIR}/jedi/convinfo" obs_ids_initial obs_categories_initial
+    read_convinfo_initial "${config_FIXDIR}/jedi/convinfo" obs_ids_initial cwp_obs_initial obs_categories_initial
     #echo "obs_string=\"${obs_ids_initial[*]}\", obs_category=\"${obs_categories_initial[*]}\""
     #exit 0
 
-    declare -a -g cwp_obs_initial=("cwp" "lwp" "iwp" "cwp_night")
+    #declare -a -g cwp_obs_initial=("cwp" "lwp" "iwp" "cwp_night" "lwp_night" "iwp_night")
+    declare -a -g cwp_obs_regex=$(IFS='|'; echo "${cwp_obs_initial[*]}")
 
     DO_RADAR_REF="true"   # To prevent yaml_finalize from changing the increment variables
     export DO_RADAR_REF
