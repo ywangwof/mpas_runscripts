@@ -47,4 +47,4 @@ time2=$(date '+%s')
 
 diff=$((time2-time1))
 
-printf "\nJob   Ended: %(%a %b %d %H:%M:%S %Z %Y)T. Job run time: %s.\n" $time2 $(date -d@$diff -u +%H:%M:%S)
+printf "\nJob   Ended: %(%a %b %d %H:%M:%S %Z %Y)T. Job run time: %s.\n" "${time2}" "$(date -d@${diff} -u +%H:%M:%S)"

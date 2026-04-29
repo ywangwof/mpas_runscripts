@@ -361,18 +361,21 @@ for pkg in "${packages[@]}"; do
         echo "  -- ${cmdnote} runtime static files to ${desdir} ...."
 
         run_cmd "${runcmd}" "${srcmodel}/src/core_atmosphere/physics/physics_wrf/files" "${staticfiles[*]}"
-        run_cmd "${runcmd}" "${srcmodel}/src/core_atmosphere/physics/TEMPO/tables" CCN_ACTIVATE.BIN
+        run_cmd "${runcmd}" "${srcmodel}/src/core_atmosphere/physics/TEMPO/tables" ccn_activate.bin
 
         if [[ ${realrun} == true ]]; then
-            thompsonfiles=(MP_THOMPSON_freezeH2O_DATA.DBL      MP_THOMPSON_QIautQS_DATA.DBL  \
-                           MP_THOMPSON_QRacrQG_DATA.DBL        MP_THOMPSON_QRacrQS_DATA.DBL  \
-                           MP_TEMPO_freezeH2O_DATA.DBL         MP_TEMPO_QIautQS_DATA.DBL     \
-                           MP_TEMPO_QRacrQG_DATA.DBL           MP_TEMPO_QRacrQS_DATA.DBL     \
-                           MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL CCN_ACTIVATE.BIN )
+            thompsonfiles=(MP_THOMPSON_freezeH2O_DATA.DBL      MP_THOMPSON_QIautQS_DATA.DBL
+                           MP_THOMPSON_QRacrQG_DATA.DBL        MP_THOMPSON_QRacrQS_DATA.DBL)
+            tempofiles=( qr_acr_qs_data_tempo_v3    qr_acr_qg_data_tempo_v3
+                         freeze_water_data_tempo_v3 ccn_activate.bin )
+                           #MP_TEMPO_freezeH2O_DATA.DBL         MP_TEMPO_QIautQS_DATA.DBL     \
+                           #MP_TEMPO_QRacrQG_DATA.DBL           MP_TEMPO_QRacrQS_DATA.DBL     \
+                           #MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL CCN_ACTIVATE.BIN )
 
             cd "${desdir}" || exit 1
 
             run_cmd "${runcmd}" "${rootdir}/fix_files${affix}" "${thompsonfiles[*]}"
+            run_cmd "${runcmd}" "${rootdir}/fix_files${affix}" "${tempofiles[*]}"
         else
             #cd "$desdir" || exit 1
 

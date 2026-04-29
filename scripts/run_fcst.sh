@@ -486,10 +486,16 @@ function run_mpas {
         done
 
         if [[ "${config_mpscheme}" == "mp_tempo" ]]; then
-            thompson_tables=( MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL MP_TEMPO_QRacrQS_DATA.DBL   \
-                              MP_TEMPO_freezeH2O_DATA.DBL         MP_TEMPO_QIautQS_DATA.DBL   CCN_ACTIVATE_DATA )
+            #tempo_tables=( MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL MP_TEMPO_QRacrQS_DATA.DBL   \
+            #               MP_TEMPO_freezeH2O_DATA.DBL         MP_TEMPO_QIautQS_DATA.DBL   CCN_ACTIVATE_DATA )
+            tempo_tables=( qr_acr_qs_data_tempo_v3 qr_acr_qg_data_tempo_v3 freeze_water_data_tempo_v3 ccn_activate.bin )
 
-            for fn in "${thompson_tables[@]}"; do
+            for fn in "${tempo_tables[@]}"; do
+                if [[ ! -s ${config_FIXDIR}/$fn ]]; then
+                    mecho0 "${RED}ERROR${NC}: ${config_FIXDIR}/$fn not found."
+                    mecho0 "${YELLOW}INFO${NC}: Please run ${CYAN}${config_FIXDIR}/run_build_tables.${mach}${NC} once."
+                    exit 1
+                fi
                 ln -sf ${config_FIXDIR}/$fn .
             done
         elif [[ "${config_mpscheme}" == "Thompson" ]]; then
@@ -610,10 +616,12 @@ EOF
             cat << EOF >> namelist.atmosphere
     config_sfclayer_scheme           = '${sfcscheme/sf_mynn/sf_mynnsfclay}'
     config_microp_scheme             = '${config_mpscheme}'
-    config_tempo_hailaware           = .true.
-    config_tempo_aerosolaware        = .true.
-    config_tempo_ml_nc_pbl           = .true.
     config_mynn_mixnumcon            = 0
+/
+&physics_mp_tempo
+    config_tempo_aerosolaware        = .true.
+    config_tempo_hailaware           = .true.
+    config_tempo_ml_for_bl_nc        = .true.
 /
 EOF
         fi

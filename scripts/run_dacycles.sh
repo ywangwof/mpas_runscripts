@@ -809,10 +809,12 @@ EOF
         cat << EOF >> "${filename}"
     config_sfclayer_scheme           = '${sfcscheme/sf_mynn/sf_mynnsfclay}'
     config_microp_scheme             = '${config_mpscheme}'
-    config_tempo_hailaware           = .true.
-    config_tempo_aerosolaware        = .true.
-    config_tempo_ml_nc_pbl           = .true.
     config_mynn_mixnumcon            = 0
+/
+&physics_mp_tempo
+    config_tempo_aerosolaware        = .true.
+    config_tempo_hailaware           = .true.
+    config_tempo_ml_for_bl_nc        = .true.
 /
 EOF
     else
@@ -1237,12 +1239,12 @@ function jedi_preparation {
     #------------------------------------------------------
     # DATA=wrkdir
     if [[ ${#obs_ids[@]} -gt 0 ]]; then
-        physics_convection_permitting=( CAM_ABS_DATA.DBL CAM_AEROPT_DATA.DBL CCN_ACTIVATE_DATA   \
-                                        GENPARM.TBL      LANDUSE.TBL                             \
-                                        OZONE_DAT.TBL    OZONE_LAT.TBL      OZONE_PLEV.TBL \
-                                        QNWFA_QNIFA_SIGMA_MONTHLY.dat       \
-                                        RRTMG_LW_DATA RRTMG_LW_DATA.DBL     \
-                                        RRTMG_SW_DATA RRTMG_SW_DATA.DBL     \
+        physics_convection_permitting=( CAM_ABS_DATA.DBL CAM_AEROPT_DATA.DBL CCN_ACTIVATE_DATA
+                                        GENPARM.TBL      LANDUSE.TBL
+                                        OZONE_DAT.TBL    OZONE_LAT.TBL      OZONE_PLEV.TBL
+                                        QNWFA_QNIFA_SIGMA_MONTHLY.dat
+                                        RRTMG_LW_DATA RRTMG_LW_DATA.DBL
+                                        RRTMG_SW_DATA RRTMG_SW_DATA.DBL
                                         SOILPARM.TBL VEGPARM.TBL )
 
         for fn in "${physics_convection_permitting[@]}"; do
@@ -1250,13 +1252,14 @@ function jedi_preparation {
         done
 
         # shellcheck disable=SC2034
-        physics_mp_tempo=( MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL MP_TEMPO_QIautQS_DATA.DBL \
-                           MP_TEMPO_QRacrQG_DATA.DBL           MP_TEMPO_QRacrQS_DATA.DBL \
+        physics_mp_tempo=( MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL MP_TEMPO_QIautQS_DATA.DBL
+                           MP_TEMPO_QRacrQG_DATA.DBL           MP_TEMPO_QRacrQS_DATA.DBL
                            MP_TEMPO_freezeH2O_DATA.DBL        )
+        #physics_mp_tempo=( qr_acr_qs_data_tempo_v3 qr_acr_qg_data_tempo_v3 freeze_water_data_tempo_v3 ccn_activate.bin )
 
         # shellcheck disable=SC2034
-        physics_mp_thompson=( MP_THOMPSON_QIautQS_DATA.DBL   MP_THOMPSON_QRacrQG_DATA.DBL   \
-                           MP_THOMPSON_QRacrQS_DATA.DBL   MP_THOMPSON_freezeH2O_DATA.DBL      )
+        physics_mp_thompson=( MP_THOMPSON_QIautQS_DATA.DBL   MP_THOMPSON_QRacrQG_DATA.DBL
+                              MP_THOMPSON_QRacrQS_DATA.DBL   MP_THOMPSON_freezeH2O_DATA.DBL )
 
         if [[ "${config_mpscheme}" =~ ^(mp_tempo|mp_thompson)$ ]]; then
             declare -n mp_target="physics_${config_mpscheme}"
@@ -1391,7 +1394,7 @@ function jedi_preparation {
         analysisDate="$(date -u -d @${iseconds} +%Y-%m-%dT%H:%M:%SZ)"
         bseconds=$((iseconds - 1800))
         beginDate="$(date -u -d @${bseconds} +%Y-%m-%dT%H:%M:%SZ)"
-        lenwind="PT30M"
+        lenwind="PT60M"
 
         # generate the JEDI yaml files using templates from the parm/ directory
         #source "${USHrrfs}"/yaml_from_parm.sh "getkf"
@@ -1440,7 +1443,8 @@ function jedi_preparation {
         [[ -s "${config_FIXDIR}/jedi/satinfo" ]] && cp "${config_FIXDIR}/jedi/satinfo" .
         export GETKF_TYPE="${taskname}"
         export EMPTY_OBS_SPACE_ACTION='skip output'   # @emptyObsSpaceAction@
-        mecho0 "yaml_finalize - $(${rrfs_dir}/ush/yaml_finalize getkf.yaml 2>&1)"        # manage output message
+        yaml_finalize_message=$(${rrfs_dir}/ush/yaml_finalize getkf.yaml 2>&1)
+        [[ -n "${yaml_finalize_message}" ]] && mecho0 "yaml_finalize - ${yaml_finalize_message}"        # manage output message
 
 
         if [[ "${taskname}" == "post" ]]; then
@@ -2230,10 +2234,16 @@ function run_mpas {
         done
 
         if [[ "${config_mpscheme}" == "mp_tempo" ]]; then
-            thompson_tables=( MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL MP_TEMPO_QRacrQS_DATA.DBL   \
-                              MP_TEMPO_freezeH2O_DATA.DBL         MP_TEMPO_QIautQS_DATA.DBL   CCN_ACTIVATE_DATA )
+            #tempo_tables=( MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL MP_TEMPO_QRacrQS_DATA.DBL   \
+            #                  MP_TEMPO_freezeH2O_DATA.DBL         MP_TEMPO_QIautQS_DATA.DBL   CCN_ACTIVATE_DATA )
+            tempo_tables=( qr_acr_qs_data_tempo_v3 qr_acr_qg_data_tempo_v3 freeze_water_data_tempo_v3 ccn_activate.bin )
 
-            for fn in "${thompson_tables[@]}"; do
+            for fn in "${tempo_tables[@]}"; do
+                if [[ ! -s ${config_FIXDIR}/$fn ]]; then
+                    mecho0 "${RED}ERROR${NC}: ${config_FIXDIR}/$fn not found."
+                    mecho0 "${YELLOW}INFO${NC}: Please run ${CYAN}${config_FIXDIR}/run_build_tables.${mach}${NC} once."
+                    exit 1
+                fi
                 ln -sf ${config_FIXDIR}/$fn .
             done
         elif [[ "${config_mpscheme}" == "mp_thompson" ]]; then
@@ -2330,7 +2340,6 @@ function dacycle_driver() {
     #echo "obs_string=\"${obs_ids_initial[*]}\", obs_category=\"${obs_categories_initial[*]}\""
     #exit 0
 
-    #declare -a -g cwp_obs_initial=("cwp" "lwp" "iwp" "cwp_night" "lwp_night" "iwp_night")
     declare -a -g cwp_obs_regex=$(IFS='|'; echo "${cwp_obs_initial[*]}")
 
     DO_RADAR_REF="true"   # To prevent yaml_finalize from changing the increment variables
