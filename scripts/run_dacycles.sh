@@ -2013,11 +2013,20 @@ function run_update_bc {
     # Prepare update_bc by copying/linking the background files
     #------------------------------------------------------
 
-    lbcfiles_org1=(); lbcfiles_org2=()
-    lbcfiles_mem1=(); lbcfiles_mem2=()
-    lbcfiles_mems=(); lbcfiles_next=()
+    lbcdir="${casedir}/lbc"
 
-    jobarrays=()
+    # isec_nlbc1, isec_nlbc2, isec_elbc and icycle_lbcgap are set in the caller
+
+    # External GRIB file provided file times
+    lbctime_str1=$(date -u -d @${isec_nlbc1} +%Y-%m-%d_%H.%M.%S)
+    lbctime_str2=$(date -u -d @${isec_nlbc2} +%Y-%m-%d_%H.%M.%S)
+
+    # MPAS expected boundary file times
+    mpastime_str1=$(date -u -d @${iseconds}   +%Y-%m-%d_%H.%M.%S)
+    mpastime_str2=$(date -u -d @${isec_elbc}  +%Y-%m-%d_%H.%M.%S)
+
+    declare -A mem_map=()
+    declare -a jobarrays=()
     for iens in $(seq 1 ${config_ENS_SIZE}); do
         #(( jindex=iens-1 ))
 
@@ -2033,40 +2042,13 @@ function run_update_bc {
         jens=$(( (iens-1)%config_nenslbc+1 ))
         mlbcstr=$(printf "%02d" $jens)                # get LBC member string
 
-        # isec_nlbc1, isec_nlbc2, isec_elbc and icycle_lbcgap are set in the caller
-
-        # External GRIB file provided file times
-        lbctime_str1=$(date -u -d @${isec_nlbc1} +%Y-%m-%d_%H.%M.%S)
-        lbctime_str2=$(date -u -d @${isec_nlbc2} +%Y-%m-%d_%H.%M.%S)
-
-        # MPAS expected boundary file times
-        mpastime_str1=$(date -u -d @${iseconds}   +%Y-%m-%d_%H.%M.%S)
-        mpastime_str2=$(date -u -d @${isec_elbc}  +%Y-%m-%d_%H.%M.%S)
+        mem_map[$iens]="${mlbcstr}"
 
         if [[ $verb -eq 1 ]]; then
-            mecho0 "Member: $iens use lbc files from $casedir/lbc:"
+            mecho0 "Member: $iens use lbc files from ${lbcdir}:"
             mecho0 "        ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc  ${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc";
         fi
 
-        lbcdir="${casedir}/lbc"
-
-        #ln -sf $rundir/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc ${domname}_${memstr}.lbc.${mpastime_str1}.nc
-        lbc_file1="${lbcdir}/${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc"
-        lbc_file2="${lbcdir}/${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc"
-        lbc_filem="./${domname}_${memstr}.lbc.${mpastime_str1}.nc"
-        lbc_filen="./${domname}_${memstr}.lbc.${mpastime_str2}.nc"
-
-        org_file1="${lbcdir}/${domname}_${mlbcstr}.lbc.${mpastime_str1}.nc"
-        org_file2="${lbcdir}/${domname}_${mlbcstr}.lbc.${mpastime_str2}.nc"
-
-        lbcfiles_org1+=("${lbc_file1}")
-        lbcfiles_org2+=("${lbc_file2}")
-
-        lbcfiles_mem1+=("${org_file1}")
-        lbcfiles_mem2+=("${org_file2}")
-
-        lbcfiles_mems+=("${lbc_filem}")
-        lbcfiles_next+=("${lbc_filen}")
 
         jobarrays+=("$iens")
     done
@@ -2079,29 +2061,53 @@ function run_update_bc {
 
     jobscript="run_update_bc.${mach}"
 
+    if [[ ${config_run_update_with_array} == true ]]; then
+        nopart=1
+        claim_cpu_update="${config_claim_cpu_update}"
+        jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
+        joboptions=("${jobarraystr}" "--output=${wrkdir}/fcst_%a_update_bc_%j.log")
+    else
+        nopart="${#jobarrays[@]}"
+
+        if [[ ${config_claim_cpu_update} =~ ntasks-per-node=([0-9]+) ]]; then
+            ntasks_per_node=${BASH_REMATCH[1]}
+        else
+            ntasks_per_node=12
+        fi
+
+        if [[ ${isec_nlbc1} -eq ${iseconds} ]]; then  # no interpolation perform
+            ntasks_per_node="${#jobarrays[@]}"
+        fi
+
+        nnodes=$(( (${#jobarrays[@]}+ntasks_per_node-1)/ntasks_per_node ))
+        [[ ${nnodes} -lt 1 ]] && nnodes=1
+
+        claim_cpu_update="--ntasks-per-node=${ntasks_per_node} --nodes=${nnodes}"
+
+        joboptions=("--output=${wrkdir}/fcst_all_update_bc_%j.log")
+    fi
+
     declare -A jobParms=(
         [PARTION]="${config_partition_filter}"
-        [NOPART]="1"
+        [NOPART]="${nopart}"
         [JOBNAME]="updatebc_${eventtime}"
-        [CPUSPEC]="${config_claim_cpu_update}"
+        [CPUSPEC]="${claim_cpu_update}"
         [CPCMD]="${cpcmd}"
-        [MPSCHEME]="${config_mpscheme}"
-        [LBCFILEORGSTR1]="${lbcfiles_org1[*]}"
-        [LBCFILEORGSTR2]="${lbcfiles_org2[*]}"
-        [LBCFILEMEMSSTR]="${lbcfiles_mems[*]}"
-        [LBCFILENEXTSTR]="${lbcfiles_next[*]}"
-        [LBCFILEMEMS1]="${lbcfiles_mem1[*]}"
-        [LBCFILEMEMS2]="${lbcfiles_mem2[*]}"
-        [UPDATEBC]="${config_update_in_place}"
+        [LBCPATH]="${lbcdir}"
+        [DOMNAME]="${domname}"
+        [MPASTIME1]="${mpastime_str1}"
+        [MPASTIME2]="${mpastime_str2}"
+        [LBCTIME1]="${lbctime_str1}"
+        [LBCTIME2]="${lbctime_str2}"
+        [MEMMAP]="$(declare -p mem_map)"
+        [NENS_MEMBERS]="${jobarrays[*]}"
     )
     if [[ "${mach}" == "pbs" ]]; then
         jobParms[NNODES]="1"
         jobParms[NCORES]="1"
     fi
 
-    jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
-
-    submit_a_job $wrkdir "update_bc" jobParms ${config_TEMPDIR}/$jobscript $jobscript "${jobarraystr}"
+    submit_a_job "${wrkdir}" "update_bc" jobParms ${config_TEMPDIR}/$jobscript "run_update_bc.${mach}" "${joboptions[*]}"
 }
 
 ########################################################################
@@ -2367,7 +2373,7 @@ function dacycle_driver() {
         #------------------------------------------------------
 
         isec_nlbc1=$(( isec - isec%config_EXTINVL ))            # get whole hour in seconds
-        isec_nlbc2=$(( isec_nlbc1 + config_EXTINVL ))        # next whole hour
+        isec_nlbc2=$(( isec_nlbc1 + config_EXTINVL ))           # next whole hour
         isec_elbc=$(( isec + config_intvl_sec ))
         while [[ $isec_elbc -gt $isec_nlbc2 ]]; do
             (( isec_nlbc2+=config_EXTINVL ))

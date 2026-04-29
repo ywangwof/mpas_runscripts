@@ -285,7 +285,7 @@ function default_site_settings {
 
         default_claim_cpu_ioda="--cpus-per-task=1"
         default_claim_cpu_ioda_refl="--cpus-per-task=2"
-        default_claim_cpu_update="--cpus-per-task=1"
+        default_claim_cpu_update="--ntasks-per-node=12"
 
 
         # FCST cycles

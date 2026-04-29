@@ -184,9 +184,19 @@ function submit_a_job {
     fi
 
     local -a commandlist=("${runcmd}")
-    [[ -n ${myjoboption} ]] && commandlist+=("${myjoboption}")
+    if [[ -n ${myjoboption} ]]; then
+        if [[ "${myjoboption}" == *" "* ]]; then
+            # If it contains a space, split it into the array
+            # This uses the default IFS (Internal Field Separator) which includes spaces
+            commandlist+=( ${myjoboption} )
+        else
+            # Otherwise, just append the string as one element
+            commandlist+=( "${myjoboption}" )
+        fi
+    fi
     #[[ -f ${config_EXEDIR}/bad_nodes.txt ]] && commandlist+=("--exclude=$(paste -sd "," ${config_EXEDIR}/bad_nodes.txt)")
     commandlist+=("${myjobscript}")
+    if [[ ${verb} -eq 1 ]]; then mecho0 "${commandlist[*]}"; fi
 
     if [[ ${dorun} == true ]]; then mecho1n "Submitting ${BROWN}${myjobscript}${NC} .... "; fi
     "${commandlist[@]}"
