@@ -88,9 +88,9 @@ function usage {
     echo -e "    WORKDIR  - Run Directory"
     echo -e "    JOBS     - One or more jobs from [geogrid,ungrib_hrrr,rotate,meshplot_{py,ncl},static,createWOFS,projectHexes,clean]"
     echo -e "               or any one from [check,checkbg,checkobs,setup]."
-    echo -e "               setup    - just write set up configuration file"
-    echo -e "               checkbg  - Check the availability of the HRRRE datasets"
-    echo -e "               checkobs - Check the availability of observations"
+    echo -e "                   o setup    - Just write the configuration file"
+    echo -e "                   o checkbg  - Check the availability of the HRRRE datasets"
+    echo -e "                   o checkobs - Check the availability of observations"
     echo -e "               Default  - All jobs in sequence order: [geogrid,ungrib_hrrr,projectHexes,meshplot_py,static]."
     echo -e " "
     echo -e "    OPTIONS:"
@@ -99,20 +99,19 @@ function usage {
     echo -e "              -v                         Verbose mode"
     echo -e "              -k             [0,1,2]     Keep working directory if exist, 0- keep as is; 1- overwrite; 2- make a backup as xxxx.bak?"
     echo -e "                                         Default is 0 for ungrib, mpassit, upp and 1 for others"
-    echo -e "              -m             Machine     Machine name to run on, [Jet, Derecho, Vecna]."
+    echo -e "              -d             domname     Domain name, default: \"wofs_mpas\""
+    echo -e "              -x             affix       Affix attached to the run directory \"dacycles\" or \"fcst\". Default: Null"
+    echo -e "              -M | -F        init        DA cycles / FCST mode, either init, restart or mpasout. default: init"
     echo -e "              --template|--fix|--exec=DIR"
     echo -e "                                         Directories for runtime files, job templates/fixed static files/executable programs respectively."
-    echo -e "              -a             wof         Account name for job submission."
-    echo -e "              -M             init        DA cycles mode, either init or restart. default: init"
-    echo -e "              -F             init        FCST launch mode, either init or restart. default same as ${BROWN}\${damode}${NC}"
+    echo -e "              -l | --levels  L60.txt     Vertical level file"
     echo -e "              -c | --center= lat,lon     Domain central lat/lon, for example, 43.33296,-84.24593. Program \"geogrid\" requires them."
-    echo -e "              -d             domname     Domain name, default: wofs_mpas"
-    echo -e "              -x             affix       Affix attached to the run directory \"dacycles\" or \"fcst\". Default: Null"
-    echo -e "              -l             L60.txt     Vertical level file"
-    echo -e "              -o             filename    Ouput file name of the configuration file for this case"
     echo -e "                                         Default: \${WORKDIR}/config.\${eventdate}\${affix}"
     echo -e "              --init         1400        Initial time string for HRRRE"
     echo -e "              --lbc          1200        Lateral boundary starting string for HRRRE"
+    echo -e "              -m             Machine     Machine name to run on, [Ursa, Derecho, Vecna, Hercules]."
+    echo -e "              -a             wof         Account name for job submission."
+    echo -e "              -o             filename    Ouput configuration file name."
     echo -e " "
     echo -e "   DEFAULTS:"
     echo    "              eventdate             = ${eventdateDF}"
@@ -188,7 +187,7 @@ function parse_args {
                 ;;
             -m )
                 case ${2^^} in
-                JET | VECNA | HERCULES | CHEYENNE )
+                URSA | VECNA | HERCULES | CHEYENNE )
                     machname="${2,,}"
                     args["machine"]="${machname^}"
                     ;;
@@ -204,7 +203,7 @@ function parse_args {
                 ;;
 
             -M)
-                if [[ ${2,,} == "init" || ${2,,} == "restart" ]]; then
+                if [[ ${2,,} == "init" || ${2,,} == "restart" || ${2,,} == "mpasout" ]]; then
                     args["damode"]="${2,,}"
                 else
                     echo -e "${RED}ERROR${NC}: unknow argument. Expect: ${YELLOW}init${NC} or ${YELLOW}restart${NC}. Got: ${PURPLE}${2,,}${NC}"
@@ -213,7 +212,7 @@ function parse_args {
                 shift
                 ;;
             -F)
-                if [[ ${2,,} == "init" || ${2,,} == "restart" ]]; then
+                if [[ ${2,,} == "init" || ${2,,} == "restart" || ${2,,} == "mpasout" ]]; then
                     args["fcstmode"]="${2,,}"
                 else
                     echo -e "${RED}ERROR${NC}: unknow argument. Expect: ${YELLOW}init${NC} or ${YELLOW}restart${NC}. Got: ${PURPLE}${2,,}${NC}"
@@ -229,7 +228,7 @@ function parse_args {
                 args["affix"]="$2"
                 shift
                 ;;
-            -l)
+            -l | --levels )
                 fixed_level="$2"
                 if [[ ! -e ${fixed_level} ]]; then
                     echo -e "${RED}ERROR${NC}: ${BLUE}${fixed_level}${NC} not exist."
@@ -1311,7 +1310,7 @@ function write_config {
 #
 # [COMMON] variables
 #
-#   damode:     DA cycles mode, either "restart" or "init", will be used in both run_dacycles.sh & run_fcst.sh
+#   damode:     DA cycles mode, either "restart", "init" or "mpasout", will be used in both run_dacycles.sh & run_fcst.sh
 #
 #   mpscheme:   Microphysics scheme, valid values are ('mp_nssl2m', 'mp_thompson', 'mp_tempo')
 #   sfclayer_schemes:   suite,sf_monin_obukhov_rev,sf_monin_obukhov,sf_mynn,off
@@ -1614,14 +1613,26 @@ function check_obs_files {
     mapfile -d $'\0' -O "${#bufr_files[@]}" bufr_files < <(find  "${site_OBS_DIR_BUFR}/${nextdate}" -maxdepth 1 -name "${nextdate}0*.tm00" -print0  2>/dev/null | sort -z)
 
     mecho0 "Found ${GREEN}${#bufr_files[@]}${NC} PrepBufr files from ${LIGHT_BLUE}${site_OBS_DIR_BUFR}/{${eventdate},${nextdate}}${NC}"
-    mecho0n "    "
-    i=0
+
+    i=0; basetime=""
     for bufrf in "${bufr_files[@]}"; do
-        echo -n "$(basename ${bufrf})    "
-        (( i += 1))
-        if (( i%2 == 0 )); then echo ""; mecho0n "    "; fi
+        newline=false; newtime=false
+
+        filename=$(basename ${bufrf})
+        bftime="${filename:8:2}"
+        if [[ ${bftime} != ${basetime} ]]; then
+            if [[ $i -ne 0 ]]; then echo  -e " (${GREEN}$i${NC})"; fi
+            mecho0n "  ${UNDERLINE}${bftime}${NC}: ${filename}    "
+            basetime="${bftime}"
+            i=1
+        else
+            if (( i%2 == 0 )); then echo ""; mecho0n "      ";fi
+            echo -en "${filename}    "
+            (( i += 1))
+        fi
+
     done
-    echo -e "\n"
+    echo -e " (${GREEN}$i${NC})\n"
 
     #
     # Check the MRMS files availability
@@ -1665,11 +1676,22 @@ function check_obs_files {
         fi
     done
 
+    i=0; basetime=""
     mecho0 "Found ${GREEN}${#shrunk_files[@]}${NC} reflectivity files from ${LIGHT_BLUE}${site_OBS_DIR_REF}/{${eventdate},${nextdate}}${NC}"
     for reff in "${shrunk_files[@]}"; do
         filename=$(basename "${reff}")
         current_header="${filename:0:13}"
-        mecho0 "    ${current_header}: ${DARK}${heights[${current_header}]}${NC} (${GREEN}${counts[${current_header}]}${NC})"
+        bftime="${filename:9:2}"
+        if [[ ${bftime} != ${basetime} ]]; then
+            if [[ $i -ne 0 ]]; then mecho0  ""; fi
+            mecho0n "  ${UNDERLINE}${bftime}${NC}: "
+            basetime="${bftime}"
+            i=1
+        else
+            mecho0n "      "
+            (( i += 1 ))
+        fi
+        echo -e "${current_header}: ${DARK}${heights[${current_header}]}${NC} (${GREEN}${counts[${current_header}]}${NC})"
     done
     echo -e ""
 
@@ -1680,14 +1702,22 @@ function check_obs_files {
     mapfile -d $'\0' -O "${#vel_files[@]}" vel_files < <(find  "${site_OBS_DIR_VEL}/${nextdate}" -maxdepth 1 -name "ioda_VR_${nextdate}_0*.nc4" -print0 2>/dev/null | sort -z)
 
     mecho0 "Found ${GREEN}${#vel_files[@]}${NC} radial velocity files from ${LIGHT_BLUE}${site_OBS_DIR_VEL}/{${eventdate},${nextdate}}${NC}"
-    mecho0n "    "
-    i=0
+    i=0; basetime=""
     for velf in "${vel_files[@]}"; do
-        echo -n "$(basename ${velf})    "
-        (( i += 1))
-        if (( i%2 == 0 )); then echo ""; mecho0n "    "; fi
+        filename="$(basename ${velf})"
+        bftime="${filename:17:2}"
+        if [[ ${bftime} != ${basetime} ]]; then
+            if [[ $i -ne 0 ]]; then echo -e " (${GREEN}$i${NC})"; fi
+            mecho0n "  ${UNDERLINE}${bftime}${NC}: "
+            basetime="${bftime}"
+            i=1
+        else
+            if (( i%2 == 0 )); then echo ""; mecho0n "      "; fi
+            (( i+= 1 ))
+        fi
+        echo -n "${filename}    "
     done
-    echo -e "\n"
+    echo -e " (${GREEN}$i${NC})\n"
 
     #
     # Check the CWP files availability
@@ -1696,14 +1726,23 @@ function check_obs_files {
     mapfile -d $'\0' -O "${#cwp_files[@]}" cwp_files < <(find  "${site_OBS_DIR_CWP}/${nextdate}" -maxdepth 1 -name "${nextdate}0*_CWP_OBS.nc" -print0 2>/dev/null | sort -z)
 
     mecho0 "Found ${GREEN}${#cwp_files[@]}${NC} CWP files from ${LIGHT_BLUE}${site_OBS_DIR_CWP}/{${eventdate},${nextdate}}${NC}"
-    mecho0n "    "
-    i=0
+
+    i=0; basetime=""
     for cwpf in "${cwp_files[@]}"; do
+        filename="$(basename ${cwpf})"
+        bftime="${filename:8:2}"
+        if [[ ${bftime} != ${basetime} ]]; then
+            basetime="${bftime}"
+            if [[ $i -ne 0 ]]; then echo -e " (${GREEN}$i${NC})"; fi
+            mecho0n "  ${UNDERLINE}${bftime}${NC}: "
+            i=1
+        else
+            if (( i%2 == 0 )); then echo ""; mecho0n "      "; fi
+            (( i += 1))
+        fi
         echo -n "$(basename ${cwpf})    "
-        (( i += 1))
-        if (( i%2 == 0 )); then echo ""; mecho0n "    "; fi
     done
-    echo -e "\n"
+    echo -e " (${GREEN}$i${NC})\n"
 }
 
 #%%%#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1773,11 +1812,11 @@ export runcmd
 # Set Event Date and Time
 #
 #-----------------------------------------------------------------------
-[[ -v args["eventdate"] ]] && eventdate="${args['eventdate']}" || eventdate="${eventdateDF}"
-[[ -v args["eventtime"] ]] && eventtime="${args['eventtime']}" || eventtime="1500"
+[[ -v args["eventdate"] ]]  && eventdate="${args['eventdate']}"   || eventdate="${eventdateDF}"
+[[ -v args["eventtime"] ]]  && eventtime="${args['eventtime']}"   || eventtime="1500"
 
-[[ -v args["init"] ]] && inittime="${args['init']}" || inittime="1400"
-[[ -v args["lbc"] ]]  && lbctime="${args['lbc']}"   || lbctime="1200"
+[[ -v args["init"] ]]       && inittime="${args['init']}"         || inittime="1400"
+[[ -v args["lbc"] ]]        && lbctime="${args['lbc']}"           || lbctime="1200"
 
 [[ -v args["caseconfig"] ]] && caseconfig="${args['caseconfig']}" || caseconfig="${WORKDIR}/config.${eventdate}${affix}"
 
@@ -1797,14 +1836,14 @@ config_EXEDIR="${EXEDIR}"
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
 
-echo    ""
-echo -e "---- Jobs (${YELLOW}$$${NC}) started at ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} on host ${LIGHT_RED}$(hostname)${NC} ----\n"
-echo -e "  Event  date: ${WHITE}${eventdate}${NC} ${YELLOW}${eventtime}${NC}"
-echo -e "  ROOT    dir: ${rootdir}/${BROWN}scripts${NC}"
-echo -e "  TEMP    dir: ${PURPLE}${TEMPDIR}${NC}"
-echo -e "  FIXED   dir: ${DARK}${FIXDIR}${NC}"
-echo -e "  EXEC    dir: ${GREEN}${EXEDIR}${NC}"
-echo -e "  Working dir: ${WORKDIR}/${WHITE}${eventdate}${NC}"
+echo     ""
+echo -e  "---- Jobs (${YELLOW}$$${NC}) started at ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} on host ${LIGHT_RED}$(hostname)${NC} ----\n"
+echo -e  "  Event  date: ${WHITE}${eventdate}${NC} ${YELLOW}${eventtime}${NC}"
+echo -e  "  ROOT    dir: ${rootdir}/${BROWN}scripts${NC}"
+echo -e  "  TEMP    dir: ${PURPLE}${TEMPDIR}${NC}"
+echo -e  "  FIXED   dir: ${DARK}${FIXDIR}${NC}"
+echo -e  "  EXEC    dir: ${GREEN}${EXEDIR}${NC}"
+echo -e  "  Working dir: ${WORKDIR}/${WHITE}${eventdate}${NC}"
 echo -ne "  Domain name: ${RED}${domname}${NC};  MP scheme: ${CYAN}mp_nssl2m${NC}"
 
 if [[ -n ${cen_lat} || -n ${cen_lon} ]]; then
