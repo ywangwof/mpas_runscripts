@@ -2077,14 +2077,16 @@ function run_update_bc {
 
         if [[ ${isec_nlbc1} -eq ${iseconds} ]]; then  # no interpolation perform
             ntasks_per_node="${#jobarrays[@]}"
+            local myruncmd="/bin/bash"          # run on terminal directly to save waiting time
+            joboptions=("--output=${wrkdir}/update_bc.out")
+        else
+            joboptions=("--output=${wrkdir}/fcst_all_update_bc_%j.log")
         fi
 
         nnodes=$(( (${#jobarrays[@]}+ntasks_per_node-1)/ntasks_per_node ))
         [[ ${nnodes} -lt 1 ]] && nnodes=1
 
         claim_cpu_update="--ntasks-per-node=${ntasks_per_node} --nodes=${nnodes}"
-
-        joboptions=("--output=${wrkdir}/fcst_all_update_bc_%j.log")
     fi
 
     declare -A jobParms=(

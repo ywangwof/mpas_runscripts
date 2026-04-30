@@ -184,6 +184,8 @@ function submit_a_job {
     fi
 
     local -a commandlist=("${runcmd}")
+
+    # Options to the job itself
     if [[ -n ${myjoboption} ]]; then
         if [[ "${myjoboption}" == *" "* ]]; then
             # If it contains a space, split it into the array
@@ -196,11 +198,22 @@ function submit_a_job {
     fi
     #[[ -f ${config_EXEDIR}/bad_nodes.txt ]] && commandlist+=("--exclude=$(paste -sd "," ${config_EXEDIR}/bad_nodes.txt)")
     commandlist+=("${myjobscript}")
+
     if [[ ${verb} -eq 1 ]]; then mecho0 "${commandlist[*]}"; fi
 
-    if [[ ${dorun} == true ]]; then mecho1n "Submitting ${BROWN}${myjobscript}${NC} .... "; fi
-    "${commandlist[@]}"
-    if [[ ${dorun} == true && $? -eq 0 ]]; then touch ${mywrkdir}/queue.${myjobname}; fi
+    if [[ -n ${myruncmd} ]]; then
+        if [[ ${dorun} == true ]]; then mecho1n "Running ${BROWN}${myjobscript}${NC} .... "; fi
+        if [[ ${myjoboption} =~ --output=(.*) ]]; then
+            log_file="${BASH_REMATCH[1]}"
+        else
+            log_file="${mywrkdir}/${myjobname}.out"
+        fi
+        ${myruncmd} "${myjobscript}" > "$log_file" 2>&1
+    else
+        if [[ ${dorun} == true ]]; then mecho1n "Submitting ${BROWN}${myjobscript}${NC} .... "; fi
+        "${commandlist[@]}"
+        if [[ ${dorun} == true && $? -eq 0 ]]; then touch ${mywrkdir}/queue.${myjobname}; fi
+    fi
     echo " "
 }
 

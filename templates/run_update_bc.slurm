@@ -6,10 +6,22 @@
 ACCTSTR
 EXCLSTR
 
-time1=$(date '+%s')
-printf "Job Started: %(%a %b %d %H:%M:%S %Z %Y)T. Job Id: %s\n\n" "${time1}" "${SLURM_JOBID}"
+# --- Terminal/Manual Run Support ---
+# If not running under SLURM, provide a dummy Job ID and check for arguments
+if [[ -z "$SLURM_JOBID" ]]; then
+    export SLURM_JOBID="manual_$(date +%Y%m%d_%H%M)"
+    echo "-- Running in Terminal Mode (Job ID: $SLURM_JOBID) --"
+    # If a number is passed as the first argument, treat it as the Array Task ID
+    if [[ -n "$1" && "$1" =~ ^[0-9]+$ ]]; then
+        export SLURM_ARRAY_TASK_ID=$1
+        echo "Targeting Member: $SLURM_ARRAY_TASK_ID"
+    fi
+else
+    ulimit -s unlimited
+fi
 
-ulimit -s unlimited
+time1=$(date '+%s')
+printf "\nJob Started: %(%a %b %d %H:%M:%S %Z %Y)T. Job Id: %s\n\n" "${time1}" "${SLURM_JOBID}"
 
 # Arrays derived from the driver script
 MEMMAP
@@ -99,10 +111,17 @@ else
     # Mode 2: Run all NENS members in background simultaneously
     # Ensure NENS is replaced by your actual ensemble count
     # Use srun to give each member its own dedicated CPUs/Resource step
-    array_defs=$(declare -p mem_map)
 
-    declare -A pids  # Associative array to store PID -> Member mapping
-    for m in NENS_MEMBERS; do
+    # Capture definitions for subprocesses
+
+    array_defs=$(declare -p mem_map)
+    func_def=$(declare -f run_member)
+
+    # Use srun if in a real SLURM job, otherwise use standard bash
+    if [[ "$SLURM_JOBID" == manual* ]]; then
+        LAUNCH_CMD="bash -c"
+        echo "Launching all members in background (Local Terminal Mode)..."
+    else
         # --ntasks=1 ensures this specific member gets 1 task's worth of resources
         # --exclusive: Ensures no two srun steps share the same CPU core
         # --relative=0: Starts looking for free slots from the first node in the allocation
@@ -112,10 +131,13 @@ else
         # exports the function logic into that new sub-process so it can be executed.
         # srun to execute a command, it launches that task in a separate sub-process
         #         each member is running in its own isolated environment
-        srun --ntasks=1 --nodes=1 --exclusive --relative=0 \
-             bash -c "$array_defs; $(declare -f run_member); run_member $m" &
+        LAUNCH_CMD="srun --ntasks=1 --nodes=1 --exclusive --relative=0 bash -c"
+    fi
 
-        pids[$!]=$m  # Store the PID ($!) and map it to member index
+    declare -A pids  # Associative array to store PID -> Member mapping
+    for m in NENS_MEMBERS; do
+        $LAUNCH_CMD "$array_defs; $func_def; run_member $m" &
+        pids[$!]=$m
     done
 
     echo "All tasks submitted. Waiting for completion..."
@@ -137,6 +159,7 @@ else
         fi
     done
 
+    # Status Cleanup
     if [[ $overall_status -ne 0 ]]; then
         echo "One or more members failed: ( ${fail_jobs[*]} )"
         touch error.update_bc
