@@ -373,9 +373,9 @@ post | plot | diag | verif | snd )
 /^wrfinputpath: /s#: .*#: ${run_dir}/#
 /^imagepath: /s#: .*#: ${run_dir}/image_files/#
 /^jsonpath: /s#: .*#: ${post_dir}/json/#
-/^mrmspath: /s# .*#: ${RT_OBSDIR}/MRMS/#
-/^asospath: /s# .*#: ${RT_OBSDIR}/ASOS/#
-/^lsrwwapath: /s# .*#: ${RT_OBSDIR}/LSR_WWA/#
+/^mrmspath: /s#: .*#: ${RT_OBSDIR}/MRMS/#
+/^asospath: /s#: .*#: ${RT_OBSDIR}/ASOS/#
+/^lsrwwapath: /s#: .*#: ${RT_OBSDIR}/LSR_WWA/2026#
 EOF
         if [[ ! -f "${post_config_orig}" ]]; then
             echo " "
@@ -471,25 +471,25 @@ post )
             ${show} "${cmds[@]}"
         fi
 
+        wrkdir="${run_dir}/summary_files"
+        cd "${wrkdir}" || exit 1
+
         if [[ ${support_interactive_job} == true ]]; then               # run interactively
-            cd "${post_script_dir}" || exit 1
-            cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${post_config}")
+            cmds=(time "${post_script_dir}/wofs_${task}_summary_files_MPAS.py" "${post_config}")
         else                                                            # submit a job to the compute nodes
             jobscript="${run_dir}/summary_files/run_${task}_${eventdate}${affix}.slurm"
 
-            wrkdir="${post_script_dir}"
             # shellcheck disable=SC2154
             declare -A jobParms=(
                 [PARTION]="${config_partition_post}"
                 [NOPART]="1"
                 [JOBNAME]="${task}_${eventdate}${affix}"
-                [CPUSPEC]="${config_claim_cpu_post}"
+                [CPUSPEC]="${config_claim_cpu_python}"
                 [MACHINE]="${machine}"
-                [LOGDIR]="${run_dir}/summary_files"
-                [PYTHONSCRIPT]="./wofs_${task}_summary_files_MPAS.py"
+                [PYTHONSCRIPT]="${post_script_dir}/wofs_${task}_summary_files_MPAS.py"
                 [CONFIGFILE]="${post_config}"
             )
-            cmds=(submit_a_job "$wrkdir" "${task}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" "")
+            cmds=(submit_a_job "${wrkdir}" "${task}_${eventdate}${affix}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" "")
         fi
     else
         echo -e "${DARK}File ${CYAN}$donepost${NC} exist"
@@ -506,24 +506,24 @@ plot )
             sleep 10
         done
 
+        wrkdir="${run_dir}/summary_files"
+        cd "${wrkdir}" || exit 1
+
         if [[ ${support_interactive_job} == true ]]; then               # run interactively
-            cd "${post_script_dir}" || exit 1
-            cmds=(time "./wofs_${task}_summary_files_MPAS.py" "${post_config}")
+            cmds=(time "${post_script_dir}/wofs_${task}_summary_files_MPAS.py" "${post_config}")
         else                                                            # submit a job to the compute nodes
             jobscript="${run_dir}/summary_files/run_${task}_${eventdate}${affix}.slurm"
 
-            wrkdir="${post_script_dir}"
             declare -A jobParms=(
                 [PARTION]="${config_partition_post}"
                 [NOPART]="1"
                 [JOBNAME]="${task}_${eventdate}${affix}"
-                [CPUSPEC]="${config_claim_cpu_post}"
+                [CPUSPEC]="${config_claim_cpu_python}"
                 [MACHINE]="${machine}"
-                [LOGDIR]="${run_dir}/summary_files"
-                [PYTHONSCRIPT]="./wofs_${task}_summary_files_MPAS.py"
+                [PYTHONSCRIPT]="${post_script_dir}/wofs_${task}_summary_files_MPAS.py"
                 [CONFIGFILE]="${post_config}"
             )
-            cmds=(submit_a_job "$wrkdir" "${task}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" "")
+            cmds=(submit_a_job "$wrkdir" "${task}_${eventdate}${affix}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" "")
         fi
 
     else
@@ -540,24 +540,24 @@ verif )
             sleep 10
         done
 
+        wrkdir="${run_dir}/summary_files"
+        cd "${wrkdir}" || exit 1
+
         if [[ ${support_interactive_job} == true ]]; then               # run interactively
-            cd "${post_script_dir}" || exit 1
-            cmds=(time "./wofs_plot_verification_MPAS.py" "${post_config}")
+            cmds=(time "${post_script_dir}/wofs_plot_verification_MPAS.py" "${post_config}")
         else                                                            # submit a job to the compute nodes
             jobscript="${run_dir}/summary_files/run_${task}_${eventdate}${affix}.slurm"
 
-            wrkdir="${post_script_dir}"
             declare -A jobParms=(
                 [PARTION]="${config_partition_post}"
                 [NOPART]="1"
                 [JOBNAME]="${task}_${eventdate}${affix}"
-                [CPUSPEC]="${config_claim_cpu_post}"
+                [CPUSPEC]="${config_claim_cpu_python}"
                 [MACHINE]="${machine}"
-                [LOGDIR]="${run_dir}/summary_files"
-                [PYTHONSCRIPT]="./wofs_plot_verification_MPAS.py"
+                [PYTHONSCRIPT]="${post_script_dir}/wofs_plot_verification_MPAS.py"
                 [CONFIGFILE]="${post_config}"
             )
-            cmds=(submit_a_job "$wrkdir" "${task}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" "")
+            cmds=(submit_a_job "$wrkdir" "${task}_${eventdate}${affix}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" "")
         fi
 
     else
@@ -569,29 +569,29 @@ verif )
 #6. snd
 snd )
     if [[ ! -e ${donesnd} ]]; then
-        echo -e "${DARK}Waiting for ${donepost} ...."
+        echo -e "Waiting for ${DARK}${donepost}${NC} ...."
         while [[ ! -e "${donepost}" ]]; do
             sleep 10
         done
 
+        wrkdir="${run_dir}/summary_files"
+        cd "${wrkdir}" || exit 1
+
         if [[ ${support_interactive_job} == true ]]; then               # run interactively
-            cd "${post_script_dir}" || exit 1
-            cmds=(time "./wofs_plot_sounding_MPAS.py" "${post_config}")
+            cmds=(time "${post_script_dir}/wofs_plot_sounding_MPAS.py" "${post_config}")
         else                                                            # submit a job to the compute nodes
             jobscript="${run_dir}/summary_files/run_${task}_${eventdate}${affix}.slurm"
 
-            wrkdir="${post_script_dir}"
             declare -A jobParms=(
                 [PARTION]="${config_partition_post}"
                 [NOPART]="1"
                 [JOBNAME]="${task}_${eventdate}${affix}"
-                [CPUSPEC]="${config_claim_cpu_post}"
+                [CPUSPEC]="${config_claim_cpu_python}"
                 [MACHINE]="${machine}"
-                [LOGDIR]="${run_dir}/summary_files"
-                [PYTHONSCRIPT]="./wofs_plot_sounding_MPAS.py"
+                [PYTHONSCRIPT]="${post_script_dir}/wofs_plot_sounding_MPAS.py"
                 [CONFIGFILE]="${post_config}"
             )
-            cmds=(submit_a_job "$wrkdir" "${task}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" "")
+            cmds=(submit_a_job "${wrkdir}" "${task}_${eventdate}${affix}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" "")
         fi
 
     else
@@ -620,13 +620,12 @@ diag )
             [PARTION]="${config_partition_post}"
             [NOPART]="1"
             [JOBNAME]="${task}_${eventdate}${affix}"
-            [CPUSPEC]="${config_claim_cpu_post}"
+            [CPUSPEC]="${config_claim_cpu_python}"
             [MACHINE]="${machine}"
-            [LOGDIR]="${wrkdir}"
             [PYTHONSCRIPT]="${cmds[*]}"
             [CONFIGFILE]=""
         )
-        cmds=(submit_a_job "${wrkdir}" "${task}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" "")
+        cmds=(submit_a_job "${wrkdir}" "${task}_${eventdate}${affix}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" "")
     fi
     ;;
 

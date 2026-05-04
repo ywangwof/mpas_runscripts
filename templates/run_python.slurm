@@ -3,7 +3,7 @@
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
 #SBATCH -t 04:30:00
-#SBATCH --output=LOGDIR/JOBNAME_%j.log
+#SBATCH --output=WRKDIR/JOBNAME_%j.log
 ACCTSTR
 EXCLSTR
 
@@ -16,24 +16,29 @@ source ROOTDIR/modules/env.python
 
 cd WRKDIR
 
-touch LOGDIR/running.JOBNAME
-rm -rf LOGDIR/error.JOBNAME WRKDIR/queue.JOBNAME
+touch running.JOBNAME
+rm -rf error.JOBNAME queue.JOBNAME
 
 export OMP_MAX_ACTIVE_LEVELS=1
+export OMP_NUM_THREADS=1
+export KMP_WARNINGS=0
+
+# Better for multi-process/multi-threading jobs
+export PYTHONUNBUFFERED=1
 
 # Run the python programs
 time PYTHONSCRIPT CONFIGFILE
 
 estatus="$?"
 if [[ $estatus -eq 0 ]]; then
-    touch LOGDIR/done.JOBNAME
+    touch done.JOBNAME
 elif [[ $estatus -eq 99 ]]; then
-    touch LOGDIR/missed.JOBNAME
+    touch missed.JOBNAME
 else
-    touch LOGDIR/error.JOBNAME
+    touch error.JOBNAME
 fi
 
-rm -rf LOGDIR/running.JOBNAME
+rm -rf running.JOBNAME
 
 time2=$(date '+%s')
 

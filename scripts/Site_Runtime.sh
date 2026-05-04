@@ -60,7 +60,7 @@ function setup_machine {
 
         site_workdir="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/run_dirs"
         site_postdir="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/frdd-wofs-post.mpas"
-        RT_OBSDIR="/scratch3/NAGAPE/wof/ywang/rt_obs"
+        RT_OBSDIR="/scratch3/NAGAPE/wof/kknopfmeier/VERIF"   # "/scratch3/NAGAPE/wof/ywang/rt_obs"
 
         if [[ ${set_up} == true ]]; then
             # shellcheck source=/dev/null
@@ -292,6 +292,7 @@ function default_site_settings {
         default_ncores_fcst=96;  default_ncores_post=48
         default_partition_fcst="u1-compute";   default_claim_cpu_fcst="--cpus-per-task=2"
         default_partition_post="u1-compute";   default_claim_cpu_post="--ntasks-per-node=${default_ncores_post}"
+        default_claim_cpu_python="--cpus-per-task=48"
 
         default_npefcst=96    ; default_nnodes_fcst=$(( default_npefcst/default_ncores_fcst ))
         default_npepost=96    ; default_nnodes_post=$(( default_npepost/default_ncores_post ))
@@ -418,4 +419,5 @@ function default_site_settings {
     export default_claim_cpu_ioda   default_claim_cpu_ioda_refl  default_claim_cpu_update
     export default_partition_fcst   default_claim_cpu_fcst   default_npefcst       default_ncores_fcst    default_nnodes_fcst
     export default_partition_post   default_claim_cpu_post   default_npepost       default_ncores_post    default_nnodes_post
+    export default_claim_cpu_python
 }

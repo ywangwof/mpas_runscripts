@@ -1469,6 +1469,7 @@ function write_config {
     partition_post="${default_partition_post}"
     claim_cpu_fcst="${default_claim_cpu_fcst}"
     claim_cpu_post="${default_claim_cpu_post}"
+    claim_cpu_python="${default_claim_cpu_python}"
     npefcst="${default_npefcst}";    ncores_fcst="${default_ncores_fcst}";  nnodes_fcst="${default_nnodes_fcst}"
     npepost="${default_npepost}";    ncores_post="${default_ncores_post}";  nnodes_post="${default_nnodes_post}"
 

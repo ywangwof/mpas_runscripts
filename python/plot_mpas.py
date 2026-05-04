@@ -1,17 +1,12 @@
 #!/usr/bin/env python3
 
-import warnings
 import os
+from contextlib import redirect_stderr
 
-# 1. Block the Holoviews/Geoviews warnings BEFORE any other imports
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-warnings.filterwarnings("ignore", message=".*ResamplingOperation.*")
-warnings.filterwarnings("ignore", message=".*holoviews.*")
-
-# 2. Also set environment variable to silence warnings at the interpreter level
-os.environ['PYTHONWARNINGS'] = "ignore::DeprecationWarning"
-
-import uxarray as ux
+# geoviews may print a deprecation message during uxarray import on some systems.
+# Keep output clean by muting stderr only for this import.
+with open(os.devnull, "w") as _devnull, redirect_stderr(_devnull):
+    import uxarray as ux
 import matplotlib
 matplotlib.use('Agg') # Force non-interactive backend
 
@@ -24,9 +19,7 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 from metpy.plots import ctables
 from pathlib import Path
-import sys
 import time
-import os
 import re
 import traceback
 import multiprocessing
@@ -50,13 +43,15 @@ try:
 except ImportError:
     psutil = None
 
-################################################################################
+########################################################################
 def get_memory_usage():
     if psutil:
         process = psutil.Process(os.getpid())
         return process.memory_info().rss / (1024 * 1024)
     return 0.0
 
+########################################################################
+# Decode filename time
 def decode_filename_time(filename):
     pattern = r"(\d{4}-\d{2}-\d{2}_\d{2}[\.:]\d{2}[\.:]\d{2})"
     match = re.search(pattern, filename)
@@ -64,11 +59,14 @@ def decode_filename_time(filename):
         return match.group(1).replace('.', ':')
     return None
 
+########################################################################
+# Log error
 def log_error(msg):
     with open("error_log.txt", "a") as f:
         f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {msg}\n")
 
-################################################################################
+########################################################################
+# Get command line arguments
 def get_args():
     parser = argparse.ArgumentParser(description="Parallel MPAS Plotter (Multi-Grid Support)")
     parser.add_argument("data_file", help="Path to the MPAS netCDF file")
@@ -84,7 +82,7 @@ def get_args():
     parser.add_argument("-n", "--nproc", type=int, help="Processors")
     return parser.parse_args()
 
-################################################################################
+#######################################################################
 def get_plot_settings(fieldname, cmin=None, cmax=None, cinc=None):
     cmap = "turbo"
     norm = None
@@ -117,7 +115,7 @@ def get_plot_settings(fieldname, cmin=None, cmax=None, cinc=None):
             norm = mcolors.Normalize(vmin=cmin, vmax=cmax)
     return cmap, norm
 
-################################################################################
+#######################################################################
 def plot_mpas_worker(task_info):
     fieldname, level, grid_source, data_file, args_dict, file_timestamp = task_info
     t_start = time.time()
@@ -148,32 +146,87 @@ def plot_mpas_worker(task_info):
         data_min = float(f"{np.nanmin(plot_data):.5g}")
         data_max = float(f"{np.nanmax(plot_data):.5g}")
 
+        horiz_dim_aliases = {
+            "nCells": ["nCells", "n_face"],
+            "nEdges": ["nEdges", "n_edge"],
+            "nVertices": ["nVertices", "n_node"],
+        }
+        horiz_dim = None
+        horiz_dim_key = None
+        for key, aliases in horiz_dim_aliases.items():
+            match = next((d for d in aliases if d in data_var.dims), None)
+            if match is not None:
+                horiz_dim = match
+                horiz_dim_key = key
+                break
+
+        if horiz_dim is None:
+            raise ValueError(f"Unsupported horizontal dimension for {fieldname}: {data_var.dims}")
+
+        n_horiz_expected = int(data_var.sizes[horiz_dim])
+        if plot_data.size != n_horiz_expected:
+            raise ValueError(
+                f"Unexpected flattened size for {fieldname}: got {plot_data.size}, "
+                f"expected {n_horiz_expected} from '{horiz_dim}'"
+            )
+
         faces = np.asarray(uxds.uxgrid.face_node_connectivity.values, dtype=np.int64)
         nodes_lon, nodes_lat = uxds.uxgrid.node_lon.values, uxds.uxgrid.node_lat.values
         if np.abs(nodes_lat).max() <= (np.pi + 0.1):
             nodes_lon, nodes_lat = np.rad2deg(nodes_lon), np.rad2deg(nodes_lat)
         nodes_lon = (nodes_lon + 180) % 360 - 180
 
-        lon_sent = np.append(nodes_lon, np.nan); lat_sent = np.append(nodes_lat, np.nan)
-        faces[faces < 0] = len(nodes_lon)
-        f_lons = np.take(lon_sent, faces); f_lats = np.take(lat_sent, faces)
-        verts = [np.column_stack((l[~np.isnan(l)], t[~np.isnan(t)])) for l, t in zip(f_lons, f_lats)]
-
         cmap, norm = get_plot_settings(fieldname, args_dict['min'], args_dict['max'], args_dict['inc'])
         fig = plt.figure(figsize=(14, 10))
         ax = plt.axes(projection=ccrs.PlateCarree())
         ax.add_feature(cfeature.COASTLINE, linewidth=0.8); ax.add_feature(cfeature.STATES.with_scale('50m'), alpha=0.3)
 
-        coll = mcoll.PolyCollection(verts, array=plot_data, cmap=cmap, norm=norm, edgecolors='none', antialiaseds=True)
-        ax.add_collection(coll)
+        if horiz_dim_key == "nCells":
+            lon_sent = np.append(nodes_lon, np.nan); lat_sent = np.append(nodes_lat, np.nan)
+            faces[faces < 0] = len(nodes_lon)
+            f_lons = np.take(lon_sent, faces); f_lats = np.take(lat_sent, faces)
+            verts = [np.column_stack((l[~np.isnan(l)], t[~np.isnan(t)])) for l, t in zip(f_lons, f_lats)]
+            mappable = mcoll.PolyCollection(verts, array=plot_data, cmap=cmap, norm=norm, edgecolors='none', antialiaseds=True)
+            ax.add_collection(mappable)
+        elif horiz_dim_key == "nEdges":
+            edges = np.asarray(uxds.uxgrid.edge_node_connectivity.values, dtype=np.int64)
+            if edges.shape[0] != plot_data.size:
+                raise ValueError(
+                    f"Edge connectivity/data size mismatch for {fieldname}: "
+                    f"{edges.shape[0]} edges vs {plot_data.size} values"
+                )
+            seg_lon = np.take(nodes_lon, edges)
+            seg_lat = np.take(nodes_lat, edges)
+            segments = np.stack((seg_lon, seg_lat), axis=2)
+            mappable = mcoll.LineCollection(segments, array=plot_data, cmap=cmap, norm=norm, linewidths=0.7)
+            ax.add_collection(mappable)
+        else:
+            if "lonVertex" in uxds and "latVertex" in uxds:
+                vertices_lon = uxds["lonVertex"].values
+                vertices_lat = uxds["latVertex"].values
+                if np.abs(vertices_lat).max() <= (np.pi + 0.1):
+                    vertices_lon = np.rad2deg(vertices_lon)
+                    vertices_lat = np.rad2deg(vertices_lat)
+                vertices_lon = (vertices_lon + 180) % 360 - 180
+            else:
+                vertices_lon = nodes_lon
+                vertices_lat = nodes_lat
+
+            if vertices_lon.size != plot_data.size:
+                raise ValueError(
+                    f"Vertex coordinate/data size mismatch for {fieldname}: "
+                    f"{vertices_lon.size} vertices vs {plot_data.size} values"
+                )
+            mappable = ax.scatter(vertices_lon, vertices_lat, c=plot_data, cmap=cmap, norm=norm, s=4, linewidths=0, transform=ccrs.PlateCarree())
+
         ax.set_extent([np.min(nodes_lon)-0.5, np.max(nodes_lon)+0.5, np.min(nodes_lat)-0.5, np.max(nodes_lat)+0.5], crs=ccrs.PlateCarree())
-        plt.colorbar(coll, ax=ax, shrink=0.7, pad=0.03, label=units)
+        plt.colorbar(mappable, ax=ax, shrink=0.7, pad=0.03, label=units)
 
         display_time = file_timestamp if file_timestamp else f"T{args_dict['time']}"
 
         # Updated Title with Units and Statistics
         unit_str = f" [{units}]" if units else ""
-        title_str = f"MPAS-{display_time} {fieldname}{unit_str}\n(Min: {data_min}, Max: {data_max})"
+        title_str = f"MPAS-{display_time} {fieldname}{unit_str} ({horiz_dim_key}; Min: {data_min}, Max: {data_max})"
         if v_dim:
             title_str += f" | L{level}"
         ax.set_title(title_str)
@@ -189,7 +242,8 @@ def plot_mpas_worker(task_info):
         log_error(err_msg)
         return {"field": fieldname, "level": level, "status": "Failed (see log)", "time": time.time()-t_start, "memory": get_memory_usage(), "file": "N/A"}
 
-################################################################################
+########################################################################
+
 def main():
     args = get_args()
     grid_source = args.grid_file if args.grid_file else args.data_file
@@ -226,6 +280,8 @@ def main():
         console.print(table)
     if os.path.exists("error_log.txt"):
         print("\n[!] Some tasks failed. Detailed errors saved to: error_log.txt")
+
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 if __name__ == "__main__":
     main()

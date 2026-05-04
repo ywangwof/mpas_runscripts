@@ -18,7 +18,7 @@ def parse_args():
     parser.add_argument("-s", "--start", type=str, required=True, help="Start time YYYYmmddHHMM")
     parser.add_argument("-e", "--end", type=str, required=True, help="End time YYYYmmddHHMM")
     parser.add_argument("-d", "--dir", type=str, required=True, help="Base run directory")
-    parser.add_argument("-o", "--obs", nargs='+', default=['radar_rw'], help="List of observation types (without .nc)")
+    parser.add_argument("-o", "--obs", type=str, default="radar_rw", help="Comma-separated observation types (without .nc)")
     parser.add_argument("-m", "--mems", type=int, default=36, help="Number of ensemble members")
     parser.add_argument("-c", "--cycle_min", type=int, default=15, help="Cycle interval in minutes")
     parser.add_argument("-x", "--affix", type=str, default="", help="Affix for dacycles directory")
@@ -29,7 +29,9 @@ def parse_args():
     parser.add_argument("-n", "--number", action="store_true", help="Plot gross error check counts")
     parser.add_argument("--cr", action="store_true", help="Plot Consistency Ratio (RMSD / Total Spread)") # Added
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    args.obs = [ob.strip() for ob in args.obs.split(",") if ob.strip()]
+    return args
 
 ################################################################################
 def get_sawtooth_metadata(args):
