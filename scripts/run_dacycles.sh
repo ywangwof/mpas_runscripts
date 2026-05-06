@@ -34,8 +34,7 @@ shopt -s nullglob extglob
 #    2.1 SLURM scripts on Jet
 #        run_filter.slurm                    or run_filter.pbs
 #        run_mpas_array.slurm                or run_mpas_array.pbs
-#        run_update_states.slurm             or run_update_states.pbs
-#        run_update_sbc.slurm                or run_update_bc.pbs
+#        run_update_bc.slurm                 or run_update_bc.pbs
 #
 # 3. fix_files                              # runtime fix files for MPAS model and accompany programs
 #
@@ -885,7 +884,7 @@ function create_streams {
                   filename_template="${domname}_${memstr}.history.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
                   io_type="${config_OUTIOTYPE}"
                   clobber_mode="replace_files"
-                  output_interval="${OUTINVL_STR}" >
+                  output_interval="${RSTINVL_STR}" >
 
                 <file name="stream_list.atmosphere.output"/>
 </stream>
@@ -895,7 +894,7 @@ function create_streams {
                   filename_template="${domname}_${memstr}.diag.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
                   io_type="${config_OUTIOTYPE}"
                   clobber_mode="replace_files"
-                  output_interval="${RSTINVL_STR}" >
+                  output_interval="${OUTINVL_STR}" >
 
                 <file name="${diag_stream}"/>
 </stream>
@@ -1300,8 +1299,6 @@ function jedi_preparation {
     esac
 
     if [[ -d "ens" ]]; then           # Link ensembles to ens/ for tasks observer and solver
-        currtime_fil=${currtime_str//:/.}
-
         for mem in $(seq -w 01 "${config_ENS_SIZE}"); do
             if [[ $icycle -eq 0 ]]; then
                 input_file_="${casedir}/init/${domname}_${mem}.init.nc"
@@ -1475,7 +1472,7 @@ function run_jedi_observer {
     local icycle=$2
     local iseconds=$3
 
-    local wrkdir="$datimedir/jedi_observer"
+    local wrkdir="${datimedir}/jedi_observer"
 
     #
     # Return if is running or is done
@@ -1822,163 +1819,78 @@ function run_add_noise {
     #
     # Build working directory
     #
-    cd $wrkdir || return
+    cd ${wrkdir} || return
 
     timestr_cur=$(date  -u -d @$iseconds    +%Y%m%d%H%M)
-    mapfile -t days_secs < <(convertS2days "${iseconds}")
 
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/done.add_noise ]]; then
+    if [[ -f ${wrkdir}/done.add_noise ]]; then
         #mecho0 "add_noise is already done"
         return
     fi
 
-    if [[ -f $wrkdir/running.noise_pert || -f $wrkdir/queue.noise_pert ]]; then
+    if [[ -f ${wrkdir}/running.add_noise || -f ${wrkdir}/queue.add_noise ]]; then
         #mecho0 "add_noise is running/queued."
         return
     fi
-
-    seqfile="obs_seq.final.${timestr_cur}.nc"
 
     #------------------------------------------------------
     # Run grid_refl_obs.py for noise mask files
     #------------------------------------------------------
 
-    if [[ ${no_observation} == true ]]; then
-        mecho0 "${YELLOW}WARNING${NC}: no observation, skipping ...."
-        touch done.add_noise done.noise_mask
+    if [[ ! " ${obs_ids[*]} " =~ " refl10cm " ]]; then
+        mecho0 "${YELLOW}WARNING${NC}: no MRMS reflectivity observation, skipping ...."
+        touch done.add_noise
         return
     fi
 
-    #
-    # Waiting for done.update_states
-    #
-    local -a conditions
-    conditions=("${wrkdir}/done.update_states" "${seqfile}")
-
-    if [[ $dorun == true ]]; then
-        for cond in "${conditions[@]}"; do
-            mecho0 "Checking $cond...."
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: ${CYAN}$cond${NC}"
-                fi
-                sleep 10
-            done
-        done
-    fi
-
-    if [[ ! -e done.noise_mask && ! -e running.noise_mask && ! -e queue.noise_mask && ! -e missed.noise_mask ]]; then
-        if [[ $verb -eq 1 ]]; then mecho0 "Running ${WHITE}grid_refl_obs.py${NC} at ${YELLOW}${timestr_cur}${NC}"; fi
-
-        invfile="$rundir/init/${domname}.invariant.nc"
-        #
-        # Create job script and submit it
-        #
-        runexe_str="${config_runcmd_str} -n 1"
-
-        jobscript="run_noise_mask.${mach}"
-
-        declare -A jobParms=(
-            [PARTION]="${config_partition_filter}"
-            [NOPART]="1"
-            [JOBNAME]="noise_mask_${eventtime}"
-            [CPUSPEC]="${config_claim_cpu_update}"
-            [MACHINE]="${machine}"
-            [SEQFILE]="${seqfile}"
-            [INVFILE]="${invfile}"
-            [WAN_PATH]="${config_WOFSAN_PATH}"
-            [EVENTDAYS]="${days_secs[0]}"
-            [EVENTSECS]="${days_secs[1]}"
-            [RUNCMD]="${runexe_str}"
-        )
-        if [[ "${mach}" == "pbs" ]]; then
-            jobParms[NNODES]="1"
-            jobParms[NCORES]="1"
-        fi
-
-        submit_a_job $wrkdir "noise_mask" "jobParms" "${config_TEMPDIR}/$jobscript" "$jobscript" ""
-    fi
-
-    #------------------------------------------------------
-    # Run add_pert_where_high_refl.py for all members
-    #------------------------------------------------------
+    jdiagfile="${wrkdir}/jedi_observer/jdiag_mrms_refl.nc"
 
     #
-    # Waiting for done.noise_mask
+    # Waiting for done.observer and jdiag_mrms_refl.nc
     #
     local -a conditions
-    conditions=("${wrkdir}/done.noise_mask")
+    conditions=("${wrkdir}/jedi_observer/done.observer" "${jdiagfile}")
 
-    if [[ $dorun == true ]]; then
-        for cond in "${conditions[@]}"; do
-            mecho0 "Checking $cond...."
-            while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
-                    mecho0 "Waiting for file: ${CYAN}$cond${NC}"
-                fi
-                if [[ -e "${wrkdir}/missed.noise_mask" ]]; then
-                    mecho0 "${YELLOW}WARNING${NC}: No radar reflectivity obs for this cycle. Skip ${WHITE}add_noise${NC}."
-                    touch "${wrkdir}/done.add_noise"
-                    return
-                fi
-                sleep 10
-            done
-        done
+    wait_for_conditions "${conditions[*]}"
+
+    #-------------------------------------------------------------------
+    # Run add_pert_where_high_refl.py & add_pert_where_high_refl.py for all members
+    #-------------------------------------------------------------------
+
+    if [[ $verb -eq 1 ]]; then
+        mecho0 "Running ${WHITE}${scpdir}/wofs_addnoise/grid_refl_obs.py${NC} and ${WHITE}${scpdir}/wofs_addnoise/add_pert_where_high_refl.py${NC} at ${YELLOW}${timestr_cur}${NC}"
     fi
-
-    if [[ $verb -eq 1 ]]; then mecho0 "Running ${WHITE}add_pert_where_high_refl.py${NC} at ${YELLOW}${timestr_cur}${NC}"; fi
 
     invfile="$rundir/init/${domname}.invariant.nc"
-
-    jobarrays=()
-    for iens in $(seq 1 ${config_ENS_SIZE}); do
-        memstr=$(printf "%02d" $iens)
-
-        memwrkdir=$wrkdir/fcst_$memstr
-        mkwrkdir $memwrkdir 0
-        cd $memwrkdir  || return
-
-        if [[ ! -e done.add_noise_${memstr} && ! -e running.add_noise_${memstr} ]]; then
-            days_str=$(printf "%5.5i_%6.6i" ${days_secs[0]} ${days_secs[1]})
-            ln -sf ../refl_obs_${days_str}.pkl ../wofs_mpas_grid_kdtree.pkl ../mpas_XYZ.pkl .
-            jobarrays+=("$iens")
-        fi
-    done
-
-    cd "${wrkdir}" || return
-
     #
     # Create job script and submit it
     #
-    if [[ ${#jobarrays[@]} -gt 0 ]]; then
-        jobscript="run_noise_pert.${mach}"
+    runexe_str="srun --ntasks=1 --nodes=1 --exclusive --relative=0 bash -c"
 
-        runexe_str="${config_runcmd_str} -n 1"
+    jobscript="run_addnoise.${mach}"
 
-        declare -A jobParms=(
-            [PARTION]="${config_partition_filter}"
-            [NOPART]="1"
-            [JOBNAME]="noist_pert_${eventtime}"
-            [CPUSPEC]="${config_claim_cpu_update}"
-            [INVFILE]="${invfile}"
-            [MACHINE]="${machine}"
-            [SEQFILE]="${seqfile}"
-            [WAN_PATH]="${config_WOFSAN_PATH}"
-            [EVENTDAYS]="${days_secs[0]}"
-            [EVENTSECS]="${days_secs[1]}"
-            [RUNCMD]="${runexe_str}"
-        )
-        if [[ "${mach}" == "pbs" ]]; then
-            jobParms[NNODES]="1"
-            jobParms[NCORES]="1"
-        fi
-
-        jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
-        submit_a_job $wrkdir "add_noise" "jobParms" "${config_TEMPDIR}/$jobscript" "$jobscript" "${jobarraystr}"
+    declare -A jobParms=(
+        [PARTION]="${config_partition_filter}"
+        [NOPART]="${config_ENS_SIZE}"
+        [JOBNAME]="addnoise_${eventtime}"
+        [CPUSPEC]="${config_claim_cpu_update}"
+        [MACHINE]="${machine}"
+        [SEQFILE]="${jdiagfile}"
+        [INITFILE]="${initfile}"
+        [EVENTDATETIME]="${timestr_cur}"
+        [ENSSIZE]="${config_ENS_SIZE}"
+        [INVFILE]="${invfile}"
+        [RUNCMD]="${runexe_str}"
+    )
+    if [[ "${mach}" == "pbs" ]]; then
+        jobParms[NNODES]="1"
+        jobParms[NCORES]="1"
     fi
+
+    submit_a_job $wrkdir "add_noise" "jobParms" "${config_TEMPDIR}/$jobscript" "$jobscript" ""
 }
 
 ########################################################################
@@ -2015,6 +1927,21 @@ function run_update_bc {
 
     lbcdir="${casedir}/lbc"
 
+    local cpinitcmd initorigfile
+    if [[ ${config_run_addnoise} == true ]]; then
+        cpinitcmd="cp -f"
+    else
+        cpinitcmd="ln -sf"
+    fi
+    #
+    # init files
+    #
+    if [[ $icycle -eq 0 && ${init_da} == false ]]; then
+        initorigfile="${casedir}/init/${domname}_\${memstr}.init.nc"
+    else
+        initorigfile="${wrkdir}/jedi_solver/ana/mem0\${memstr}.nc"
+    fi
+
     # isec_nlbc1, isec_nlbc2, isec_elbc and icycle_lbcgap are set in the caller
 
     # External GRIB file provided file times
@@ -2032,7 +1959,7 @@ function run_update_bc {
 
         memstr=$(printf "%02d" $iens)
 
-        memwrkdir=$wrkdir/fcst_$memstr
+        memwrkdir=${wrkdir}/fcst_$memstr
         mkwrkdir $memwrkdir 0
         cd $memwrkdir  || return
 
@@ -2075,13 +2002,13 @@ function run_update_bc {
             ntasks_per_node=12
         fi
 
-        if [[ ${isec_nlbc1} -eq ${iseconds} ]]; then  # no interpolation perform
-            ntasks_per_node="${#jobarrays[@]}"
-            local myruncmd="/bin/bash"          # run on terminal directly to save waiting time
-            joboptions=("--output=${wrkdir}/update_bc.out")
-        else
+        #if [[ ${isec_nlbc1} -eq ${iseconds} ]]; then  # no interpolation perform
+        #    ntasks_per_node="${#jobarrays[@]}"
+        #    local myruncmd="/bin/bash"          # run on terminal directly to save waiting time
+        #    joboptions=("--output=${wrkdir}/update_bc.out")
+        #else
             joboptions=("--output=${wrkdir}/fcst_all_update_bc_%j.log")
-        fi
+        #fi
 
         nnodes=$(( (${#jobarrays[@]}+ntasks_per_node-1)/ntasks_per_node ))
         [[ ${nnodes} -lt 1 ]] && nnodes=1
@@ -2095,6 +2022,9 @@ function run_update_bc {
         [JOBNAME]="updatebc_${eventtime}"
         [CPUSPEC]="${claim_cpu_update}"
         [CPCMD]="${cpcmd}"
+        [CPINITCMD]="${cpinitcmd}"
+        [INITFILENAME]="${initfile}"
+        [INITORIGFILE]="${initorigfile}"
         [LBCPATH]="${lbcdir}"
         [DOMNAME]="${domname}"
         [MPASTIME1]="${mpastime_str1}"
@@ -2153,10 +2083,9 @@ function run_mpas {
         split_graph "${config_gpmetis}" "${domname}.graph.info" "${config_npefcst}" "$rundir/$domname" "$dorun" "$verb"
     fi
 
-    currtime_fil=${currtime_str//:/.}
     #fcst_sec=$(( iseconds + config_intvl_sec ))
     #fcsttime_fil=$(date -u -d @${fcst_sec} +%Y-%m-%d_%H.%M.%S)
-
+    local casedir="${rundir}"
 
     #
     # Preparation for each member
@@ -2186,35 +2115,33 @@ function run_mpas {
             do_restart="false"
             do_dacyle="false"
             mpas_inputfile_template="${domname}_${memstr}.init.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-            initfile="./${domname}_${memstr}.init.${currtime_fil}.nc"
         elif [[ ${config_damode} == "mpasout" ]]; then
             do_restart="false"
             do_dacyle="true"
             mpas_inputfile_template="${domname}_${memstr}.init.nc"
-            initfile="./${domname}_${memstr}.mpasout.${currtime_fil}.nc"
         else
             do_restart="true"
             do_dacyle="true"
             mpas_inputfile_template="${domname}_${memstr}.init.nc"
-            initfile="./${domname}_${memstr}.restart.${currtime_fil}.nc"
         fi
 
-        local casedir="${rundir}"
+        #
+        # run_update_bc will prepare the init files for all members
+        #
+        #if [[ $icycle -eq 0 && ${init_da} == false ]]; then
+        #    ln -sf "${casedir}/init/${domname}_${memstr}.init.nc" "${initfile}"
+        #else
+        #    ln -sf "../jedi_solver/ana/mem0${memstr}.nc" "${initfile}"
+        #    #cp -f "../jedi_solver/ana/mem0${memstr}.nc" "${initfile}"
+        #fi
 
-        if [[ $icycle -eq 0 && ${init_da} == false ]]; then
-            ln -sf "${casedir}/init/${domname}_${memstr}.init.nc" "${initfile}"
-        else
-            ln -sf "../jedi_solver/ana/mem0${memstr}.nc" "${initfile}"
-            #cp -f "../jedi_solver/ana/mem0${memstr}.nc" "${initfile}"
-        fi
-
+        mem_initfile=$(eval echo "${initfile}")
         if [[ $verb -eq 1 ]]; then
-            #realinit=$(realpath -m --relative-to=. ${initfile})
-            mecho0 "Member $iens init file: ${initfile}";
+            mecho0 "Member $iens init file: ${mem_initfile}";
         fi
 
-        if [[ ! -e ${initfile} && ${dorun} == true ]]; then
-            mecho0 "${RED}ERROR${NC}: ${config_damode} file: ${CYAN}${initfile}${NC} not exists"
+        if [[ ! -e ${mem_initfile} && ${dorun} == true ]]; then
+            mecho0 "${RED}ERROR${NC}: ${config_damode} file: ${CYAN}${mem_initfile}${NC} not exists"
             exit 1              # something wrong should never happen
         fi
 
@@ -2408,6 +2335,16 @@ function dacycle_driver() {
         currtime_str=$(date -u -d @${isec} +%Y-%m-%d_%H:%M:%S)
         fcstmin_str=$(printf "%02d" "${intvl_min}")
 
+        currtime_fil=${currtime_str//:/.}
+        #
+        # init files
+        #
+        if [[ $icyc -eq 0 || ${config_damode} == "init" ]]; then
+            initfile="./${domname}_\${memstr}.init.${currtime_fil}.nc"
+        else
+            initfile="./${domname}_\${memstr}.${config_damode}.${currtime_fil}.nc"
+        fi
+
         #------------------------------------------------------
         # 0.1. Retrieve observation string
         #------------------------------------------------------
@@ -2515,7 +2452,7 @@ function dacycle_driver() {
             check_job_status "mpassit mem mpasssit" ${dawrkdir}/mpassit ${config_ENS_SIZE} run_mpassit.${mach} ${num_resubmit}
         else
             # Clean not needed files in each member's forecast directory after
-            # the MPAS forward forecast
+            # the MPAS forward forecast, Keep it for post-diagnositic purpose
             if [[ $config_outwrf == false && $icyc -gt 0 ]]; then
                 rm -rf ${dawrkdir}/fcst_??/${domname}_??.{diag,history}.*
             fi

@@ -45,6 +45,17 @@ run_member() {
     touch running.update_bc_${memstr}
     rm -rf error.update_bc_${memstr} queue.update_bc_${memstr}
 
+    #
+    # init files
+    #
+
+    echo "MEM ${memstr}: Using init file: INITORIGFILE => INITFILENAME"
+    CPINITCMD "INITORIGFILE" "INITFILENAME"
+
+    #
+    # lbc files
+    #
+
     lbc_filem="./DOMNAME_${memstr}.lbc.MPASTIME1.nc"
     lbc_filen="./DOMNAME_${memstr}.lbc.MPASTIME2.nc"
 
