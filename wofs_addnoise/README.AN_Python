@@ -1,0 +1,58 @@
+#
+This is a short document to descibe the interfaces for the new additive 
+noise written in python for both the WRF and MPAS WoFS systems.
+
+
+# grid_refl_obs.py
+ 
+python grid_refl_obs.py wrf_data/obs_seq.nc.202303312100 wrf_data/wrfout_d01_2023-03-31_21:00:00_1 154221 75600 wrf
+
+
+      The input for this command is not changed, except ADDING a model type to the end of the command ("wrf" or "mpas")
+
+      a) The 1st argument is the netCDF obs_seq file
+      b) The 2nd argument is the minimum reflectivity for adding noise
+      b) The 3rd argument is the minimum innovation for adding noise
+      b) The 4th argument is the netCDF wrf file
+      c) The 5th argument is the number of Julian seconds
+      d) The 6th argument is the number of Julian days
+      e) The 7th argument is the model type:  wrf / mpas
+
+
+# add_pert_where_high_refl.py
+#
+python add_pert_where_high_refl.py wrf_data/wrfinput_d01 9000.0 3000.0 0.50 0.50 0.0 0.50 0.50 0.0 154221 75600 35 wrf
+
+      The input for this command HAS changed slightly.  The input refl_*.txt file is no longer needed.  
+      And a model type is the last argument at the end of the command
+
+      Important:  WRF file will be overwritten!
+
+      a) The 1st argument is the netCDF wrf file - this will be OVER WRITTEN!
+      b) The 2nd argument is the horizontal smoothing scale in meters (usually ~ 9000 m)
+      b) The 3rd argument is the vertical smoothing scale in meters (usually ~ 3000 m)
+      c) The 4th-9th arguments are the standard deviations of the noise for the U/V/W/THETA/Td/QV fields
+      c) The 10th argument is the number of Julian seconds
+      d) The 11th argument is the number of Julian days
+      e) The 12th argument is the model type:  wrf / mpas
+
+Note, that for MPAS, specify the same noise level for U & V 
+
+
+PYTHON ENV:
+
+Included in the directory is a python environment yaml file.  I highly, highly recommend, if you are creating
+your own env, to install micromamba and use that to manage your python envs.
+You can do this on the command line without root privileges. I think Vecna has it installed (or ask Brett).
+We use micromamba on our cloud systems.
+
+after installing micromamba, you can create the environment:
+
+      minimamba create -n wofs_an wofs_an.yaml
+
+then activate it
+
+      minimamba activate wofs_an
+
+
+-->> included in this environment are the NCO operators.
