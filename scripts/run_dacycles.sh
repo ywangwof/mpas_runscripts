@@ -19,22 +19,23 @@ shopt -s nullglob extglob
 # Required files from ROOTDIR
 #
 # 0. module files in modules
-#     build_jet_Rocky8_intel_smiol
-#     env.mpas_smiol
+#     build_ursa_Rocky9_intel_hpxmpi_smiol
+#     env.python
 #
 # 1. exec                                   # The executables
 #     atmosphere_model
-#     filter
-#     update_mpas_states
-#     update_bc
+#     jedi/mpasjedi_enkf.x
+#     jedi/process_NSSL_mosaic.exe
+#     jedi/bufr2ioda.x
+#     jedi/bufr2netcdf.x
 #
 # 2. templates                              # templates used in this scripts
 #    README
 #
 #    2.1 SLURM scripts on Jet
-#        run_filter.slurm                    or run_filter.pbs
+#        run_mpasjedi.slurm                  or run_filter.pbs
 #        run_mpas_array.slurm                or run_mpas_array.pbs
-#        run_update_bc.slurm                 or run_update_bc.pbs
+#        run_update_mpas.slurm               or run_update_mpas.pbs
 #
 # 3. fix_files                              # runtime fix files for MPAS model and accompany programs
 #
@@ -65,11 +66,12 @@ shopt -s nullglob extglob
 #        *RRTMG_SW_DATA.DBL SOILPARM.TBL
 #        *VEGPARM.TBL
 #
-#    3.3 DART filter static files
-#        *sampling_error_correction_table.nc
-#
 #    NOTE:
 #         * not in the git repository
+#
+# 4. WoFS additive noise scripts
+#     wofs_addnoise/grid_refl_obs.py
+#     wofs_addnoise/add_pert_where_high_refl.py
 #
 # INSTRUCTIONS:
 #
@@ -111,8 +113,8 @@ function usage {
     echo "    WORKDIR  - Run Directory"
     echo "    CONFIG   - MPAS-WoFS runtime configuration file with full path."
     echo "               WORKDIR & DATETIME will be extracted from the CONFIG name unless they are given explicitly."
-    echo "    JOBS     - One or more jobs from [ioda,jedi_observer,jedi_solver,update_bc,mpas,clean,mpassit_mean]"
-    echo "               Default all jobs in [ioda,jedi_observer,jedi_solver,update_bc,mpas] for a DA cyle"
+    echo "    JOBS     - One or more jobs from [ioda,jedi_observer,jedi_solver,update_mpas,mpas,clean,mpassit_mean]"
+    echo "               Default all jobs in [ioda,jedi_observer,jedi_solver,update_mpas,mpas] for a DA cyle"
     echo " "
     echo "    OPTIONS:"
     echo "              -h                  Display this message"
@@ -2047,6 +2049,160 @@ function run_update_bc {
 
 ########################################################################
 
+function run_update_mpas {
+    # $1        $2        $3
+    # wrkdir    icycle    iseconds
+    # Combines update_bc and add_noise into a single job step
+    local wrkdir=$1
+    local icycle=$2
+    local iseconds=$3
+
+    cd $wrkdir || return
+
+    #
+    # Return if is running or is done
+    #
+    if [[ -f $wrkdir/running.update_mpas || -f $wrkdir/done.update_mpas || -f $wrkdir/queue.update_mpas ]]; then
+        return
+    fi
+
+    local casedir="${rundir}"
+
+    #
+    # Waiting for job conditions for update_bc
+    #
+    local -a conditions
+    conditions=("${casedir}/lbc/done.${domname}" "${wrkdir}/jedi_solver/done.solver")
+
+    wait_for_conditions "${conditions[*]}"
+
+    timestr_cur=$(date -u -d @$iseconds +%Y%m%d%H%M)
+    jdiagfile="${wrkdir}/jedi_observer/jdiag_mrms_refl.nc"
+    invfile="$rundir/init/${domname}.invariant.nc"
+
+    #------------------------------------------------------
+    # Prepare update_bc by copying/linking the background files
+    #------------------------------------------------------
+
+    lbcdir="${casedir}/lbc"
+
+    local cpinitcmd initorigfile
+    if [[ ${config_run_addnoise} == true ]]; then
+        cpinitcmd="cp -f"
+    else
+        cpinitcmd="ln -sf"
+    fi
+    #
+    # init files
+    #
+    if [[ $icycle -eq 0 && ${init_da} == false ]]; then
+        initorigfile="${casedir}/init/${domname}_\${memstr}.init.nc"
+    else
+        initorigfile="${wrkdir}/jedi_solver/ana/mem0\${memstr}.nc"
+    fi
+
+    # isec_nlbc1, isec_nlbc2, isec_elbc and icycle_lbcgap are set in the caller
+
+    # External GRIB file provided file times
+    lbctime_str1=$(date -u -d @${isec_nlbc1} +%Y-%m-%d_%H.%M.%S)
+    lbctime_str2=$(date -u -d @${isec_nlbc2} +%Y-%m-%d_%H.%M.%S)
+
+    # MPAS expected boundary file times
+    mpastime_str1=$(date -u -d @${iseconds}   +%Y-%m-%d_%H.%M.%S)
+    mpastime_str2=$(date -u -d @${isec_elbc}  +%Y-%m-%d_%H.%M.%S)
+
+    declare -A mem_map=()
+    declare -a jobarrays=()
+    for iens in $(seq 1 ${config_ENS_SIZE}); do
+        memstr=$(printf "%02d" $iens)
+
+        memwrkdir=${wrkdir}/fcst_$memstr
+        mkwrkdir $memwrkdir 0
+        cd $memwrkdir  || return
+
+        #
+        # lbc files
+        #
+        jens=$(( (iens-1)%config_nenslbc+1 ))
+        mlbcstr=$(printf "%02d" $jens)                # get LBC member string
+
+        mem_map[$iens]="${mlbcstr}"
+
+        if [[ $verb -eq 1 ]]; then
+            mecho0 "Member: $iens use lbc files from ${lbcdir}:"
+            mecho0 "        ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc  ${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc";
+        fi
+
+        jobarrays+=("$iens")
+    done
+
+    #------------------------------------------------------
+    # Run update_bc and add_noise as a combined job
+    #------------------------------------------------------
+
+    cd ${wrkdir} || return
+
+    jobscript="run_update_mpas.${mach}"
+
+    nopart="${#jobarrays[@]}"
+
+    if [[ ${config_claim_cpu_update} =~ ntasks-per-node=([0-9]+) ]]; then
+        ntasks_per_node=${BASH_REMATCH[1]}
+    else
+        ntasks_per_node=12
+    fi
+
+    nnodes=$(( (${#jobarrays[@]}+ntasks_per_node-1)/ntasks_per_node ))
+    [[ ${nnodes} -lt 1 ]] && nnodes=1
+
+    claim_cpu_update="--ntasks-per-node=${ntasks_per_node} --nodes=${nnodes}"
+    runexe_str="srun --ntasks=1 --nodes=1 --exclusive --relative=0 bash -c"
+
+    run_add_noise=false
+    if [[ ${config_run_addnoise} == true ]]; then
+        if [[ ! " ${obs_ids[*]} " =~ " refl10cm " ]]; then
+            mecho0 "${YELLOW}WARNING${NC}: No MRMS reflectivity observation, skipping run_add_noise ...."
+            run_add_noise=false
+        else
+            run_add_noise=true
+            wait_for_conditions "${jdiagfile}"
+        fi
+    fi
+
+    declare -A jobParms=(
+        [PARTION]="${config_partition_filter}"
+        [NOPART]="${nopart}"
+        [JOBNAME]="update_mpas_${eventtime}"
+        [CPUSPEC]="${claim_cpu_update}"
+        [CPCMD]="${cpcmd}"
+        [CPINITCMD]="${cpinitcmd}"
+        [INITFILENAME]="${initfile}"
+        [INITORIGFILE]="${initorigfile}"
+        [LBCPATH]="${lbcdir}"
+        [DOMNAME]="${domname}"
+        [MPASTIME1]="${mpastime_str1}"
+        [MPASTIME2]="${mpastime_str2}"
+        [LBCTIME1]="${lbctime_str1}"
+        [LBCTIME2]="${lbctime_str2}"
+        [MEMMAP]="$(declare -p mem_map)"
+        [NENS_MEMBERS]="${jobarrays[*]}"
+        [RUNADDNOISE]="${run_add_noise}"
+        [INVFILE]="${invfile}"
+        [EVENTDATETIME]="${timestr_cur}"
+        [SEQFILE]="${jdiagfile}"
+        [RUNCMD]="${runexe_str}"
+    )
+
+    if [[ "${mach}" == "pbs" ]]; then
+        jobParms[NNODES]="1"
+        jobParms[NCORES]="1"
+    fi
+
+    submit_a_job "${wrkdir}" "update_mpas" jobParms ${config_TEMPDIR}/$jobscript "run_update_mpas.${mach}" ""
+}
+
+########################################################################
+
 function run_mpas {
     # $1        $2      $3
     # wrkdir    icycle    iseconds
@@ -2075,8 +2231,7 @@ function run_mpas {
     # Waiting for job conditions
     #
     local -a conditions
-    conditions=("$wrkdir/done.update_bc")
-    [[ ${config_run_addnoise} == true ]] && conditions+=("$wrkdir/done.add_noise")
+    conditions=("$wrkdir/done.update_mpas")
 
     wait_for_conditions "${conditions[*]}"
 
@@ -2391,29 +2546,15 @@ function dacycle_driver() {
         fi
 
         #------------------------------------------------------
-        # 5. Run update_bc for all ensemble members
+        # 5. Run update_bc and add_noise for all ensemble members
         #------------------------------------------------------
-        if [[ " ${jobs[*]} " =~ " update_bc " ]]; then
-            if [[ $verb -eq 1 ]]; then echo "  Run update_bc at $eventtime"; fi
-            run_update_bc $dawrkdir $icyc $isec
+        if [[ " ${jobs[*]} " =~ " update_mpas " ]]; then
+            if [[ $verb -eq 1 ]]; then echo "  Run update_mpas (update_bc + add_noise) at $eventtime"; fi
+            run_update_mpas $dawrkdir $icyc $isec
         fi
 
         #------------------------------------------------------
-        # 6. Add noise (must run after solver and update_bc, but before advance model)
-        #------------------------------------------------------
-
-        if [[ ${config_run_addnoise} == true ]]; then
-            #if [[ ! -e done.update_bc ]]; then
-            #    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-            #    check_job_status "update_bc fcst update_bc" ${dawrkdir} ${config_ENS_SIZE} run_update_bc.${mach} ${num_resubmit}
-            #fi
-
-            if [[ $verb -eq 1 ]]; then echo "  Run add_noise at $eventtime"; fi
-            run_add_noise $dawrkdir $isec
-        fi
-
-        #------------------------------------------------------
-        # 7. Advance model for each member
+        # 6. Advance model for each member
         #------------------------------------------------------
         # Run forecast for ensemble members until the next analysis time
         if [[ " ${jobs[*]} " =~ " mpas " ]]; then
@@ -2435,7 +2576,7 @@ function dacycle_driver() {
         fi
 
         #------------------------------------------------------
-        # 8.1 MPASSIT for prior and post mean, diagnostic purpose
+        # 7.1 MPASSIT for prior and post mean, diagnostic purpose
         #------------------------------------------------------
         # Interpolate the forecast datasets to a virtual WRF grid
 
@@ -2445,7 +2586,7 @@ function dacycle_driver() {
         fi
 
         #------------------------------------------------------
-        # 8.2 MPASSIT for each member, diagnostic purpose
+        # 7.2 MPASSIT for each member, diagnostic purpose
         #------------------------------------------------------
         # Interpolate the forecast datasets to a virtual WRF grid
 
@@ -3015,7 +3156,7 @@ init_da=false     # do analysis at the intial time or not
 if [[ -v args["jobs"] ]]; then
     read -r -a jobs <<< "${args['jobs']}"
 else
-    jobs=(ioda jedi_observer jedi_solver jedi_post update_bc mpas clean)
+    jobs=(ioda jedi_observer jedi_solver jedi_post update_mpas mpas clean)
 fi
 
 #-----------------------------------------------------------------------
