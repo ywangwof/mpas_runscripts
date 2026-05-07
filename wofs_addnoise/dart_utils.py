@@ -115,7 +115,7 @@ def read_model_grid(model_file, model_type='wrf', model_attrib=None, write_new_f
 
 #-------------------------------------------------------------------------------
 #
-def write_model_grid(model_grid_file,model_file, noise, sd, model_type='wrf', write_new_file=True):
+def write_model_grid(model_grid_file, model_file, noise, sd, model_type='wrf', write_new_file=True):
 
     ts0      = 300.
     ps0      = 1.0e5
@@ -159,9 +159,7 @@ def write_model_grid(model_grid_file,model_file, noise, sd, model_type='wrf', wr
 
         mpas_vars = ['u', 'v', 'w', 'theta', 'td', 'qv']
 
-        print(f" model_grid_file = {model_grid_file},\n model_file = {model_file}")
-
-        dg = ncdf.Dataset(model_grid_file, 'r')
+        print(f"\n Model_grid_file = {model_grid_file},\n Model_file = {model_file}")
 
         ds = ncdf.Dataset(model_file, 'r+')
         ds.set_auto_mask(False)
@@ -172,8 +170,10 @@ def write_model_grid(model_grid_file,model_file, noise, sd, model_type='wrf', wr
 
         noise = noise.reshape(nCell, nz, nflds)
 
-        bdyMaskCell = dg.variables['bdyMaskCell'][...]
-        ic          = np.where(bdyMaskCell == 0)[0]    # this is the lists of non-boundary zones
+        with Dataset(model_grid_file, "r") as dg:   # need to use this to mask lateral boundaries
+
+            bdyMaskCell = dg.variables['bdyMaskCell'][...]
+            ic          = np.where(bdyMaskCell == 0)[0]    # this is the lists of non-boundary zones
 
         for n, var in enumerate(mpas_vars):
 
@@ -183,23 +183,81 @@ def write_model_grid(model_grid_file,model_file, noise, sd, model_type='wrf', wr
 
                     time1 = timeit.time()
 
-                    cellsOnEdge = dg.variables['cellsOnEdge'][...]  # (nEdge, 2)
-                    cellsOnEdge = cellsOnEdge - 1  # to account for the fortran indices
-
-                    angleEdge   = dg.variables['angleEdge'][...]    # (nEdge,)
-                    angleEdge   = np.dstack([angleEdge]*nz).reshape(nEdge,nz)
-
-                    bdyMaskEdge = dg.variables['bdyMaskEdge'][...]
-                    ie          = np.where(bdyMaskEdge == 0)[0]
-
                     u = noise[:,:,n]
                     v = noise[:,:,n+1]  # now have cell centered 2D noise arrays
 
-                    ds.variables['u'][0,ie] += 0.5*(u[cellsOnEdge[ie,0]] * np.cos(angleEdge[ie])
-                                                   +u[cellsOnEdge[ie,1]] * np.cos(angleEdge[ie])
-                                                   +v[cellsOnEdge[ie,0]] * np.sin(angleEdge[ie])
-                                                   +v[cellsOnEdge[ie,1]] * np.sin(angleEdge[ie]))
+                    with Dataset(model_grid_file, "r") as nc:
 
+                        # 1-based -> 0-based; MPAS uses 0 as the sentinel for a missing cell
+                        # on a boundary edge, so subtract 1 only for valid (> 0) entries.
+
+                        coe_raw = nc.variables["cellsOnEdge"][:].astype(np.int32)   # (nEdges, 2)
+                        cells_on_edge = coe_raw - 1                                  # now -1 = boundary
+ 
+                        tangent_plane = np.asarray( nc.variables["cellTangentPlane"][:], dtype=np.float64)   # (nCells, 2, 3)
+                        edge_normals = np.asarray(nc.variables["edgeNormalVectors"][:], dtype=np.float64)  # (nEdges, 3)
+ 
+                    n_edges = cells_on_edge.shape[0]
+                    n_bdy   = int(np.sum(np.any(cells_on_edge < 0, axis=1)))
+
+                    n_cells, n_levels = u.shape[0:2]
+                    n_edges           = cells_on_edge.shape[0]
+ 
+                    east  = tangent_plane[:, 0, :]   # (nCells, 3)
+                    north = tangent_plane[:, 1, :]   # (nCells, 3)
+
+                    # ------------------------------------------------------------------
+                    # Step 1: Cartesian velocity at every cell center
+                    #   U[i,k] * east[i,j]  +  V[i,k] * north[i,j]
+                    #   = einsum 'ik,ij->ikj' + 'ik,ij->ikj'
+                    # Result: (nCells, nVertLevels, 3)
+
+                    vec_cell = ( u[:, :, None] * east[:, None, :]    # (nCells, nLevels, 3)
+                             +   v[:, :, None] * north[:, None, :] )
+ 
+                    # Append a zero-vector row so that index -1 (boundary sentinel) maps to
+                    # a zero contribution rather than wrapping to the last real cell.
+                    # Shape after pad: (nCells+1, nVertLevels, 3), last row = 0
+
+                    zero_row = np.zeros((1, n_levels, 3), dtype=np.float64)
+                    vec_padded = np.concatenate([vec_cell, zero_row], axis=0)  # (nCells+1, nLev, 3)
+
+                    # ------------------------------------------------------------------
+                    # Step 2: Average cell vectors across the two neighbors of each edge
+                    #
+                    # cells_on_edge has values in [-1, nCells-1].
+                    # After padding, index nCells (the appended row) = zero vector,
+                    # so we remap -1 -> nCells.
+
+                    c = cells_on_edge.copy()                      # (nEdges, 2)
+                    c[c < 0] = n_cells                            # boundary sentinel -> zero row
+ 
+                    # Gather: (nEdges, 2, nVertLevels, 3)
+
+                    vec_neighbors = vec_padded[c]                 # fancy index on first axis
+ 
+                    # Count valid neighbors per edge: interior=2, boundary=1
+                    # valid mask: True where the original index was >= 0
+
+                    valid = (cells_on_edge >= 0).astype(np.float64)   # (nEdges, 2)
+ 
+                    # Weighted average: sum / n_valid
+                    # Expand valid to (nEdges, 2, 1, 1) for broadcasting
+
+                    n_valid = valid.sum(axis=1, keepdims=True)                       # (nEdges, 1)
+                    w       = (valid / n_valid)[:, :, None, None]                    # (nEdges, 2, 1, 1)
+ 
+                    # vec_edge: (nEdges, nVertLevels, 3)
+
+                    vec_edge = (w * vec_neighbors).sum(axis=1)
+ 
+                    # ------------------------------------------------------------------
+                    # Step 3: Project onto edge unit normal
+                    #   u[e, k] = dot( vec_edge[e, k, :], edge_normals[e, :] )
+                    #           = einsum 'ekj,ej->ek'
+                    
+                    ds.variables['u'][0] += np.einsum("ekj,ej->ek", vec_edge, edge_normals)   # (nEdges, nVertLevels)
+ 
                     print("\n Elapsed time to add noise to the MPAS U-field is:  %f seconds\n" % (timeit.time() - time1))
 
                 elif var == 'v':
@@ -229,7 +287,6 @@ def write_model_grid(model_grid_file,model_file, noise, sd, model_type='wrf', wr
 
                 if debug:  print(" Did NOT ADD noise to %s " % var)
 
-        dg.close()
         ds.close()
 
         print("\n Elapsed time to add noise to the MPAS state is:  %f seconds" % (timeit.time() - time0))
