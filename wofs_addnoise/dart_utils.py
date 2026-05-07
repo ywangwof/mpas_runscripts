@@ -175,6 +175,8 @@ def write_model_grid(model_grid_file, model_file, noise, sd, model_type='wrf', w
             bdyMaskCell = dg.variables['bdyMaskCell'][...]
             ic          = np.where(bdyMaskCell == 0)[0]    # this is the lists of non-boundary zones
 
+        noise[ic,:,:] = 0.0  # set noise == 0 in boundary zones
+
         for n, var in enumerate(mpas_vars):
 
             if np.abs(sd[n]) > 0.0:
@@ -196,6 +198,14 @@ def write_model_grid(model_grid_file, model_file, noise, sd, model_type='wrf', w
  
                         tangent_plane = np.asarray( nc.variables["cellTangentPlane"][:], dtype=np.float64)   # (nCells, 2, 3)
                         edge_normals = np.asarray(nc.variables["edgeNormalVectors"][:], dtype=np.float64)  # (nEdges, 3)
+
+                    is_zero = np.allclose(tangent_plane, 0)
+                    if is_zero:
+                        print(f" \n ERROR:  Add_Noise_High_Refl:  cellTangentPlane array is uninitialized!!") 
+                        print(f" \n Cannot reconstruct winds - trying using MPAS init file")
+                        print(f" \n Skippng u additive noise\n")
+                        continue
+
  
                     n_edges = cells_on_edge.shape[0]
                     n_bdy   = int(np.sum(np.any(cells_on_edge < 0, axis=1)))
