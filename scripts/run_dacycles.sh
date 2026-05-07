@@ -410,9 +410,11 @@ function run_ioda_mrms_refl {
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/ioda_mrms_refl/running.ioda_mrms_refl \
-       || -f $wrkdir/ioda_mrms_refl/done.ioda_mrms_refl    \
+    if [[ -f $wrkdir/ioda_mrms_refl/running.ioda_mrms_refl   \
+       || -f $wrkdir/ioda_mrms_refl/done.ioda_mrms_refl      \
        || -f $wrkdir/ioda_mrms_refl/queue.ioda_refl ]]; then
+        local ids_refl10cm=("refl10cm")
+        join_arrays obs_ids ids_refl10cm
         return
     fi
 
@@ -1841,7 +1843,7 @@ function run_add_noise {
     #------------------------------------------------------
 
     if [[ ! " ${obs_ids[*]} " =~ " refl10cm " ]]; then
-        mecho0 "${YELLOW}WARNING${NC}: no MRMS reflectivity observation, skipping ...."
+        mecho0 "${YELLOW}WARNING${NC}: No MRMS reflectivity observation, skipping run_add_noise ...."
         touch done.add_noise
         return
     fi
@@ -1852,7 +1854,8 @@ function run_add_noise {
     # Waiting for done.observer and jdiag_mrms_refl.nc
     #
     local -a conditions
-    conditions=("${wrkdir}/jedi_observer/done.observer" "${jdiagfile}")
+    conditions=("${wrkdir}/jedi_solver/done.solver" "${jdiagfile}" "${wrkdir}/done.update_bc")
+    # update_bc because initfile requirements
 
     wait_for_conditions "${conditions[*]}"
 
@@ -1870,12 +1873,12 @@ function run_add_noise {
     #
     runexe_str="srun --ntasks=1 --nodes=1 --exclusive --relative=0 bash -c"
 
-    jobscript="run_addnoise.${mach}"
+    jobscript="run_add_noise.${mach}"
 
     declare -A jobParms=(
         [PARTION]="${config_partition_filter}"
         [NOPART]="${config_ENS_SIZE}"
-        [JOBNAME]="addnoise_${eventtime}"
+        [JOBNAME]="add_noise_${eventtime}"
         [CPUSPEC]="${config_claim_cpu_update}"
         [MACHINE]="${machine}"
         [SEQFILE]="${jdiagfile}"
@@ -1917,7 +1920,7 @@ function run_update_bc {
     # Waiting for job conditions
     #
     local -a conditions
-    conditions=("${casedir}/lbc/done.${domname}")
+    conditions=("${casedir}/lbc/done.${domname}" "${wrkdir}/jedi_solver/done.solver")
 
     wait_for_conditions "${conditions[*]}"
 
@@ -2072,7 +2075,8 @@ function run_mpas {
     # Waiting for job conditions
     #
     local -a conditions
-    [[ $icycle -gt 0 ]] && conditions=("$wrkdir/jedi_solver/done.solver")
+    conditions=("$wrkdir/done.update_bc")
+    [[ ${config_run_addnoise} == true ]] && conditions+=("$wrkdir/done.add_noise")
 
     wait_for_conditions "${conditions[*]}"
 
@@ -2395,13 +2399,14 @@ function dacycle_driver() {
         fi
 
         #------------------------------------------------------
-        # 6. Add noise (must run after solver)
+        # 6. Add noise (must run after solver and update_bc, but before advance model)
         #------------------------------------------------------
 
-        if [[ ${config_run_addnoise} == true && $icyc -gt 0 ]]; then
-            if [[ ! -e jedi_solver/done.solver ]]; then
-                wait_for_conditions "jedi_solver/done.solver"
-            fi
+        if [[ ${config_run_addnoise} == true ]]; then
+            #if [[ ! -e done.update_bc ]]; then
+            #    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
+            #    check_job_status "update_bc fcst update_bc" ${dawrkdir} ${config_ENS_SIZE} run_update_bc.${mach} ${num_resubmit}
+            #fi
 
             if [[ $verb -eq 1 ]]; then echo "  Run add_noise at $eventtime"; fi
             run_add_noise $dawrkdir $isec
@@ -2413,10 +2418,10 @@ function dacycle_driver() {
         # Run forecast for ensemble members until the next analysis time
         if [[ " ${jobs[*]} " =~ " mpas " ]]; then
             # check and set update_bc status
-            if [[ ! -e done.update_bc ]]; then
-                #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-                check_job_status "update_bc fcst update_bc" ${dawrkdir} ${config_ENS_SIZE} run_update_bc.${mach} ${num_resubmit}
-            fi
+            #if [[ ! -e done.update_bc ]]; then
+            #    #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
+            #    check_job_status "update_bc fcst update_bc" ${dawrkdir} ${config_ENS_SIZE} run_update_bc.${mach} ${num_resubmit}
+            #fi
 
             if [[ $verb -eq 1 ]]; then echo "  Run advance model at $eventtime"; fi
 
@@ -3006,7 +3011,7 @@ parse_args "$@"
 #
 #-----------------------------------------------------------------------
 
-init_da=true
+init_da=false     # do analysis at the intial time or not
 if [[ -v args["jobs"] ]]; then
     read -r -a jobs <<< "${args['jobs']}"
 else
@@ -3021,7 +3026,6 @@ fi
 
 source "${scpdir}/Site_Runtime.sh" || exit $?
 
-#[[ ${run_trimvr} == true || ${config_run_addnoise} == true ]] && use_python=true || use_python=false
 setup_machine "${args['machine']}" "$rootdir" true false
 
 [[ $dorun == false ]] && runcmd="echo ${site_runcmd}" || runcmd="${site_runcmd}"

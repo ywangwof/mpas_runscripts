@@ -61,6 +61,7 @@ parser.add_argument("qv_sd",type=float)
 parser.add_argument("gdatetime",type=int)
 parser.add_argument("ensNum",type=int)
 parser.add_argument("modelType",type=str)
+parser.add_argument("pkl_path",type=str)
 
 input = parser.parse_args()
 input_dict = vars(input)
@@ -95,16 +96,25 @@ nflds_sd = np.array([input.u_sd, input.v_sd,  input.w_sd,
 #-------------------------------------------------------------------------------
 # Based on time and ens member number, initiate a random seed
 
-np.random.seed(1000*(input.gdatetime) + input.ensNum)
+np.random.seed(int(timeit.time()) + input.ensNum)
 
 #-------------------------------------------------------------------------------
-# Read in serialized (pickled) KDTREE created in GRID_REFL_OBS
+
+kdtree_file   = os.path.join(input.pkl_path, 'wofs_%s_grid_kdtree.pkl' % input.modelType)
+reflobs_file  = os.path.join(input.pkl_path, 'refl_valid_obs_%12.12i.pkl' % (input.gdatetime))
+modelXYZ_file = os.path.join(input.pkl_path, 'wofs_%s_XYZ.pkl' % input.modelType)
+
+# Check if all required pickle files exist
+for file_path in [kdtree_file, reflobs_file, modelXYZ_file]:
+    if not os.path.exists(file_path):
+        print(f"\nError: Required file not found: {file_path}")
+        sys.exit(1)
 
 time0 = timeit.time()
 
-# time0 = timeit.time()
+# Read in serialized (pickled) KDTREE created in GRID_REFL_OBS
 
-with open('wofs_%s_grid_kdtree.pkl' % input.modelType, 'rb') as handle:
+with open(kdtree_file, 'rb') as handle:
         model_kdtree3D = pickle.load(handle)
 
 print(" Elapsed time to read in KDTree table is:  %f seconds" % (timeit.time() - time0))
@@ -113,12 +123,12 @@ time0 = timeit.time()
 
 # Now read in the serialized (pickled) REFL_OBS file which stores the positions
 
-with open('refl_obs_%12.12i.pkl' % (input.gdatetime), 'rb') as handle:
+with open(reflobs_file, 'rb') as handle:
     refl_noise_loc = pickle.load(handle)
 
 # Now read in the serialized (pickled) model grid locations
 
-with open('%s_XYZ.pkl' % input.modelType, 'rb') as handle:
+with open(modelXYZ_file, 'rb') as handle:
     hgt3D, yCell3D, xCell3D = pickle.load(handle)
 
 print(" Elapsed time to read in obs locations and model grid:  %f seconds" % (timeit.time() - time0))

@@ -53,7 +53,7 @@ input_dict = vars(input)
 print("\n ====================================")
 print("\n BEGIN GRID_REFL_OBS \n")
 
-if len(list(input_dict.keys())) != 7:
+if len(list(input_dict.keys())) != 6:
     print("\n Problem, input argument list is not correct - need:")
     print(" ---------------------------------------------------\n")
     for key in input_dict.keys():
@@ -141,7 +141,7 @@ with open('wofs_%s_grid_kdtree.pkl' % input.modelType, 'wb') as handle:
 
 # Need to store out X, Y, Z!
 
-with open('%s_XYZ.pkl' % input.modelType, 'wb') as handle:
+with open('wofs_%s_XYZ.pkl' % input.modelType, 'wb') as handle:
         pickle.dump((hgt3D, yCell3D, xCell3D), handle)
 
 print(" Elapsed time to write out kdtree and grids are:  %f seconds" % (timeit.time() - time0))
@@ -216,6 +216,7 @@ for n in np.arange(num_refl_obs):
         innov = refl['obs'][n,yobs] - ob_value_prior
 
         if (innov > input.innovThresh and refl['obs'][n,yobs] > input.reflMin):
+            #print(f"WYH- {n}-{l}: {innov} > {input.innovThresh}; {refl['obs'][n,yobs]} > {input.reflMin}")
             refl_ob[l] = refl['obs'][n,yobs]
             refl_noise_loc.append((i, j, k, l, hgt3D[l], yCell3D[l], xCell3D[l], refl_ob[l]) )
         else:
@@ -225,7 +226,7 @@ for n in np.arange(num_refl_obs):
 
 output = []
 
-txt_file = open('refl_obs_%12.12i.txt' % (input.gdatetime), 'w')
+txt_file = open('refl_valid_obs_%12.12i.txt' % (input.gdatetime), 'w')
 
 for item in refl_noise_loc:
 
@@ -245,7 +246,7 @@ for item in refl_noise_loc:
 
 txt_file.close()
 
-with open('refl_obs_%12.12i.pkl' % (input.gdatetime), 'wb') as handle:
+with open('refl_valid_obs_%12.12i.pkl' % (input.gdatetime), 'wb') as handle:
     pickle.dump(output, handle)
 
 if debug:

@@ -506,6 +506,11 @@ def ioda_get_refl(ioda_file, refl_thresh=None, debug=False):
              np.isfinite(lon_raw)  &
              np.isfinite(hgt_raw)  &
              (qc_raw == 0))
+    #valid = (np.isfinite(obs_raw)  &
+    #         np.isfinite(hofx_raw) &
+    #         np.isfinite(lat_raw)  &
+    #         np.isfinite(lon_raw)  &
+    #         np.isfinite(hgt_raw) )
 
     # --- optional reflectivity threshold ----------------------------------------
     if refl_thresh is not None:

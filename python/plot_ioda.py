@@ -460,7 +460,7 @@ def parse_args():
 
     parsed_args['ioda_file'] = False
     obs_filename = os.path.basename(parsed_args['obsfile'])
-    if obs_filename.startswith('ioda_'):
+    if obs_filename.startswith('ioda_') or obs_filename.startswith('jdiag_'):
         parsed_args['ioda_file'] = True
 
     #-------------------------------------------------------------------

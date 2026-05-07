@@ -38,9 +38,12 @@ run_member() {
 
     local mlbcstr="${mem_map[$mem]}"
 
-    echo "Processing Member: ${memstr} use LBC member - ${mlbcstr}"
-
     cd WRKDIR/fcst_${memstr} || return 1
+
+    # Redirect all subsequent commands in this subshell/function
+    exec > log.update_bc_${memstr} 2>&1
+
+    echo "Processing Member: ${memstr} use LBC member - ${mlbcstr}"
 
     touch running.update_bc_${memstr}
     rm -rf error.update_bc_${memstr} queue.update_bc_${memstr}
