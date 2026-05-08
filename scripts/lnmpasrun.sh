@@ -157,12 +157,13 @@ cd ${wrkdir} || exit $?
 #    echo "Linking $(basename $fn) ..."
 #    ${show} ln -sf $(realpath $fn) $(basename $fn)
 #done
-static_files=(  CAM_ABS_DATA.DBL     RRTMG_LW_DATA      CAM_AEROPT_DATA.DBL  RRTMG_LW_DATA.DBL   \
-                GENPARM.TBL          RRTMG_SW_DATA      LANDUSE.TBL          RRTMG_SW_DATA.DBL   \
-                OZONE_DAT.TBL        SOILPARM.TBL       OZONE_LAT.TBL        VEGPARM.TBL         \
-                OZONE_PLEV.TBL                                                                   \
-                MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL                      \
-                MP_THOMPSON_QRacrQG_DATA.DBL MP_THOMPSON_QRacrQS_DATA.DBL CCN_ACTIVATE.BIN)
+static_files=(  CAM_ABS_DATA.DBL     RRTMG_LW_DATA      CAM_AEROPT_DATA.DBL  RRTMG_LW_DATA.DBL   
+                GENPARM.TBL          RRTMG_SW_DATA      LANDUSE.TBL          RRTMG_SW_DATA.DBL   
+                OZONE_DAT.TBL        SOILPARM.TBL       OZONE_LAT.TBL        VEGPARM.TBL         
+                OZONE_PLEV.TBL                                                                   
+                MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL                      
+                MP_THOMPSON_QRacrQG_DATA.DBL MP_THOMPSON_QRacrQS_DATA.DBL CCN_ACTIVATE.BIN
+                qr_acr_qg_data_tempo_v3 qr_acr_qs_data_tempo_v3 freeze_water_data_tempo_v3 ccn_activate.bin )
 
 echo "Linking static files ..."
 for fn in "${static_files[@]}"; do
@@ -213,7 +214,7 @@ else
     done
 fi
 
-find ${srcdir} -type f -name "*.mpasout.*.nc" -exec ln -sf {} . \; -quit
+find ${srcdir} -name "*.mpasout.*.nc" | sort -n | head -n 1 | xargs -I {} ln -sf {} .
 
 if compgen -G ./*.lbc*.nc > /dev/null; then
     :

@@ -42,7 +42,9 @@ function usage {
     echo    ""
     echo    "    CONFIG   - MPAS-WoFS runtime configuration file with full path."
     echo    "               WORKDIR & DATETIME will be extracted from the CONFIG name unless they are given explicitly."
-    echo -e "    TASK     - One of [${YELLOW}dacycles${NC},${YELLOW}fcst${NC},${YELLOW}post${NC},${YELLOW}plot${NC},${YELLOW}diag${NC},${YELLOW}verif${NC},${YELLOW}snd${NC},${BROWN}atpost${NC}]"
+    echo -e "    TASK     - One of [${YELLOW}dacycles${NC},${YELLOW}fcst${NC},"
+    echo -e "               ${YELLOW}post${NC},${YELLOW}plot${NC},${YELLOW}diag${NC},${YELLOW}verif${NC},${YELLOW}snd${NC},"
+    echo -e "               ${BROWN}atpost${NC}, ${BROWN}nccompress${NC}]"
     echo    " "
     echo    "    OPTIONS:"
     echo    "              -h                  Display this message"
@@ -53,6 +55,7 @@ function usage {
     echo    "              -e  HHMM            Last time in HHMM format or YYYYmmddHHMM."
     echo    "              -f  conf_file       Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
     echo -e "              -t  launchtime      Date and time to launch the first task for task ${BROWN}atpost${NC}, as ${LIGHT_BLUE}HH:MM${NC} or ${LIGHT_BLUE}HH:MM mmddyy${NC}"
+    echo -e "              --tasks  task_list  Comma-separated list of tasks for ${BROWN}nccompress${NC}, e.g., ${YELLOW}dacycles,fcst,mpassit,post${NC}. Default: all."
     echo -e "              -p  machine         Post-processing machine, default: ${PURPLE}wof-epyc8${NC}."
     echo    " "
     echo    "   DEFAULTS:"
@@ -119,11 +122,16 @@ function parse_args {
                 args["post_machine"]="$2"
                 shift
                 ;;
+            --tasks )
+                IFS=',' read -r -a tasks <<< "$2"
+                args["tasks"]="${tasks[*]}"
+                shift
+                ;;
             -* )
                 echo -e "${RED}ERROR${NC}: Unknown option: ${YELLOW}$key${NC}"
                 usage 2
                 ;;
-            dacycles | fcst | post | plot | diag | verif | snd | atpost )
+            dacycles | fcst | post | plot | diag | verif | snd | atpost | nccompress )
                 args["task"]=$key
                 ;;
             noscript )
@@ -261,6 +269,9 @@ else
     (( 10#$endtime < default_datime )) && enddatetime="${nextdate}${endtime}" || enddatetime="${eventdate}${endtime}"
 fi
 
+fbeg_s=$(date -u -d "${startdatetime:0:8} ${startdatetime:8:4}" +%s)
+fend_s=$(date -u -d "${enddatetime:0:8}   ${enddatetime:8:4}"   +%s)
+
 #-----------------------------------------------------------------------
 #
 # Handle the logging mechanism, after we get these variables:
@@ -338,11 +349,8 @@ post | plot | diag | verif | snd )
     wof_domain_name="geo_${config_domname##*_}"
 
     if [[ ! -f "${post_config}" ]]; then
-        fbeg_s=$(date -u -d "${startdatetime:0:8} ${startdatetime:8:4}" +%s)
-        fbeg_e=$(date -u -d "${enddatetime:0:8}   ${enddatetime:8:4}"   +%s)
-
         fcst_times=""
-        for ((ftime=fbeg_s;ftime<=fbeg_e;ftime+=3600)); do
+        for ((ftime=fbeg_s;ftime<=fend_s;ftime+=3600)); do
             fcst_time=$(date -u -d @$ftime +%H%M)
             fcst_times+=" '${fcst_time}',"
         done
@@ -644,6 +652,35 @@ atpost )
     fi
     exit 0
    ;;
+#9. nccompress
+nccompress )
+    cd "${run_dir}" || exit 1
+
+    if [[ -v args["tasks"] ]]; then
+        tasklist=("${tasks[@]}")
+    else
+        tasklist=(dacycles fcst mpassit post)
+    fi
+
+    if [[ ${support_interactive_job} == false ]]; then
+        jobscript="run_ncdfcompress_${eventdate}${affix}.slurm"
+
+        declare -A jobParms=(
+            [PARTION]="${config_partition_post}"
+            [NOPART]="1"
+            [JOBNAME]="${task}_${eventdate}${affix}"
+            [CPUSPEC]="${config_claim_cpu_python}"
+            [MACHINE]="${machine}"
+            [TASKLIST]="(${tasklist[*]})"
+            [EVENTDATE]="${eventdate}"
+            [AFFIX]="${affix}"
+            [MEMBERS]="${config_ENS_SIZE}"
+            [BEGINS]="${fbeg_s}"
+            [ENDS]="${fend_s}"
+        )
+        cmds=(submit_a_job "${run_dir}" "${task}_${eventdate}${affix}" "jobParms" "${rootdir}/templates/run_ncdfcompress.slurm" "$jobscript" "")
+    fi
+    ;;
 * )
     echo -e "${RED}ERROR${NC}: Unknown task - ${PURPLE}$task${NC}\n"
     exit 3

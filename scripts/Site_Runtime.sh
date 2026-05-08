@@ -285,7 +285,7 @@ function default_site_settings {
 
         default_claim_cpu_ioda="--cpus-per-task=1"
         default_claim_cpu_ioda_refl="--cpus-per-task=2"
-        default_claim_cpu_update="--ntasks-per-node=12"
+        default_claim_cpu_update="--ntasks-per-node=36"
 
 
         # FCST cycles
@@ -322,7 +322,7 @@ function default_site_settings {
 
         default_claim_cpu_ioda="--cpus-per-task=1"
         default_claim_cpu_ioda_refl="--cpus-per-task=2"
-        default_claim_cpu_update="--cpus-per-task=1"
+        default_claim_cpu_update="--ntasks-per-node=36"
 
 
         # FCST cycles
@@ -360,7 +360,7 @@ function default_site_settings {
 
         default_claim_cpu_ioda="ncpus=1"
         default_claim_cpu_ioda_refl="ncpus=2"
-        default_claim_cpu_update="ncpus=2"
+        default_claim_cpu_update="ncpus=36"
 
         # FCST cycles
         default_ncores_post=32; default_ncores_fcst=128
@@ -398,7 +398,7 @@ function default_site_settings {
 
         default_claim_cpu_ioda="--cpus-per-task=1"
         default_claim_cpu_ioda_refl="--cpus-per-task=2"
-        default_claim_cpu_update="--cpus-per-task=1"
+        default_claim_cpu_update="--ntasks-per-node=36"
 
         # FCST cycles
         default_ncores_post=24         ; default_ncores_fcst=96

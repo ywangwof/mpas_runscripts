@@ -1444,7 +1444,6 @@ function write_config {
     claim_cpu_ioda="${default_claim_cpu_ioda}"
     claim_cpu_ioda_refl="${default_claim_cpu_ioda_refl}"
 
-    run_update_with_array=false
     claim_cpu_update="${default_claim_cpu_update}"
 
     claim_time_fcst="00:40:00"
