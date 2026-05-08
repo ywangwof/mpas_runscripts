@@ -77,7 +77,7 @@ compress_task() {
     local timesubdir="$3"
     local mem_prefix="$4"
 
-    pushd "${basedir}" || return 1
+    pushd "${basedir}" > /dev/null || return 1
     echo "Before compression ($(pwd)): $(du -sh .)"
 
     for ((sec=begins; sec<=ends; sec+=intval)); do
@@ -85,23 +85,23 @@ compress_task() {
         local timedir="${hhmm}"
         [[ -n "${timesubdir}" ]] && timedir="${hhmm}/${timesubdir}"
 
-        pushd "${timedir}" || { popd; return 1; }
+        pushd "${timedir}" > /dev/null || { popd > /dev/null || exit; return 1; }
 
         if [[ -n "${mem_prefix}" ]]; then
             for mem in $(seq -f "%02g" 1 ${nens}); do
-                pushd "${mem_prefix}${mem}" || { popd; popd; return 1; }
-                compress_ncfiles "${eventdate}/${timedir}/${mem_prefix}${mem}" || { popd; popd; popd; return 1; }
-                popd || { popd; return 1; }
+                pushd "${mem_prefix}${mem}" > /dev/null || { popd > /dev/null || exit; popd > /dev/null || exit; return 1; }
+                compress_ncfiles "${basedir}/${timedir}/${mem_prefix}${mem}" || { popd > /dev/null || exit; popd > /dev/null || exit; popd > /dev/null || exit; return 1; }
+                popd > /dev/null || { popd > /dev/null || exit; return 1; }
             done
         else
-            compress_ncfiles "${eventdate}${affix}/${timedir}" || { popd; popd; return 1; }
+            compress_ncfiles "${basedir}/${timedir}" || { popd > /dev/null || exit; popd > /dev/null || exit; return 1; }
         fi
 
-        popd || { popd; return 1; }
+        popd > /dev/null || { popd > /dev/null || exit; return 1; }
     done
 
     echo "After compression ($(pwd)): $(du -sh .)"
-    popd
+    popd > /dev/null || exit
 }
 
 istatus=0
