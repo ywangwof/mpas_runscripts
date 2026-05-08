@@ -52,17 +52,23 @@ compress_single_ncfile() {
 compress_ncfiles() {
     local context="$1"
 
-    echo "Compressing .nc files in ${context} ..."
-
     # Use xargs with parallel execution based on SLURM_CPUS_PER_TASK
     local num_procs=${SLURM_CPUS_PER_TASK:-1}
 
     # Export the function so child shells (spawned by xargs) can access it
     export -f compress_single_ncfile
 
+    echo -n "Compressing .nc files in ${context} using ${num_procs} parallel processes ..."
+
     find . -type f -name "*.nc" -print0 | xargs -0 -I {} -P "${num_procs}" bash -c 'compress_single_ncfile "{}"'
 
-    return $?
+    if [[ $? -ne 0 ]]; then
+        echo " Failed."
+        return 1
+    else
+        echo " Done."
+        return 0
+    fi
 }
 
 # Compress a task directory tree between ${begins} and ${ends}.
@@ -90,11 +96,11 @@ compress_task() {
         if [[ -n "${mem_prefix}" ]]; then
             for mem in $(seq -f "%02g" 1 ${nens}); do
                 pushd "${mem_prefix}${mem}" > /dev/null || { popd > /dev/null || exit; popd > /dev/null || exit; return 1; }
-                compress_ncfiles "${basedir}/${timedir}/${mem_prefix}${mem}" || { popd > /dev/null || exit; popd > /dev/null || exit; popd > /dev/null || exit; return 1; }
+                compress_ncfiles "${timedir}/${mem_prefix}${mem}" || { popd > /dev/null || exit; popd > /dev/null || exit; popd > /dev/null || exit; return 1; }
                 popd > /dev/null || { popd > /dev/null || exit; return 1; }
             done
         else
-            compress_ncfiles "${basedir}/${timedir}" || { popd > /dev/null || exit; popd > /dev/null || exit; return 1; }
+            compress_ncfiles "${timedir}" || { popd > /dev/null || exit; popd > /dev/null || exit; return 1; }
         fi
 
         popd > /dev/null || { popd > /dev/null || exit; return 1; }
