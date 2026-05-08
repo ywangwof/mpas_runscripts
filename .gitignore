@@ -60,3 +60,8 @@ fix_files/MP_THOMPSON_QRacrQG_DATA.DBL
 fix_files/MP_THOMPSON_QRacrQS_DATA.DBL
 fix_files/QNWFA_QNIFA_SIGMA_MONTHLY.dat
 __pycache__
+.trunk
+fix_files/jedi/observer
+fix_files/jedi/post
+fix_files/jedi/rrfs
+fix_files/jedi/solver
