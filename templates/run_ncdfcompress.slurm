@@ -11,10 +11,10 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-machine=MACHINE
+#machine=MACHINE
 module load nco
 
-cd WRKDIR
+cd WRKDIR || exit $?
 
 touch running.JOBNAME
 rm -rf error.JOBNAME queue.JOBNAME
@@ -32,6 +32,21 @@ nens=MEMBERS
 
 cd ${wrkdir}/${eventdate} || exit $?
 
+# Compress a single .nc file using ncks.
+# Args: ncfile
+compress_single_ncfile() {
+    local ncfile="$1"
+
+    ncks -4 -L 5 -O "${ncfile}" "${ncfile%.nc}_compressed.nc"
+    if [[ $? -eq 0 ]]; then
+        rm -rf "${ncfile}"
+        mv "${ncfile%.nc}_compressed.nc" "${ncfile}"
+    else
+        echo "Error processing ${ncfile}."
+        return 1
+    fi
+}
+
 # Compress all .nc files in the current directory, return 1 on first failure.
 # Args: context_string (used in error messages)
 compress_ncfiles() {
@@ -39,17 +54,15 @@ compress_ncfiles() {
 
     echo "Compressing .nc files in ${context} ..."
 
-    mapfile -t ncfiles < <(find . -type f -name "*.nc")
-    for ncfile in "${ncfiles[@]}"; do
-        ncks -4 -L 5 -O "${ncfile}" "${ncfile%.nc}_compressed.nc"
-        if [[ $? -eq 0 ]]; then
-            rm -rf "${ncfile}"
-            mv "${ncfile%.nc}_compressed.nc" "${ncfile}"
-        else
-            echo "Error processing ${ncfile} in ${context}."
-            return 1
-        fi
-    done
+    # Use xargs with parallel execution based on SLURM_CPUS_PER_TASK
+    local num_procs=${SLURM_CPUS_PER_TASK:-1}
+
+    # Export the function so child shells (spawned by xargs) can access it
+    export -f compress_single_ncfile
+
+    find . -type f -name "*.nc" -print0 | xargs -0 -I {} -P "${num_procs}" bash -c 'compress_single_ncfile "{}"'
+
+    return $?
 }
 
 # Compress a task directory tree between ${begins} and ${ends}.
