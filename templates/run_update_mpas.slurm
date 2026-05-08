@@ -3,7 +3,7 @@
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
 #SBATCH -t 00:30:00
-#SBATCH --output=WRKDIR/update_mpas_%j.log
+#SBATCH --output=WRKDIR/fcst_all_update_mpas_%j.log
 ACCTSTR
 EXCLSTR
 
@@ -70,11 +70,13 @@ run_update_member() {
     #
     # init files
     #
-
     echo "MEM ${memstr}: Using init file: INITORIGFILE => INITFILENAME"
-    CPINITCMD "INITORIGFILE" "INITFILENAME"
+    if [[ RUNADDNOISE == true ]]; then
+        cp -f "INITORIGFILE" "INITFILENAME"       # Copy the original init file to the new location for add_noise processing
+    else
+        ln -sf "INITORIGFILE" "INITFILENAME"
+    fi
     istatus=$?
-
 
     #
     # lbc files

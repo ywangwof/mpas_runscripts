@@ -787,6 +787,7 @@ EOF_MPAS
     config_pbl_scheme          = 'bl_mynnedmf'
     config_gwdo_scheme         = 'bl_ugwp_gwdo'
     config_gvf_update          = false
+    bl_mynn_version            = 1
 EOF
     else
         cat << EOF >> "${filename}"
@@ -2066,7 +2067,7 @@ function run_update_mpas {
         return
     fi
 
-    local casedir="${rundir}"
+    local casedir="${rundir}"    # contains event date
 
     #
     # Waiting for job conditions for update_bc
@@ -2078,7 +2079,7 @@ function run_update_mpas {
 
     timestr_cur=$(date -u -d @$iseconds +%Y%m%d%H%M)
     jdiagfile="${wrkdir}/jedi_observer/jdiag_mrms_refl.nc"
-    invfile="$rundir/init/${domname}.invariant.nc"
+    invfile="${casedir}/init/${domname}.invariant.nc"
 
     #------------------------------------------------------
     # Prepare update_bc by copying/linking the background files
@@ -2086,12 +2087,7 @@ function run_update_mpas {
 
     lbcdir="${casedir}/lbc"
 
-    local cpinitcmd initorigfile
-    if [[ ${config_run_addnoise} == true ]]; then
-        cpinitcmd="cp -f"
-    else
-        cpinitcmd="ln -sf"
-    fi
+    local initorigfile
     #
     # init files
     #
@@ -2136,28 +2132,6 @@ function run_update_mpas {
         jobarrays+=("$iens")
     done
 
-    #------------------------------------------------------
-    # Run update_bc and add_noise as a combined job
-    #------------------------------------------------------
-
-    cd ${wrkdir} || return
-
-    jobscript="run_update_mpas.${mach}"
-
-    nopart="${#jobarrays[@]}"
-
-    if [[ ${config_claim_cpu_update} =~ ntasks-per-node=([0-9]+) ]]; then
-        ntasks_per_node=${BASH_REMATCH[1]}
-    else
-        ntasks_per_node=12
-    fi
-
-    nnodes=$(( (${#jobarrays[@]}+ntasks_per_node-1)/ntasks_per_node ))
-    [[ ${nnodes} -lt 1 ]] && nnodes=1
-
-    claim_cpu_update="--ntasks-per-node=${ntasks_per_node} --nodes=${nnodes}"
-    runexe_str="srun --ntasks=1 --nodes=1 --exclusive --relative=0 bash -c"
-
     run_add_noise=false
     if [[ ${config_run_addnoise} == true ]]; then
         if [[ ! " ${obs_ids[*]} " =~ " refl10cm " ]]; then
@@ -2169,13 +2143,33 @@ function run_update_mpas {
         fi
     fi
 
+    #------------------------------------------------------
+    # Run update_bc and add_noise as a combined job
+    #------------------------------------------------------
+
+    cd ${wrkdir} || return
+
+    jobscript="run_update_mpas.${mach}"
+
+    nopart="${#jobarrays[@]}"
+    ntasks_per_node="${nopart}"
+
+    if [[ ${config_claim_cpu_update} =~ ntasks-per-node=([0-9]+) ]]; then
+        ntasks_per_node=${BASH_REMATCH[1]}
+    fi
+
+    nnodes=$(( (${#jobarrays[@]}+ntasks_per_node-1)/ntasks_per_node ))
+    [[ ${nnodes} -lt 1 ]] && nnodes=1
+
+    claim_cpu_update="--ntasks-per-node=${ntasks_per_node} --nodes=${nnodes}"
+    runexe_str="srun --ntasks=1 --nodes=1 --exclusive --relative=0 bash -c"
+
     declare -A jobParms=(
         [PARTION]="${config_partition_filter}"
         [NOPART]="${nopart}"
         [JOBNAME]="update_mpas_${eventtime}"
         [CPUSPEC]="${claim_cpu_update}"
         [CPCMD]="${cpcmd}"
-        [CPINITCMD]="${cpinitcmd}"
         [INITFILENAME]="${initfile}"
         [INITORIGFILE]="${initorigfile}"
         [LBCPATH]="${lbcdir}"
@@ -2195,7 +2189,7 @@ function run_update_mpas {
 
     if [[ "${mach}" == "pbs" ]]; then
         jobParms[NNODES]="1"
-        jobParms[NCORES]="1"
+        jobParms[NCORES]="${nopart}"
     fi
 
     submit_a_job "${wrkdir}" "update_mpas" jobParms ${config_TEMPDIR}/$jobscript "run_update_mpas.${mach}" ""
@@ -2596,12 +2590,12 @@ function dacycle_driver() {
             run_mpassit $dawrkdir ${isec}
 
             check_job_status "mpassit mem mpasssit" ${dawrkdir}/mpassit ${config_ENS_SIZE} run_mpassit.${mach} ${num_resubmit}
-        else
+        #else
             # Clean not needed files in each member's forecast directory after
             # the MPAS forward forecast, Keep it for post-diagnositic purpose
-            if [[ $config_outwrf == false && $icyc -gt 0 ]]; then
-                rm -rf ${dawrkdir}/fcst_??/${domname}_??.{diag,history}.*
-            fi
+            #if [[ $config_outwrf == false && $icyc -gt 0 ]]; then
+            #    rm -rf ${dawrkdir}/fcst_??/${domname}_??.{diag,history}.*
+            #fi
         fi
 
         #------------------------------------------------------

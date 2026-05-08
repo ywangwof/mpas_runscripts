@@ -213,6 +213,8 @@ else
     done
 fi
 
+find ${srcdir} -type f -name "*.mpasout.*.nc" -exec ln -sf {} . \; -quit
+
 if compgen -G ./*.lbc*.nc > /dev/null; then
     :
 else
