@@ -73,29 +73,33 @@ def log_error(msg):
 #
 # Created with help from claude ai
 
-def reconstruct_winds_vectorized(mesh_grid, data_grid, addTimeAxis=True):
+def mpas_reconstruct_1d(mesh_grid, data_grid, timeIndex = 0, addTimeAxis=True):
 
     """
 
-    Fully vectorized version of reconstruct_winds (faster for large meshes).
-
-    Uses masked arrays to handle variable edge counts without a Python loop.
+    Fully vectorized version of mpas_reconstruct_1d from MPAS fortran code 
+    
+    Source code location:  MPAS/src/operators/mpas_vector_reconstruction.F
+    Subroutine routine mpas_reconstruct_1d
 
     Notes
     -----
     1. Assumes that raw MPAS u-array winds for reconstruction has dimensions (nCells, nz).
-    2. Requires that the cellTangentPlane array not be zero for proper reconstruction.
+    2. Requires that the coeffs_reconstruct array not be zero for proper reconstruction.
+    3. For fields that have more than one time level, user needs to pass in timeIndex
 
 
     Required Inputs  
     ---------------
     MPAS mesh grid netCDF file
-    MPAS data grid information.
-
+    MPAS data grid information
+    
 
     Optional Input
     --------------
-    addTimeAxis==True : expands U_Zonal and U_Meridonal to add a leading time dimension.
+    
+    indexTime = int():  Default is 0, but user can ask for any valid time level if u is truely 3D   
+    addTimeAxis==True : expands U_Zonal and U_Meridonal to add a leading time dimension
 
     Output
     ------
@@ -109,67 +113,69 @@ def reconstruct_winds_vectorized(mesh_grid, data_grid, addTimeAxis=True):
 
     """
 
+    with Dataset(data_grid, 'r') as nc:
+        u = np.asarray(nc.variables['u'][timeIndex,:].squeeze(), dtype=np.float64)
+        
     with Dataset(mesh_grid, 'r') as nc:
 
-        n_edges_on_cell = nc.variables["nEdgesOnCell"][:].astype(np.int32)
+        nEdgesOnCell = nc.variables["nEdgesOnCell"][:].astype(np.int32)
  
         # MPAS stores 1-based Fortran indices — convert to 0-based
 
-        edges_on_cell = nc.variables["edgesOnCell"][:].astype(np.int32) - 1
+        edgesOnCell = nc.variables["edgesOnCell"][:].astype(np.int32) - 1
  
         # RBF reconstruction weight vectors, shape (nCells, maxEdges, R3)
 
-        coeffs = np.asarray(nc.variables["coeffs_reconstruct"][:], dtype=np.float64)
+        coeffs_reconstruct = np.asarray(nc.variables["coeffs_reconstruct"][:], dtype=np.float64)
+        
+        latCell = np.asarray(nc.variables["latCell"][:], dtype=np.float64)
+        lonCell = np.asarray(nc.variables["lonCell"][:], dtype=np.float64)
  
-        # Local tangent-plane basis at each cell center, shape (nCells, TWO, R3)
-        #   [:, 0, :] = local east  (zonal)   unit vector
-        #   [:, 1, :] = local north (merid.)  unit vector
-
-        tangent_plane = np.asarray(nc.variables["cellTangentPlane"][:], dtype=np.float64)
-
-    with Dataset(data_grid, 'r') as nc:
-        u = nc.variables['u'][:].squeeze()
-
-    # Make sure the tangent_plane variables are initialized
-
-    is_zero = np.allclose(tangent_plane, 0)
+    is_zero = np.allclose(coeffs_reconstruct, 0)
     if is_zero:
-        print(f" \n Reconstruct_winds_vectorized:  cellTangentPlane array is uninitialized!!") 
+        print(f" \n MPAS_RECONSTRUCT_1D:  coeffs_reconstruct array is uninitialized!!")
         print(f" \n Cannot reconstruct winds - trying using MPAS init file")
-        print(f" \n Return zero arrays for U_Zonal and U_Meridonal")
+        print(f" \n Return zero arrays for U_Zonal and U_Merid")
 
-        u_zonal      = np.zeros_like(u)
-        u_meridional = np.zeros_like(u)
+        u_zonal = np.zeros_like(u)
+        u_merid = np.zeros_like(u)
+        
+    else:
+        
+        # start calculations
+        
+        uReconstructX = np.zeros((latCell.shape[0], u.shape[1]))  # (nCells, nVertLevels,)
+        uReconstructY = np.zeros((latCell.shape[0], u.shape[1]))
+        uReconstructZ = np.zeros((latCell.shape[0], u.shape[1]))
+    
+        nCells = latCell.shape[0]
+    
+        # This algorithm is converted from fortran using MPAS source code
+        # Location:  MPAS/src/operators/mpas_vector_reconstruction.F
+        # Subroutine routine mpas_reconstruct_1d
 
-    else:  # do reconstruction
+        for iCell in range(nCells):
+    
+            n       = nEdgesOnCell[iCell]
+            edges   = edgesOnCell[iCell, :n]            # (n,)
+            coeffs  = coeffs_reconstruct[iCell, :n, :]  # (n, 3)
+            u_edges = u[edges, :]                       # (n, nVertLevels)
+        
+            uReconstructX[iCell, :] = coeffs[:, 0] @ u_edges  # (nVertLevels,)
+            uReconstructY[iCell, :] = coeffs[:, 1] @ u_edges 
+            uReconstructZ[iCell, :] = coeffs[:, 2] @ u_edges
 
-        n_cells, max_edges = edges_on_cell.shape
+        clat = np.cos(latCell)   # (nCells,)
+        slat = np.sin(latCell)   # (nCells,)
+        clon = np.cos(lonCell)   # (nCells,)
+        slon = np.sin(lonCell)   # (nCells,)
 
-        # Step 1 — inactive-slot mask: True where edge slot is not used
-        slot_idx = np.arange(max_edges, dtype=np.int32)[None, :]   # (1, maxEdges)
-        mask = slot_idx >= n_edges_on_cell[:, None]                 # (nCells, maxEdges)
- 
-        # Step 2 — gather: clamp masked slots to index 0 (values zeroed in step 4)
-        safe_edges = edges_on_cell.copy()
-        safe_edges[mask] = 0
-        u_e = u[safe_edges]      # (nCells, maxEdges, nVertLevels)
- 
-        # Step 3 — project RBF coefficients onto local east/north
-        east  = tangent_plane[:, 0, :]    # (nCells, 3)
-        north = tangent_plane[:, 1, :]    # (nCells, 3)
- 
-        # einsum 'iej,ij->ie' : for each cell i and edge slot e,
-        #   sum over the 3 Cartesian components j
-        w_zon = np.einsum("iej,ij->ie", coeffs, east)    # (nCells, maxEdges)
-        w_mer = np.einsum("iej,ij->ie", coeffs, north)   # (nCells, maxEdges)
- 
-        # Step 4 — zero inactive slots and contract over edge dimension
-        w_zon[mask] = 0.0
-        w_mer[mask] = 0.0
- 
-        # einsum 'ie,iek->ik' : weighted sum over edge slots
-        u_zonal = np.einsum("ie,iek->ik", w_zon, u_e)   # (nCells, nVertLevels)
-        u_merid = np.einsum("ie,iek->ik", w_mer, u_e)   # (nCells, nVertLevels)
+        u_zonal = (- uReconstructX * slon[:, None]
+                   + uReconstructY * clon[:, None])
+
+        u_merid = (-(uReconstructX * clon[:, None]
+                   + uReconstructY * slon[:, None]) * slat[:, None]
+                   + uReconstructZ * clat[:, None])
 
     if addTimeAxis:
         return xr.DataArray(u_zonal[np.newaxis,:,:], dims=['Time','nCells','nVertLevels'],
@@ -258,7 +264,7 @@ def plot_mpas_worker(task_info):
         if fieldname == 'u_zonal' or fieldname == 'u_merid':  # if u or v are requested, compute nodal recontructed winds
 
             print(f"\n ---> Reconstructing U & V from raw MPAS u \n")
-            u, v = reconstruct_winds_vectorized(grid_source, data_file) 
+            u, v = mpas_reconstruct_1d(grid_source, data_file) 
 
             is_zero = np.allclose(u, 0) and np.allclose(v, 0)
             if is_zero:
