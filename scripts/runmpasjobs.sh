@@ -234,7 +234,7 @@ else
 fi
 
 if [[ -f ${config_file} ]]; then
-    readconf "${config_file}" COMMON fcst || exit $?
+    readconf "${config_file}" COMMON fcst compression || exit $?
 else
     echo " "
     echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not exist."
@@ -663,18 +663,21 @@ nccompress )
     fi
 
     if [[ ${support_interactive_job} == false ]]; then
+        # shellcheck disable=SC2154
         if [[ "${tasklist[*]}" == "dacycles" ]]; then
             jobtemplate="run_compress_da.slurm"
             jobscript="run_compress_da_${eventdate}${affix}.slurm"
-            ens_size=36
-            cpuspec=36
-            ntasks=8; taskspec=2    # nnodes = ntasks / taskspec
+            ens_size="${config_ens_size_da}"
+            cpuspec="${config_ncpus_da}"
+            ntasks="${config_ntasks_da}"
+            taskspec="${config_nstasks_per_node_da}"    # nnodes = ntasks / taskspec
         else
             jobtemplate="run_compress_post.slurm"
             jobscript="run_compress_post_${eventdate}${affix}.slurm"
-            ens_size=18
-            cpuspec=73
-            ntasks=4; taskspec=1    # nnodes = ntasks / taskspec
+            ens_size="${config_ens_size_post}"
+            cpuspec="${config_ncpus_post}"
+            ntasks="${config_ntasks_post}"
+            taskspec="${config_nstasks_per_node_post}"    # nnodes = ntasks / taskspec
         fi
 
         declare -A jobParms=(

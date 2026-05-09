@@ -1,21 +1,21 @@
 import numpy as np
-import sys, os, glob
-import datetime as dtime
+import sys  #, os, glob
+#import datetime as dtime
 #import xarray as xr      #netcdf4 is faster, and we dont need xarray features
 import netCDF4 as ncdf
 from netCDF4 import chartostring
 import time as timeit
-from scipy.spatial import KDTree
+#from scipy.spatial import KDTree
 from pyproj import Transformer
 
-try:
-    import _pickle as pickle
-except:
-    import pickle
+#try:
+#    import _pickle as pickle
+#except:
+#    import pickle
 
 debug = True
 
-__missing = -9999.
+#__missing = -9999.
 __gravity = 9.806
 
 #-------------------------------------------------------------------------------
@@ -170,7 +170,7 @@ def write_model_grid(model_grid_file, model_file, noise, sd, model_type='wrf', w
 
         noise = noise.reshape(nCell, nz, nflds)
 
-        with Dataset(model_grid_file, "r") as dg:   # need to use this to mask lateral boundaries
+        with ncdf.Dataset(model_grid_file, "r") as dg:   # need to use this to mask lateral boundaries
 
             bdyMaskCell = dg.variables['bdyMaskCell'][...]
             ic          = np.where(bdyMaskCell == 0)[0]    # this is the lists of non-boundary zones
@@ -188,31 +188,31 @@ def write_model_grid(model_grid_file, model_file, noise, sd, model_type='wrf', w
                     u = noise[:,:,n]
                     v = noise[:,:,n+1]  # now have cell centered 2D noise arrays
 
-                    with Dataset(model_grid_file, "r") as nc:
+                    with ncdf.Dataset(model_grid_file, "r") as nc:
 
                         # 1-based -> 0-based; MPAS uses 0 as the sentinel for a missing cell
                         # on a boundary edge, so subtract 1 only for valid (> 0) entries.
 
                         coe_raw = nc.variables["cellsOnEdge"][:].astype(np.int32)   # (nEdges, 2)
                         cells_on_edge = coe_raw - 1                                  # now -1 = boundary
- 
+
                         tangent_plane = np.asarray( nc.variables["cellTangentPlane"][:], dtype=np.float64)   # (nCells, 2, 3)
                         edge_normals = np.asarray(nc.variables["edgeNormalVectors"][:], dtype=np.float64)  # (nEdges, 3)
 
                     is_zero = np.allclose(tangent_plane, 0)
                     if is_zero:
-                        print(f" \n ERROR:  Add_Noise_High_Refl:  cellTangentPlane array is uninitialized!!") 
+                        print(f" \n ERROR:  Add_Noise_High_Refl:  cellTangentPlane array is uninitialized!!")
                         print(f" \n Cannot reconstruct winds - trying using MPAS init file")
                         print(f" \n Skippng u additive noise\n")
                         continue
 
- 
+
                     n_edges = cells_on_edge.shape[0]
                     n_bdy   = int(np.sum(np.any(cells_on_edge < 0, axis=1)))
 
                     n_cells, n_levels = u.shape[0:2]
                     n_edges           = cells_on_edge.shape[0]
- 
+
                     east  = tangent_plane[:, 0, :]   # (nCells, 3)
                     north = tangent_plane[:, 1, :]   # (nCells, 3)
 
@@ -224,7 +224,7 @@ def write_model_grid(model_grid_file, model_file, noise, sd, model_type='wrf', w
 
                     vec_cell = ( u[:, :, None] * east[:, None, :]    # (nCells, nLevels, 3)
                              +   v[:, :, None] * north[:, None, :] )
- 
+
                     # Append a zero-vector row so that index -1 (boundary sentinel) maps to
                     # a zero contribution rather than wrapping to the last real cell.
                     # Shape after pad: (nCells+1, nVertLevels, 3), last row = 0
@@ -241,33 +241,33 @@ def write_model_grid(model_grid_file, model_file, noise, sd, model_type='wrf', w
 
                     c = cells_on_edge.copy()                      # (nEdges, 2)
                     c[c < 0] = n_cells                            # boundary sentinel -> zero row
- 
+
                     # Gather: (nEdges, 2, nVertLevels, 3)
 
                     vec_neighbors = vec_padded[c]                 # fancy index on first axis
- 
+
                     # Count valid neighbors per edge: interior=2, boundary=1
                     # valid mask: True where the original index was >= 0
 
                     valid = (cells_on_edge >= 0).astype(np.float64)   # (nEdges, 2)
- 
+
                     # Weighted average: sum / n_valid
                     # Expand valid to (nEdges, 2, 1, 1) for broadcasting
 
                     n_valid = valid.sum(axis=1, keepdims=True)                       # (nEdges, 1)
                     w       = (valid / n_valid)[:, :, None, None]                    # (nEdges, 2, 1, 1)
- 
+
                     # vec_edge: (nEdges, nVertLevels, 3)
 
                     vec_edge = (w * vec_neighbors).sum(axis=1)
- 
+
                     # ------------------------------------------------------------------
                     # Step 3: Project onto edge unit normal
                     #   u[e, k] = dot( vec_edge[e, k, :], edge_normals[e, :] )
                     #           = einsum 'ekj,ej->ek'
-                    
+
                     ds.variables['u'][0] += np.einsum("ekj,ej->ek", vec_edge, edge_normals)   # (nEdges, nVertLevels)
- 
+
                     print("\n Elapsed time to add noise to the MPAS U-field is:  %f seconds\n" % (timeit.time() - time1))
 
                 elif var == 'v':
