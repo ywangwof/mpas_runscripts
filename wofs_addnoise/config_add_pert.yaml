@@ -1,0 +1,25 @@
+# Configuration for add_pert_where_high_refl.py
+
+# Model and file paths
+modelGrid: /path/to/model/grid.nc
+modelFile: /path/to/model/state.nc
+pkl_path: /path/to/pickle/files
+
+# Model type: 'mpas' or other valid model type
+modelType: mpas
+
+# Length scales for smoothing (meters)
+h_length: 9000.0      # horizontal length scale
+v_length: 3000.0      # vertical length scale
+
+# Standard deviations for perturbations (for each field)
+u_sd: 0.5             # u wind standard deviation
+v_sd: 0.5             # v wind standard deviation
+w_sd: 0.3             # w wind standard deviation
+t_sd: 0.5             # temperature standard deviation
+td_sd: 0.5            # dew point standard deviation
+qv_sd: 1.0e-5         # specific humidity standard deviation
+
+# Date and ensemble information
+gdatetime: 202206011800    # Grid date/time (YYYYMMDDHHmm format)
+ensNum: 1                  # Ensemble member number
