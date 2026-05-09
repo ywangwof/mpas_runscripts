@@ -687,7 +687,8 @@ function run_ioda_cwp {
 
 function create_namelist {
 
-    local filename="$1"
+    local taskname="$1"
+    local filename="$2"
 
     #
     # Default runtime parameters for MPAS model
@@ -787,8 +788,9 @@ EOF_MPAS
     config_pbl_scheme          = 'bl_mynnedmf'
     config_gwdo_scheme         = 'bl_ugwp_gwdo'
     config_gvf_update          = false
-    bl_mynn_version            = 1
 EOF
+        [[ "${taskname}" == "MPAS" ]] &&  \
+        echo "    config_mynn_version        = 1" >> "${filename}"
     else
         cat << EOF >> "${filename}"
     config_pbl_scheme          = '${pblscheme}'
@@ -1363,7 +1365,7 @@ function jedi_preparation {
         do_dacyle="false"
         pblscheme="bl_mynnedmf"
         sfcscheme="sf_mynn"
-        create_namelist "namelist.atmosphere"
+        create_namelist "JEDI" "namelist.atmosphere"
         #cp "${config_FIXDIR}/jedi/streams.atmosphere.getkf" streams.atmosphere
         create_streams "GETKF" "streams.atmosphere"
 
@@ -1810,6 +1812,7 @@ function run_jedi_post {
 
 ########################################################################
 
+# shellcheck disable=SC2329
 function run_add_noise {
     # $1        $2
     # wrkdir    iseconds
@@ -2343,7 +2346,7 @@ function run_mpas {
             done
         fi
 
-        create_namelist namelist.atmosphere
+        create_namelist MPAS namelist.atmosphere
 
         create_streams MPAS streams.atmosphere
 
