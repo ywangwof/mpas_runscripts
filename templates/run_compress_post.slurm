@@ -1,11 +1,41 @@
 #!/bin/bash
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
-#SBATCH --ntasks=NOPART CPUSPEC
+#SBATCH --ntasks=NOPART --ntasks-per-node=TASKSPEC
+#SBATCH --cpus-per-task=CPUSPEC
 #SBATCH -t 04:30:00
 #SBATCH --output=WRKDIR/JOBNAME_%j.log
+#SBATCH --exclusive
 ACCTSTR
-EXCLSTR
+
+# ============================================================================
+# Parallelism Configuration:
+#
+# This script uses a two-level parallelism strategy:
+#
+# 1. MEMBER LEVEL (outer loop): Processes ensemble members in parallel
+#    - Controlled by: --ntasks (SLURM_NTASKS)
+#    - Each member directory runs as an independent process
+#    - Default (if unset): 1 (serial execution)
+#
+# 2. NCFILE LEVEL (inner loop): Compresses .nc files in parallel within compress_ncfiles
+#    - Controlled by: --cpus-per-task (SLURM_CPUS_PER_TASK)
+#    - When member loop is active (mem_prefix set): uses SLURM_CPUS_PER_TASK processes
+#    - When member loop is inactive (mem_prefix empty): uses SLURM_CPUS_PER_TASK * SLURM_NTASKS
+#    - Default (if unset): 73 (parallel execution using one node on Ursa)
+#
+# CONFIGURATION EXAMPLES:
+#   Example 1 - Process 8 members in parallel, 4 files per member:
+#     #SBATCH --ntasks=8
+#     #SBATCH --cpus-per-task=4
+#
+#   Example 2 - Process 16 files in parallel (no member loop):
+#     #SBATCH --ntasks=4
+#     #SBATCH --cpus-per-task=4
+#
+# NOTE: The total parallelism is bounded by available resources.
+#       Ensure --ntasks * --cpus-per-task ≤ available system resources.
+# ============================================================================
 
 time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
@@ -48,17 +78,20 @@ compress_single_ncfile() {
 }
 
 # Compress all .nc files in the current directory, return 1 on first failure.
-# Args: context_string (used in error messages)
+# Args: memdir  num_procs
+#   memdir    - relative path to member directory (optional, for cd; empty = current dir)
+#   num_procs - number of parallel processes (optional, defaults to SLURM_CPUS_PER_TASK)
 compress_ncfiles() {
-    local context="$1"
+    local memdir="$1"
+    local num_procs=${2:-${SLURM_CPUS_PER_TASK:-1}}
 
-    # Use xargs with parallel execution based on SLURM_CPUS_PER_TASK
-    local num_procs=${SLURM_CPUS_PER_TASK:-1}
+    # Change to member directory if specified
+    cd "${memdir}" || exit 1
 
     # Export the function so child shells (spawned by xargs) can access it
     export -f compress_single_ncfile
 
-    echo -n "Compressing .nc files in ${context} using ${num_procs} parallel processes ..."
+    echo -n "Compressing .nc files in ${memdir} using ${num_procs} parallel processes ..."
 
     find . -type f -name "*.nc" -print0 | xargs -0 -I {} -P "${num_procs}" bash -c 'compress_single_ncfile "{}"'
 
@@ -86,6 +119,11 @@ compress_task() {
     pushd "${basedir}" > /dev/null || return 1
     echo "Before compression ($(pwd)): $(du -sh .)"
 
+    local max_mem_jobs=${SLURM_NTASKS:-1}
+    local cpus_per_task=${SLURM_CPUS_PER_TASK:-1}
+    local mem_pids=()
+    local failed=0
+
     for ((sec=begins; sec<=ends; sec+=intval)); do
         hhmm=$(date -d "@$sec" -u +%H%M)
         local timedir="${hhmm}"
@@ -94,13 +132,27 @@ compress_task() {
         pushd "${timedir}" > /dev/null || { popd > /dev/null || exit; return 1; }
 
         if [[ -n "${mem_prefix}" ]]; then
+            # Parallel member loop, throttled by SLURM_NTASKS
             for mem in $(seq -f "%02g" 1 ${nens}); do
-                pushd "${mem_prefix}${mem}" > /dev/null || { popd > /dev/null || exit; popd > /dev/null || exit; return 1; }
-                compress_ncfiles "${timedir}/${mem_prefix}${mem}" || { popd > /dev/null || exit; popd > /dev/null || exit; popd > /dev/null || exit; return 1; }
-                popd > /dev/null || { popd > /dev/null || exit; return 1; }
+                ( compress_ncfiles "${timedir}/${mem_prefix}${mem}" "${cpus_per_task}" || exit 1 ) &
+                mem_pids+=("$!")
+
+                # Throttle mem jobs
+                if [[ ${#mem_pids[@]} -ge ${max_mem_jobs} ]]; then
+                    wait "${mem_pids[0]}" || failed=1
+                    mem_pids=("${mem_pids[@]:1}")
+                fi
             done
+
+            # Wait for remaining mem jobs
+            for pid in "${mem_pids[@]}"; do
+                wait "${pid}" || failed=1
+            done
+            mem_pids=()
         else
-            compress_ncfiles "${timedir}" || { popd > /dev/null || exit; popd > /dev/null || exit; return 1; }
+            # No member loop: use combined parallelism
+            local combined_procs=$((cpus_per_task * max_mem_jobs))
+            compress_ncfiles "${timedir}" "${combined_procs}" || failed=1
         fi
 
         popd > /dev/null || { popd > /dev/null || exit; return 1; }
@@ -108,6 +160,7 @@ compress_task() {
 
     echo "After compression ($(pwd)): $(du -sh .)"
     popd > /dev/null || exit
+    return ${failed}
 }
 
 istatus=0
@@ -115,7 +168,6 @@ for task in "${tasks[@]}"; do
     echo "Compressing: ${task} for ${eventdate}${affix} from $(date -d "@${begins}" -u +%H%M) to $(date -d "@${ends}" -u +%H%M) with ${nens} members."
 
     case ${task} in
-        dacycles ) compress_task "dacycles${affix}"                              900 ""        "fcst_" || { istatus=1; break; } ;;
         fcst     ) compress_task "fcst${affix}"                                 3600 ""        "fcst_" || { istatus=1; break; } ;;
         mpassit  ) compress_task "fcst${affix}"                                 3600 "mpassit" "mem_"  || { istatus=1; break; } ;;
         post     ) compress_task "${wrkdir}/summary_files/${eventdate}${affix}" 3600 ""        ""      || { istatus=1; break; } ;;

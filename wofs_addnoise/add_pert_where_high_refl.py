@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 #-------------------------------------------------------------------------------
 #
 """
@@ -9,19 +10,19 @@
 """
 
 import numpy as np
-import sys, os, glob
-import netCDF4 as ncdf
+import sys, os  #, glob
+#import netCDF4 as ncdf
 import time as timeit
-from scipy.spatial import KDTree
-from numpy.random import randn
-import argparse
+#from scipy.spatial import KDTree
+#from numpy.random import randn
+import yaml
 
 try:
     import cPickle as pickle
 except:
     import pickle
 
-from pyproj import Transformer
+#from pyproj import Transformer
 
 from dart_utils import write_model_grid
 
@@ -32,60 +33,63 @@ writeNewFile = True
 
 #
 
-__missing = -9999.
-__gravity = 9.806
-
-__hLength = 9000.
-__vLength = 3000.  # default length scales for smoothing noise
-
-__default_sd = 0.0
+#__missing = -9999.
+#__gravity = 9.806
+#
+#__hLength = 9000.
+#__vLength = 3000.  # default length scales for smoothing noise
+#
+#__default_sd = 0.0
 
 nflds = 6  # number of fields that could be generated
 
 #-------------------------------------------------------------------------------
-# This is just processing sys.argv command line input, but using Argparse
-# so later on we can do something else.
+# Load configuration from YAML file
 
-parser = argparse.ArgumentParser()
+if len(sys.argv) != 2:
+    print("\n ====================================")
+    print("\n Usage: python add_pert_where_high_refl.py <config_file.yaml>\n")
+    print(" ====================================\n")
+    sys.exit(1)
 
-parser.add_argument("modelGrid",type=str)
-parser.add_argument("modelFile",type=str)
-parser.add_argument("h_length",type=float)
-parser.add_argument("v_length",type=float)
-parser.add_argument("u_sd",type=float)
-parser.add_argument("v_sd",type=float)
-parser.add_argument("w_sd",type=float)
-parser.add_argument("t_sd",type=float)
-parser.add_argument("td_sd",type=float)
-parser.add_argument("qv_sd",type=float)
-parser.add_argument("gdatetime",type=int)
-parser.add_argument("ensNum",type=int)
-parser.add_argument("modelType",type=str)
-parser.add_argument("pkl_path",type=str)
+config_file = sys.argv[1]
 
-input = parser.parse_args()
-input_dict = vars(input)
+if not os.path.exists(config_file):
+    print(f"\n Error: Configuration file not found: {config_file}\n")
+    sys.exit(1)
+
+# Load configuration from YAML file
+with open(config_file, 'r') as f:
+    config = yaml.safe_load(f)
 
 print("\n ====================================")
 print("\n BEGIN ADD_PERT_WHERE_HIGH_REFL  \n")
 
-if len(list(input_dict.keys())) != 14:
+# Validate required configuration keys
+required_keys = ['modelGrid', 'modelFile', 'h_length', 'v_length', 'u_sd', 'v_sd', 'w_sd',
+                 't_sd', 'td_sd', 'qv_sd', 'gdatetime', 'ensNum', 'modelType', 'pkl_path']
 
-
-    print("\n Problem, input argument list is not correct - need: 14")
+missing_keys = [key for key in required_keys if key not in config]
+if missing_keys:
+    print(f"\n Problem, configuration is missing keys: {missing_keys}")
     print(" ---------------------------------------------------\n")
-
     sys.exit(1)
-else:
 
-    print("\n Input argument list:")
-    print(" -----------------------------------------------\n")
+# Create a simple object to access config like input.key
+class Config:
+    def __init__(self, config_dict):
+        for key, value in config_dict.items():
+            setattr(self, key, value)
 
-    for key in input_dict.keys():
-         print(" %s:  %s " % (key, input_dict[key]))
+input = Config(config)
 
+print("\n Configuration parameters:")
+print(" -----------------------------------------------\n")
 
-    print("\n")
+for key in config.keys():
+    print(f" {key}:  {config[key]} ")
+
+print("\n")
 
 #-------------------------------------------------------------------------------
 # gather up the input standard deviations

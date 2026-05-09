@@ -133,7 +133,34 @@ run_update_member() {
 
     if [[ RUNADDNOISE == true ]]; then
         echo "python ROOTDIR/wofs_addnoise/add_pert_where_high_refl.py INVFILE INITFILENAME 9000.0 3000.0 0.50 0.50 0.0 0.50 0.50 0.0 EVENTDATETIME ${mem} mpas WRKDIR"
-        python ROOTDIR/wofs_addnoise/add_pert_where_high_refl.py INVFILE INITFILENAME 9000.0 3000.0 0.50 0.50 0.0 0.50 0.50 0.0 EVENTDATETIME ${mem} mpas WRKDIR
+        cat > "config.add_pert_where_high_refl_${memstr}.yaml" << EOF
+# Configuration for add_pert_where_high_refl.py
+
+# Model and file paths
+modelGrid: INVFILE
+modelFile: INITFILENAME
+pkl_path:  WRKDIR
+
+# Model type: 'mpas' or other valid model type
+modelType: mpas
+
+# Length scales for smoothing (meters)
+h_length: 9000.0      # horizontal length scale
+v_length: 3000.0      # vertical length scale
+
+# Standard deviations for perturbations (for each field)
+u_sd:  0.5             # u wind standard deviation
+v_sd:  0.5             # v wind standard deviation
+w_sd:  0.0             # w wind standard deviation
+t_sd:  0.5             # temperature standard deviation
+td_sd: 0.5             # dew point standard deviation
+qv_sd: 1.0e-5          # specific humidity standard deviation
+
+# Date and ensemble information
+gdatetime: EVENTDATETIME        # Grid date/time (YYYYMMDDHHmm format)
+ensNum: ${mem}                  # Ensemble member number
+EOF
+        python ROOTDIR/wofs_addnoise/add_pert_where_high_refl.py "config.add_pert_where_high_refl_${memstr}.yaml"
         echo "Tasks of add_pert_where_high_refl.py return status = $?"
         ((istatus+=$?))
     fi

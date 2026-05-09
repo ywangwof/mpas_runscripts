@@ -659,26 +659,39 @@ nccompress )
     if [[ -v args["tasks"] ]]; then
         tasklist=("${tasks[@]}")
     else
-        tasklist=(dacycles fcst mpassit post)
+        tasklist=(fcst mpassit post)
     fi
 
     if [[ ${support_interactive_job} == false ]]; then
-        jobscript="run_ncdfcompress_${eventdate}${affix}.slurm"
+        if [[ "${tasklist[*]}" == "dacycles" ]]; then
+            jobtemplate="run_compress_da.slurm"
+            jobscript="run_compress_da_${eventdate}${affix}.slurm"
+            ens_size=36
+            cpuspec=36
+            ntasks=8; taskspec=2    # nnodes = ntasks / taskspec
+        else
+            jobtemplate="run_compress_post.slurm"
+            jobscript="run_compress_post_${eventdate}${affix}.slurm"
+            ens_size=18
+            cpuspec=73
+            ntasks=4; taskspec=1    # nnodes = ntasks / taskspec
+        fi
 
         declare -A jobParms=(
             [PARTION]="${config_partition_post}"
-            [NOPART]="1"
+            [NOPART]="${ntasks}"
             [JOBNAME]="${task}_${eventdate}${affix}"
-            [CPUSPEC]="${config_claim_cpu_python}"
+            [CPUSPEC]="${cpuspec}"
+            [TASKSPEC]="${taskspec}"
             [MACHINE]="${machine}"
             [TASKLIST]="(${tasklist[*]})"
             [EVENTDATE]="${eventdate}"
             [AFFIX]="${affix}"
-            [MEMBERS]="${config_ENS_SIZE}"
+            [MEMBERS]="${ens_size}"
             [BEGINS]="${fbeg_s}"
             [ENDS]="${fend_s}"
         )
-        cmds=(submit_a_job "${run_dir}" "${task}_${eventdate}${affix}" "jobParms" "${rootdir}/templates/run_ncdfcompress.slurm" "$jobscript" "")
+        cmds=(submit_a_job "${run_dir}" "${task}_${eventdate}${affix}" "jobParms" "${rootdir}/templates/${jobtemplate}" "$jobscript" "")
     fi
     ;;
 * )
