@@ -670,14 +670,12 @@ nccompress )
             ens_size="${config_ens_size_da}"
             cpuspec="${config_ncpus_da}"
             ntasks="${config_ntasks_da}"
-            taskspec="${config_nstasks_per_node_da}"    # nnodes = ntasks / taskspec
         else
             jobtemplate="run_compress_post.slurm"
             jobscript="run_compress_post_${eventdate}${affix}.slurm"
             ens_size="${config_ens_size_post}"
             cpuspec="${config_ncpus_post}"
             ntasks="${config_ntasks_post}"
-            taskspec="${config_nstasks_per_node_post}"    # nnodes = ntasks / taskspec
         fi
 
         declare -A jobParms=(
@@ -685,7 +683,6 @@ nccompress )
             [NOPART]="${ntasks}"
             [JOBNAME]="${task}_${eventdate}${affix}"
             [CPUSPEC]="${cpuspec}"
-            [TASKSPEC]="${taskspec}"
             [MACHINE]="${machine}"
             [TASKLIST]="(${tasklist[*]})"
             [EVENTDATE]="${eventdate}"

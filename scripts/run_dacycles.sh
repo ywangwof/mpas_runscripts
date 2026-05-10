@@ -2164,12 +2164,12 @@ function run_update_mpas {
     nnodes=$(( (${#jobarrays[@]}+ntasks_per_node-1)/ntasks_per_node ))
     [[ ${nnodes} -lt 1 ]] && nnodes=1
 
-    claim_cpu_update="--ntasks-per-node=${ntasks_per_node} --nodes=${nnodes}"
+    claim_cpu_update="--ntasks-per-node=${ntasks_per_node}"
     runexe_str="srun --ntasks=1 --nodes=1 --exclusive --relative=0 bash -c"
 
     declare -A jobParms=(
         [PARTION]="${config_partition_filter}"
-        [NOPART]="${nopart}"
+        [NOPART]="1"
         [JOBNAME]="update_mpas_${eventtime}"
         [CPUSPEC]="${claim_cpu_update}"
         [CPCMD]="${cpcmd}"
@@ -2187,7 +2187,7 @@ function run_update_mpas {
         [INVFILE]="${invfile}"
         [EVENTDATETIME]="${timestr_cur}"
         [SEQFILE]="${jdiagfile}"
-        [RUNCMD]="${runexe_str}"
+        [RUNCMD]=""
     )
 
     if [[ "${mach}" == "pbs" ]]; then

@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
-#SBATCH --ntasks=NOPART --ntasks-per-node=TASKSPEC
+#SBATCH --ntasks=NOPART --ntasks-per-node=NOPART
 #SBATCH --cpus-per-task=CPUSPEC
 #SBATCH -t 04:30:00
 #SBATCH --output=WRKDIR/JOBNAME_%j.log
@@ -10,6 +10,10 @@ ACCTSTR
 
 # ============================================================================
 # Parallelism Configuration:
+# subshells ( ) & only run on the single head node.
+# The script is designed to run on a single node, utilizing multiple CPU cores for parallel processing.
+# The parallelism is achieved through background subshells (using &) that allow multiple member directories to be processed simultaneously.
+# The script does not use MPI or distributed computing; all parallelism is confined to the single node.
 #
 # This script uses a two-level parallelism strategy:
 #

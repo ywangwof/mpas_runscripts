@@ -1479,8 +1479,8 @@ function write_config {
 [compression]
     ens_size_da=36
     ens_size_post=18
-    ntasks_da=4;    nstasks_per_node_da=2;      ncpus_da=36
-    ntasks_post=4;  nstasks_per_node_post=1;    ncpus_post=73
+    ntasks_da=2;     ncpus_da=36
+    ntasks_post=1;   ncpus_post=73
 EOF
 
 }

@@ -2,10 +2,11 @@
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
+#SBATCH --mem=96G
 #SBATCH -t 00:30:00
 #SBATCH --output=WRKDIR/fcst_all_update_mpas_%j.log
+#SBATCH --exclusive
 ACCTSTR
-EXCLSTR
 
 
 time1=$(date '+%s')
@@ -29,8 +30,8 @@ if [[ RUNADDNOISE == true ]]; then
 
     # Retrieve command line parameters
     echo "Starting \"grid_refl_obs.py\" for add_noise step ..."
-    echo   "python ROOTDIR/wofs_addnoise/grid_refl_obs.py SEQFILE 35.0 10.0 INVFILE EVENTDATETIME mpas"
-    RUNCMD "python ROOTDIR/wofs_addnoise/grid_refl_obs.py SEQFILE 35.0 10.0 INVFILE EVENTDATETIME mpas"
+    echo "python ROOTDIR/wofs_addnoise/grid_refl_obs.py SEQFILE 35.0 10.0 INVFILE EVENTDATETIME mpas"
+    python ROOTDIR/wofs_addnoise/grid_refl_obs.py SEQFILE 35.0 10.0 INVFILE EVENTDATETIME mpas
     estatus="$?"
     echo "Task \"grid_refl_obs.py\" return status = $estatus ..."
 
@@ -38,6 +39,40 @@ if [[ RUNADDNOISE == true ]]; then
         touch error.update_mpas
         rm -rf running.update_mpas
         exit $estatus
+    fi
+
+    # ===================================================================
+    # Copy pickle files to ramdisk cache for faster parallel I/O
+    # ===================================================================
+    ramdisk_cache="/dev/shm/mpas_cache_$$"
+    mkdir -p "$ramdisk_cache" 2>/dev/null
+
+    # Copy large pickle files to ramdisk if space available
+    pkl_files_to_cache=(
+        "wofs_mpas_grid_kdtree.pkl"
+        "wofs_mpas_XYZ.pkl"
+    )
+
+    cache_success=0
+    for pkl_file in "${pkl_files_to_cache[@]}"; do
+        src_file="WRKDIR/$pkl_file"
+        if [[ -f "$src_file" ]]; then
+            cp -f "$src_file" "$ramdisk_cache/" 2>/dev/null && ((cache_success++))
+        fi
+    done
+
+    # Also copy refl observation pickle files (using wildcard pattern)
+    for refl_file in WRKDIR/refl_valid_obs_*.pkl; do
+        if [[ -f "$refl_file" ]]; then
+            cp -f "$refl_file" "$ramdisk_cache/" 2>/dev/null && ((cache_success++))
+        fi
+    done
+
+    if [[ $cache_success -gt 0 ]]; then
+        echo "Cached $cache_success pickle files in ramdisk: $ramdisk_cache"
+    else
+        echo "Warning: Could not cache pickle files in ramdisk. Using disk cache."
+        rm -rf "$ramdisk_cache"
     fi
 else
     echo "Skipping \"grid_refl_obs.py\" step as per configuration."
@@ -49,8 +84,38 @@ fi
 # Arrays derived from the driver script
 
 MEMMAP
+# ----------------------------------------------------------------------
+# Pre-copy all 36 init files in parallel background jobs (2.9GB each).
+# This separates the heavy I/O from SLURM task scheduling overhead.
+# ----------------------------------------------------------------------
+echo "Pre-copying all init files in parallel ..."
+declare -a copy_pids=()
+for mem in NENS_MEMBERS; do
+    memstr=$(printf "%02d" $mem)
 
+    pushd fcst_${memstr} > /dev/null || return 1
+
+    echo "MEM ${memstr}: Using init file: INITORIGFILE => INITFILENAME"
+    if [[ RUNADDNOISE == true ]]; then
+        cp -f "INITORIGFILE" "INITFILENAME" &
+        copy_pids+=($!)
+    else
+        ln -sf "INITORIGFILE" "INITFILENAME"
+    fi
+    popd > /dev/null || exit 1
+done
+
+echo "Waiting for all ${#copy_pids[@]} init file copies to complete ..."
+for cpid in "${copy_pids[@]}"; do
+    wait "$cpid"
+done
+echo "All init file copies completed."
+
+########################################################################
+#
 # --- Function to process a single member ---
+#
+########################################################################
 run_update_member() {
     local mem=$1
     local memstr=$(printf "%02d" $mem)
@@ -67,16 +132,6 @@ run_update_member() {
     touch running.update_mpas_${memstr}
     rm -rf error.update_mpas_${memstr}
 
-    #
-    # init files
-    #
-    echo "MEM ${memstr}: Using init file: INITORIGFILE => INITFILENAME"
-    if [[ RUNADDNOISE == true ]]; then
-        cp -f "INITORIGFILE" "INITFILENAME"       # Copy the original init file to the new location for add_noise processing
-    else
-        ln -sf "INITORIGFILE" "INITFILENAME"
-    fi
-    istatus=$?
 
     #
     # lbc files
@@ -132,7 +187,6 @@ run_update_member() {
     # This is done after the LBC files are prepared since the script may need to read the LBC files to determine where to add noise
 
     if [[ RUNADDNOISE == true ]]; then
-        echo "python ROOTDIR/wofs_addnoise/add_pert_where_high_refl.py INVFILE INITFILENAME 9000.0 3000.0 0.50 0.50 0.0 0.50 0.50 0.0 EVENTDATETIME ${mem} mpas WRKDIR"
         cat > "config.add_pert_where_high_refl_${memstr}.yaml" << EOF
 # Configuration for add_pert_where_high_refl.py
 
@@ -160,6 +214,8 @@ qv_sd: 1.0e-5          # specific humidity standard deviation
 gdatetime: EVENTDATETIME        # Grid date/time (YYYYMMDDHHmm format)
 ensNum: ${mem}                  # Ensemble member number
 EOF
+        #echo "python ROOTDIR/wofs_addnoise/add_pert_where_high_refl.py INVFILE INITFILENAME 9000.0 3000.0 0.50 0.50 0.0 0.50 0.50 0.0 EVENTDATETIME ${mem} mpas WRKDIR"
+        echo "python ROOTDIR/wofs_addnoise/add_pert_where_high_refl.py config.add_pert_where_high_refl_${memstr}.yaml"
         python ROOTDIR/wofs_addnoise/add_pert_where_high_refl.py "config.add_pert_where_high_refl_${memstr}.yaml"
         echo "Tasks of add_pert_where_high_refl.py return status = $?"
         ((istatus+=$?))
@@ -180,32 +236,20 @@ EOF
 # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
 # Main Execution Logic
+# Run all NENS members in background simultaneously
 #
 # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-# Run all NENS members in background simultaneously
-# Ensure NENS is replaced by your actual ensemble count
-# Use srun to give each member its own dedicated CPUs/Resource step
 
 # Capture definitions for subprocesses
 
 array_defs=$(declare -p mem_map)
 func_def=$(declare -f run_update_member)
 
-# --ntasks=1 ensures this specific member gets 1 task's worth of resources
-# --exclusive: Ensures no two srun steps share the same CPU core
-# --relative=0: Starts looking for free slots from the first node in the allocation
-# --nodes=1, you are telling SLURM: "Execute this member's logic on exactly one node;
-#            do not attempt to split its resources across the network fabric
-# Since srun starts a new shell context, bash -c "$(declare -f run_member); ..."
-# exports the function logic into that new sub-process so it can be executed.
-# srun to execute a command, it launches that task in a separate sub-process
-#         each member is running in its own isolated environment
-
 declare -A pids  # Associative array to store PID -> Member mapping
 declare -a fail_jobs=()
 
 for mem in NENS_MEMBERS; do
-    RUNCMD "$array_defs; $func_def; run_update_member $mem" &
+    ( eval "$array_defs"; eval "$func_def"; run_update_member $mem ) &
     pids[$!]=$mem
 done
 
@@ -236,6 +280,13 @@ fi
 echo "Check log file \"log.update_mpas_??\" in the member directory for details."
 
 rm -rf running.update_mpas
+
+# Cleanup ramdisk cache
+ramdisk_cache="/dev/shm/mpas_cache_$$"
+if [[ -d "$ramdisk_cache" ]]; then
+    rm -rf "$ramdisk_cache"
+    echo "Cleaned up ramdisk cache: $ramdisk_cache"
+fi
 
 time2=$(date '+%s')
 diff=$((time2-time1))

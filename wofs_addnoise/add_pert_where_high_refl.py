@@ -16,6 +16,8 @@ import time as timeit
 #from scipy.spatial import KDTree
 #from numpy.random import randn
 import yaml
+import psutil
+import gc
 
 try:
     import cPickle as pickle
@@ -108,6 +110,20 @@ kdtree_file   = os.path.join(input.pkl_path, 'wofs_%s_grid_kdtree.pkl' % input.m
 reflobs_file  = os.path.join(input.pkl_path, 'refl_valid_obs_%12.12i.pkl' % (input.gdatetime))
 modelXYZ_file = os.path.join(input.pkl_path, 'wofs_%s_XYZ.pkl' % input.modelType)
 
+# Try to use ramdisk cache if available (for faster I/O in parallel runs)
+ramdisk_cache = f"/dev/shm/mpas_cache_{os.getppid()}"
+if os.path.isdir(ramdisk_cache):
+    # Check if all pickle files exist in ramdisk cache
+    kdtree_cache = os.path.join(ramdisk_cache,   'wofs_%s_grid_kdtree.pkl' % input.modelType)
+    reflobs_cache = os.path.join(ramdisk_cache,  'refl_valid_obs_%12.12i.pkl' % (input.gdatetime))
+    modelXYZ_cache = os.path.join(ramdisk_cache, 'wofs_%s_XYZ.pkl' % input.modelType)
+
+    if os.path.exists(kdtree_cache) and os.path.exists(reflobs_cache) and os.path.exists(modelXYZ_cache):
+        kdtree_file = kdtree_cache
+        reflobs_file = reflobs_cache
+        modelXYZ_file = modelXYZ_cache
+        print(f"\n Using cached pickle files from ramdisk: {ramdisk_cache}\n")
+
 # Check if all required pickle files exist
 for file_path in [kdtree_file, reflobs_file, modelXYZ_file]:
     if not os.path.exists(file_path):
@@ -135,15 +151,31 @@ with open(reflobs_file, 'rb') as handle:
 with open(modelXYZ_file, 'rb') as handle:
     hgt3D, yCell3D, xCell3D = pickle.load(handle)
 
+# Convert to float32 to save ~50% memory
+hgt3D = hgt3D.astype('float32')
+yCell3D = yCell3D.astype('float32')
+xCell3D = xCell3D.astype('float32')
+
 print(" Elapsed time to read in obs locations and model grid:  %f seconds" % (timeit.time() - time0))
+
+# Log memory usage
+process = psutil.Process(os.getpid())
+mem_info = process.memory_info()
+print(f"\n Memory usage after loading pickle files:")
+print(f"  RSS (Resident Set Size): {mem_info.rss / 1e9:.2f} GB")
+print(f"  VMS (Virtual Memory Size): {mem_info.vms / 1e9:.2f} GB")
+print(f"  Available system memory: {psutil.virtual_memory().available / 1e9:.2f} GB\n")
 
 #-------------------------------------------------------------------------------
 # Create noise array which will then be added into the model state.
+# Use float32 to reduce memory footprint by 50% compared to float64
 
-noise = np.zeros((*hgt3D.shape,nflds))
+noise = np.zeros((*hgt3D.shape, nflds), dtype='float32')
 
 if debug:
    print(' NOISE array shape:  ',noise.shape, '\n')
+   import sys
+   print(f' NOISE array memory size:  {noise.nbytes / 1e6:.1f} MB\n')
 
 #-------------------------------------------------------------------------------
 # Loop through noise list and use model_kdtree3D to find locations.
@@ -160,11 +192,11 @@ for item in refl_noise_loc:
 
     ijk_ind = model_kdtree3D.query_ball_point(item[4:7], input.h_length)
 
-    rand_num = np.random.normal(0.0, nflds_sd)
+    rand_num = np.random.normal(0.0, nflds_sd).astype('float32')
 
     dis_xyz = np.exp( - ( np.abs(item[6] - xCell3D[ijk_ind]) / input.h_length
                         + np.abs(item[5] - yCell3D[ijk_ind]) / input.h_length
-                        + np.abs(item[4] -   hgt3D[ijk_ind]) / input.v_length ) )
+                        + np.abs(item[4] -   hgt3D[ijk_ind]) / input.v_length ) ).astype('float32')
 
     # for a reason I dont understand, using the SQRT creates much bigger perts.
 
@@ -173,7 +205,19 @@ for item in refl_noise_loc:
     # dis_z = ( (item[4] - hgt3D[ijk_ind])   / v_length )**2
     # dis_xyz = np.exp( - np.sqrt(dis_x*dis_y*dis_z) )
 
-    noise[ijk_ind,:] +=  np.where(dis_xyz <= 1.0, dis_xyz, 0.0)[:,np.newaxis] * rand_num[np.newaxis,:]
+    noise[ijk_ind,:] +=  np.where(dis_xyz <= 1.0, dis_xyz, 0.0)[:,np.newaxis].astype('float32') * rand_num[np.newaxis,:]
+
+    # Clean up temporary arrays to help garbage collection
+    del ijk_ind, dis_xyz
+
+# Clean up large temporary objects and force garbage collection
+del model_kdtree3D, yCell3D, xCell3D
+gc.collect()
+
+mem_info = process.memory_info()
+print(f"\n Memory usage after processing loop and cleanup:")
+print(f"  RSS (Resident Set Size): {mem_info.rss / 1e9:.2f} GB")
+print(f"  VMS (Virtual Memory Size): {mem_info.vms / 1e9:.2f} GB\n")
 
 # this code should go back out into the "writer for the model"
 
