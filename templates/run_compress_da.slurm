@@ -86,7 +86,7 @@ compress_mem() {
 
     cd "${memdir}" || exit 1
 
-    echo -n "Compressing .nc files in ${timedir}/${memdir} ..."
+    echo "Compressing .nc files in ${timedir}/${memdir} ..."
 
     local status=0
     while IFS= read -r -d '' ncfile; do
@@ -94,10 +94,10 @@ compress_mem() {
     done < <(find . -type f -name "*.nc" -print0)
 
     if [[ ${status} -ne 0 ]]; then
-        echo " Failed."
+        echo "      Failed ${timedir}/${memdir} compression."
         return 1
     else
-        echo " Done."
+        echo "      Done ${timedir}/${memdir} compression."
         return 0
     fi
 }

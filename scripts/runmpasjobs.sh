@@ -667,12 +667,14 @@ nccompress )
         if [[ "${tasklist[*]}" == "dacycles" ]]; then
             jobtemplate="run_compress_da.slurm"
             jobscript="run_compress_da_${eventdate}${affix}.slurm"
+            jobname="${task}_da_${eventdate}${affix}"
             ens_size="${config_ens_size_da}"
             cpuspec="${config_ncpus_da}"
             ntasks="${config_ntasks_da}"
         else
             jobtemplate="run_compress_post.slurm"
             jobscript="run_compress_post_${eventdate}${affix}.slurm"
+            jobname="${task}_post_${eventdate}${affix}"
             ens_size="${config_ens_size_post}"
             cpuspec="${config_ncpus_post}"
             ntasks="${config_ntasks_post}"
@@ -681,7 +683,7 @@ nccompress )
         declare -A jobParms=(
             [PARTION]="${config_partition_post}"
             [NOPART]="${ntasks}"
-            [JOBNAME]="${task}_${eventdate}${affix}"
+            [JOBNAME]="${jobname}"
             [CPUSPEC]="${cpuspec}"
             [MACHINE]="${machine}"
             [TASKLIST]="(${tasklist[*]})"
@@ -691,7 +693,7 @@ nccompress )
             [BEGINS]="${fbeg_s}"
             [ENDS]="${fend_s}"
         )
-        cmds=(submit_a_job "${run_dir}" "${task}_${eventdate}${affix}" "jobParms" "${rootdir}/templates/${jobtemplate}" "$jobscript" "")
+        cmds=(submit_a_job "${run_dir}" "${jobname}" "jobParms" "${rootdir}/templates/${jobtemplate}" "$jobscript" "")
     fi
     ;;
 * )

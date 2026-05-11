@@ -135,7 +135,7 @@ compress_task() {
         local timedir="${hhmm}"
         [[ -n "${timesubdir}" ]] && timedir="${hhmm}/${timesubdir}"
 
-        pushd "${timedir}" > /dev/null || { popd > /dev/null || exit; return 1; }
+        #pushd "${timedir}" > /dev/null || { popd > /dev/null || exit; return 1; }
 
         if [[ -n "${mem_prefix}" ]]; then
             # Parallel member loop, throttled by SLURM_NTASKS
@@ -150,18 +150,20 @@ compress_task() {
                 fi
             done
 
-            # Wait for remaining mem jobs
-            for pid in "${mem_pids[@]}"; do
-                wait "${pid}" || failed=1
-            done
-            mem_pids=()
         else
             # No member loop: use combined parallelism
             local combined_procs=$((cpus_per_task * max_mem_jobs))
-            compress_ncfiles "${timedir}" "${combined_procs}" || failed=1
+            ( compress_ncfiles "${timedir}" "${combined_procs}" || exit 1 ) &
+            mem_pids+=("$!")
         fi
 
-        popd > /dev/null || { popd > /dev/null || exit; return 1; }
+        # Wait for remaining mem jobs
+        for pid in "${mem_pids[@]}"; do
+            wait "${pid}" || failed=1
+        done
+        mem_pids=()
+
+        #popd > /dev/null || { popd > /dev/null || exit; return 1; }
     done
 
     echo "After compression ($(pwd)): $(du -sh .)"
