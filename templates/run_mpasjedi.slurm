@@ -39,8 +39,107 @@ cd WRKDIR || exit $?
 touch running.${task}
 rm -rf error.${task} queue.jedi_${task}
 
+# parallel_copy_verify DEST MAX_THREADS FILE1 FILE2 ...
+# Copies files to DEST in parallel, verifies via metadata, retries failures, then exits on mismatch.
+parallel_copy_verify() {
+    local DEST="$1"
+    local MAX_THREADS="$2"
+    shift 2
+    local FILES=("$@")
+    local FILE_COUNT=${#FILES[@]}
+    local VERBOSE=true
+
+    log_msg() { [[ "$VERBOSE" == true ]] && echo -e "$1"; }
+
+    # --- Pre-check: Detect Filename Collisions ---
+    local DUPLICATES
+    DUPLICATES=$(printf "%s\n" "${FILES[@]}" | xargs -n 1 basename | sort | uniq -d)
+    if [[ -n "$DUPLICATES" ]]; then
+        echo -e "❌ ERROR: Duplicate filenames detected! Flattening will cause overwrites:"
+        echo -e "$DUPLICATES"
+        exit 1
+    fi
+
+    # --- Phase 1: Parallel Copy (Bash Backgrounding) ---
+    log_msg "--- Phase 1: Parallel Copy (Backgrounding) ---"
+
+    local job_count=0
+    local FILE
+    for FILE in "${FILES[@]}"; do
+        cp -Lp "$FILE" "$DEST/" &
+        ((job_count++))
+        if (( job_count % MAX_THREADS == 0 )); then
+            wait
+        fi
+    done
+    wait # Ensure all remaining background copies finish before Phase 2
+
+    # --- Phase 2: Metadata Verification (Size + MTime) ---
+    log_msg "--- Phase 2: Metadata Verification (Size + MTime) ---"
+
+    local FAILED_FILES=()
+    local SUCCESS_COUNT=0
+    local FILENAME DST_PATH SRC_META DST_META
+
+    for FILE in "${FILES[@]}"; do
+        FILENAME=$(basename "$FILE")
+        DST_PATH="$DEST/$FILENAME"
+
+        if [[ ! -e "$DST_PATH" ]]; then
+            log_msg "❌ Missing File: $FILENAME"
+            FAILED_FILES+=("$FILE")
+            continue
+        fi
+
+        SRC_META=$(stat -L -c "%s %Y" "$FILE" 2>/dev/null)
+        DST_META=$(stat -c "%s %Y" "$DST_PATH" 2>/dev/null)
+
+        if [[ "$SRC_META" != "$DST_META" ]]; then
+            log_msg "❌ Mismatch: $FILENAME"
+            FAILED_FILES+=("$FILE")
+        else
+            ((SUCCESS_COUNT++))
+        fi
+    done
+
+    # --- Phase 3: Retry (Bash Backgrounding) ---
+    if [ ${#FAILED_FILES[@]} -gt 0 ]; then
+        log_msg "⚠️  ${#FAILED_FILES[@]} issues detected. Retrying..."
+
+        local retry_count=0
+        for FILE in "${FAILED_FILES[@]}"; do
+            cp -Lp "$FILE" "$DEST/" &
+            ((retry_count++))
+            if (( retry_count % MAX_THREADS == 0 )); then
+                wait
+            fi
+        done
+        wait
+
+        # Recalculate final success count
+        SUCCESS_COUNT=0
+        for FILE in "${FILES[@]}"; do
+            FILENAME=$(basename "$FILE")
+            [[ -e "$DEST/$FILENAME" ]] && ((SUCCESS_COUNT++))
+        done
+    fi
+
+    # --- Final Summary ---
+    log_msg "--- Final Summary ---"
+    log_msg "Expected Files: $FILE_COUNT"
+    log_msg "Verified Files: $SUCCESS_COUNT"
+
+    if [[ "$SUCCESS_COUNT" -eq "$FILE_COUNT" ]]; then
+        log_msg "✅ ALL MATCHED: Copying session successful."
+    else
+        echo "❌ ERROR: Count mismatch! Only $SUCCESS_COUNT of $FILE_COUNT files are present in $DEST."
+        exit 1
+    fi
+}
+
 case "${task}" in
 solver )
+    # For the first cycle, we need to copy the ensemble members from ens to ana before running ncks to combine increments to the original background file.
     if [[ CYCLENO -gt 0 ]]; then
         echo "Copying ensemble members from ens to ana for cycle = CYCLENO ..."
 
@@ -49,103 +148,53 @@ solver )
             mem_filelist+=("ens/mem${mem}.nc")
         done
 
-        DEST="ana"
-        FILES=("${mem_filelist[@]}")
-        VERBOSE=true
-        MAX_THREADS=ENS_SIZE
+        parallel_copy_verify "ana" ENS_SIZE "${mem_filelist[@]}"
+    else
+        echo "Should not run ncks for cycle = CYCLENO because we are using the mpasout files ..."
+    fi
+    ;;
 
-        FILE_COUNT=${#FILES[@]}
+post )
+    # Copy ensemble members from Solver to ana and replace "refl10cm" from the forward forecasts
+    # for the post-processing task.
+    echo "Copying ensemble members from Solver to ana for the post-processing task ..."
 
-        # Helper function for conditional output
-        log_msg() { [[ "$VERBOSE" == true ]] && echo -e "$1"; }
+    declare -a mem_filelist
+    for mem in $(seq -w 001 ENS_SIZE); do
+        mem_filelist+=("../jedi_solver/ana/mem${mem}.nc")
+    done
 
-        # --- Pre-check: Detect Filename Collisions ---
-        DUPLICATES=$(printf "%s\n" "${FILES[@]}" | xargs -n 1 basename | sort | uniq -d)
-        if [[ -n "$DUPLICATES" ]]; then
-            echo -e "❌ ERROR: Duplicate filenames detected! Flattening will cause overwrites:"
-            echo -e "$DUPLICATES"
-            exit 1
-        fi
-
-        # --- Phase 1: Parallel Copy (Bash Backgrounding) ---
-        log_msg "--- Phase 1: Parallel Copy (Backgrounding) ---"
-
-        job_count=0
-        for FILE in "${FILES[@]}"; do
-            # Run copy in background
-            cp -Lp "$FILE" "$DEST/" &
-            ((job_count++))
-
-            # Throttle: Wait for current batch to finish if we hit MAX_THREADS
-            if (( job_count % MAX_THREADS == 0 )); then
-                wait
-            fi
+    if parallel_copy_verify "ana" ENS_SIZE "${mem_filelist[@]}"; then
+        echo "Copying ensemble members from Solver to ana for the post-processing task is successful. Now replacing \"refl10cm\" from the forward forecasts ..."
+        declare -a pids=()
+        for mem in $(seq -w 01 ENS_SIZE); do
+            mem_file="ana/mem0${mem}.nc"
+            mpas_file="../fcst_${mem}/DOMNAME_${mem}.diag.CURRTIMEFIL.nc"  # wofs_mpas_01.diag.2026-04-23_18.00.00.nc
+            srun --ntasks=1 --exclusive --nodes=${SLURM_NNODES} ncks -A -C -v "refl10cm" "${mpas_file}" "${mem_file}" &
+            pids+=($!)
         done
-        wait # Ensure all remaining background copies finish before Phase 2
 
-        # --- Phase 2: Metadata Verification (Size + MTime) ---
-        log_msg "--- Phase 2: Metadata Verification (Size + MTime) ---"
-
-        FAILED_FILES=()
-        SUCCESS_COUNT=0
-
-        for FILE in "${FILES[@]}"; do
-            FILENAME=$(basename "$FILE")
-            DST_PATH="$DEST/$FILENAME"
-
-            if [[ ! -e "$DST_PATH" ]]; then
-                log_msg "❌ Missing File: $FILENAME"
-                FAILED_FILES+=("$FILE")
-                continue
-            fi
-
-            SRC_META=$(stat -L -c "%s %Y" "$FILE" 2>/dev/null)
-            DST_META=$(stat -c "%s %Y" "$DST_PATH" 2>/dev/null)
-
-            if [[ "$SRC_META" != "$DST_META" ]]; then
-                log_msg "❌ Mismatch: $FILENAME"
-                FAILED_FILES+=("$FILE")
+        # Wait for all parallel ncks commands to complete
+        icount=0
+        ierr=0
+        for pid in "${pids[@]}"; do
+            wait "${pid}"
+            if [ $? -eq 0 ]; then
+                ((icount+=1))
             else
-                ((SUCCESS_COUNT++))
+                ((ierr+=1))
             fi
         done
 
-        # --- Phase 3: Retry (Bash Backgrounding) ---
-        if [ ${#FAILED_FILES[@]} -gt 0 ]; then
-            log_msg "⚠️  ${#FAILED_FILES[@]} issues detected. Retrying..."
-
-            retry_count=0
-            for FILE in "${FAILED_FILES[@]}"; do
-                cp -Lp "$FILE" "$DEST/" &
-                ((retry_count++))
-
-                if (( retry_count % MAX_THREADS == 0 )); then
-                    wait
-                fi
-            done
-            wait
-
-            # Recalculate final success count
-            SUCCESS_COUNT=0
-            for FILE in "${FILES[@]}"; do
-                FILENAME=$(basename "$FILE")
-                [[ -e "$DEST/$FILENAME" ]] && ((SUCCESS_COUNT++))
-            done
-        fi
-
-        # --- Final Summary ---
-        log_msg "--- Final Summary ---"
-        log_msg "Expected Files: $FILE_COUNT"
-        log_msg "Verified Files: $SUCCESS_COUNT"
-
-        if [[ "$SUCCESS_COUNT" -eq "$FILE_COUNT" ]]; then
-            log_msg "✅ ALL MATCHED: Copying session successful."
+        if [ "${icount}" -eq ENS_SIZE ]; then
+            echo "✅ Successfully replaced refl10cm in all ensemble members."
         else
-            echo "❌ ERROR: Count mismatch! Only $SUCCESS_COUNT of $FILE_COUNT files are present in $DEST."
+            echo "❌ ERROR: refl10cm replacement failed for ${ierr} ensemble members."
             exit 1
         fi
     else
-        echo "Should run ncks for cycle = CYCLENO to use the mpasout files ..."
+        echo "Failed to copy ensemble members from Solver to ana for the post-processing task."
+        exit 1
     fi
     ;;
 * )
@@ -185,7 +234,7 @@ if [[ $istatus -eq 0 ]]; then
             var_list="VARLIST"
             declare -a pids=()
             for mem in $(seq -w 001 ENS_SIZE); do
-                srun --ntasks=1 --exclusive ncks -A -C -x -v ${var_list} "ens/mem${mem}.nc" "ana/mem${mem}.nc" &
+                srun --ntasks=1 --exclusive --nodes=${SLURM_NNODES} ncks -A -C -x -v ${var_list} "ens/mem${mem}.nc" "ana/mem${mem}.nc" &
                 pids+=($!)
             done
 

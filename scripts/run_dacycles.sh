@@ -415,6 +415,7 @@ function run_ioda_mrms_refl {
     if [[ -f $wrkdir/ioda_mrms_refl/running.ioda_mrms_refl   \
        || -f $wrkdir/ioda_mrms_refl/done.ioda_mrms_refl      \
        || -f $wrkdir/ioda_mrms_refl/queue.ioda_refl ]]; then
+        # shellcheck disable=SC2034
         local ids_refl10cm=("refl10cm")
         join_arrays obs_ids ids_refl10cm
         return
@@ -609,7 +610,7 @@ function run_ioda_cwp {
         #for l in -1 1; do
         l=-1            # looking back only
             curr_sec=$(( iseconds + l*j*60))
-            curr_year=$(date -u -d @$curr_sec +%Y)
+            #curr_year=$(date -u -d @$curr_sec +%Y)
             curr_date=$(date -u -d @$curr_sec +%Y%m%d)
             curr_datetime=$(date -u -d @$curr_sec +%Y%m%d%H%M)
 
@@ -1025,15 +1026,14 @@ function read_convinfo_initial {
     local -n cwp_list=$3           # for CWP observations
     local -n obs_category=$4       # for prepbufr observations
 
-    declare -a  cwp_local_initial=("cwp" "lwp" "iwp" "cwp_night" "lwp_night" "iwp_night")
-    declare -a  cwp_local_regex=$(IFS='|'; echo "${cwp_local_initial[*]}")
+    declare -a cwp_local_initial=("cwp" "lwp" "iwp" "cwp_night" "lwp_night" "iwp_night")
+    cwp_local_regex=$(IFS='|'; echo "${cwp_local_initial[*]}")
+    declare -r cwp_local_regex
 
     #file_content=$(< "${config_FIXDIR}/jedi/convinfo") # read in all content
     while read -r line; do
-        # remove leading whitespace from a string
-        aline=${line##+([[:space:]])}
-        # remove trailing whitespace from a string
-        aline=${aline%%+([[:space:]])}
+        # remove leading and trailing whitespace from a string
+        read -r aline <<< "${line}"
 
         found=false
         if [[ $aline == "!"* ]]; then
@@ -1055,20 +1055,22 @@ function read_convinfo_initial {
                 type=$(printf "%03d" ${fields[1]})
                 atype="${atype}${type}"
             fi
-            if [[ ${sub} -ne 0 ]]; then
+            if [[ ${isub} -ne 0 ]]; then
                 type=$(printf "%03d" ${fields[2]})
                 atype="${atype}_${type}"
             fi
 
-            if [[ $iuse -eq 1 ]]; then
-                if [[ " ${atype} " =~ [[:space:]](${cwp_local_regex})[[:space:]] ]]; then
+            if [[ ${iuse} -eq 1 ]]; then
+                local re_cwp="[[:space:]](${cwp_local_regex})[[:space:]]"
+                if [[ " ${atype} " =~ ${re_cwp} ]]; then
                     cwp_list+=("${atype}")
                 else
                     obs_list+=("$atype")
                     if [[ ${itype} -ne 0 ]]; then
                         icategory="${icat%%,*}"
-                        if [[ ! " ${obs_category[*]} " =~ " ${icategory,,} " ]]; then
-                            obs_category+=("${icategory,,}")
+                        local icategory_lc="${icategory,,}"
+                        if [[ ! " ${obs_category[*]} " == *" ${icategory_lc} "* ]]; then
+                            obs_category+=("${icategory_lc}")
                         fi
                     fi
                 fi
@@ -1088,6 +1090,7 @@ function get_convinfo {
     #
     local infile="$1"
     local outfile="$2"
+    # shellcheck disable=SC2178
     local -n obs_list="$3"
 
     #IFS=',' read -ra obs_list <<<"$3"
@@ -1098,10 +1101,8 @@ function get_convinfo {
 
     #file_content=$(< "${config_FIXDIR}/jedi/convinfo") # read in all content
     while read -r line; do
-        # remove leading whitespace from a string
-        aline=${line##+([[:space:]])}
-        # remove trailing whitespace from a string
-        aline=${aline%%+([[:space:]])}
+        # remove leading and trailing whitespace from a string
+        read -r aline <<< "${line}"
 
         found=false
         if [[ $aline == "!"* ]]; then
@@ -1267,7 +1268,8 @@ function jedi_preparation {
         physics_mp_thompson=( MP_THOMPSON_QIautQS_DATA.DBL   MP_THOMPSON_QRacrQG_DATA.DBL
                               MP_THOMPSON_QRacrQS_DATA.DBL   MP_THOMPSON_freezeH2O_DATA.DBL )
 
-        if [[ "${config_mpscheme}" =~ ^(mp_tempo|mp_thompson)$ ]]; then
+        local re_mp='^(mp_tempo|mp_thompson)$'
+        if [[ "${config_mpscheme}" =~ ${re_mp} ]]; then
             declare -n mp_target="physics_${config_mpscheme}"
             for fn in "${mp_target[@]}"; do
                 ln -sf "${config_FIXDIR}/${fn}" .
@@ -1297,8 +1299,8 @@ function jedi_preparation {
         mkdir -p ens jdiag ana
         ;;
     post )
-        mkdir -p jdiag
-        ln -snfr "${datetime_dir}"/jedi_solver/ana ana
+        mkdir -p jdiag ana
+        #ln -snfr "${datetime_dir}"/jedi_solver/ana ana
         ;;
     * )
         mecho1 "${RED}ERROR${NC}: Unsupported taskname = ${PURPLE}${taskname}${NC}."
@@ -1319,7 +1321,7 @@ function jedi_preparation {
     fi
 
     if [[ -d "jdiag" ]]; then        # Link observations for jdiag/ for task solver and post
-        currdir=$(realpath -m --relative-to ${WORKDIR} $(pwd))
+        currdir=$(realpath -m --relative-to ${WORKDIR} "$(pwd)")
         [[ ${#obs_files[@]} -gt 0 ]] && mecho0 "Linking observer output files to ${currdir}/jdiag for task = ${PURPLE}${taskname}${NC} ..."
         for file in "${obs_files[@]}"; do
             display_filename=$(realpath -m --relative-to ${WORKDIR} ${file})
@@ -1376,10 +1378,10 @@ function jedi_preparation {
             num_processors=${config_npefilter}
         fi
 
-        if [[ ! -f $casedir/$domname/$domname.graph.info.part.${num_processors} ]]; then
-            split_graph "${config_gpmetis}" "${domname}.graph.info" "${num_processors}" "$rundir/$domname" "$dorun" "$verb"
+        if [[ ! -f $casedir/${domname}/${domname}.graph.info.part.${num_processors} ]]; then
+            split_graph "${config_gpmetis}" "${domname}.graph.info" "${num_processors}" "${rundir}/${domname}" "$dorun" "$verb"
         fi
-        ${lncmd} $casedir/$domname/$domname.graph.info.part.${num_processors} .
+        ${lncmd} $casedir/${domname}/${domname}.graph.info.part.${num_processors} .
 
         ln -sf "${config_FIXDIR}"/jedi/stream_list/* .
 
@@ -1505,9 +1507,10 @@ function run_jedi_observer {
     # Waiting for job conditions
     #
     local -a conditions
+    local re_cwp="[[:space:]](${cwp_obs_regex})[[:space:]]"
     [[ " ${obs_ids[*]} " =~ " refl10cm " ]] && conditions=("${datimedir}/ioda_mrms_refl/done.ioda_mrms_refl")
     [[ "${#obs_categories[@]}" -gt 0     ]] && conditions+=("${datimedir}/ioda_bufr/done.ioda_bufr")
-    [[ " ${obs_ids[*]} " =~ [[:space:]](${cwp_obs_regex})[[:space:]] ]] && conditions+=("${datimedir}/ioda_cwp/done.ioda_cwp")
+    [[ " ${obs_ids[*]} " =~ $re_cwp ]] && conditions+=("${datimedir}/ioda_cwp/done.ioda_cwp")
 
     wait_for_conditions "${conditions[*]}"
 
@@ -1580,9 +1583,9 @@ function run_jedi_observer {
         obs_lists+=("ioda_rw_obs.nc")
     fi
 
-    if [[ " ${obs_ids[*]} " =~ [[:space:]](${cwp_obs_regex})[[:space:]] ]]; then
+    if [[ " ${obs_ids[*]} " =~ ${re_cwp} ]]; then
         for cwpobs in "${cwp_obs_initial[@]}"; do
-            if [[ " ${obs_ids[*]} " =~ " ${cwpobs} " ]]; then
+            if [[ " ${obs_ids[*]} " == *" ${cwpobs} "* ]]; then
                 mappings["ioda_${cwpobs}_obs.nc"]="${datimedir}/ioda_cwp/ioda_${cwpobs}_obs.nc"
                 obs_lists+=("ioda_${cwpobs}_obs.nc")
             fi
@@ -1764,7 +1767,7 @@ function run_jedi_post {
     # Waiting for job conditions
     #
     local -a conditions
-    conditions=("${datimedir}/jedi_solver/done.solver")
+    conditions=("${datimedir}/jedi_solver/done.solver" "${datimedir}/done.fcst")
 
     wait_for_conditions "${conditions[*]}"
 
@@ -1774,14 +1777,14 @@ function run_jedi_post {
     # DATA=wrkdir
     taskname="post"
 
-    jedi_preparation "${taskname}" "${wrkdir}" $2 $3
-
     #
     # Copy ioda observation files
     if [[ ${#obs_ids[@]} -le 0 ]]; then
         touch done.post
         return
     fi
+
+    jedi_preparation "${taskname}" "${wrkdir}" $2 $3
 
     #------------------------------------------------------
     # Run mpasjedi_enkf.x
@@ -1798,6 +1801,8 @@ function run_jedi_post {
         [EXEDIR]="${config_EXEDIR}/jedi"
         [WRKDIR]="${wrkdir}"
         [TASKNAME]="${taskname}"
+        [DOMNAME]="${domname}"
+        [CURRTIMEFIL]="${currtime_fil}"
         [JEDIDIR]="${JEDI_DIR}"
         [MODULE]="${jedi_modulename}"
     )
@@ -1904,7 +1909,11 @@ function run_add_noise {
 
 ########################################################################
 
+# shellcheck disable=SC2329
 function run_update_bc {
+    # Never used currently, but keep it here for future use if we want
+    # to run update_bc as a separate step in the DA cycling framework.
+    # For now, we run update_bc as part of the update_mpas step to save time and resources.
     # $1
     # wrkdir
     local wrkdir=$1
@@ -2005,7 +2014,8 @@ function run_update_bc {
     else
         nopart="${#jobarrays[@]}"
 
-        if [[ ${config_claim_cpu_update} =~ ntasks-per-node=([0-9]+) ]]; then
+        local re_ntasks='ntasks-per-node=([0-9]+)'
+        if [[ ${config_claim_cpu_update} =~ ${re_ntasks} ]]; then
             ntasks_per_node=${BASH_REMATCH[1]}
         else
             ntasks_per_node=12
@@ -2157,7 +2167,8 @@ function run_update_mpas {
     nopart="${#jobarrays[@]}"
     ntasks_per_node="${nopart}"
 
-    if [[ ${config_claim_cpu_update} =~ ntasks-per-node=([0-9]+) ]]; then
+    local re_ntasks='ntasks-per-node=([0-9]+)'
+    if [[ ${config_claim_cpu_update} =~ ${re_ntasks} ]]; then
         ntasks_per_node=${BASH_REMATCH[1]}
     fi
 
@@ -2326,7 +2337,7 @@ function run_mpas {
 
         if [[ "${config_mpscheme}" == "mp_tempo" ]]; then
             #tempo_tables=( MP_TEMPO_HAILAWARE_QRacrQG_DATA.DBL MP_TEMPO_QRacrQS_DATA.DBL   \
-            #                  MP_TEMPO_freezeH2O_DATA.DBL         MP_TEMPO_QIautQS_DATA.DBL   CCN_ACTIVATE_DATA )
+            #               MP_TEMPO_freezeH2O_DATA.DBL         MP_TEMPO_QIautQS_DATA.DBL   CCN_ACTIVATE_DATA )
             tempo_tables=( qr_acr_qs_data_tempo_v3 qr_acr_qg_data_tempo_v3 freeze_water_data_tempo_v3 ccn_activate.bin )
 
             for fn in "${tempo_tables[@]}"; do
@@ -2431,7 +2442,8 @@ function dacycle_driver() {
     #echo "obs_string=\"${obs_ids_initial[*]}\", obs_category=\"${obs_categories_initial[*]}\""
     #exit 0
 
-    declare -a -g cwp_obs_regex=$(IFS='|'; echo "${cwp_obs_initial[*]}")
+    cwp_obs_regex=$(IFS='|'; echo "${cwp_obs_initial[*]}")
+    declare -rg cwp_obs_regex
 
     DO_RADAR_REF="true"   # To prevent yaml_finalize from changing the increment variables
     export DO_RADAR_REF
@@ -2450,8 +2462,6 @@ function dacycle_driver() {
         echo ""
         echo -e "- Cycle $icyc at ${DARK}$(TZ="America/Chicago" date +'%m-%d %H:%M:%S')${NC} for ${WHITE}${timestr_curr}${NC}"
         time1=$(date +%s)
-
-        no_observation=false
 
         #------------------------------------------------------
         # Lateral boundary times for this cycle
@@ -3134,14 +3144,14 @@ source $scpdir/Common_Utilfuncs.sh || exit $?
 
 parse_args "$@"
 
-[[ -v args["verb"] ]]      && verb=${args["verb"]}           || verb=0
-[[ -v args["overwrite"] ]] && overwrite=${args["overwrite"]} || overwrite=0
+verb=${args["verb"]:-0}
+overwrite=${args["overwrite"]:-0}
+dorun=${args["dorun"]:-true}
+rt_run=${args["rt_run"]:-false}
+cleanoption=${args["cleanoption"]:-"clean"}
 
-[[ -v args["dorun"] ]]     && dorun=${args["dorun"]}   || dorun=true
-[[ -v args["rt_run"] ]]    && rt_run=${args["rt_run"]} || rt_run=false
-
-[[ -v args["cleanoption"] ]] && cleanoption=${args["cleanoption"]}              || cleanoption="clean"
-[[ -v args["cleanjobs"] ]]   && read -r -a cleanjobs <<< "${args['cleanjobs']}" || cleanjobs=()
+declare -a cleanjobs
+read -r -a cleanjobs <<< "${args['cleanjobs']:-}"
 
 #-----------------------------------------------------------------------
 #
@@ -3169,13 +3179,13 @@ setup_machine "${args['machine']}" "$rootdir" true false
 [[ $dorun == false ]] && runcmd="echo ${site_runcmd}" || runcmd="${site_runcmd}"
 export runcmd
 
-[[ -v args["WORKDIR"] ]] && WORKDIR=${args["WORKDIR"]} || WORKDIR="${site_workdir}"
+WORKDIR=${args["WORKDIR"]:-"${site_workdir}"}
 
 #-----------------------------------------------------------------------
 # Set Event Date
 #-----------------------------------------------------------------------
 
-[[ -v args["eventdate"] ]] && eventdate="${args['eventdate']}" || eventdate="$eventdateDF"
+eventdate="${args['eventdate']:-"$eventdateDF"}"
 
 #-----------------------------------------------------------------------
 # read configurations that is not set from command line
