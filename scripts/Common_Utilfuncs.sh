@@ -174,6 +174,16 @@ function submit_a_job {
     done
 
     sed -f ${sedfile} ${myjobtemp} > ${myjobscript}
+
+    # Remove task-specific sections that don't match the current task
+    local keepsections="${commparms[KEEPSECTIONS]:-}"
+    for section in solver_pre solver_after post jobcheck funcdef addnoise noaddnoise; do
+        if [[  " ${keepsections} " != *" ${section} "* ]]; then        # drop all sections that are not in the keepsections list
+            sed -i "/# __BEGIN_${section}/,/# __END_${section}/d" "${myjobscript}"
+        fi
+    done
+    sed -i "/# __BEGIN_\|# __END_/d" "${myjobscript}"
+
     # shellcheck disable=SC2154
     if [[ ${verb} -eq 1 ]]; then
         mecho1 "Generated job script: ${WHITE}${myjobscript}${NC}"

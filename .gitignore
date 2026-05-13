@@ -68,3 +68,12 @@ fix_files/jedi/solver
 .vscode/settings.json
 fix_files/jedi/new_*.yaml
 fix_files/jedi/getkf_rrfsv2.1.3-1.3.yaml
+.cursorignore
+.vscode/extensions.json
+*.log
+fix_files/ccn_activate.bin
+fix_files/freeze_water_data_tempo_v3
+fix_files/qr_acr_qg_data_tempo_v3
+fix_files/qr_acr_qs_data_tempo_v3
+fix_files/jedi/stream_list/**
+fix_files/jedi/streams.atmosphere.getkf

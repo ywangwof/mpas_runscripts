@@ -22,11 +22,11 @@ cd WRKDIR || exit $?
 rm -f queue.update_mpas
 touch running.update_mpas
 
+# __BEGIN_addnoise
+
 # ---------------------------------------------------------------------
 # Run the python programs for noise mask if requested
 # ---------------------------------------------------------------------
-
-if [[ RUNADDNOISE == true ]]; then
 
     # Retrieve command line parameters
     echo "Starting \"grid_refl_obs.py\" for add_noise step ..."
@@ -74,9 +74,7 @@ if [[ RUNADDNOISE == true ]]; then
         echo "Warning: Could not cache pickle files in ramdisk. Using disk cache."
         rm -rf "$ramdisk_cache"
     fi
-else
-    echo "Skipping \"grid_refl_obs.py\" step as per configuration."
-fi
+# __END_addnoise
 
 # ----------------------------------------------------------------------
 # run update_member
@@ -88,20 +86,24 @@ MEMMAP
 # Pre-copy all 36 init files in parallel background jobs (2.9GB each).
 # This separates the heavy I/O from SLURM task scheduling overhead.
 # ----------------------------------------------------------------------
-echo "Pre-copying all init files in parallel ..."
+echo -e "\nPre-copying all init files in parallel ...\n"
 declare -a copy_pids=()
 for mem in NENS_MEMBERS; do
     memstr=$(printf "%02d" $mem)
 
     pushd fcst_${memstr} > /dev/null || return 1
 
-    echo "MEM ${memstr}: Using init file: INITORIGFILE => INITFILENAME"
-    if [[ RUNADDNOISE == true ]]; then
-        cp -f "INITORIGFILE" "INITFILENAME" &
-        copy_pids+=($!)
-    else
-        ln -sf "INITORIGFILE" "INITFILENAME"
-    fi
+    echo "MEM ${memstr}: Using init file: INITFILENAME"
+    echo "              <= INITORIGFILE"
+# __BEGIN_addnoise
+    cp -f "INITORIGFILE" "INITFILENAME" &
+    copy_pids+=($!)
+# __END_addnoise
+
+# __BEGIN_noaddnoise
+    ln -sf "INITORIGFILE" "INITFILENAME"
+# __END_noaddnoise
+
     popd > /dev/null || exit 1
 done
 
@@ -109,7 +111,7 @@ echo "Waiting for all ${#copy_pids[@]} init file copies to complete ..."
 for cpid in "${copy_pids[@]}"; do
     wait "$cpid"
 done
-echo "All init file copies completed."
+echo -e "All init file copies completed.\n"
 
 ########################################################################
 #
@@ -147,14 +149,14 @@ run_update_member() {
     # LBC 1 processing
     lbc_file1="LBCPATH/DOMNAME_${mlbcstr}.lbc.MPASTIME1.nc"
     if [[ -f "${lbc_file1}" ]]; then
-        echo "MEM ${memstr}: Using lbc file: ${lbc_file1} directly"
+        echo -e "\nMEM ${memstr}: Using lbc file: ${lbc_file1} directly"
         CPCMD "${lbc_file1}" "${lbc_filem}"
         ((istatus+=$?))
     else
         lbc_origs1="LBCPATH/DOMNAME_${mlbcstr}.lbc.LBCTIME1.nc"
         lbc_origs2="LBCPATH/DOMNAME_${mlbcstr}.lbc.LBCTIME2.nc"
         echo ""
-        echo "MEM ${memstr}: Interpolating lbc ${lbc_filem} file from"
+        echo -e "\nMEM ${memstr}: Interpolating lbc ${lbc_filem} file from"
         echo "                     ${lbc_origs1} and"
         echo "                     ${lbc_origs2}"
         #machine=MACHINE source ROOTDIR/modules/env.python
@@ -165,7 +167,7 @@ run_update_member() {
     # LBC 2 processing
     lbc_file2="LBCPATH/DOMNAME_${mlbcstr}.lbc.MPASTIME2.nc"
     if [[ -f "${lbc_file2}" ]]; then
-        echo "MEM ${memstr}: Using lbc file: ${lbc_file2} directly"
+        echo -e "\nMEM ${memstr}: Using lbc file: ${lbc_file2} directly"
         ln -sf "${lbc_file2}" "${lbc_filen}"
         ((istatus+=$?))
     else
@@ -173,7 +175,7 @@ run_update_member() {
         lbc_origs2="LBCPATH/DOMNAME_${mlbcstr}.lbc.LBCTIME2.nc"
 
         echo ""
-        echo "MEM ${memstr}: Interpolating lbc ${lbc_filen} file from"
+        echo -e "\nMEM ${memstr}: Interpolating lbc ${lbc_filen} file from"
         echo "                     ${lbc_origs1} and"
         echo "                     ${lbc_origs2}"
         echo ""
@@ -182,12 +184,12 @@ run_update_member() {
         ((istatus+=$?))
     fi
 
+# __BEGIN_addnoise
     #
     # run add_pert_where_high_refl.py if requested
     # This is done after the LBC files are prepared since the script may need to read the LBC files to determine where to add noise
 
-    if [[ RUNADDNOISE == true ]]; then
-        cat > "config.add_pert_where_high_refl_${memstr}.yaml" << EOF
+    cat > "config.add_pert_where_high_refl_${memstr}.yaml" << EOF
 # Configuration for add_pert_where_high_refl.py
 
 # Model and file paths
@@ -214,12 +216,12 @@ qv_sd: 1.0e-5          # specific humidity standard deviation
 gdatetime: EVENTDATETIME        # Grid date/time (YYYYMMDDHHmm format)
 ensNum: ${mem}                  # Ensemble member number
 EOF
-        #echo "python ROOTDIR/wofs_addnoise/add_pert_where_high_refl.py INVFILE INITFILENAME 9000.0 3000.0 0.50 0.50 0.0 0.50 0.50 0.0 EVENTDATETIME ${mem} mpas WRKDIR"
-        echo "python ROOTDIR/wofs_addnoise/add_pert_where_high_refl.py config.add_pert_where_high_refl_${memstr}.yaml"
-        python ROOTDIR/wofs_addnoise/add_pert_where_high_refl.py "config.add_pert_where_high_refl_${memstr}.yaml"
-        echo "Tasks of add_pert_where_high_refl.py return status = $?"
-        ((istatus+=$?))
-    fi
+    #echo "python ROOTDIR/wofs_addnoise/add_pert_where_high_refl.py INVFILE INITFILENAME 9000.0 3000.0 0.50 0.50 0.0 0.50 0.50 0.0 EVENTDATETIME ${mem} mpas WRKDIR"
+    echo -e "\npython ROOTDIR/wofs_addnoise/add_pert_where_high_refl.py config.add_pert_where_high_refl_${memstr}.yaml"
+    python ROOTDIR/wofs_addnoise/add_pert_where_high_refl.py "config.add_pert_where_high_refl_${memstr}.yaml"
+    echo "Tasks of add_pert_where_high_refl.py return status = $?"
+    ((istatus+=$?))
+# __END_addnoise
 
     rm -rf running.update_mpas_${memstr}
 
@@ -253,7 +255,7 @@ for mem in NENS_MEMBERS; do
     pids[$!]=$mem
 done
 
-echo "All tasks of run_update_member submitted. Waiting for completion ..."
+echo -e "All tasks of run_update_member submitted. Waiting for completion ...\n"
 
 overall_status=0
 for pid in "${!pids[@]}"; do
@@ -281,12 +283,14 @@ echo "Check log file \"log.update_mpas_??\" in the member directory for details.
 
 rm -rf running.update_mpas
 
+# __BEGIN_addnoise
 # Cleanup ramdisk cache
 ramdisk_cache="/dev/shm/mpas_cache_$$"
 if [[ -d "$ramdisk_cache" ]]; then
     rm -rf "$ramdisk_cache"
     echo "Cleaned up ramdisk cache: $ramdisk_cache"
 fi
+# __END_addnoise
 
 time2=$(date '+%s')
 diff=$((time2-time1))

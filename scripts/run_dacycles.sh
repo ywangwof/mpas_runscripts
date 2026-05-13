@@ -1027,8 +1027,7 @@ function read_convinfo_initial {
     local -n obs_category=$4       # for prepbufr observations
 
     declare -a cwp_local_initial=("cwp" "lwp" "iwp" "cwp_night" "lwp_night" "iwp_night")
-    cwp_local_regex=$(IFS='|'; echo "${cwp_local_initial[*]}")
-    declare -r cwp_local_regex
+    declare -r cwp_local_regex=$(IFS='|'; echo "${cwp_local_initial[*]}")
 
     #file_content=$(< "${config_FIXDIR}/jedi/convinfo") # read in all content
     while read -r line; do
@@ -1510,7 +1509,7 @@ function run_jedi_observer {
     local re_cwp="[[:space:]](${cwp_obs_regex})[[:space:]]"
     [[ " ${obs_ids[*]} " =~ " refl10cm " ]] && conditions=("${datimedir}/ioda_mrms_refl/done.ioda_mrms_refl")
     [[ "${#obs_categories[@]}" -gt 0     ]] && conditions+=("${datimedir}/ioda_bufr/done.ioda_bufr")
-    [[ " ${obs_ids[*]} " =~ $re_cwp ]] && conditions+=("${datimedir}/ioda_cwp/done.ioda_cwp")
+    [[ " ${obs_ids[*]} " =~ ${re_cwp} ]]    && conditions+=("${datimedir}/ioda_cwp/done.ioda_cwp")
 
     wait_for_conditions "${conditions[*]}"
 
@@ -1583,6 +1582,7 @@ function run_jedi_observer {
         obs_lists+=("ioda_rw_obs.nc")
     fi
 
+    #mecho0 "obs_ids = ${obs_ids[*]}, re_cwp = ${re_cwp}"
     if [[ " ${obs_ids[*]} " =~ ${re_cwp} ]]; then
         for cwpobs in "${cwp_obs_initial[@]}"; do
             if [[ " ${obs_ids[*]} " == *" ${cwpobs} "* ]]; then
@@ -1619,7 +1619,8 @@ function run_jedi_observer {
     declare -A jobParms=(
         [PARTION]="${config_partition_filter}"
         [NOPART]="${config_npefilter}"
-        [NNODES]="${config_nnodes_filter}"
+        [CONFIGNNODES]="${config_nnodes_filter}"
+        [WRKFLOWDEBUG]="${verb}"
         [JOBNAME]="${taskname}-${jobname}_${eventtime}"
         [CPUSPEC]="${config_claim_cpu_filter}"
         [EXEDIR]="${config_EXEDIR}/jedi"
@@ -1629,7 +1630,7 @@ function run_jedi_observer {
         [MODULE]="${jedi_modulename}"
     )
     if [[ "${mach}" == "pbs" ]]; then
-        jobParms[NNODES]="${config_nnodes_filter}"
+        jobParms[CONFIGNNODES]="${config_nnodes_filter}"
         jobParms[NCORES]="${config_ncores_filter}"
     fi
 
@@ -1696,6 +1697,12 @@ function run_jedi_solver {
         return
     fi
 
+    if [[ ${icycle} -eq 0 ]]; then
+        keep_sections="solver_after jobcheck"
+    else
+        keep_sections="solver_pre funcdef"
+    fi
+
     #------------------------------------------------------
     # Run mpasjedi_enkf.x
     #------------------------------------------------------
@@ -1705,12 +1712,14 @@ function run_jedi_solver {
     declare -A jobParms=(
         [PARTION]="${config_partition_filter}"
         [NOPART]="${config_npefilter}"
-        [NNODES]="${config_nnodes_filter}"
+        [CONFIGNNODES]="${config_nnodes_filter}"
+        [WRKFLOWDEBUG]="${verb}"
         [JOBNAME]="${taskname}-${jobname}_${eventtime}"
         [CPUSPEC]="${config_claim_cpu_filter}"
         [EXEDIR]="${config_EXEDIR}/jedi"
         [WRKDIR]="${wrkdir}"
         [TASKNAME]="${taskname}"
+        [KEEPSECTIONS]="${keep_sections}"
         [JEDIDIR]="${JEDI_DIR}"
         [VARLIST]="${anlys_varstr}"         #  Special for Solver
         [CYCLENO]="${icycle}"               #  Special for Solver
@@ -1719,7 +1728,7 @@ function run_jedi_solver {
     )
 
     if [[ "${mach}" == "pbs" ]]; then
-        jobParms[NNODES]="${config_nnodes_filter}"
+        jobParms[CONFIGNNODES]="${config_nnodes_filter}"
         jobParms[NCORES]="${config_ncores_filter}"
     fi
 
@@ -1795,12 +1804,16 @@ function run_jedi_post {
     declare -A jobParms=(
         [PARTION]="${config_partition_post}"
         [NOPART]="${config_npepost}"
-        [NNODES]="${config_nnodes_post}"
+        [CONFIGNNODES]="${config_nnodes_post}"
+        [WRKFLOWDEBUG]="${verb}"
         [JOBNAME]="${taskname}-${jobname}_${eventtime}"
         [CPUSPEC]="${config_claim_cpu_post}"
         [EXEDIR]="${config_EXEDIR}/jedi"
         [WRKDIR]="${wrkdir}"
         [TASKNAME]="${taskname}"
+        [KEEPSECTIONS]="post funcdef jobcheck"       #  Special for Post
+        [USE_REFL10CM_DIAG]=true                     #  Special for Post
+        [ENS_SIZE]="${config_ENS_SIZE}"
         [DOMNAME]="${domname}"
         [CURRTIMEFIL]="${currtime_fil}"
         [JEDIDIR]="${JEDI_DIR}"
@@ -1808,7 +1821,7 @@ function run_jedi_post {
     )
 
     if [[ "${mach}" == "pbs" ]]; then
-        jobParms[NNODES]="${config_nnodes_post}"
+        jobParms[CONFIGNNODES]="${config_nnodes_post}"
         jobParms[NCORES]="${config_ncores_post}"
     fi
 
@@ -2145,13 +2158,13 @@ function run_update_mpas {
         jobarrays+=("$iens")
     done
 
-    run_add_noise=false
+    run_add_noise="noaddnoise"
     if [[ ${config_run_addnoise} == true ]]; then
         if [[ ! " ${obs_ids[*]} " =~ " refl10cm " ]]; then
             mecho0 "${YELLOW}WARNING${NC}: No MRMS reflectivity observation, skipping run_add_noise ...."
-            run_add_noise=false
+            run_add_noise="noaddnoise"
         else
-            run_add_noise=true
+            run_add_noise="addnoise"
             wait_for_conditions "${jdiagfile}"
         fi
     fi
@@ -2194,7 +2207,7 @@ function run_update_mpas {
         [LBCTIME2]="${lbctime_str2}"
         [MEMMAP]="$(declare -p mem_map)"
         [NENS_MEMBERS]="${jobarrays[*]}"
-        [RUNADDNOISE]="${run_add_noise}"
+        [KEEPSECTIONS]="${run_add_noise}"
         [INVFILE]="${invfile}"
         [EVENTDATETIME]="${timestr_cur}"
         [SEQFILE]="${jdiagfile}"
@@ -2545,15 +2558,7 @@ function dacycle_driver() {
         fi
 
         #------------------------------------------------------
-        # 4. Run post (if requested)
-        #------------------------------------------------------
-        if [[ " ${jobs[*]} " =~ " jedi_post " ]]; then
-            if [[ $verb -eq 1 ]]; then echo "  Run jedi_post at $eventtime"; fi
-            run_jedi_post $dawrkdir $icyc $isec
-        fi
-
-        #------------------------------------------------------
-        # 5. Run update_bc and add_noise for all ensemble members
+        # 4. Run update_mpas (both update_bc and add_noise) for all ensemble members
         #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " update_mpas " ]]; then
             if [[ $verb -eq 1 ]]; then echo "  Run update_mpas (update_bc + add_noise) at $eventtime"; fi
@@ -2561,7 +2566,7 @@ function dacycle_driver() {
         fi
 
         #------------------------------------------------------
-        # 6. Advance model for each member
+        # 5. Advance model for each member
         #------------------------------------------------------
         # Run forecast for ensemble members until the next analysis time
         if [[ " ${jobs[*]} " =~ " mpas " ]]; then
@@ -2583,7 +2588,15 @@ function dacycle_driver() {
         fi
 
         #------------------------------------------------------
-        # 7.1 MPASSIT for prior and post mean, diagnostic purpose
+        # 6.1 Run post (if requested)
+        #------------------------------------------------------
+        if [[ " ${jobs[*]} " =~ " jedi_post " ]]; then
+            if [[ $verb -eq 1 ]]; then echo "  Run jedi_post at $eventtime"; fi
+            run_jedi_post $dawrkdir $icyc $isec
+        fi
+
+        #------------------------------------------------------
+        # 6.2 MPASSIT for prior and post mean, diagnostic purpose
         #------------------------------------------------------
         # Interpolate the forecast datasets to a virtual WRF grid
 
@@ -2593,7 +2606,7 @@ function dacycle_driver() {
         fi
 
         #------------------------------------------------------
-        # 7.2 MPASSIT for each member, diagnostic purpose
+        # 6.3 MPASSIT for each member, diagnostic purpose
         #------------------------------------------------------
         # Interpolate the forecast datasets to a virtual WRF grid
 
