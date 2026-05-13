@@ -12,6 +12,7 @@ ACCTSTR
 time1=$(date '+%s')
 printf "\nJob Started: %(%a %b %d %H:%M:%S %Z %Y)T. Job Id: %s\n\n" "${time1}" "${SLURM_JOBID}"
 
+# shellcheck disable=SC1091
 machine=MACHINE source ROOTDIR/modules/env.python
 
 ulimit -s unlimited
@@ -96,6 +97,7 @@ declare -A mem_map=MEMMAPSTR
 t0=$(date '+%s')
 echo -e "\nPre-copying all init files in parallel ...\n"
 declare -a copy_pids=()
+# shellcheck disable=SC2043
 for mem in NENS_MEMBERS; do
     memstr=$(printf "%02d" $mem)
 
@@ -130,20 +132,23 @@ t1=$(date '+%s');
 ########################################################################
 run_update_member() {
     local mem=$1
-    local t0=$(date '+%s')
-    local memstr=$(printf "%02d" "${mem}")
+
+    local t0 memstr
+
+    t0=$(date '+%s')
+    memstr=$(printf "%02d" "${mem}")
 
     local mlbcstr="${mem_map[$mem]}"
 
     cd "WRKDIR/fcst_${memstr}" || return 1
 
     # Redirect all subsequent commands in this subshell/function
-    exec > log.update_mpas_${memstr} 2>&1
+    exec > "log.update_mpas_${memstr}" 2>&1
 
     echo "Processing Member: ${memstr} use LBC member - ${mlbcstr}"
 
-    touch running.update_mpas_${memstr}
-    rm -rf error.update_mpas_${memstr}
+    touch "running.update_mpas_${memstr}"
+    rm -rf "error.update_mpas_${memstr}"
 
 
     #
@@ -230,17 +235,17 @@ EOF
     #echo "python ROOTDIR/wofs_addnoise/add_pert_where_high_refl.py INVFILE INITFILENAME 9000.0 3000.0 0.50 0.50 0.0 0.50 0.50 0.0 EVENTDATETIME ${mem} mpas WRKDIR"
     echo -e "\npython ROOTDIR/wofs_addnoise/add_pert_where_high_refl.py config.add_pert_where_high_refl_${memstr}.yaml"
     python ROOTDIR/wofs_addnoise/add_pert_where_high_refl.py "config.add_pert_where_high_refl_${memstr}.yaml"
-    echo "Tasks of add_pert_where_high_refl.py return status = $?"
     ((istatus+=$?))
+    echo "Tasks of add_pert_where_high_refl.py return status = ${istatus}."
 # __END_addnoise
 
-    rm -rf running.update_mpas_${memstr}
+    rm -rf "running.update_mpas_${memstr}"
 
     # Check exit status
     if [[ ${istatus} -eq 0 ]]; then
-        touch done.update_mpas_${memstr}
+        touch "done.update_mpas_${memstr}"
     else
-        touch error.update_mpas_${memstr}
+        touch "error.update_mpas_${memstr}"
     fi
 
     t1=$(date '+%s')
@@ -264,6 +269,7 @@ declare -A pids  # Associative array to store PID -> Member mapping
 declare -a fail_jobs=()
 
 t0=$(date '+%s')
+# shellcheck disable=SC2043
 for mem in NENS_MEMBERS; do
     ( eval "$array_defs"; eval "$func_def"; run_update_member $mem ) &
     pids[$!]=$mem

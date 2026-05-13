@@ -1624,7 +1624,7 @@ function check_obs_files {
 
         filename=$(basename ${bufrf})
         bftime="${filename:8:2}"
-        if [[ ${bftime} != ${basetime} ]]; then
+        if [[ ${bftime} != "${basetime}" ]]; then
             if [[ $i -ne 0 ]]; then echo  -e " (${GREEN}$i${NC})"; fi
             mecho0n "  ${UNDERLINE}${bftime}${NC}: ${filename}    "
             basetime="${bftime}"
@@ -1686,7 +1686,7 @@ function check_obs_files {
         filename=$(basename "${reff}")
         current_header="${filename:0:13}"
         bftime="${filename:9:2}"
-        if [[ ${bftime} != ${basetime} ]]; then
+        if [[ ${bftime} != "${basetime}" ]]; then
             if [[ $i -ne 0 ]]; then mecho0  ""; fi
             mecho0n "  ${UNDERLINE}${bftime}${NC}: "
             basetime="${bftime}"
@@ -1735,7 +1735,7 @@ function check_obs_files {
     for cwpf in "${cwp_files[@]}"; do
         filename="$(basename ${cwpf})"
         bftime="${filename:8:2}"
-        if [[ ${bftime} != ${basetime} ]]; then
+        if [[ ${bftime} != "${basetime}" ]]; then
             basetime="${bftime}"
             if [[ $i -ne 0 ]]; then echo -e " (${GREEN}$i${NC})"; fi
             mecho0n "  ${UNDERLINE}${bftime}${NC}: "

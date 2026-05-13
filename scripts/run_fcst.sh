@@ -929,7 +929,8 @@ function run_mpassit_onetime {
 
     cd $wrkdir || return
 
-    local fcst_lauch_time=$(date -u -d @${iseconds} +%H%M)
+    local fcst_lauch_time
+    fcst_lauch_time=$(date -u -d @${iseconds} +%H%M)
 
     # Loop over forecast minutes
     for minstr in "${fcsttimes[@]}"; do
@@ -991,7 +992,8 @@ function run_mpassit_alltimes {
     local minsec=${fcst_seconds}
     local maxsec=0
 
-    local fcst_lauch_time=$(date -u -d @${iseconds} +%H%M)
+    local fcst_lauch_time
+    fcst_lauch_time=$(date -u -d @${iseconds} +%H%M)
 
     mecho0 "Checking forecast files for all ${config_ENS_SIZE} memebers from fcst${daffix}/${fcst_lauch_time} ..."
 
