@@ -37,7 +37,8 @@ DEBUG=true
     python ROOTDIR/wofs_addnoise/grid_refl_obs.py SEQFILE 35.0 10.0 INVFILE EVENTDATETIME mpas
     estatus="$?"
     echo "Task \"grid_refl_obs.py\" return status = $estatus ..."
-    t1=$(date '+%s'); [[ ${DEBUG} == true ]] && printf "Wallclock %-44s %s\n" "grid_refl_obs.py:" "$(date -d@$((t1-t0)) -u +%H:%M:%S)"
+    t1=$(date '+%s');
+    [[ ${DEBUG} == true ]] && printf "\nWallclock %-44s %s\n" "grid_refl_obs.py:" "$(date -d@$((t1-t0)) -u +%H:%M:%S)"
 
     if [[ $estatus -ne 0 ]]; then
         touch error.update_mpas
@@ -119,7 +120,8 @@ for cpid in "${copy_pids[@]}"; do
     wait "$cpid"
 done
 echo -e "All init file copies completed.\n"
-t1=$(date '+%s'); [[ ${DEBUG} == true ]] && printf "Wallclock %-44s %s\n" "Pre-copying all init files:" "$(date -d@$((t1-t0)) -u +%H:%M:%S)"
+t1=$(date '+%s');
+[[ ${DEBUG} == true ]] && printf "\nWallclock %-44s %s\n" "Pre-copying all init files:" "$(date -d@$((t1-t0)) -u +%H:%M:%S)"
 
 ########################################################################
 #
@@ -242,7 +244,7 @@ EOF
     fi
 
     t1=$(date '+%s')
-    [[ ${DEBUG} == true ]] && printf "Wallclock %-44s %s\n" "run_update_member mem ${memstr}:" "$(date -d@$((t1-t0)) -u +%H:%M:%S)"
+    [[ ${DEBUG} == true ]] && printf "\nWallclock %-44s %s\n" "run_update_member mem ${memstr}:" "$(date -d@$((t1-t0)) -u +%H:%M:%S)"
     return ${istatus}
 }
 
@@ -286,7 +288,7 @@ for pid in "${!pids[@]}"; do
     fi
 done
 t1=$(date '+%s');
-[[ ${DEBUG} == true ]] && printf "Wallclock %-44s %s\n" "run_update_member tasks (all members):" "$(date -d@$((t1-t0)) -u +%H:%M:%S)"
+[[ ${DEBUG} == true ]] && printf "\nWallclock %-44s %s\n" "run_update_member tasks (all members):" "$(date -d@$((t1-t0)) -u +%H:%M:%S)"
 
 # Status Cleanup
 if [[ $overall_status -eq 0 ]]; then

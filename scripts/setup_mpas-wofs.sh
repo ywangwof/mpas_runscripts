@@ -1421,8 +1421,7 @@ function write_config {
     use_VR=true
     use_CWP=true
 
-    run_addnoise=false                  # run WoFS add_noise facility (Python)
-    WOFSAN_PATH="${default_mpas_wofs_python}"
+    run_addnoise=true                  # run WoFS add_noise facility (Python)
 
     OUTIOTYPE="pnetcdf,cdf5"
     outwrf=false                        # Run MPASSIT after each data assimilation
@@ -1621,7 +1620,7 @@ function check_obs_files {
 
     i=0; basetime=""
     for bufrf in "${bufr_files[@]}"; do
-        newline=false; newtime=false
+        #newline=false; newtime=false
 
         filename=$(basename ${bufrf})
         bftime="${filename:8:2}"
@@ -1711,7 +1710,7 @@ function check_obs_files {
     for velf in "${vel_files[@]}"; do
         filename="$(basename ${velf})"
         bftime="${filename:17:2}"
-        if [[ ${bftime} != ${basetime} ]]; then
+        if [[ ${bftime} != "${basetime}" ]]; then
             if [[ $i -ne 0 ]]; then echo -e " (${GREEN}$i${NC})"; fi
             mecho0n "  ${UNDERLINE}${bftime}${NC}: "
             basetime="${bftime}"
@@ -1781,7 +1780,7 @@ affix="${args['affix']:-}"
 cen_lat="${args["cen_lat"]:-}"
 cen_lon="${args["cen_lon"]:-}"
 
-hpcaccount="${args['hpcaccount']:-}"
+[[ -v args["hpcaccount"] ]] && hpcaccount="${args['hpcaccount']}"       # Leave it unset if not provided, and use default from site config
 
 #-----------------------------------------------------------------------
 #
@@ -1827,12 +1826,16 @@ export runcmd
 [[ -v args["caseconfig"] ]] && caseconfig="${args['caseconfig']}" || caseconfig="${WORKDIR}/config.${eventdate}${affix}"
 
 relative_path=false
+
+# shellcheck disable=SC2034
+{
 config_relative_path=${relative_path}
 config_job_account_str="${site_job_account_str}"
 config_job_exclusive_str="${site_job_exclusive_str}"
 config_job_runexe_str="${site_job_runexe_str}"
 config_job_runmpexe_str="${site_job_runmpexe_str}"
 config_EXEDIR="${EXEDIR}"
+}
 
 #
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@

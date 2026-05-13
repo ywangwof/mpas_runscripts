@@ -76,7 +76,7 @@ compress_single_ncfile() {
     fi
 }
 
-# Compress all .nc files in a member directory, return 1 on first failure.
+# Compress all .nc files in a member directory serially, return 1 on first failure.
 # Args: memdir  timedir
 #   memdir – relative path to member directory (e.g. "fcst_01")
 #   timedir – time directory string (used in output messages)
@@ -98,6 +98,33 @@ compress_mem() {
         return 1
     else
         echo "      Done ${timedir}/${memdir} compression."
+        return 0
+    fi
+}
+
+# Compress all .nc files in the current directory in parallel, return 1 on first failure.
+# Args: memdir  num_procs
+#   memdir    - relative path to member directory (optional, for cd; empty = current dir)
+#   num_procs - number of parallel processes (optional, defaults to SLURM_CPUS_PER_TASK)
+compress_ncfiles() {
+    local memdir="$1"
+    local num_procs=${2:-${SLURM_CPUS_PER_TASK:-1}}
+
+    # Change to member directory if specified
+    cd "${memdir}" || exit 1
+
+    # Export the function so child shells (spawned by xargs) can access it
+    export -f compress_single_ncfile
+
+    echo -n "Compressing .nc files in ${memdir} using ${num_procs} parallel processes ..."
+
+    find . -type f -name "*.nc" -print0 | xargs -0 -I {} -P "${num_procs}" bash -c 'compress_single_ncfile "{}"'
+
+    if [[ $? -ne 0 ]]; then
+        echo " Failed."
+        return 1
+    else
+        echo " Done."
         return 0
     fi
 }
@@ -148,6 +175,24 @@ compress_task() {
             done
 
             exit ${mem_failed}
+        ) &
+        timedir_pids+=("$!")
+
+        # Throttle timedir jobs
+        if [[ ${#timedir_pids[@]} -ge ${max_timedir_jobs} ]]; then
+            wait "${timedir_pids[0]}" || failed=1
+            timedir_pids=("${timedir_pids[@]:1}")
+        fi
+
+        #   Compress "ana" directories (output) under "jedi_solver" and "jedi_post" if they exist
+        (
+            cd "${timedir}" || exit 1
+
+            for jedi_dir in "jedi_solver" "jedi_post"; do
+                if [[ -d "${jedi_dir}/ana" ]]; then
+                    compress_ncfiles "${jedi_dir}/ana" "${max_mem_jobs}" || exit 1
+                fi
+            done
         ) &
         timedir_pids+=("$!")
 

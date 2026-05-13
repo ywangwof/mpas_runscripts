@@ -11,8 +11,9 @@ EXCLSTR
 DEBUG=WRKFLOWDEBUG   # set to true to enable debug messages
 
 time1=$(date '+%s')
-printf "Job Started: %(%a %b %d %H:%M:%S %Z %Y)T. Job Id: %s\n\n" $time1 $SLURM_JOBID
+printf "Job Started: %(%a %b %d %H:%M:%S %Z %Y)T. Job Id: %s\n\n" "${time1}" "${SLURM_JOBID}"
 
+# shellcheck disable=SC2050,SC1091
 if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules" || "MACHINE" == "Ursa" ]]; then
     HOMErrfs="JEDIDIR"
     source /etc/profile.d/modules.sh
@@ -152,7 +153,7 @@ parallel_copy_verify() {
 
     t_start=$(date '+%s')
     parallel_copy_verify "ana" ENS_SIZE "${mem_filelist[@]}"
-    [[ "$DEBUG" == true ]] && printf "Elapsed time for copying ens to ana: %s\n" $(date -d@$(( $(date '+%s') - t_start )) -u +%H:%M:%S)
+    [[ "$DEBUG" == true ]] && printf "Elapsed time for copying ens to ana: %s\n" "$(date -d@$(( $(date '+%s') - t_start )) -u +%H:%M:%S)"
 #fi
 # __END_solver_pre
 
@@ -166,12 +167,13 @@ for mem in $(seq -w 001 ENS_SIZE); do
     mem_filelist+=("../jedi_solver/ana/mem${mem}.nc")
 done
 
+# shellcheck disable=SC2050
 if [[ USE_REFL10CM_DIAG == true ]]; then
     echo "Will replace \"refl10cm\" from the forward forecasts for the post-processing task ..."
 
     t_start=$(date '+%s')
     if parallel_copy_verify "ana" ENS_SIZE "${mem_filelist[@]}"; then
-        [[ "$DEBUG" == true ]] && printf "Elapsed time for copying solver ana to post ana: %s\n" $(date -d@$(( $(date '+%s') - t_start )) -u +%H:%M:%S)
+        [[ "$DEBUG" == true ]] && printf "Elapsed time for copying solver ana to post ana: %s\n" "$(date -d@$(( $(date '+%s') - t_start )) -u +%H:%M:%S)"
         echo "Copying ensemble members from Solver to ana for the post-processing task is successful."
         echo "Now replacing \"refl10cm\" from the forward forecasts ..."
 
@@ -185,9 +187,9 @@ if [[ USE_REFL10CM_DIAG == true ]]; then
 
             mem_file="ana/mem0${mem}.nc"
             mpas_file="../fcst_${mem}/DOMNAME_${mem}.diag.CURRTIMEFIL.nc"  # wofs_mpas_01.diag.2026-04-23_18.00.00.nc
-            echo "Replacing refl10cm in ${mem_file} with ${mpas_file} on node ${node} ..."
+            echo "Replacing refl10cm,refl10cm_max in ${mem_file} with ${mpas_file} on node ${node} ..."
             srun --ntasks=1 --exclusive --nodes=1 --nodelist="${node}"  \
-                ncks -A -C -v "refl10cm" "${mpas_file}" "${mem_file}" &
+                ncks -A -C -v "refl10cm,refl10cm_max" "${mpas_file}" "${mem_file}" &
             pids+=($!)
         done
 
@@ -196,6 +198,7 @@ if [[ USE_REFL10CM_DIAG == true ]]; then
         ierr=0
         for pid in "${pids[@]}"; do
             wait "${pid}"
+            # shellcheck disable=SC2181
             if [ $? -eq 0 ]; then
                 ((icount+=1))
             else
@@ -203,8 +206,9 @@ if [[ USE_REFL10CM_DIAG == true ]]; then
             fi
         done
 
+        # shellcheck disable=SC2170
         if [ "${icount}" -eq ENS_SIZE ]; then
-            [[ "$DEBUG" == true ]] && printf "Elapsed time for ncks refl10cm replacement: %s\n" $(date -d@$(( $(date '+%s') - t_start )) -u +%H:%M:%S)
+            [[ "$DEBUG" == true ]] && printf "Elapsed time for ncks refl10cm replacement: %s\n" "$(date -d@$(( $(date '+%s') - t_start )) -u +%H:%M:%S)"
             echo "✅ Successfully replaced refl10cm in all ensemble members."
         else
             echo "❌ ERROR: refl10cm replacement failed for ${ierr} ensemble members."
@@ -230,7 +234,7 @@ sed -i -e "/config_pio_num_iotasks/s/=.*/= $nnode/g;/config_pio_stride/s/=.*/= $
 t_start=$(date '+%s')
 RUNMPCMD -n NOPART EXEDIR/mpasjedi_enkf.x getkf.yaml log.out
 istatus=$?
-[[ "$DEBUG" == true ]] && printf "Elapsed time for mpasjedi_enkf.x: %s\n" $(date -d@$(( $(date '+%s') - t_start )) -u +%H:%M:%S)
+[[ "$DEBUG" == true ]] && printf "Elapsed time for mpasjedi_enkf.x: %s\n" "$(date -d@$(( $(date '+%s') - t_start )) -u +%H:%M:%S)"
 
 if [[ $istatus -eq 0 ]]; then
 
@@ -257,7 +261,7 @@ if [[ $istatus -eq 0 ]]; then
         (( istatus += iret ))
         [[ "$DEBUG" == true ]] && echo "DEBUG: mv returned ${iret} (istatus=${istatus})"
     done
-    [[ "$DEBUG" == true ]] && printf "Elapsed time for nccopy/ncrename jdiag loop: %s\n" $(date -d@$(( $(date '+%s') - t_start )) -u +%H:%M:%S)
+    [[ "$DEBUG" == true ]] && printf "Elapsed time for nccopy/ncrename jdiag loop: %s\n" "$(date -d@$(( $(date '+%s') - t_start )) -u +%H:%M:%S)"
     # __END_post
 
     # __BEGIN_solver_after
@@ -277,9 +281,14 @@ if [[ $istatus -eq 0 ]]; then
         t_start=$(date '+%s')
         echo "Running ncks for cycle = CYCLENO to combine increments to the original background file ..."
         var_list="VARLIST"
+        mapfile -t nodelist < <(scontrol show hostnames "$SLURM_NODELIST")
+        nnodes=${#nodelist[@]}
+
         declare -a pids=()
         for mem in $(seq -w 001 ENS_SIZE); do
-            srun --ntasks=1 --exclusive --nodes=${SLURM_NNODES} ncks -A -C -x -v ${var_list} "ens/mem${mem}.nc" "ana/mem${mem}.nc" &
+            mem_idx=$(( 10#${mem} - 1 ))
+            node=${nodelist[$((mem_idx % nnodes))]}
+            srun --ntasks=1 --exclusive --nodes=1 --nodelist="${node}" ncks -A -C -x -v ${var_list} "ens/mem${mem}.nc" "ana/mem${mem}.nc" &
             pids+=($!)
         done
 
@@ -287,6 +296,7 @@ if [[ $istatus -eq 0 ]]; then
         # Wait for all and check status
         for pid in "${pids[@]}"; do
             wait "$pid";
+            # shellcheck disable=SC2181
             if [ $? -eq 0 ]; then
                 #echo "PID $pid exited successfully"
                 ((icount+=1))
@@ -296,8 +306,9 @@ if [[ $istatus -eq 0 ]]; then
             fi
         done
 
+        # shellcheck disable=SC2170
         if [ "$icount" -eq ENS_SIZE ]; then
-            [[ "$DEBUG" == true ]] && printf "Elapsed time for ncks -A append loop: %s\n" $(date -d@$(( $(date '+%s') - t_start )) -u +%H:%M:%S)
+            [[ "$DEBUG" == true ]] && printf "Elapsed time for ncks -A append loop: %s\n" "$(date -d@$(( $(date '+%s') - t_start )) -u +%H:%M:%S)"
             sleep 10   # file system may be slower than the job status in memory
             istatus=0
         else
@@ -327,4 +338,4 @@ time2=$(date '+%s')
 
 diff=$((time2-time1))
 
-printf "\nJob   Ended: %(%a %b %d %H:%M:%S %Z %Y)T. Job run time: %s.\n" $time2 $(date -d@$diff -u +%H:%M:%S)
+printf "\nJob   Ended: %(%a %b %d %H:%M:%S %Z %Y)T. Job run time: %s.\n" "${time2}" "$(date -d@$diff -u +%H:%M:%S)"

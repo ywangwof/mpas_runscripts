@@ -135,7 +135,10 @@ function setup_machine {
             site_nckspath="/work2/noaa/wof/ywang/tools/hpc-stack/intel-oneapi-compilers-2022.2.1/nco/5.0.6/bin/ncks"
             site_gpmetis="/home/yhwang/local/bin/gpmetis"
 
-            site_OBS_DIR="/work2/noaa/wof/ywang/MPAS/OBSGEN"
+            site_OBS_DIR_BUFR="/work2/noaa/wof/ywang/MPAS/OBSGEN"
+            site_OBS_DIR_REF="/work2/noaa/wof/ywang/MPAS/MRMS"
+            site_OBS_DIR_VEL="/work2/noaa/wof/ywang/MPAS/VR"
+            site_OBS_DIR_CWP="/work2/noaa/wof/ywang/MPAS/CWP"
 
             site_hrrr_dir="/work2/noaa/wof/ywang/MPAS/MODEL_DATA/HRRRE"
         fi
@@ -167,7 +170,10 @@ function setup_machine {
             site_nckspath="/glade/u/apps/derecho/23.09/spack/opt/spack/nco/5.2.4/gcc/12.2.0/c2uf/bin/ncks"
             site_gpmetis="/glade/work/ywang/tools/bin/gpmetis"
 
-            site_OBS_DIR="/glade/work/ywang/observations"
+            site_OBS_DIR_BUFR="/glade/work/ywang/observations"
+            site_OBS_DIR_REF="/glade/work/ywang/MRMS"
+            site_OBS_DIR_VEL="/glade/work/ywang/MRMS"
+            site_OBS_DIR_CWP="/glade/work/ywang/CWP"
 
             site_hrrr_dir="/glade/derecho/scratch/ywang/tmp"
         fi
@@ -215,7 +221,10 @@ function setup_machine {
             export LD_LIBRARY_PATH="/home/yunheng.wang/tools/lib"
             site_nclpath="/scratch/software/miniconda3/bin/ncl"
 
-            site_OBS_DIR="/scratch/wofs_mpas/OBS_SEQ.reduced"
+            site_OBS_DIR_BUFR="/scratch/wofs_mpas/OBS_SEQ.reduced"
+            site_OBS_DIR_REF="/scratch/wofs_mpas/MRMS"
+            site_OBS_DIR_VEL="/scratch/wofs_mpas/MRMS"
+            site_OBS_DIR_CWP="/scratch/wofs_mpas/CWP"
 
             #hrrr_dir="/scratch2/wofuser/MODEL_DATA/HRRRE"
             site_hrrr_dir="/scratch/wofs/wofuser/MODEL_DATA/HRRRE"
@@ -260,7 +269,6 @@ function default_site_settings {
 
     case $machine in
     "Ursa" )
-        default_mpas_wofs_python="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/wofs_new_noise"
         default_claim_cpu_ungrib="--cpus-per-task=96"   # --mem-per-cpu=10G"
 
         # ICs
@@ -299,7 +307,6 @@ function default_site_settings {
         ;;
 
     "Hercules" )
-        default_mpas_wofs_python="????"
         default_claim_cpu_ungrib="--cpus-per-task=12 --mem-per-cpu=10G"
 
         # ICs
@@ -335,7 +342,6 @@ function default_site_settings {
         ;;
 
     "Cheyenne" )
-        default_mpas_wofs_python="/glade/work/ywang/wofs_new_noise"
         default_claim_cpu_ungrib=""
 
         # Derecho node has 128 processors
@@ -374,7 +380,6 @@ function default_site_settings {
     * )
         # Vecna at NSSL
 
-        default_mpas_wofs_python="/home/yunheng.wang/MPAS/wofs_new_noise"
         default_claim_cpu_ungrib=""
 
         # ICs
@@ -410,7 +415,6 @@ function default_site_settings {
         ;;
     esac
 
-    export default_mpas_wofs_python
     export default_claim_cpu_ungrib
     export default_partition_ics    default_claim_cpu_ics    default_npeics        default_ncores_ics
     export default_partition_lbc    default_claim_cpu_lbc    default_npelbc        default_ncores_lbc
