@@ -22,6 +22,8 @@ cd WRKDIR || exit $?
 rm -f queue.update_mpas
 touch running.update_mpas
 
+DEBUG=true
+
 # __BEGIN_addnoise
 
 # ---------------------------------------------------------------------
@@ -31,9 +33,11 @@ touch running.update_mpas
     # Retrieve command line parameters
     echo "Starting \"grid_refl_obs.py\" for add_noise step ..."
     echo "python ROOTDIR/wofs_addnoise/grid_refl_obs.py SEQFILE 35.0 10.0 INVFILE EVENTDATETIME mpas"
+    t0=$(date '+%s')
     python ROOTDIR/wofs_addnoise/grid_refl_obs.py SEQFILE 35.0 10.0 INVFILE EVENTDATETIME mpas
     estatus="$?"
     echo "Task \"grid_refl_obs.py\" return status = $estatus ..."
+    t1=$(date '+%s'); [[ ${DEBUG} == true ]] && printf "Wallclock %-44s %s\n" "grid_refl_obs.py:" "$(date -d@$((t1-t0)) -u +%H:%M:%S)"
 
     if [[ $estatus -ne 0 ]]; then
         touch error.update_mpas
@@ -80,18 +84,21 @@ touch running.update_mpas
 # run update_member
 # ---------------------------------------------------------------------
 # Arrays derived from the driver script
+# declare -A mem_map=([34]="16" [35]="17" [36]="18" ......
 
-MEMMAP
+declare -A mem_map=MEMMAPSTR
+
 # ----------------------------------------------------------------------
 # Pre-copy all 36 init files in parallel background jobs (2.9GB each).
 # This separates the heavy I/O from SLURM task scheduling overhead.
 # ----------------------------------------------------------------------
+t0=$(date '+%s')
 echo -e "\nPre-copying all init files in parallel ...\n"
 declare -a copy_pids=()
 for mem in NENS_MEMBERS; do
     memstr=$(printf "%02d" $mem)
 
-    pushd fcst_${memstr} > /dev/null || return 1
+    pushd "fcst_${memstr}" > /dev/null || return 1
 
     echo "MEM ${memstr}: Using init file: INITFILENAME"
     echo "              <= INITORIGFILE"
@@ -112,6 +119,7 @@ for cpid in "${copy_pids[@]}"; do
     wait "$cpid"
 done
 echo -e "All init file copies completed.\n"
+t1=$(date '+%s'); [[ ${DEBUG} == true ]] && printf "Wallclock %-44s %s\n" "Pre-copying all init files:" "$(date -d@$((t1-t0)) -u +%H:%M:%S)"
 
 ########################################################################
 #
@@ -120,11 +128,12 @@ echo -e "All init file copies completed.\n"
 ########################################################################
 run_update_member() {
     local mem=$1
-    local memstr=$(printf "%02d" $mem)
+    local t0=$(date '+%s')
+    local memstr=$(printf "%02d" "${mem}")
 
     local mlbcstr="${mem_map[$mem]}"
 
-    cd WRKDIR/fcst_${memstr} || return 1
+    cd "WRKDIR/fcst_${memstr}" || return 1
 
     # Redirect all subsequent commands in this subshell/function
     exec > log.update_mpas_${memstr} 2>&1
@@ -232,6 +241,8 @@ EOF
         touch error.update_mpas_${memstr}
     fi
 
+    t1=$(date '+%s')
+    [[ ${DEBUG} == true ]] && printf "Wallclock %-44s %s\n" "run_update_member mem ${memstr}:" "$(date -d@$((t1-t0)) -u +%H:%M:%S)"
     return ${istatus}
 }
 
@@ -250,6 +261,7 @@ func_def=$(declare -f run_update_member)
 declare -A pids  # Associative array to store PID -> Member mapping
 declare -a fail_jobs=()
 
+t0=$(date '+%s')
 for mem in NENS_MEMBERS; do
     ( eval "$array_defs"; eval "$func_def"; run_update_member $mem ) &
     pids[$!]=$mem
@@ -263,14 +275,18 @@ for pid in "${!pids[@]}"; do
     status=$?
     member_idx=${pids[$pid]}
 
+    memstr=$(printf "%02d" "${member_idx}")
+
     if [[ $status -eq 0 ]]; then
-        echo "Member ${member_idx} (PID $pid) run_update_member finished successfully."
+        echo "Member ${member_idx} (PID $pid) run_update_member finished successfully. Log file is \"fcst_${memstr}/log.update_mpas_${memstr}\"."
     else
-        echo "Member ${member_idx} (PID $pid) run_update_member FAILED with exit code $status."
+        echo "Member ${member_idx} (PID $pid) run_update_member FAILED with exit code $status. Check log file \"fcst_${memstr}/log.update_mpas_${memstr}\" for details."
         fail_jobs+=("${member_idx}")
         overall_status=1
     fi
 done
+t1=$(date '+%s');
+[[ ${DEBUG} == true ]] && printf "Wallclock %-44s %s\n" "run_update_member tasks (all members):" "$(date -d@$((t1-t0)) -u +%H:%M:%S)"
 
 # Status Cleanup
 if [[ $overall_status -eq 0 ]]; then
@@ -279,7 +295,6 @@ else
     echo "One or more members failed run_update_member: ( ${fail_jobs[*]} )."
     touch error.update_mpas
 fi
-echo "Check log file \"log.update_mpas_??\" in the member directory for details."
 
 rm -rf running.update_mpas
 
@@ -288,7 +303,7 @@ rm -rf running.update_mpas
 ramdisk_cache="/dev/shm/mpas_cache_$$"
 if [[ -d "$ramdisk_cache" ]]; then
     rm -rf "$ramdisk_cache"
-    echo "Cleaned up ramdisk cache: $ramdisk_cache"
+    echo -e "\nCleaned up ramdisk cache: $ramdisk_cache"
 fi
 # __END_addnoise
 

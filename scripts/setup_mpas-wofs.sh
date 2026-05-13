@@ -155,7 +155,7 @@ function parse_args {
                 args["dorun"]=false
                 ;;
             -v)
-                args["verb"]=1
+                args["verbose"]=true
                 ;;
             -k)
                 if [[ $2 =~ [012] ]]; then
@@ -441,7 +441,7 @@ function run_createWOFS {
         for cond in "${conditions[@]}"; do
             mecho0 "Checking: ${CYAN}${cond}"${NC}
             while [[ ! -e ${cond} ]]; do
-                if [[ ${verb} -eq 1 ]]; then
+                if [[ ${verbose} == true ]]; then
                     mecho0 "Waiting for file: ${CYAN}${cond}"${NC}
                 fi
                 sleep 10
@@ -583,7 +583,7 @@ function run_projectHexes {
         for cond in "${conditions[@]}"; do
             mecho0 "Checking: ${CYAN}${cond}${NC}"
             while [[ ! -e ${cond} ]]; do
-                if [[ ${verb} -eq 1 ]]; then
+                if [[ ${verbose} == true ]]; then
                     mecho0 "Waiting for file: ${CYAN}${cond}${NC}"
                 fi
                 sleep 10
@@ -725,7 +725,7 @@ function run_static {
         for cond in "${conditions[@]}"; do
             mecho0 "Checking: ${CYAN}${cond}"${NC}
             while [[ ! -e ${cond} ]]; do
-                if [[ ${verb} -eq 1 ]]; then
+                if [[ ${verbose} == true ]]; then
                     mecho0 "Waiting for file: ${CYAN}${cond}"${NC}
                 fi
                 sleep 10
@@ -746,7 +746,7 @@ function run_static {
 
     if [[ ! -f ${domname}.graph.info.part.${default_npestatic} ]]; then
         # shellcheck disable=SC2154
-        split_graph "${site_gpmetis}" "${domname}.graph.info" "${default_npestatic}" "${wrkdir}" "${dorun}" "${verb}"
+        split_graph "${site_gpmetis}" "${domname}.graph.info" "${default_npestatic}" "${wrkdir}" "${dorun}" "${verbose}"
     fi
 
     # The program needs a time string in file $domname.grid.nc
@@ -892,7 +892,7 @@ function run_rotate {
         for cond in "${conditions[@]}"; do
             mecho0 "Checking: ${CYAN}${cond}"${NC}
             while [[ ! -e ${cond} ]]; do
-                if [[ ${verb} -eq 1 ]]; then
+                if [[ ${verbose} == true ]]; then
                     mecho0 "Waiting for file: ${CYAN}${cond}"${NC}
                 fi
                 sleep 10
@@ -1020,9 +1020,9 @@ function run_ungrib_hrrr {
     basefn=$(basename ${hrrrfile})
     basefn="NSSL_${basefn}"
 
-    if [[ ${verb} -eq 1 ]]; then mecho0 "HRRR file: ${BLUE}${hrrrfile}${NC}"; fi
+    if [[ ${verbose} == true ]]; then mecho0 "HRRR file: ${BLUE}${hrrrfile}${NC}"; fi
     while [[ ! -f ${hrrrfile} && ! -f ${basefn} ]]; do
-        if [[ ${verb} -eq 1 ]]; then
+        if [[ ${verbose} == true ]]; then
             mecho0 "Waiting for ${hrrrfile} ..."
         fi
         sleep 10
@@ -1086,7 +1086,7 @@ function run_meshplot_ncl {
         for cond in "${conditions[@]}"; do
             mecho0 "Checking: ${CYAN}${cond}"${NC}
             while [[ ! -e ${cond} ]]; do
-                if [[ ${verb} -eq 1 ]]; then
+                if [[ ${verbose} == true ]]; then
                     mecho0 "Waiting for file: ${CYAN}${cond}"${NC}
                 fi
                 sleep 10
@@ -1146,7 +1146,7 @@ function run_meshplot_py {
         for cond in "${conditions[@]}"; do
             mecho0 "Checking: ${CYAN}${cond}"${NC}
             while [[ ! -e ${cond} ]]; do
-                if [[ ${verb} -eq 1 ]]; then
+                if [[ ${verbose} == true ]]; then
                     mecho0 "Waiting for file: ${CYAN}${cond}"${NC}
                 fi
                 sleep 10
@@ -1768,19 +1768,20 @@ source "${scpdir}/Common_Utilfuncs.sh" || exit $?
 
 parse_args "$@"
 
-[[ -v args["verb"] ]]      && verb=${args["verb"]}           || verb=0
-[[ -v args["overwrite"] ]] && overwrite=${args["overwrite"]} || overwrite=0
-[[ -v args["dorun"] ]]     && dorun=${args["dorun"]}         || dorun=true
+verbose=${args["verbose"]:-false}
+overwrite=${args["overwrite"]:-0}
+dorun=${args["dorun"]:-true}
 
-[[ -v args["damode"] ]]    && damode="${args['damode']}"     || damode="mpasout"
-[[ -v args["fcstmode"] ]]  && fcstmode="${args['fcstmode']}" || fcstmode="${damode}"
+damode="${args['damode']:-mpasout}"
+fcstmode="${args['fcstmode']:-${damode}}"
 
-[[ -v args["domname"] ]]    && domname="${args['domname']}"   || domname="wofs_mpas"
-[[ -v args["affix"] ]]      && affix="${args['affix']}"       || affix=""
+domname="${args['domname']:-wofs_mpas}"
+affix="${args['affix']:-}"
 
-[[ -v args["hpcaccount"] ]]   && hpcaccount="${args['hpcaccount']}"
-[[ -v args["cen_lat"] ]]      && cen_lat="${args['cen_lat']}"       || cen_lat=""
-[[ -v args["cen_lon"] ]]      && cen_lon="${args['cen_lon']}"       || cen_lon=""
+cen_lat="${args["cen_lat"]:-}"
+cen_lon="${args["cen_lon"]:-}"
+
+hpcaccount="${args['hpcaccount']:-}"
 
 #-----------------------------------------------------------------------
 #
@@ -1936,7 +1937,7 @@ declare -A jobargs=([geogrid]="${rundir}/geo_${domname##*_}"            \
                    )
 
 for job in "${jobs[@]}"; do
-    if [[ ${verb} -eq 1 ]]; then
+    if [[ ${verbose} == true ]]; then
         echo " "
         echo "    run_${job} ${jobargs[${job}]}"
     fi

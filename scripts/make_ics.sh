@@ -109,7 +109,7 @@ function parse_args {
                 args["dorun"]=false
                 ;;
             -v)
-                args["verb"]=1
+                args["verbose"]=true
                 ;;
             -k)
                 if [[ $2 =~ [012] ]]; then
@@ -205,7 +205,7 @@ function run_ungrib {
 
             mecho0 "mem ${memstr} GRIB file: ${gribfilename}"
             while [[ ! -f ${gribfile} ]]; do
-                if [[ ${verb} -eq 1 ]]; then
+                if [[ ${verbose} == true ]]; then
                     mecho0 "Waiting for ${gribfilename} ..."
                 fi
                 sleep 10
@@ -529,7 +529,7 @@ function run_init4invariant {
             mecho0 "Checking: ${CYAN}${rcond}${NC} ...."
             while [[ ! -e ${cond} ]]; do
                 check_job_status "ungrib" "${rundir}/init/ungrib" "${config_nensics}"
-                if [[ ${verb} -eq 1 ]]; then
+                if [[ ${verbose} == true ]]; then
                     mecho0 "Waiting for file: ${CYAN}${cond}${NC}"
                 fi
                 sleep 10
@@ -556,7 +556,7 @@ function run_init4invariant {
     ln -sf "${rundir}/${domname}/${domname}.static.nc" .
 
     if [[ ! -f ${rundir}/${domname}/${domname}.graph.info.part.${config_npeics} ]]; then
-        split_graph "${config_gpmetis}" "${domname}.graph.info" "${config_npeics}" "${rundir}/${domname}" "${dorun}" "${verb}"
+        split_graph "${config_gpmetis}" "${domname}.graph.info" "${config_npeics}" "${rundir}/${domname}" "${dorun}" "${verbose}"
     fi
     ln -sf ${rundir}/${domname}/${domname}.graph.info.part.${config_npeics} .
 
@@ -729,7 +729,7 @@ function run_init {
             mecho0 "Checking: ${CYAN}${rcond}${NC} ...."
             while [[ ! -e ${cond} ]]; do
                 check_job_status "ungrib" "${rundir}/init/ungrib" "${config_nensics}"
-                if [[ ${verb} -eq 1 ]]; then
+                if [[ ${verbose} == true ]]; then
                     mecho0 "Waiting for file: ${CYAN}${cond}${NC}"
                 fi
                 sleep 10
@@ -753,7 +753,7 @@ function run_init {
         #ln -sf ../${domname}.invariant.nc .
 
         if [[ ! -f ${rundir}/${domname}/${domname}.graph.info.part.${config_npeics} ]]; then
-            split_graph "${config_gpmetis}" "${domname}.graph.info" "${config_npeics}" "${rundir}/${domname}" "${dorun}" "${verb}"
+            split_graph "${config_gpmetis}" "${domname}.graph.info" "${config_npeics}" "${rundir}/${domname}" "${dorun}" "${verbose}"
         fi
         ln -sf ${rundir}/${domname}/${domname}.graph.info.part.${config_npeics} .
 
@@ -844,13 +844,11 @@ source ${scpdir}/Common_Utilfuncs.sh || exit $?
 
 parse_args "$@"
 
-[[ -v args["verb"] ]]      && verb=${args["verb"]}           || verb=0
-[[ -v args["overwrite"] ]] && overwrite=${args["overwrite"]} || overwrite=0
-
-[[ -v args["dorun"] ]]     && dorun=${args["dorun"]}         || dorun=true
-[[ -v args["jobwait"] ]]   && jobwait=${args["jobwait"]}     || jobwait=0
-
-[[ -v args["cleanall"] ]]  && cleanall=${args["cleanall"]}   || cleanall=false  # realtime run?
+verbose=${args["verbose"]:-false}
+overwrite=${args["overwrite"]:-0}
+dorun=${args["dorun"]:-true}
+jobwait=${args["jobwait"]:-0}
+cleanall=${args["cleanall"]:-false}
 
 #-----------------------------------------------------------------------
 #
@@ -964,7 +962,7 @@ declare -A jobargs=([ungrib]="${config_hrrr_dir} ${config_hrrr_time}"           
                    )
 
 for job in "${jobs[@]}"; do
-    if [[ ${verb} -eq 1 ]]; then
+    if [[ ${verbose} == true ]]; then
         echo " "
         echo "    run_${job} ${jobargs[${job}]}"
     fi

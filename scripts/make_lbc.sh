@@ -112,7 +112,7 @@ function parse_args {
                 args["dorun"]=false
                 ;;
             -v)
-                args["verb"]=1
+                args["verbose"]=true
                 ;;
             -k)
                 if [[ $2 =~ [012] ]]; then
@@ -256,7 +256,7 @@ function run_ungrib {
 
             mecho0 "mem ${memstr} GRIB file ${hstr}: ${gribfilename}"
             while [[ ! -f ${gribfile} ]]; do
-                if [[ ${verb} -eq 1 ]]; then
+                if [[ ${verbose} == true ]]; then
                     mecho0 "Waiting for ${gribfilename} ..."
                 fi
                 sleep 10
@@ -547,7 +547,7 @@ function run_lbc {
             rcond=$(realpath -m --relative-to "${WORKDIR}" "${cond}")
             mecho0 "Checking: ${CYAN}${rcond}${NC} ...."
             while [[ ! -e ${cond} ]]; do
-                if [[ ${verb} -eq 1 ]]; then
+                if [[ ${verbose} == true ]]; then
                     mecho0 "Waiting for file: ${CYAN}${cond}${NC}"
                 fi
 
@@ -577,7 +577,7 @@ function run_lbc {
         #ln -sf $rundir/init/${domname}.invariant.nc .
 
         if [[ ! -f ${rundir}/${domname}/${domname}.graph.info.part.${config_npelbc} ]]; then
-            split_graph "${config_gpmetis}" "${domname}.graph.info" "${config_npelbc}" "${rundir}/${domname}" "${dorun}" "${verb}"
+            split_graph "${config_gpmetis}" "${domname}.graph.info" "${config_npelbc}" "${rundir}/${domname}" "${dorun}" "${verbose}"
         fi
         ln -sf ${rundir}/${domname}/${domname}.graph.info.part.${config_npelbc} .
 
@@ -640,7 +640,7 @@ function run_time_intrp {
             rcond=$(realpath -m --relative-to "${WORKDIR}" "${cond}")
             mecho0 "Checking: ${CYAN}${rcond}${NC} ...."
             while [[ ! -e ${cond} ]]; do
-                if [[ ${verb} -eq 1 ]]; then
+                if [[ ${verbose} == true ]]; then
                     mecho0 "Waiting for file: ${CYAN}${cond}${NC}"
                 fi
 
@@ -661,7 +661,7 @@ function run_time_intrp {
     starttime_s=$(date -u -d "${eventdate}        ${eventtime}"        +%s)
     stoptime_s=$(date  -u -d "${stopdatetime:0:8} ${stopdatetime:8:4}" +%s)
 
-    #[[ $verb -eq 1 ]] && mecho0 "Running time intrpolation ...."
+    #[[ ${verbose} == true ]] && mecho0 "Running time intrpolation ...."
 
     #for((i=starttime_s;i<=stoptime_s;i+=config_intvl_sec)); do
     #    min=$(date -u -d @$i +%M)
@@ -678,7 +678,7 @@ function run_time_intrp {
     #            lbc_file1="${domname}_${mem_str}.lbc.${time_str1}.nc"
     #            lbc_file2="${domname}_${mem_str}.lbc.${time_str2}.nc"
     #            if [[ ! -f ${lbc_filename} ]]; then
-    #                if [[ $verb -eq 1 ]]; then
+    #                if [[ ${verbose} == true ]]; then
     #                    mecho0 "Interpolating lbc file: ${lbc_filename} file from"
     #                    mecho0 "                        ${lbc_file1} and"
     #                    mecho0 "                        ${lbc_file2}"
@@ -778,13 +778,11 @@ source ${scpdir}/Common_Utilfuncs.sh || exit $?
 
 parse_args "$@"
 
-[[ -v args["verb"] ]]      && verb=${args["verb"]}           || verb=0
-[[ -v args["overwrite"] ]] && overwrite=${args["overwrite"]} || overwrite=0
-
-[[ -v args["dorun"] ]]     && dorun=${args["dorun"]}         || dorun=true
-[[ -v args["jobwait"] ]]   && jobwait=${args["jobwait"]}     || jobwait=0
-
-[[ -v args["cleanall"] ]]  && cleanall=${args["cleanall"]}   || cleanall=false  # realtime run?
+verbose=${args["verbose"]:-false}
+overwrite=${args["overwrite"]:-0}
+dorun=${args["dorun"]:-true}
+jobwait=${args["jobwait"]:-0}
+cleanall=${args["cleanall"]:-false}
 
 #-----------------------------------------------------------------------
 #
@@ -930,7 +928,7 @@ declare -A jobargs=([ungrib]="${config_hrrr_dir} ${config_hrrr_time}"   \
                    )
 
 for job in "${jobs[@]}"; do
-    if [[ ${verb} -eq 1 ]]; then
+    if [[ ${verbose} == true ]]; then
         echo " "
         echo "    run_${job} ${jobargs[${job}]}"
     fi

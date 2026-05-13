@@ -169,7 +169,7 @@ function parse_args {
                 args["dorun"]=false
                 ;;
             -v)
-                args["verb"]=1
+                args["verbose"]=true
                 ;;
             -r)
                 args["rt_run"]=true
@@ -462,7 +462,7 @@ function run_ioda_mrms_refl {
                     ${cpcmd}   "${nsslfile}" .
                     base_filename=$(basename "${nsslfile}")
                     echo "${base_filename}" >> filelist_mrms
-                    if [[ $verb -eq 1 ]]; then mecho0 "Copying MRMS files ${CYAN}${base_filename}${NC} ...."; fi
+                    if [[ ${verbose} == true ]]; then mecho0 "Copying MRMS files ${CYAN}${base_filename}${NC} ...."; fi
                 done
                 break 2
             else
@@ -616,7 +616,7 @@ function run_ioda_cwp {
 
             cwpfile="${config_OBS_CWP_DIR}/${curr_date}/${curr_datetime}_GOES19_CWP_OBS.nc"
 
-            if [[ $verb -eq 1 ]]; then mecho0 "Looking for CWP data valid: ${DARK}${curr_datetime}${NC} as ${cwpfile}"; fi
+            if [[ ${verbose} == true ]]; then mecho0 "Looking for CWP data valid: ${DARK}${curr_datetime}${NC} as ${cwpfile}"; fi
 
             if [[ -s "${cwpfile}" ]]; then
                 mecho0 "Using CWP file ${CYAN}${cwpfile}${NC}"
@@ -1378,7 +1378,7 @@ function jedi_preparation {
         fi
 
         if [[ ! -f $casedir/${domname}/${domname}.graph.info.part.${num_processors} ]]; then
-            split_graph "${config_gpmetis}" "${domname}.graph.info" "${num_processors}" "${rundir}/${domname}" "$dorun" "$verb"
+            split_graph "${config_gpmetis}" "${domname}.graph.info" "${num_processors}" "${rundir}/${domname}" "$dorun" "$verbose"
         fi
         ${lncmd} $casedir/${domname}/${domname}.graph.info.part.${num_processors} .
 
@@ -1601,7 +1601,7 @@ function run_jedi_observer {
             mecho0 "    ${CYAN}${display_name}${NC}"
             ${cpcmd} "${obs_file}"  "obs/${dst_file}"
         else
-            [[ ${verb} -eq 1 ]] && mecho0 "${PURPLE}WARNING${NC}: ${CYAN}${obs_file}${NC} does not exist!"
+            [[ ${verbose} == true ]] && mecho0 "${PURPLE}WARNING${NC}: ${CYAN}${obs_file}${NC} does not exist!"
         fi
     done
 
@@ -1620,7 +1620,7 @@ function run_jedi_observer {
         [PARTION]="${config_partition_filter}"
         [NOPART]="${config_npefilter}"
         [CONFIGNNODES]="${config_nnodes_filter}"
-        [WRKFLOWDEBUG]="${verb}"
+        [WRKFLOWDEBUG]="${verbose}"
         [JOBNAME]="${taskname}-${jobname}_${eventtime}"
         [CPUSPEC]="${config_claim_cpu_filter}"
         [EXEDIR]="${config_EXEDIR}/jedi"
@@ -1713,7 +1713,7 @@ function run_jedi_solver {
         [PARTION]="${config_partition_filter}"
         [NOPART]="${config_npefilter}"
         [CONFIGNNODES]="${config_nnodes_filter}"
-        [WRKFLOWDEBUG]="${verb}"
+        [WRKFLOWDEBUG]="${verbose}"
         [JOBNAME]="${taskname}-${jobname}_${eventtime}"
         [CPUSPEC]="${config_claim_cpu_filter}"
         [EXEDIR]="${config_EXEDIR}/jedi"
@@ -1805,7 +1805,7 @@ function run_jedi_post {
         [PARTION]="${config_partition_post}"
         [NOPART]="${config_npepost}"
         [CONFIGNNODES]="${config_nnodes_post}"
-        [WRKFLOWDEBUG]="${verb}"
+        [WRKFLOWDEBUG]="${verbose}"
         [JOBNAME]="${taskname}-${jobname}_${eventtime}"
         [CPUSPEC]="${config_claim_cpu_post}"
         [EXEDIR]="${config_EXEDIR}/jedi"
@@ -1887,7 +1887,7 @@ function run_add_noise {
     # Run add_pert_where_high_refl.py & add_pert_where_high_refl.py for all members
     #-------------------------------------------------------------------
 
-    if [[ $verb -eq 1 ]]; then
+    if [[ ${verbose} == true ]]; then
         mecho0 "Running ${WHITE}${scpdir}/wofs_addnoise/grid_refl_obs.py${NC} and ${WHITE}${scpdir}/wofs_addnoise/add_pert_where_high_refl.py${NC} at ${YELLOW}${timestr_cur}${NC}"
     fi
 
@@ -2002,7 +2002,7 @@ function run_update_bc {
 
         mem_map[$iens]="${mlbcstr}"
 
-        if [[ $verb -eq 1 ]]; then
+        if [[ ${verbose} == true ]]; then
             mecho0 "Member: $iens use lbc files from ${lbcdir}:"
             mecho0 "        ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc  ${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc";
         fi
@@ -2150,7 +2150,7 @@ function run_update_mpas {
 
         mem_map[$iens]="${mlbcstr}"
 
-        if [[ $verb -eq 1 ]]; then
+        if [[ ${verbose} == true ]]; then
             mecho0 "Member: $iens use lbc files from ${lbcdir}:"
             mecho0 "        ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc  ${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc";
         fi
@@ -2168,6 +2168,12 @@ function run_update_mpas {
             wait_for_conditions "${jdiagfile}"
         fi
     fi
+
+    mem_map_str="( "
+    for k in "${!mem_map[@]}"; do
+        mem_map_str+="[$k]='${mem_map[$k]}' "
+    done
+    mem_map_str+=" )"
 
     #------------------------------------------------------
     # Run update_bc and add_noise as a combined job
@@ -2205,7 +2211,7 @@ function run_update_mpas {
         [MPASTIME2]="${mpastime_str2}"
         [LBCTIME1]="${lbctime_str1}"
         [LBCTIME2]="${lbctime_str2}"
-        [MEMMAP]="$(declare -p mem_map)"
+        [MEMMAPSTR]="${mem_map_str}"
         [NENS_MEMBERS]="${jobarrays[*]}"
         [KEEPSECTIONS]="${run_add_noise}"
         [INVFILE]="${invfile}"
@@ -2260,7 +2266,7 @@ function run_mpas {
     # Preparation for all members
     #
     if [[ ! -f $rundir/$domname/$domname.graph.info.part.${config_npefcst} ]]; then
-        split_graph "${config_gpmetis}" "${domname}.graph.info" "${config_npefcst}" "$rundir/$domname" "$dorun" "$verb"
+        split_graph "${config_gpmetis}" "${domname}.graph.info" "${config_npefcst}" "$rundir/$domname" "$dorun" "$verbose"
     fi
 
     #fcst_sec=$(( iseconds + config_intvl_sec ))
@@ -2316,7 +2322,7 @@ function run_mpas {
         #fi
 
         mem_initfile=$(eval echo "${initfile}")
-        if [[ $verb -eq 1 ]]; then
+        if [[ ${verbose} == true ]]; then
             mecho0 "Member $iens init file: ${mem_initfile}";
         fi
 
@@ -2537,7 +2543,7 @@ function dacycle_driver() {
         # 1. Run ioda
         #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " ioda" && ${icyc} -gt 0 ]]; then
-            if [[ $verb -eq 1 ]]; then echo "  Run ioda at $eventtime"; fi
+            if [[ ${verbose} == true ]]; then echo "  Run ioda at $eventtime"; fi
             run_ioda $dawrkdir $isec
         fi
 
@@ -2545,7 +2551,7 @@ function dacycle_driver() {
         # 2. Run observer
         #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " jedi_observer " ]]; then
-            if [[ $verb -eq 1 ]]; then echo "  Run jedi_observer at $eventtime"; fi
+            if [[ ${verbose} == true ]]; then echo "  Run jedi_observer at $eventtime"; fi
             run_jedi_observer $dawrkdir $icyc $isec
         fi
 
@@ -2553,7 +2559,7 @@ function dacycle_driver() {
         # 3. Run solver
         #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " jedi_solver " ]]; then
-            if [[ $verb -eq 1 ]]; then echo "  Run jedi_solver at $eventtime"; fi
+            if [[ ${verbose} == true ]]; then echo "  Run jedi_solver at $eventtime"; fi
             run_jedi_solver $dawrkdir $icyc $isec
         fi
 
@@ -2561,7 +2567,7 @@ function dacycle_driver() {
         # 4. Run update_mpas (both update_bc and add_noise) for all ensemble members
         #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " update_mpas " ]]; then
-            if [[ $verb -eq 1 ]]; then echo "  Run update_mpas (update_bc + add_noise) at $eventtime"; fi
+            if [[ ${verbose} == true ]]; then echo "  Run update_mpas (update_bc + add_noise) at $eventtime"; fi
             run_update_mpas $dawrkdir $icyc $isec
         fi
 
@@ -2576,7 +2582,7 @@ function dacycle_driver() {
             #    check_job_status "update_bc fcst update_bc" ${dawrkdir} ${config_ENS_SIZE} run_update_bc.${mach} ${num_resubmit}
             #fi
 
-            if [[ $verb -eq 1 ]]; then echo "  Run advance model at $eventtime"; fi
+            if [[ ${verbose} == true ]]; then echo "  Run advance model at $eventtime"; fi
 
             mpas_jobscript="run_mpas.${mach}"
             run_mpas $dawrkdir $icyc $isec
@@ -2591,7 +2597,7 @@ function dacycle_driver() {
         # 6.1 Run post (if requested)
         #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " jedi_post " ]]; then
-            if [[ $verb -eq 1 ]]; then echo "  Run jedi_post at $eventtime"; fi
+            if [[ ${verbose} == true ]]; then echo "  Run jedi_post at $eventtime"; fi
             run_jedi_post $dawrkdir $icyc $isec
         fi
 
@@ -2601,7 +2607,7 @@ function dacycle_driver() {
         # Interpolate the forecast datasets to a virtual WRF grid
 
         if [[ " ${jobs[*]} " =~ " mpassit_mean " ]]; then
-            if [[ $verb -eq 1 ]]; then echo "  Run MPASSIT at $eventtime"; fi
+            if [[ ${verbose} == true ]]; then echo "  Run MPASSIT at $eventtime"; fi
             run_mpassit_mean $dawrkdir ${isec}
         fi
 
@@ -2611,7 +2617,7 @@ function dacycle_driver() {
         # Interpolate the forecast datasets to a virtual WRF grid
 
         if [[ " ${jobs[*]} " =~ " mpassit " ]]; then
-            if [[ $verb -eq 1 ]]; then echo "  Run MPASSIT at $eventtime"; fi
+            if [[ ${verbose} == true ]]; then echo "  Run MPASSIT at $eventtime"; fi
 
             run_mpassit $dawrkdir ${isec}
 
@@ -2662,7 +2668,7 @@ function run_mpassit_mean {
         for cond in "${conditions[@]}"; do
             mecho0 "Checking $cond...."
             while [[ ! -e $cond ]]; do
-                if [[ $verb -eq 1 ]]; then
+                if [[ ${verbose} == true ]]; then
                     mecho0 "Waiting for file: $cond"
                 fi
                 sleep 10
@@ -2685,7 +2691,7 @@ function run_mpassit_mean {
     parmfiles=(diaglist histlist_2d histlist_3d )
     for fn in "${parmfiles[@]}"; do
         if [[ ! -e $fn ]]; then
-            #if [[ $verb -eq 1 ]]; then echo "Linking $fn ..."; fi
+            #if [[ ${verbose} == true ]]; then echo "Linking $fn ..."; fi
             if [[ -e ${config_FIXDIR}/MPASSIT/${fn}.${fileappend}_analysis_mean ]]; then
                 ln -sf ${config_FIXDIR}/MPASSIT/${fn}.${fileappend}_analysis_mean $fn
             elif [[ -e ${config_FIXDIR}/MPASSIT/${fn}_analysis_mean ]]; then
@@ -2699,7 +2705,7 @@ function run_mpassit_mean {
 
     fn="histlist_soil"
     if [[ ! -e $fn ]]; then
-        #if [[ $verb -eq 1 ]]; then echo "Linking $fn ..."; fi
+        #if [[ ${verbose} == true ]]; then echo "Linking $fn ..."; fi
         if [[ -e ${config_FIXDIR}/MPASSIT/${fn} ]]; then
             ln -sf ${config_FIXDIR}/MPASSIT/${fn} $fn
         else
@@ -2744,7 +2750,7 @@ function run_mpassit_mean {
 
         if [[ $dorun == true ]]; then
             while [[ ! -f ${org_file} ]]; do
-                if [[ $verb -eq 1 ]]; then
+                if [[ ${verbose} == true ]]; then
                     mecho0 "Waiting for $org_file ..."
                 fi
                 sleep 10
@@ -2867,7 +2873,7 @@ function run_mpassit {
             parmfiles=(diaglist histlist_2d histlist_3d histlist_soil)
             for fn in "${parmfiles[@]}"; do
                 if [[ ! -e $fn ]]; then
-                    #if [[ $verb -eq 1 ]]; then echo "Linking $fn ..."; fi
+                    #if [[ ${verbose} == true ]]; then echo "Linking $fn ..."; fi
                     if [[ -e ${config_FIXDIR}/MPASSIT/${fn}.${fileappend} ]]; then
                         ln -sf ${config_FIXDIR}/MPASSIT/${fn}.${fileappend} $fn
                     elif [[ -e ${config_FIXDIR}/MPASSIT/${fn} ]]; then
@@ -2990,14 +2996,14 @@ function prepare_mpassit_onetime {
                     outdone=true
                 fi
                 while [[ ! -f $fn ]]; do
-                    if [[ $verb -eq 1 ]]; then
+                    if [[ ${verbose} == true ]]; then
                         mecho0 "Waiting for $fn ..."
                     fi
                     sleep 10
                 done
                 fileage=$(( $(date +%s) - $(stat -c %Y -- "$fn") ))
                 if [[ $fileage -lt $waitseconds ]]; then
-                    if [[ $verb -eq 1 ]]; then mecho0 "Waiting for $fn ..."; fi
+                    if [[ ${verbose} == true ]]; then mecho0 "Waiting for $fn ..."; fi
                     sleep "$waitseconds"
                 fi
             done
@@ -3080,7 +3086,7 @@ function run_clean {
         if [[ -d $dawrkdir ]]; then
             cd $dawrkdir || return
 
-            if [[ $verb -eq 1 ]]; then mecho0 "Cleaning working directory ${CYAN}$dawrkdir${NC}"; fi
+            if [[ ${verbose} == true ]]; then mecho0 "Cleaning working directory ${CYAN}$dawrkdir${NC}"; fi
 
             for dirname in "${jobs[@]}"; do
 
@@ -3157,7 +3163,7 @@ source $scpdir/Common_Utilfuncs.sh || exit $?
 
 parse_args "$@"
 
-verb=${args["verb"]:-0}
+verbose=${args["verbose"]:-false}
 overwrite=${args["overwrite"]:-0}
 dorun=${args["dorun"]:-true}
 rt_run=${args["rt_run"]:-false}

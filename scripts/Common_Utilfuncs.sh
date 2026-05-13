@@ -114,7 +114,7 @@ function submit_a_job {
     #   1      2       3       4       5        6
     # wrkdir jobname jobparms jobtemp jobscript joboption
     #
-    # Use global variables: $verb, $dorun, $runcmd, $exedir
+    # Use global variables: $verbose, $dorun, $runcmd, $exedir
     #          ${config_relative_path}, $rootdir, $modulename, $machine
     #          $config_job_account_str, $config_job_exclusive_str
     #          $config_job_runexe_str, $config_job_runmpexe_str
@@ -137,6 +137,11 @@ function submit_a_job {
     local myjobtemp=$4
     local myjobscript=$5
     local myjoboption=$6
+
+    local myverbose=${verbose:-false}
+    if [[ ${verb} -eq 1 ]]; then
+        myverbose=true
+    fi
 
     cd ${mywrkdir}  || return
 
@@ -185,7 +190,7 @@ function submit_a_job {
     sed -i "/# __BEGIN_\|# __END_/d" "${myjobscript}"
 
     # shellcheck disable=SC2154
-    if [[ ${verb} -eq 1 ]]; then
+    if [[ ${myverbose} == true ]]; then
         mecho1 "Generated job script: ${WHITE}${myjobscript}${NC}"
         mecho1 "from template       : ${BLUE}${myjobtemp}${NC} "
         mecho1 "using sed file      : ${DARK}${sedfile}${NC}  "
@@ -209,7 +214,7 @@ function submit_a_job {
     #[[ -f ${config_EXEDIR}/bad_nodes.txt ]] && commandlist+=("--exclude=$(paste -sd "," ${config_EXEDIR}/bad_nodes.txt)")
     commandlist+=("${myjobscript}")
 
-    if [[ ${verb} -eq 1 ]]; then mecho0 "${commandlist[*]}"; fi
+    if [[ ${myverbose} == true ]]; then mecho0 "${commandlist[*]}"; fi
 
     if [[ -n ${myruncmd} ]]; then
         if [[ ${dorun} == true ]]; then mecho1n "Running ${BROWN}${myjobscript}${NC} .... "; fi
@@ -286,7 +291,12 @@ function check_job_status {
     fi
 
     # global variables:
-    # $runcmd, $verb
+    # $runcmd, $verbose
+
+    local myverbose=${verbose:-false}
+    if [[ ${verb} -eq 1 ]]; then
+        myverbose=true
+    fi
 
     local numtry "done" memdir runjobs mem memstr
     local memdonefile memerrorfile donefile
@@ -327,7 +337,7 @@ function check_job_status {
             memdonefile="${memdir}/done.${stfile}_${memstr}"
             memerrorfile="${memdir}/error.${stfile}_${memstr}"
 
-            if [[ ${verb} -eq 1 ]]; then mecho0 "Checking ${memdonefile}"; fi
+            if [[ ${myverbose} == true ]]; then mecho0 "Checking ${memdonefile}"; fi
             # 4 possiblilites
             #   1. done, do not enter the following loop
             #   2. queued or running, wait for the log file or error/done file
@@ -383,7 +393,7 @@ function check_job_status {
                     fi
                     break
                 else                           # job pending or running
-                    #if [[ $verb -eq 1 ]]; then echo "Waiting for $donefile"; fi
+                    #if [[ ${myverbose} == true ]]; then echo "Waiting for $donefile"; fi
                     sleep 10
                 fi
             done
@@ -581,6 +591,7 @@ function delete_array {
     # the most efficient approach in Bash uses an associative array as a lookup table.
     [[ $# -lt 2 ]] && return 1
 
+    # shellcheck disable=SC2178
     local -n array1="$1"
     local -n array2="$2"
 
@@ -798,7 +809,7 @@ function validate_assignment {
 
 ########################################################################
 
-#verb=false
+#verbose=false
 
 function readconf {
     if [[ $# -lt 2 ]]; then
@@ -810,12 +821,16 @@ function readconf {
     local sections
     sections=$(join_by \| "${@:2}")
 
-    local debug=${verb}           # global verb
     local readmode=false
     local line clean_part
     local varname varvalue vartype
     local color_key vartypestr
     local confvarname
+
+    local debug=${verbose:-false}
+    if [[ ${verb} -eq 1 ]]; then
+        debug=true
+    fi
 
     declare -a read_sections=()
     declare -A type_colors=(["Number"]="GREEN" ["String"]="PURPLE" ["Array"]="RED" ["Bool"]="LIGHT_BLUE")
@@ -837,7 +852,7 @@ function readconf {
         if [[ "${line}" =~ ^\[(${sections})\]$ ]]; then
             readmode=true
             local sname="${BASH_REMATCH[1]}"
-            if [[ ${debug} -eq 1 ]]; then
+            if [[ ${debug} == true ]]; then
                 mecho0 ""
                 mecho0 "=== SECTION: ${YELLOW}${sname}${NC}"
             fi
@@ -864,7 +879,7 @@ function readconf {
                 [[ -z "${clean_part}" ]] && continue
 
                 if validate_assignment "${clean_part}"; then
-                    if [[ ${debug} -eq 1 ]]; then
+                    if [[ ${debug} == true ]]; then
                         color_key=${type_colors[${vartype}]}
                         vartypestr=$(printf "%-6s" "${vartype}")
                         mecho0 "+++ (${!color_key}${vartypestr}${NC}): ${BROWN}${varname}${NC} = ${DARK}${varvalue}${NC}"
@@ -884,7 +899,7 @@ function readconf {
         fi
     done < "${configfile}"
 
-    if [[ ${debug} -eq 1 ]]; then mecho0 ""; fi
+    if [[ ${debug} == true ]]; then mecho0 ""; fi
 
     mecho0 "Successfully read sections: ${WHITE}${read_sections[*]}${NC}."
 }
@@ -981,6 +996,11 @@ wait_for_conditions () {
     local conditions cond1 rcond1 cond2 rcond2
     read -r -a conditions <<< "$1"
 
+    local myverbose=${verbose:-false}
+    if [[ ${verb} -eq 1 ]]; then
+        myverbose=true
+    fi
+
     if [[ ${dorun} == true ]]; then
         for cond in "${conditions[@]}"; do
             if [[ "$cond" =~ (.+)"|"(.+) ]]; then
@@ -988,14 +1008,14 @@ wait_for_conditions () {
                 cond2=${BASH_REMATCH[2]}; rcond2=$(realpath -m --relative-to "${WORKDIR}" "${cond1}")
                 mecho1 "Checking ${rcond1} or ${rcond2} ...."
                 while [[ ! -e "${cond1}" && ! -e "${cond2}" ]]; do
-                    [[ $verb -eq 1 ]] && mecho0 "Waiting for file: ${LIGHT_BLUE}${rcond1}${NC} or ${LIGHT_BLUE}${rcond2}${NC}"
+                    [[ ${myverbose} == true ]] && mecho0 "Waiting for file: ${LIGHT_BLUE}${rcond1}${NC} or ${LIGHT_BLUE}${rcond2}${NC}"
                     sleep 10
                 done
             else
                 rcond1=$(realpath -m --relative-to "${WORKDIR}" "${cond}")
                 mecho1 "Checking ${rcond1} ...."
                 while [[ ! -e ${cond} ]]; do
-                    if [[ $verb -eq 1 ]]; then
+                    if [[ ${myverbose} == true ]]; then
                         mecho0 "Waiting for file: ${rcond1}"
                     fi
                     sleep 10
@@ -1036,7 +1056,7 @@ function num_pending_jobs_greater_than {
     #cmd=("squeue" "-o" "%.12i %.2t" "-u" "${USER}")
     #status_index=1
     #
-    #if $verb; then
+    #if [[ ${verbose} == true ]]; then
     #    echo "${cmd[*]}"
     #fi
     #mapfile -t out < <( "${cmd[@]}" 2>&1 )
@@ -1074,6 +1094,11 @@ function clean_mem_runfiles {
 
     local mem memstr memdir donefile
 
+    local myverbose=${verbose:-false}
+    if [[ ${verb} -eq 1 ]]; then
+        myverbose=true
+    fi
+
     cd ${mywrkdir}  || return
 
     done=0
@@ -1084,14 +1109,14 @@ function clean_mem_runfiles {
 
         #echo $donefile, $memdir
         if [[ -e ${donefile} ]]; then
-            if [[ ${verb} -eq 1 ]]; then
+            if [[ ${myverbose} == true ]]; then
                 mecho1 "${CYAN}${donefile}${NC} exist, delete ${BROWN}${memdir}${NC} & ${BROWN}${jobname}_${mem}_*.log${NC}."
             fi
             rm -rf ${memdir}
             rm -f  ${jobname}_${mem}_*.log
             (( done+=1 ))
         else
-            if [[ ${verb} -eq 1 ]]; then
+            if [[ ${myverbose} == true ]]; then
                 mecho1 "${CYAN}${donefile}${NC} not found. Skip deleting ${BROWN}${memdir}${NC} & ${BROWN}${jobname}_${mem}_*.log${NC}."
             fi
         fi
@@ -1114,6 +1139,11 @@ function split_graph {
     local dorun=$5
     local verb=$6
 
+    local myverbose=${verb:-false}
+    if [[ ${verb} -eq 1 ]]; then
+        myverbose=true
+    fi
+
     local wrkdir
     wrkdir=$(pwd)
 
@@ -1122,7 +1152,7 @@ function split_graph {
 
     cd "${rundir}" || exit $?
 
-    if [[ ${verb} -eq 1 ]]; then
+    if [[ ${myverbose} == true ]]; then
         mecho0 "Generating ${CYAN}${graph_file}.part.${numprocs}${NC} in ${BLUE}${shortdir}${NC} using ${GREEN}${gpmetis}${NC}"
     fi
     if command -v ${gpmetis} >/dev/null 2>&1; then

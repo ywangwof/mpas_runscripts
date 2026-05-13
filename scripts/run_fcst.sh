@@ -179,7 +179,7 @@ function parse_args {
                 args["dorun"]=false
                 ;;
             -v)
-                args["verb"]=1
+                args["verbose"]=true
                 ;;
             -r)
                 args["rt_run"]=true
@@ -354,7 +354,7 @@ function run_mpas {
     # Preparation for all members
     #
     if [[ ! -f $rundir/$domname/$domname.graph.info.part.${config_npefcst} ]]; then
-        split_graph "${config_gpmetis}" "${domname}.graph.info" "${config_npefcst}" "$rundir/$domname" "$dorun" "$verb"
+        split_graph "${config_gpmetis}" "${domname}.graph.info" "${config_npefcst}" "$rundir/$domname" "$dorun" "${verbose}"
     fi
 
     currtime_str=$(date -u -d @$iseconds +%Y-%m-%d_%H:%M:%S)
@@ -421,7 +421,7 @@ function run_mpas {
         ln -sf "${case_dir}/init/${domname}.invariant.nc" .
         ln -sf "${case_dir}/${domname}/${domname}.ugwp_oro_data.nc" .
 
-        if [[ $verb -eq 1 ]]; then
+        if [[ ${verbose} == true ]]; then
             mecho0 "Member: $iens init file: ${initfile}";
         fi
 
@@ -442,7 +442,7 @@ function run_mpas {
             done
         fi
         ln -sf ${lbc_dafile} ${lbc_myfile}
-        if [[ $verb -eq 1 ]]; then
+        if [[ ${verbose} == true ]]; then
             mecho0 "Member: $iens lbc file ${mpastime_str}: ${lbc_dafile}";
         fi
 
@@ -455,12 +455,12 @@ function run_mpas {
             lbc_file="${case_dir}/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str}.nc"
             if [[ ${isec} -eq ${jsec} ]]; then
                 ln -sf $lbc_file ${domname}_${memstr}.lbc.${mpastime_str}.nc
-                [[ $verb -eq 1 ]] && mecho0 "Member: $iens lbc file ${mpastime_str}: ${lbc_file}";
+                [[ ${verbose} == true ]] && mecho0 "Member: $iens lbc file ${mpastime_str}: ${lbc_file}";
             else
                 nsec=$((jsec+config_EXTINVL))
                 ntime_str=$(date -u -d @$nsec +%Y-%m-%d_%H.%M.%S)
                 lbc_filen="${case_dir}/lbc/${domname}_${mlbcstr}.lbc.${ntime_str}.nc"
-                [[ $verb -eq 1 ]] && mecho0 "Member: $iens lbc file ${mpastime_str} interpolate from:\n\t\t${lbc_file}\n\t\t${lbc_filen}"
+                [[ ${verbose} == true ]] && mecho0 "Member: $iens lbc file ${mpastime_str} interpolate from:\n\t\t${lbc_file}\n\t\t${lbc_filen}"
                 exp_lbc_times+=("${mpastime_str}")
                 ext_lbc_time1+=("${lbctime_str}")
                 ext_lbc_time2+=("${ntime_str}")
@@ -880,7 +880,7 @@ function run_mpassit {
             parmfiles=(diaglist histlist_2d histlist_3d histlist_soil)
             for fn in "${parmfiles[@]}"; do
                 if [[ ! -e $fn ]]; then
-                    #if [[ $verb -eq 1 ]]; then echo "Linking $fn ..."; fi
+                    #if [[ ${verbose} == true ]]; then echo "Linking $fn ..."; fi
                     if [[ -e ${config_FIXDIR}/MPASSIT/${fn}.${fileappend} ]]; then
                         ln -sf ${config_FIXDIR}/MPASSIT/${fn}.${fileappend} $fn
                     elif [[ -e ${config_FIXDIR}/MPASSIT/${fn} ]]; then
@@ -1090,14 +1090,14 @@ function prepare_mpassit_onetime {
                         continue 3                   # go ahead to process next hour
                     fi
 
-                    if [[ $verb -eq 1 ]]; then
+                    if [[ ${verbose} == true ]]; then
                         mecho0 "Waiting for $fn ..."
                     fi
                     sleep 10
                 done
                 fileage=$(( $(date +%s) - $(stat -c %Y -- "$fn") ))
                 if [[ $fileage -lt $waitseconds ]]; then
-                    if [[ $verb -eq 1 ]]; then mecho0 "Waiting for $fn ..."; fi
+                    if [[ ${verbose} == true ]]; then mecho0 "Waiting for $fn ..."; fi
                     sleep "$waitseconds"
                 fi
             done
@@ -1232,7 +1232,7 @@ function run_upp {
                     continue 2                    # go ahread to process next forecast hour
                 fi
 
-                #if [[ $verb -eq 1 ]]; then
+                #if [[ ${verbose} == true ]]; then
                 #    echo "Waiting for $donefile ..."
                 #fi
                 sleep 10
@@ -1382,7 +1382,7 @@ function fcst_driver() {
             #------------------------------------------------------
             # 1. Model forecast for all members
             #------------------------------------------------------
-            if [[ $verb -eq 1 ]]; then echo "  Run MPAS model at $eventtime"; fi
+            if [[ ${verbose} == true ]]; then echo "  Run MPAS model at $eventtime"; fi
 
             mpas_jobscript="run_mpas.${mach}"
             run_mpas $fcstwrkdir $ilaunch
@@ -1395,7 +1395,7 @@ function fcst_driver() {
             #------------------------------------------------------
             # 2. Interpolate the forecast datasets to a virtual WRF grid
             #------------------------------------------------------
-            if [[ $verb -eq 1 ]]; then echo "  Run MPASSIT at $eventtime"; fi
+            if [[ ${verbose} == true ]]; then echo "  Run MPASSIT at $eventtime"; fi
 
             run_mpassit $fcstwrkdir $ilaunch
 
@@ -1428,7 +1428,7 @@ function fcst_driver() {
                 fi
             fi
 
-            if [[ $verb -eq 1 ]]; then echo "  Run UPP at $eventtime"; fi
+            if [[ ${verbose} == true ]]; then echo "  Run UPP at $eventtime"; fi
 
             run_upp $fcstwrkdir $ilaunch
 
@@ -1505,7 +1505,7 @@ function run_clean {
         if [[ -d $fcstwrkdir ]]; then
             cd $fcstwrkdir || return
 
-            if [[ $verb -eq 1 ]]; then mecho0 "    Cleaning working directory ${CYAN}${fcstwrkdir}${NC}"; fi
+            if [[ ${verbose} == true ]]; then mecho0 "    Cleaning working directory ${CYAN}${fcstwrkdir}${NC}"; fi
 
             for dirname in "${jobs[@]}"; do
 
@@ -1649,12 +1649,11 @@ source $scpdir/Common_Utilfuncs.sh || exit $?
 
 parse_args "$@"
 
-[[ -v args["verb"] ]]        && verb=${args["verb"]}           || verb=0
-[[ -v args["overwrite"] ]]   && overwrite=${args["overwrite"]} || overwrite=0
-
-[[ -v args["dorun"] ]]       && dorun=${args["dorun"]}         || dorun=true
-[[ -v args["rt_run"] ]]      && rt_run=${args["rt_run"]}       || rt_run=false  # realtime run?
-[[ -v args["jobwait"] ]]     && jobwait=${args["jobwait"]}     || jobwait=0
+verbose=${args["verbose"]:-false}
+overwrite=${args["overwrite"]:-0}
+dorun=${args["dorun"]:-true}
+rt_run=${args["rt_run"]:-false}                         # realtime run?
+jobwait=${args["jobwait"]:-0}
 
 [[ -v args["cleanoption"] ]] && cleanoption=${args["cleanoption"]}              || cleanoption="clean"
 [[ -v args["cleanjobs"] ]]   && read -r -a cleanjobs <<< "${args['cleanjobs']}" || cleanjobs=()
