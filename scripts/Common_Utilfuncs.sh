@@ -17,7 +17,6 @@
 # o is_balanced              # Check whether quote character is balanced  (used in readconf)
 # o validate_assignment      # Check whether a string is a valid Bash variable assignment statement (String, Number, Array, Bool, used in readconf)
 # o readconf                 # Read config file, written from "setup_mpas-wofs.sh"
-# o convertS2days            # Convert epoch seconds to days/seconds since 1601-01-01
 # o get_parent_dir           # get n level parent directory path
 # o get_3char_order          # Get 3-character letters from 0 for GRIB file processing
 # o clean_mem_runfiles       # Clean the runtime files of an ensemble task
@@ -198,13 +197,14 @@ function submit_a_job {
         rm -f ${sedfile}
     fi
 
-    local -a commandlist=("${runcmd}")
+    local -a commandlist=(${runcmd})
 
     # Options to the job itself
     if [[ -n ${myjoboption} ]]; then
         if [[ "${myjoboption}" == *" "* ]]; then
             # If it contains a space, split it into the array
             # This uses the default IFS (Internal Field Separator) which includes spaces
+            # shellcheck disable=SC2206
             commandlist+=( ${myjoboption} )
         else
             # Otherwise, just append the string as one element
@@ -887,7 +887,7 @@ function readconf {
 
                     confvarname="config_${varname}"
                     # Safety check for existing variables
-                    [[ -v "${confvarname}" ]] && mecho0 "*** WARNING *** Variable ${BROWN}${varname}${NC} changed: ${YELLOW}${!confvarname}${NC} -> ${WHITE}${varvalue}${NC}"
+                    [[ -v ${confvarname} ]] && mecho0 "*** WARNING *** Variable ${BROWN}${varname}${NC} changed: ${YELLOW}${!confvarname}${NC} -> ${WHITE}${varvalue}${NC}"
 
                     # Execute the assignment
                     eval "config_${clean_part}"
@@ -902,31 +902,6 @@ function readconf {
     if [[ ${debug} == true ]]; then mecho0 ""; fi
 
     mecho0 "Successfully read sections: ${WHITE}${read_sections[*]}${NC}."
-}
-
-########################################################################
-
-function convertS2days {
-    # Usage:
-    #   read -r -a g_date < <(convertS2days "${seconds}")
-    #   echo "${g_date[0]}, ${g_date[1]}"
-    #         days          seconds since 1601-01-01 00:00:00
-
-    local g_sec=$1
-
-    if [[ $# -ne 1 ]]; then
-        echo "No enough argument for \"${FUNCNAME[0]}:\", get: $*"
-        exit 0
-    fi
-
-    # epoch: 1970-01-01 00:00:00 is 134774 days since '1601-01-01'
-    # one day is 86400 seconds
-
-    local g_days g_secs
-    (( g_days=g_sec/86400 + 134774 ))
-    (( g_secs=g_sec-86400*(g_sec/86400) ))
-
-    echo "${g_days} ${g_secs}"
 }
 
 ########################################################################
@@ -1006,21 +981,22 @@ wait_for_conditions () {
             if [[ "$cond" =~ (.+)"|"(.+) ]]; then
                 cond1=${BASH_REMATCH[1]}; rcond1=$(realpath -m --relative-to "${WORKDIR}" "${cond1}")
                 cond2=${BASH_REMATCH[2]}; rcond2=$(realpath -m --relative-to "${WORKDIR}" "${cond1}")
-                mecho1 "Checking ${rcond1} or ${rcond2} ...."
+                mecho1n "Checking ${rcond1} or ${rcond2} ...."
                 while [[ ! -e "${cond1}" && ! -e "${cond2}" ]]; do
-                    [[ ${myverbose} == true ]] && mecho0 "Waiting for file: ${LIGHT_BLUE}${rcond1}${NC} or ${LIGHT_BLUE}${rcond2}${NC}"
+                    [[ ${myverbose} == true ]] && mecho0 "\nWaiting for file: ${LIGHT_BLUE}${rcond1}${NC} or ${LIGHT_BLUE}${rcond2}${NC}"
                     sleep 10
                 done
             else
                 rcond1=$(realpath -m --relative-to "${WORKDIR}" "${cond}")
-                mecho1 "Checking ${rcond1} ...."
+                mecho1n "Checking ${rcond1} ...."
                 while [[ ! -e ${cond} ]]; do
                     if [[ ${myverbose} == true ]]; then
-                        mecho0 "Waiting for file: ${rcond1}"
+                        mecho0 "\nWaiting for file: ${rcond1}"
                     fi
                     sleep 10
                 done
             fi
+            echo " found."
         done
     fi
 }

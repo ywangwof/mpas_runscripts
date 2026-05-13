@@ -28,23 +28,21 @@ source "${script_dir}/Common_Utilfuncs.sh" || exit $?
 
 function usage {
     echo    " "
-    echo    "    USAGE: $0 [options] [DATETIME] [WORKDIR] [CONFIG] [TASK]"
+    echo    "    USAGE: $0 [options] [EVENTDATE] [WORKDIR] [CONFIG] [TASK]"
     echo    " "
     echo    "    PURPOSE: Run MPAS-WOFS tasks interactively or using Linux at/cron facility."
     # shellcheck disable=SC2154
     echo -e "             It will log the outputs to a file as ${LIGHT_BLUE}\${WORKDIR}${NC}/${DIR_CLR}\${EVENTDATE}${NC}/log${DIRa_CLR}\${affix}${NC}.${YELLOW}\${task}${NC} automatically."
     echo    " "
-    echo    "    DATETIME - Event date as YYYYmmdd."
-    echo    " "
-    echo -e "    WORKDIR  - Top level ${LIGHT_BLUE}run_dir${NC} for all tasks. Generally, it should contain these folders:"
-    echo -e "                   ${DIR_CLR}\${EVENTDATE}${NC}/{${WHITE}dacycles${NC},${WHITE}fcst${NC}}${DIRa_CLR}\${affix}${NC}"
-    echo -e "                   {${WHITE}FCST${NC},${WHITE}summary_files${NC},${WHITE}image_files${NC}}/${DIR_CLR}\${EVENTDATE}${DIRa_CLR}\${affix}${NC}"
+    echo -e "    CONFIG   - MPAS-WoFS runtime configuration file with full path. Default: ${LIGHT_BLUE}\${WORKDIR}${NC}/config.${DIR_CLR}\${EVENTDATE}${NC}"
+    echo -e "    TASK     - One of [${YELLOW}dacycles${NC},${YELLOW}fcst${NC},${YELLOW}post${NC},${YELLOW}plot${NC},${YELLOW}diag${NC},${YELLOW}verif${NC},${YELLOW}snd${NC},${BROWN}atpost${NC}, ${YELLOW}nccompress${NC}]"
     echo    ""
-    echo    "    CONFIG   - MPAS-WoFS runtime configuration file with full path."
-    echo    "               WORKDIR & DATETIME will be extracted from the CONFIG name unless they are given explicitly."
-    echo -e "    TASK     - One of [${YELLOW}dacycles${NC},${YELLOW}fcst${NC},"
-    echo -e "               ${YELLOW}post${NC},${YELLOW}plot${NC},${YELLOW}diag${NC},${YELLOW}verif${NC},${YELLOW}snd${NC},"
-    echo -e "               ${BROWN}atpost${NC}, ${BROWN}nccompress${NC}]"
+    echo -e "    ${DARK}WORKDIR & EVENTDATE may be extracted from the CONFIG name unless they are given explicitly.${NC}"
+    echo    ""
+    echo -e "    EVENTDATE - Event date as YYYYmmdd."
+    echo -e "    WORKDIR   - Top level ${LIGHT_BLUE}run_dir${NC} for all tasks. It should contain these folders:"
+    echo -e "                       ${DIR_CLR}\${EVENTDATE}${NC}/{dacycles,fcst}${DIRa_CLR}\${affix}${NC}"
+    echo -e "                       {FCST,summary_files,image_files}/${DIR_CLR}\${EVENTDATE}${DIRa_CLR}\${affix}${NC}"
     echo    " "
     echo    "    OPTIONS:"
     echo    "              -h                  Display this message"
@@ -53,17 +51,16 @@ function usage {
     echo    "              -v                  Verbose mode"
     echo    "              -s  HHMM            Start time in HHMM format or YYYYmmddHHMM."
     echo    "              -e  HHMM            Last time in HHMM format or YYYYmmddHHMM."
-    echo    "              -f  conf_file       Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
     echo -e "              -t  launchtime      Date and time to launch the first task for task ${BROWN}atpost${NC}, as ${LIGHT_BLUE}HH:MM${NC} or ${LIGHT_BLUE}HH:MM mmddyy${NC}"
-    echo -e "              --tasks  task_list  Comma-separated list of tasks for ${BROWN}nccompress${NC}, e.g., ${YELLOW}dacycles,fcst,mpassit,post${NC}. Default: all."
+    echo -e "              --wrkdirs  dir_list Comma-separated list of work directories for ${BROWN}nccompress${NC}, e.g., ${YELLOW}dacycles,fcst,mpassit,post${NC}."
     echo -e "              -p  machine         Post-processing machine, default: ${PURPLE}wof-epyc8${NC}."
     echo    " "
     echo    "   DEFAULTS:"
     echo -e "              EVENTDATE  = ${DIR_CLR}${eventdateDF:0:8}$NC"
-    echo -e "              WORKDIR    = ${LIGHT_BLUE}\${site_workdir}${NC}   # from scripts/Site_Runtime.sh"
+    echo -e "              WORKDIR    = ${LIGHT_BLUE}\${site_workdir}${NC}      # from scripts/Site_Runtime.sh"
     echo    "              rootdir    = ${rootdir}"
     echo    "              script_dir = ${script_dir}"
-    echo    "              post_dir   = \${site_postdir}"
+    echo -e "              post_dir   = ${LIGHT_BLUE}\${site_postdir}${NC}      # from scripts/Site_Runtime.sh"
     echo    " "
     echo    "                                     -- By Y. Wang (2024.04.17)"
     echo    " "
@@ -122,9 +119,9 @@ function parse_args {
                 args["post_machine"]="$2"
                 shift
                 ;;
-            --tasks )
-                IFS=',' read -r -a tasks <<< "$2"
-                args["tasks"]="${tasks[*]}"
+            --wrkdirs )
+                IFS=',' read -r -a wrkdirs <<< "$2"
+                args["wrkdirs"]="${wrkdirs[*]}"
                 shift
                 ;;
             -* )
@@ -241,8 +238,37 @@ else
     usage 1
 fi
 
+if [[ -z ${task} ]]; then
+    declare -a options
+    declare selected result
+
+    options=(
+             "dacycles:     Run ${YELLOW}run_dacycles.sh${NC} from ${CYAN}${default_datime}${NC} to ${CYAN}${default_endtime}${NC}"
+             "fcst:         Run ${YELLOW}run_fcst.sh${NC} from ${CYAN}${default_fcsttime}${NC} to ${CYAN}${default_endtime}${NC}"
+             "post:         Generate summary files from ${CYAN}${default_fcsttime}${NC} to ${CYAN}${default_endtime}${NC}"
+             "plot:         Generate images for the summary files from ${CYAN}${default_fcsttime}${NC} to ${CYAN}${default_endtime}${NC}"
+             "verif:        Generate verification images from ${CYAN}${default_fcsttime}${NC} to ${CYAN}${default_endtime}${NC}"
+             "snd:          Generate sounding files from ${CYAN}${default_fcsttime}${NC} to ${CYAN}${default_endtime}${NC}"
+             "diag:         Do diagnostic plots from ${CYAN}${default_datime}${NC} to ${CYAN}${default_endtime}${NC}"
+             "nccompress:   Compress the existing forecast files and clean up the original ones"
+             "abort:        Exit without doing anything"
+            )
+
+    echo ""
+    select_option "Select a task to get started: " "${options[@]}"
+    echo ""
+
+    selected=$?; result="${options[${selected}]}"; task="${result%%:*}"
+
+    if [[ "${task}" == "abort" ]]; then
+        echo -e "${YELLOW}INFO${NC}: Aborting as requested."
+        exit 0
+    fi
+    saved_args+=" ${task}"
+fi
+
 if [[ -z ${starttime} ]]; then
-    if [[ "${task}" == "dacycles" ]]; then
+    if [[ "${task}" == "dacycles" || "${task}" == "diag" ]]; then
         starttime="${default_datime}"
     else
         starttime="${default_fcsttime}"
@@ -613,8 +639,8 @@ snd )
 diag )
     cd "${script_dir}" || exit 1
     cmds=("${script_dir}/plot_allobs.sh" "${config_file}" "${eventdate}")
-    [[ "${starttime}" != "${default_fcsttime}" ]] && cmds+=(-s "${startdatetime}")
-    [[ "${endtime}"   != "${default_endtime}"  ]] && cmds+=(-e "${enddatetime}")
+    [[ "${starttime}" != "${default_datime}" ]]    && cmds+=(-s "${startdatetime}")
+    [[ "${endtime}"   != "${default_endtime}"   ]] && cmds+=(-e "${enddatetime}")
     if [[ -n "${taskopt}" ]]; then cmds+=("${taskopt}");  fi
 
     if [[ ${support_interactive_job} == false ]]; then               # run interactively
@@ -656,15 +682,15 @@ atpost )
 nccompress )
     cd "${run_dir}" || exit 1
 
-    if [[ -v args["tasks"] ]]; then
-        tasklist=("${tasks[@]}")
+    if [[ -v args["wrkdirs"] ]]; then
+        read -r -a wrkdirs <<< "${args["wrkdirs"]}"
     else
-        tasklist=(fcst mpassit post)
+        wrkdirs=(fcst mpassit post)
     fi
 
     if [[ ${support_interactive_job} == false ]]; then
         # shellcheck disable=SC2154
-        if [[ "${tasklist[*]}" == "dacycles" ]]; then
+        if [[ "${wrkdirs[*]}" == "dacycles" ]]; then
             jobtemplate="run_compress_da.slurm"
             jobscript="run_compress_da_${eventdate}${affix}.slurm"
             jobname="${task}_da_${eventdate}${affix}"
@@ -686,7 +712,7 @@ nccompress )
             [JOBNAME]="${jobname}"
             [CPUSPEC]="${cpuspec}"
             [MACHINE]="${machine}"
-            [TASKLIST]="(${tasklist[*]})"
+            [WRKDIRS]="(${wrkdirs[*]})"
             [EVENTDATE]="${eventdate}"
             [AFFIX]="${affix}"
             [MEMBERS]="${ens_size}"

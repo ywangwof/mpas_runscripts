@@ -2662,19 +2662,9 @@ function run_mpassit_mean {
     # Waiting for job conditions
     #
     local -a conditions
-    conditions=("$(realpath -m --relative-to=. ${dawrkdir}/jedi_solver/done.solver)")
+    conditions=("${dawrkdir}/jedi_solver/done.solver")
 
-    if [[ $dorun == true ]]; then
-        for cond in "${conditions[@]}"; do
-            mecho0 "Checking $cond...."
-            while [[ ! -e $cond ]]; do
-                if [[ ${verbose} == true ]]; then
-                    mecho0 "Waiting for file: $cond"
-                fi
-                sleep 10
-            done
-        done
-    fi
+    wait_for_conditions "${conditions[*]}"
 
     #
     # Prepare MPASSIT working files

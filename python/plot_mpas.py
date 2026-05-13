@@ -1,33 +1,18 @@
 #!/usr/bin/env python3
 
 import os
-from contextlib import redirect_stderr
-
-# geoviews may print a deprecation message during uxarray import on some systems.
-# Keep output clean by muting stderr only for this import.
-
-with open(os.devnull, "w") as _devnull, redirect_stderr(_devnull):
-    import uxarray as ux
-
-import matplotlib
-matplotlib.use('Agg') # Force non-interactive backend
-
-import xarray as xr
-import matplotlib.pyplot as plt
-import matplotlib.collections as mcoll
-import matplotlib.colors as mcolors
 import argparse
 import numpy as np
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
-from metpy.plots import ctables
 from pathlib import Path
 import time
 import re
 import traceback
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
-from netCDF4 import Dataset
+
+# Heavy scientific imports (uxarray, cartopy, matplotlib.pyplot, metpy, netCDF4)
+# are deferred into the worker functions that need them so that the script
+# starts quickly even when those packages are slow to initialise.
 
 # UI Libraries
 try:
@@ -68,7 +53,7 @@ def decode_filename_time(filename):
 def log_error(msg):
     with open("error_log.txt", "a") as f:
         f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {msg}\n")
-        
+
 ################################################################################
 #
 # Created with help from claude ai
@@ -87,7 +72,7 @@ def reconstruct_winds_vectorized(mesh_grid, data_grid, addTimeAxis=True):
     2. Requires that the cellTangentPlane array not be zero for proper reconstruction.
 
 
-    Required Inputs  
+    Required Inputs
     ---------------
     MPAS mesh grid netCDF file
     MPAS data grid information.
@@ -109,18 +94,21 @@ def reconstruct_winds_vectorized(mesh_grid, data_grid, addTimeAxis=True):
 
     """
 
+    import xarray as xr
+    from netCDF4 import Dataset
+
     with Dataset(mesh_grid, 'r') as nc:
 
         n_edges_on_cell = nc.variables["nEdgesOnCell"][:].astype(np.int32)
- 
+
         # MPAS stores 1-based Fortran indices — convert to 0-based
 
         edges_on_cell = nc.variables["edgesOnCell"][:].astype(np.int32) - 1
- 
+
         # RBF reconstruction weight vectors, shape (nCells, maxEdges, R3)
 
         coeffs = np.asarray(nc.variables["coeffs_reconstruct"][:], dtype=np.float64)
- 
+
         # Local tangent-plane basis at each cell center, shape (nCells, TWO, R3)
         #   [:, 0, :] = local east  (zonal)   unit vector
         #   [:, 1, :] = local north (merid.)  unit vector
@@ -134,7 +122,7 @@ def reconstruct_winds_vectorized(mesh_grid, data_grid, addTimeAxis=True):
 
     is_zero = np.allclose(tangent_plane, 0)
     if is_zero:
-        print(f" \n Reconstruct_winds_vectorized:  cellTangentPlane array is uninitialized!!") 
+        print(f" \n Reconstruct_winds_vectorized:  cellTangentPlane array is uninitialized!!")
         print(f" \n Cannot reconstruct winds - trying using MPAS init file")
         print(f" \n Return zero arrays for U_Zonal and U_Meridonal")
 
@@ -148,25 +136,25 @@ def reconstruct_winds_vectorized(mesh_grid, data_grid, addTimeAxis=True):
         # Step 1 — inactive-slot mask: True where edge slot is not used
         slot_idx = np.arange(max_edges, dtype=np.int32)[None, :]   # (1, maxEdges)
         mask = slot_idx >= n_edges_on_cell[:, None]                 # (nCells, maxEdges)
- 
+
         # Step 2 — gather: clamp masked slots to index 0 (values zeroed in step 4)
         safe_edges = edges_on_cell.copy()
         safe_edges[mask] = 0
         u_e = u[safe_edges]      # (nCells, maxEdges, nVertLevels)
- 
+
         # Step 3 — project RBF coefficients onto local east/north
         east  = tangent_plane[:, 0, :]    # (nCells, 3)
         north = tangent_plane[:, 1, :]    # (nCells, 3)
- 
+
         # einsum 'iej,ij->ie' : for each cell i and edge slot e,
         #   sum over the 3 Cartesian components j
         w_zon = np.einsum("iej,ij->ie", coeffs, east)    # (nCells, maxEdges)
         w_mer = np.einsum("iej,ij->ie", coeffs, north)   # (nCells, maxEdges)
- 
+
         # Step 4 — zero inactive slots and contract over edge dimension
         w_zon[mask] = 0.0
         w_mer[mask] = 0.0
- 
+
         # einsum 'ie,iek->ik' : weighted sum over edge slots
         u_zonal = np.einsum("ie,iek->ik", w_zon, u_e)   # (nCells, nVertLevels)
         u_merid = np.einsum("ie,iek->ik", w_mer, u_e)   # (nCells, nVertLevels)
@@ -181,7 +169,7 @@ def reconstruct_winds_vectorized(mesh_grid, data_grid, addTimeAxis=True):
                             name='U_Zonal', attrs={'units': 'm s^-1'}), \
                xr.DataArray(u_merid, dims=['nCells','nVertLevels'],
                             name='U_Merid', attrs={'units': 'm s^-1'})
-        
+
 
 ########################################################################
 # Get command line arguments
@@ -202,6 +190,9 @@ def get_args():
 
 #######################################################################
 def get_plot_settings(fieldname, cmin=None, cmax=None, cinc=None):
+    import matplotlib.colors as mcolors
+    import matplotlib.pyplot as plt
+    from metpy.plots import ctables
     cmap = "turbo"
     norm = None
     if fieldname.startswith("refl"):
@@ -236,6 +227,19 @@ def get_plot_settings(fieldname, cmin=None, cmax=None, cinc=None):
 #######################################################################
 def plot_mpas_worker(task_info):
 
+    import os, sys
+    from contextlib import redirect_stderr
+    import matplotlib
+    matplotlib.use('Agg')  # Force non-interactive backend
+    import matplotlib.pyplot as plt
+    import matplotlib.collections as mcoll
+    import matplotlib.colors as mcolors
+    import cartopy.crs as ccrs
+    import cartopy.feature as cfeature
+    # Suppress any deprecation warnings uxarray prints on import
+    with open(os.devnull, 'w') as _devnull, redirect_stderr(_devnull):
+        import uxarray as ux
+
     fieldname, level, grid_source, data_file, args_dict, file_timestamp = task_info
 
     t_start = time.time()
@@ -258,7 +262,7 @@ def plot_mpas_worker(task_info):
         if fieldname == 'u_zonal' or fieldname == 'u_merid':  # if u or v are requested, compute nodal recontructed winds
 
             print(f"\n ---> Reconstructing U & V from raw MPAS u \n")
-            u, v = reconstruct_winds_vectorized(grid_source, data_file) 
+            u, v = reconstruct_winds_vectorized(grid_source, data_file)
 
             is_zero = np.allclose(u, 0) and np.allclose(v, 0)
             if is_zero:
