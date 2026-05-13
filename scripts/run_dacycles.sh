@@ -2195,11 +2195,11 @@ function run_update_mpas {
     [[ ${nnodes} -lt 1 ]] && nnodes=1
 
     claim_cpu_update="--ntasks-per-node=${ntasks_per_node}"
-    runexe_str="srun --ntasks=1 --nodes=1 --exclusive --relative=0 bash -c"
+    #runexe_str="srun --ntasks=1 --nodes=1 --exclusive --relative=0 bash -c"
 
     declare -A jobParms=(
         [PARTION]="${config_partition_filter}"
-        [NOPART]="1"
+        [NOPART]="${nopart}"
         [JOBNAME]="update_mpas_${eventtime}"
         [CPUSPEC]="${claim_cpu_update}"
         [CPCMD]="${cpcmd}"

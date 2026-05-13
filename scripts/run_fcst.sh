@@ -346,7 +346,7 @@ function run_mpas {
     #
     # Waiting for job conditions
     #
-    conditions=("${rundir}/lbc/done.${domname}" "${dawrkdir}/jedi_solver/done.solver")
+    conditions=("${rundir}/lbc/done.${domname}" "${dawrkdir}/done.update_mpas")
 
     wait_for_conditions "${conditions[*]}"
 

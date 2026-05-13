@@ -2,10 +2,10 @@
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
-#SBATCH --mem=96G
 #SBATCH -t 00:30:00
 #SBATCH --output=WRKDIR/fcst_all_update_mpas_%j.log
 #SBATCH --exclusive
+#SBATCH --distribution=block:cyclic
 ACCTSTR
 
 
@@ -256,7 +256,7 @@ EOF
 # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
 # Main Execution Logic
-# Run all NENS members in background simultaneously
+# Run all 36 members simultaneously across allocated nodes
 #
 # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
@@ -269,13 +269,30 @@ declare -A pids  # Associative array to store PID -> Member mapping
 declare -a fail_jobs=()
 
 t0=$(date '+%s')
+
+echo -e "Starting all members simultaneously across ${SLURM_JOB_NUM_NODES} nodes ...\n"
+
+# Parse allocated nodes from SLURM nodelist
+mapfile -t node_array < <(sinfo -N --nodes="${SLURM_NODELIST}" -h -o '%N')
+num_nodes=${#node_array[@]}
+echo "Allocated nodes: ${node_array[*]} (total: $num_nodes nodes)"
+
+# Calculate task-to-node mapping for even distribution
+node_idx=0
+
+# Launch each member on its assigned node using srun
 # shellcheck disable=SC2043
 for mem in NENS_MEMBERS; do
-    ( eval "$array_defs"; eval "$func_def"; run_update_member $mem ) &
+    assigned_node=${node_array[$((node_idx % num_nodes))]}
+    memstr=$(printf "%02d" "$mem")
+    echo "Assigning member ${memstr} to node: ${assigned_node}"
+    srun -w "${assigned_node}" --ntasks=1 --cpus-per-task=1 --mem-per-cpu=10G --exact --cpu-bind=cores \
+        bash -c "eval \"$array_defs\"; eval \"$func_def\"; run_update_member $mem" &
     pids[$!]=$mem
+    ((node_idx++))
 done
 
-echo -e "All tasks of run_update_member submitted. Waiting for completion ...\n"
+echo -e "All ${#NENS_MEMBERS[@]} tasks of run_update_member submitted to nodes. Waiting for completion ...\n"
 
 overall_status=0
 for pid in "${!pids[@]}"; do
