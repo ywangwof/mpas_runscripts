@@ -188,7 +188,7 @@ if [[ USE_REFL10CM_DIAG == true ]]; then
             mem_file="ana/mem0${mem}.nc"
             mpas_file="../fcst_${mem}/DOMNAME_${mem}.diag.CURRTIMEFIL.nc"  # wofs_mpas_01.diag.2026-04-23_18.00.00.nc
             echo "Replacing refl10cm,refl10cm_max in ${mem_file} with ${mpas_file} on node ${node} ..."
-            srun --ntasks=1 --exclusive --nodes=1 --nodelist="${node}"  \
+            srun --ntasks=1 --exact --cpus-per-task=1 --mem-per-cpu=10G --nodes=1 --nodelist="${node}"  \
                 ncks -A -C -v "refl10cm,refl10cm_max" "${mpas_file}" "${mem_file}" &
             pids+=($!)
         done
@@ -288,7 +288,8 @@ if [[ $istatus -eq 0 ]]; then
         for mem in $(seq -w 001 ENS_SIZE); do
             mem_idx=$(( 10#${mem} - 1 ))
             node=${nodelist[$((mem_idx % nnodes))]}
-            srun --ntasks=1 --exclusive --nodes=1 --nodelist="${node}" ncks -A -C -x -v ${var_list} "ens/mem${mem}.nc" "ana/mem${mem}.nc" &
+            srun --ntasks=1 --exact --cpus-per-task=1 --nodes=1 --nodelist="${node}" --mem-per-cpu=10G \
+                ncks -A -C -x -v ${var_list} "ens/mem${mem}.nc" "ana/mem${mem}.nc" &
             pids+=($!)
         done
 

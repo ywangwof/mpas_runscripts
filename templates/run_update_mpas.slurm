@@ -85,10 +85,6 @@ DEBUG=true
 # ----------------------------------------------------------------------
 # run update_member
 # ---------------------------------------------------------------------
-# Arrays derived from the driver script
-# declare -A mem_map=([34]="16" [35]="17" [36]="18" ......
-
-declare -A mem_map=MEMMAPSTR
 
 # ----------------------------------------------------------------------
 # Pre-copy all 36 init files in parallel background jobs (2.9GB each).
@@ -133,6 +129,11 @@ t1=$(date '+%s');
 run_update_member() {
     local mem=$1
 
+    # Arrays derived from the driver script
+    # declare -A mem_map=([34]="16" [35]="17" [36]="18" ......
+
+    declare -A mem_map=MEMMAPSTR
+
     local t0 memstr
 
     t0=$(date '+%s')
@@ -159,8 +160,8 @@ run_update_member() {
     lbc_filen="./DOMNAME_${memstr}.lbc.MPASTIME2.nc"
 
     # Cleanup existing files
-    [[ -e $lbc_filem ]] && rm -rf "${lbc_filem}"
-    [[ -e $lbc_filen ]] && rm -rf "${lbc_filen}"
+    [[ -e "${lbc_filem}" ]] && rm -rf "${lbc_filem}"
+    [[ -e "${lbc_filen}" ]] && rm -rf "${lbc_filen}"
 
     # LBC 1 processing
     lbc_file1="LBCPATH/DOMNAME_${mlbcstr}.lbc.MPASTIME1.nc"
@@ -260,10 +261,8 @@ EOF
 #
 # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-# Capture definitions for subprocesses
-
-array_defs=$(declare -p mem_map)
-func_def=$(declare -f run_update_member)
+# Export function so it's available to subshells
+export -f run_update_member
 
 declare -A pids  # Associative array to store PID -> Member mapping
 declare -a fail_jobs=()
@@ -273,7 +272,7 @@ t0=$(date '+%s')
 echo -e "Starting all members simultaneously across ${SLURM_JOB_NUM_NODES} nodes ...\n"
 
 # Parse allocated nodes from SLURM nodelist
-mapfile -t node_array < <(sinfo -N --nodes="${SLURM_NODELIST}" -h -o '%N')
+mapfile -t node_array < <(scontrol show hostnames "${SLURM_NODELIST}")
 num_nodes=${#node_array[@]}
 echo "Allocated nodes: ${node_array[*]} (total: $num_nodes nodes)"
 
@@ -286,13 +285,13 @@ for mem in NENS_MEMBERS; do
     assigned_node=${node_array[$((node_idx % num_nodes))]}
     memstr=$(printf "%02d" "$mem")
     echo "Assigning member ${memstr} to node: ${assigned_node}"
-    srun -w "${assigned_node}" --ntasks=1 --cpus-per-task=1 --mem-per-cpu=10G --exact --cpu-bind=cores \
-        bash -c "eval \"$array_defs\"; eval \"$func_def\"; run_update_member $mem" &
+    srun -w "${assigned_node}" --ntasks=1 --nodes=1 --cpus-per-task=1 --mem-per-cpu=10G --exact --cpu-bind=cores \
+        bash -c "run_update_member \"$mem\"" &
     pids[$!]=$mem
     ((node_idx++))
 done
 
-echo -e "All ${#NENS_MEMBERS[@]} tasks of run_update_member submitted to nodes. Waiting for completion ...\n"
+echo -e "All tasks of run_update_member submitted to nodes. Waiting for completion ...\n"
 
 overall_status=0
 for pid in "${!pids[@]}"; do
