@@ -1431,8 +1431,10 @@ function jedi_preparation {
         yaml_cmdlist=("${scpdir}/yaml_finalize.py" "--analysis-date" "${analysisDate}" "--begin-date" "${beginDate}" "--len-win" "${lenwind}"
             "--mp-state-vars" "${_mp_state_vars}" "--mp-increment-vars" "${_mp_incr_vars}" "--cwp-hail" "${cwp_hail}"
             "--ensemble-number" "${config_ENS_SIZE}" "-t" "${taskname}" "${config_FIXDIR}/jedi/letkf.yaml" "getkf.yaml" )
-        mecho0 "Generating final JEDI yaml file for task = ${PURPLE}${taskname}${NC} with command:"
-        mecho0 "${BROWN}${yaml_cmdlist[*]}${NC}"
+        if [[ ${verbose} == true ]]; then
+            mecho0 "Generating final JEDI yaml file for task = ${PURPLE}${taskname}${NC} with command:"
+            mecho0 "${BROWN}${yaml_cmdlist[@]@Q}${NC}"
+        fi
         yaml_finalize_message=$( "${yaml_cmdlist[@]}" 2>&1 )
         mecho0 "yaml_finalize.py - ${yaml_finalize_message}"
     fi
