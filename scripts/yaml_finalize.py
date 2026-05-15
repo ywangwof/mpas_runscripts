@@ -9,8 +9,7 @@ script_dir = str(Path(__file__).parent)
 if script_dir not in sys.path:
     sys.path.append(script_dir)
 
-import hifiyaml4rrfs as hy
-import yamltools4rrfs as yt
+import yamlfromrrfs as yf
 
 import argparse
 
@@ -95,20 +94,6 @@ def parse_arguments():
     if args.backup is None:
         args.backup = args.output is None
 
-    _conv_arg = args.use_conv_info
-    if _conv_arg is None or _conv_arg.lower() in ("true", "1", "yes"):
-        args.use_conv_info = True
-        args.convinfo_file = './convinfo'
-    elif _conv_arg.lower() in ("false", "0", "no"):
-        args.use_conv_info = False
-        args.convinfo_file = None
-    else:
-        args.convinfo_file = _conv_arg
-        if not os.path.isfile(args.convinfo_file):
-            sys.stderr.write(f"ERROR: convinfo file not found: {args.convinfo_file}\n")
-            sys.exit(1)
-        args.use_conv_info = True
-
     # find an available file name to backup the old yaml file
     if args.backup or args.output is None:
         yfile_base= args.yfile.rsplit('.', 1)[0]
@@ -120,6 +105,23 @@ def parse_arguments():
            yfile2 = f'{yfile_base}_old{knt:03}.yaml'
 
         args.bakfile = yfile2
+
+    # Check convinfo file for existence
+    _conv_arg = args.use_conv_info
+    if _conv_arg is None or _conv_arg.lower() in ("true", "1", "yes"):
+        args.use_conv_info = True
+        args.convinfo_file = './convinfo'
+    elif _conv_arg.lower() in ("false", "0", "no"):
+        args.use_conv_info = False
+        args.convinfo_file = None
+    else:
+        args.convinfo_file = _conv_arg
+        args.use_conv_info = True
+
+    if args.use_conv_info:
+        if not os.path.isfile(args.convinfo_file):
+            sys.stderr.write(f"ERROR: convinfo file not found: {args.convinfo_file}\n")
+            sys.exit(1)
 
     return args
 
@@ -152,8 +154,8 @@ driver:
 ''',
     }
 
-    block = hy.text_to_yblock(driver_blocks[task])
-    hy.modify(data, "driver", block)
+    block = yf.text_to_yblock(driver_blocks[task])
+    yf.modify(data, "driver", block)
 
 ########################################################################
 
@@ -185,7 +187,7 @@ def set_yaml_value_in_group(data, group_key, var_key, value, search_window=20):
 
 ########################################################################
 
-def replace_mp_placeholders(data, mp_state_vars ):
+def replace_mp_placeholders(data, mp_state_vars):
     """
     Replace @MP_STATE_VARS@ and @MP_INCREMENT_VARS@ placeholders in YAML data.
 
@@ -370,7 +372,7 @@ def add_diagnostic_filters_to_obs_spaces(data, dcObs):
 '''
 
                 # Insert diagnostic filters after the "obs filters:" line
-                diag_block = hy.text_to_yblock(diagnostic_filters_str)
+                diag_block = yf.text_to_yblock(diagnostic_filters_str)
                 insertion_point = actual_obs_start + filters_idx + 1
                 data[insertion_point:insertion_point] = diag_block
 
@@ -440,11 +442,11 @@ def strim_convinfo(data, convinfo_file, task):
         List of YAML lines with only the obs spaces listed in the convinfo file.
     """
 
-    dcConvInfo = yt.load_convinfo(convinfo_file)
-    head_end, _ = hy.get_start_pos(data, "observations/observers")
+    dcConvInfo = yf.load_convinfo(convinfo_file)
+    head_end, _ = yf.get_start_pos(data, "observations/observers")
     output = data[0:head_end + 1]
 
-    dcObs = yt.get_all_obs(data, shallow=True)
+    dcObs = yf.get_all_obs(data, shallow=True)
     for name, observer in dcObs.items():
         sname = observer["sname"]
         tmp = data[observer["pos1"]:observer["pos2"]]
@@ -454,7 +456,7 @@ def strim_convinfo(data, convinfo_file, task):
         #  2. transfer the obsdataout obsfile to obsdatain
         #  3. if post, remove the "reduce obs space" actions and "temporal thinning" filters
         if task == "solver" or task == "post":
-            yt.getkf_observer_tweak(tmp, task)
+            yf.getkf_observer_tweak(tmp, task)
 
         # Check against convinfo
         for iname, info in dcConvInfo.items():
@@ -463,7 +465,7 @@ def strim_convinfo(data, convinfo_file, task):
                     if info['iuse'] == "-1": # Passivate if monitor-only
                         for i in range(len(tmp)):
                             if "obs filters:" in tmp[i]:
-                                spaces = " " * (hy.strip_indentations(tmp[i])[0] + 2)
+                                spaces = " " * (yf.strip_indentations(tmp[i])[0] + 2)
                                 passivate = [f"{spaces}- filter: Perform Action",
                                              f"{spaces}  action:",
                                              f"{spaces}    name: passivate", ""]
@@ -491,7 +493,7 @@ if __name__ == "__main__":
     }
 
     # 2. Load and Replace Patterns
-    data = hy.load(parsed_args.yfile, replacements)
+    data = yf.load(parsed_args.yfile, replacements)
     replace_mp_placeholders(data, parsed_args.mp_state_vars)
 
     # 3. Specific driver section modifications based on task_type
@@ -522,7 +524,7 @@ if __name__ == "__main__":
 
     # 4.2 Add Diagnostic Filters to all obs spaces (observer only)
     if task_type == "observer":
-        dcObs_all = yt.get_all_obs(output, shallow=True)
+        dcObs_all = yf.get_all_obs(output, shallow=True)
         add_diagnostic_filters_to_obs_spaces(output, dcObs_all)
 
     if task_type == "observer" or task_type == "post":
@@ -539,7 +541,7 @@ if __name__ == "__main__":
         os.replace(parsed_args.yfile, parsed_args.bakfile)
         print(f"INFO: Original YAML backed up as {parsed_args.bakfile}")
 
-    hy.dump(output, fpath=output_path)
+    yf.dump(output, fpath=output_path)
     print(f"written YAML to file: {output_path}")
 
     sys.exit(0)

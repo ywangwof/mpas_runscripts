@@ -192,11 +192,11 @@ function submit_a_job {
     if [[ ${myverbose} == true ]]; then
         mecho1 "Generated job script: ${WHITE}${myjobscript}${NC}"
         mecho1 "from template       : ${BLUE}${myjobtemp}${NC} "
-        mecho1 "using sed file      : ${DARK}${sedfile}${NC}  "
-    else
-        rm -f ${sedfile}
+        #mecho1 "using sed file      : ${DARK}${sedfile}${NC}  "
     fi
+    rm -f ${sedfile}
 
+    # shellcheck disable=SC2206
     local -a commandlist=(${runcmd})
 
     # Options to the job itself
@@ -827,10 +827,7 @@ function readconf {
     local color_key vartypestr
     local confvarname
 
-    local debug=${verbose:-false}
-    if [[ ${verb} -eq 1 ]]; then
-        debug=true
-    fi
+    local debug=false       #${verbose:-false}
 
     declare -a read_sections=()
     declare -A type_colors=(["Number"]="GREEN" ["String"]="PURPLE" ["Array"]="RED" ["Bool"]="LIGHT_BLUE")
@@ -989,9 +986,12 @@ wait_for_conditions () {
             else
                 rcond1=$(realpath -m --relative-to "${WORKDIR}" "${cond}")
                 mecho1n "Checking ${rcond1} ...."
+                local i=0
                 while [[ ! -e ${cond} ]]; do
                     if [[ ${myverbose} == true ]]; then
-                        mecho0 "\nWaiting for file: ${rcond1}"
+                        [[ $i -lt 1 ]] && echo ""
+                        mecho0 "Waiting for file: ${rcond1}"
+                        (( i+=1 ))
                     fi
                     sleep 10
                 done
