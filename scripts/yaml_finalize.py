@@ -86,13 +86,7 @@ def parse_arguments():
         "--mp-state-vars",
         required=True,
         default="",
-        help="Comma-separated list of MPAS microphysics state variables to replace @MP_STATE_VARS@."
-    )
-    parser.add_argument(
-        "--mp-increment-vars",
-        required=True,
-        default="",
-        help="Comma-separated list of MPAS microphysics increment variables to replace @MP_INCREMENT_VARS@."
+        help="Comma-separated list of MPAS microphysics state variables to replace #@MP_STATE_VARS@ & \"@MP_INCREMENT_VARS@\"."
     )
 
     args = parser.parse_args()
@@ -191,14 +185,13 @@ def set_yaml_value_in_group(data, group_key, var_key, value, search_window=20):
 
 ########################################################################
 
-def replace_mp_placeholders(data, mp_state_vars, mp_increment_vars):
+def replace_mp_placeholders(data, mp_state_vars ):
     """
     Replace @MP_STATE_VARS@ and @MP_INCREMENT_VARS@ placeholders in YAML data.
 
     Args:
         data:                List of YAML lines.
         mp_state_vars:       Comma-separated string of state variables (or empty).
-        mp_increment_vars:   Comma-separated string of increment variables (or empty).
     """
     # Format state variables as YAML list items (one per line, with leading "  - ")
     if mp_state_vars:
@@ -220,7 +213,7 @@ def replace_mp_placeholders(data, mp_state_vars, mp_increment_vars):
         if "@MP_INCREMENT_VARS@" in line:
             if mp_increment_vars:
                 # Replace only the placeholder, preserving quotes and surrounding text
-                data[i] = line.replace("\"@MP_INCREMENT_VARS@\"", mp_increment_vars)
+                data[i] = line.replace("\"@MP_INCREMENT_VARS@\"", mp_state_vars)
             else:
                 # Remove the placeholder if no variables provided
                 data[i] = line.replace("\"@MP_INCREMENT_VARS@\", ", "")
@@ -499,7 +492,7 @@ if __name__ == "__main__":
 
     # 2. Load and Replace Patterns
     data = hy.load(parsed_args.yfile, replacements)
-    replace_mp_placeholders(data, parsed_args.mp_state_vars, parsed_args.mp_increment_vars)
+    replace_mp_placeholders(data, parsed_args.mp_state_vars)
 
     # 3. Specific driver section modifications based on task_type
     set_driver_per_task(data, task_type)

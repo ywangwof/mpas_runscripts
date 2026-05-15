@@ -1405,31 +1405,26 @@ function jedi_preparation {
 
         # ---- MP-dependent state / increment variables ----
         local _mp_state_vars
-        local _mp_incr_vars
-
         local cwp_hail="false"
 
         case "${config_mpscheme}" in
         mp_nssl2m )
-            _mp_state_vars="rain_number_concentration, hail, cloud_droplet_number_concentration, snow_number_concentration, graupel_number_concentration, hail_number_concentration"
-            _mp_incr_vars="hail, cloud_droplet_number_concentration, snow_number_concentration, graupel_number_concentration, hail_number_concentration, rain_number_concentration"
+            _mp_state_vars="hail, cloud_droplet_number_concentration, rain_number_concentration, snow_number_concentration, graupel_number_concentration, hail_number_concentration"
             cwp_hail="true"
             ;;
         mp_tempo | mp_thompson )
             _mp_state_vars="rain_number_concentration, cloud_droplet_number_concentration, graupel_number_concentration"
-            _mp_incr_vars="cloud_droplet_number_concentration, graupel_number_concentration, rain_number_concentration"
             ;;
         * )
             _mp_state_vars="rain_number_concentration"
-            _mp_incr_vars="rain_number_concentration"
             ;;
         esac
 
         #
         #  Generate the final YAML configuration file based on convinfo and available ioda files
         #
-        yaml_cmdlist=("${scpdir}/yaml_finalize.py" "--analysis-date" "${analysisDate}" "--begin-date" "${beginDate}" "--len-win" "${lenwind}"
-            "--mp-state-vars" "${_mp_state_vars}" "--mp-increment-vars" "${_mp_incr_vars}" "--cwp-hail" "${cwp_hail}"
+        yaml_cmdlist=("${scpdir}/yaml_finalize.py" "--analysis-date" "${analysisDate}" "--begin-date" "${beginDate}"
+            "--len-win" "${lenwind}" "--mp-state-vars" "${_mp_state_vars}"  "--cwp-hail" "${cwp_hail}"
             "--ensemble-number" "${config_ENS_SIZE}" "-t" "${taskname}" "${config_FIXDIR}/jedi/letkf.yaml" "getkf.yaml" )
         if [[ ${verbose} == true ]]; then
             mecho0 "Generating final JEDI yaml file for task = ${PURPLE}${taskname}${NC} with command:"
