@@ -66,7 +66,7 @@ def process_single_cycle(meta, obname, args):
     path_a = os.path.join(meta['dir_a'], f'jdiag_{obname}.nc')
 
     if not (os.path.exists(path_b) and os.path.exists(path_a)):
-        return [np.nan]*2, [np.nan]*2, [np.nan]*2, None
+        return [np.nan]*2, [np.nan]*2, [np.nan]*2, None, [np.nan]*2
 
     try:
         with Dataset(path_b, 'r') as nc_b, Dataset(path_a, 'r') as nc_a:
@@ -86,7 +86,7 @@ def process_single_cycle(meta, obname, args):
                 valid_mask = valid_mask & (obs_val_b > args.thresh)
 
             if not np.any(valid_mask):
-                return [np.nan]*2, [np.nan]*2, [np.nan]*2, vartype
+                return [np.nan]*2, [np.nan]*2, [np.nan]*2, vartype, [np.nan]*2
 
             # Calculate RMSD and Bias
             rmsd = [np.sqrt(np.mean(ombg[valid_mask]**2)), np.sqrt(np.mean(oman[valid_mask]**2))]
@@ -112,7 +112,7 @@ def process_single_cycle(meta, obname, args):
             h_a = get_valid_hofx(nc_a, ens_groups_a, valid_mask)
 
             if h_b is None or h_a is None:
-                return rmsd, innov, [np.nan]*2, vartype
+                return rmsd, innov, [np.nan]*2, vartype, [np.nan]*2
 
             # Total Spread calculation [cite: 303]
             spread = [
@@ -132,7 +132,7 @@ def process_single_cycle(meta, obname, args):
     except Exception as e:
         if args.verbose:
             print(f"Error processing {meta['hm_str']}: {e}")
-        return [np.nan]*2, [np.nan]*2, [np.nan]*2, None
+        return [np.nan]*2, [np.nan]*2, [np.nan]*2, None, [np.nan]*2
 
 ################################################################################
 
