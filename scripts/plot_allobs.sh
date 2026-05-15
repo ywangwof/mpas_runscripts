@@ -290,12 +290,12 @@ if [[ ! -e done.zigzag ]]; then
         -s "${startdatetime}"
         -e "${enddatetime}"
         -d "${run_dir}"
-        -o "radar_rw" "mrms_refl"  "aircar_t133" "aircar_q133" "aircar_uv233"
+        -o "radar_rw, mrms_refl,cwp,cwp_night,adpsfc_ps187,adpsfc_q181,adpsfc_q183,adpsfc_q187,adpsfc_t187,adpsfc_uv287"
         -m 36
         -c 15
-        --type "all")
+        --type "all" --cr)
 
-    [[ -n ${affix} ]] && cmds+=("${affix}")
+    [[ -n ${affix} ]] && cmds+=(-x "${affix}")
     [[ ${verb} == true ]] && cmds+=(-v)
 
     ${show} "${cmds[@]}"
@@ -316,7 +316,7 @@ if [[ ! -e done.zigzag ]]; then
         fi
 
         estatus=0
-        for fn in sawtooth_*.png; do
+        for fn in sawtooth_${eventdate}_*.png; do
             destfn="${fn}_f360.png"
             convert "$fn" -resize 1100x1100 -trim "${image_destdir}/${destfn}"
             (( estatus+=$? ))

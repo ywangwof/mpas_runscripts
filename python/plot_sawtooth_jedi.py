@@ -295,7 +295,7 @@ def plot_ob_type(obname, cycle_meta, args):
     #ax.legend(loc='upper right', frameon=True, shadow=True)
     ax.grid(True, alpha=0.3)
 
-    out_name = f"{obname}_sawtooth_{args.eventdate}.png"
+    out_name = f"sawtooth_{args.eventdate}_{obname}.png"
     print(f"Saving plot to {out_name} ...")
     plt.savefig(out_name, bbox_inches='tight', dpi=200)
     plt.close()
