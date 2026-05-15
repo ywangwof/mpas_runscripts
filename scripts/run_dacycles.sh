@@ -2428,9 +2428,6 @@ function dacycle_driver() {
     cwp_obs_regex=$(IFS='|'; echo "${cwp_obs_initial[*]}")
     declare -rg cwp_obs_regex
 
-    DO_RADAR_REF="true"   # To prevent yaml_finalize from changing the increment variables
-    export DO_RADAR_REF
-
     declare -a obs_ids obs_categories
 
     local icyc=$(( (start_sec-init_sec)/config_intvl_sec ))

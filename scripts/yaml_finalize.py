@@ -211,7 +211,7 @@ def replace_mp_placeholders(data, mp_state_vars ):
     # Replace "@MP_INCREMENT_VARS@" with increment variables (preserving surrounding context)
     for i, line in enumerate(data):
         if "@MP_INCREMENT_VARS@" in line:
-            if mp_increment_vars:
+            if mp_state_vars:
                 # Replace only the placeholder, preserving quotes and surrounding text
                 data[i] = line.replace("\"@MP_INCREMENT_VARS@\"", mp_state_vars)
             else:
