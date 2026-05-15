@@ -1401,73 +1401,40 @@ function jedi_preparation {
         beginDate="$(date -u -d @${bseconds} +%Y-%m-%dT%H:%M:%SZ)"
         lenwind="PT60M"
 
-        # generate the JEDI yaml files using templates from the parm/ directory
-        #source "${USHrrfs}"/yaml_from_parm.sh "getkf"
-
-        sed -e "s/@analysisDate@/${analysisDate}/;s/@beginDate@/${beginDate}/;s/@lenWin@/${lenwind}/" \
-               "${config_FIXDIR}/jedi/getkf_${taskname}.yaml" > getkf.yaml
+        # generate the JEDI yaml files using templates from the fix_files/jedi/letkf.yaml
 
         # ---- MP-dependent state / increment variables ----
-        local _mp_state_block
-        local _mp_incr
+        local _mp_state_vars
+        local _mp_incr_vars
 
         local cwp_hail="false"
 
         case "${config_mpscheme}" in
         mp_nssl2m )
-            _mp_state_block="  - rain_number_concentration
-  - hail
-  - cloud_droplet_number_concentration
-  - snow_number_concentration
-  - graupel_number_concentration
-  - hail_number_concentration"
-            _mp_incr="hail, cloud_droplet_number_concentration, snow_number_concentration, graupel_number_concentration, hail_number_concentration, rain_number_concentration"
+            _mp_state_vars="rain_number_concentration, hail, cloud_droplet_number_concentration, snow_number_concentration, graupel_number_concentration, hail_number_concentration"
+            _mp_incr_vars="hail, cloud_droplet_number_concentration, snow_number_concentration, graupel_number_concentration, hail_number_concentration, rain_number_concentration"
             cwp_hail="true"
             ;;
         mp_tempo | mp_thompson )
-            _mp_state_block="  - rain_number_concentration
-  - cloud_droplet_number_concentration
-  - graupel_number_concentration"
-            _mp_incr="cloud_droplet_number_concentration, graupel_number_concentration, rain_number_concentration"
-        ;;
+            _mp_state_vars="rain_number_concentration, cloud_droplet_number_concentration, graupel_number_concentration"
+            _mp_incr_vars="cloud_droplet_number_concentration, graupel_number_concentration, rain_number_concentration"
+            ;;
         * )
-            _mp_state_block="  - rain_number_concentration"
-            _mp_incr="rain_number_concentration"
+            _mp_state_vars="rain_number_concentration"
+            _mp_incr_vars="rain_number_concentration"
             ;;
         esac
-
-        # Replace placeholders directly in the file
-        # We use '|' as a delimiter in sed to avoid issues with slashes (though not strictly needed here)
-        sed -i "s/#@MP_STATE_VARS@/${_mp_state_block//$'\n'/\\n}/" getkf.yaml
-        sed -i "s/\"@MP_INCREMENT_VARS@\"/${_mp_incr}/" getkf.yaml
-        sed -i "/add hail mixing ratio:/s/:.*/: ${cwp_hail}/" getkf.yaml
 
         #
         #  Generate the final YAML configuration file based on convinfo and available ioda files
         #
-        [[ -s "${config_FIXDIR}/jedi/satinfo" ]] && cp "${config_FIXDIR}/jedi/satinfo" .
-        export GETKF_TYPE="${taskname}"
-        export EMPTY_OBS_SPACE_ACTION='skip output'   # @emptyObsSpaceAction@
-        yaml_finalize_message=$(${rrfs_dir}/ush/yaml_finalize getkf.yaml 2>&1)
-        [[ -n "${yaml_finalize_message}" ]] && mecho0 "yaml_finalize - ${yaml_finalize_message}"        # manage output message
-
-
-        if [[ "${taskname}" == "post" ]]; then
-            ## For post task, change a few yaml settings and remove "reduce obs space"
-            #mecho0 "yaml_getkf_post - $(${rrfs_dir}/ush/yaml_getkf_post getkf.yaml)"
-            sed -i "/filename:/s/ens/ana/" getkf.yaml
-        fi
-
-        sed -i "/background:/,/nmembers:/{s/nmembers:.*$/nmembers: ${config_ENS_SIZE}/}" getkf.yaml
-        sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: Deterministic LETKF/}' getkf.yaml
-        #if [[ "${JEDI_DIR}" == *CADRE* ]]; then
-        #    #${scpdir}/process_yaml.py getkf.yaml -f CADRE -o "${obs_string}" -m ${config_ENS_SIZE} -v
-        #    #sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: GETKF/}' getkf.yaml
-        #    sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: LETKF/}' getkf.yaml
-        #else
-        #    #${scpdir}/process_yaml.py getkf.yaml -f RRFS  -o "${obs_string}" -m ${config_ENS_SIZE} -v
-        #    sed -i '/local ensemble DA:/,/solver:/{s/solver:.*$/solver: Deterministic GETKF/}' getkf.yaml
-        #fi
+        yaml_cmdlist=("${scpdir}/yaml_finalize.py" "--analysis-date" "${analysisDate}" "--begin-date" "${beginDate}" "--len-win" "${lenwind}"
+            "--mp-state-vars" "${_mp_state_vars}" "--mp-increment-vars" "${_mp_incr_vars}" "--cwp-hail" "${cwp_hail}"
+            "--ensemble-number" "${config_ENS_SIZE}" "-t" "${taskname}" "${config_FIXDIR}/jedi/letkf.yaml" "getkf.yaml" )
+        mecho0 "Generating final JEDI yaml file for task = ${PURPLE}${taskname}${NC} with command:"
+        mecho0 "${BROWN}${yaml_cmdlist[*]}${NC}"
+        yaml_finalize_message=$( "${yaml_cmdlist[@]}" 2>&1 )
+        mecho0 "yaml_finalize.py - ${yaml_finalize_message}"
     fi
 }
 
