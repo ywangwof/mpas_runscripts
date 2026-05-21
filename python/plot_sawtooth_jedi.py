@@ -27,7 +27,7 @@ def parse_args():
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose path debugging")
     parser.add_argument("-p", "--nprocs", type=int, default=8, help="Number of processes for parallel reading")
     parser.add_argument("-n", "--number", action="store_true", help="Plot gross error check counts")
-    parser.add_argument("--cr", action="store_true", help="Plot Consistency Ratio (RMSD / Total Spread)") # Added
+    parser.add_argument("--cr", action="store_true", help="Plot Consistency Ratio (Total Spread² / RMSD²)")
 
     args = parser.parse_args()
     args.obs = [ob.strip() for ob in args.obs.split(",") if ob.strip()]
@@ -121,10 +121,11 @@ def process_single_cycle(meta, obname, args):
             ]
 
             # --- NEW: Consistency Ratio calculation ---
+            # CR = total_spread^2 / RMSD^2 (cf. plot_dartzig.py); ideally = 1
             # Avoid division by zero
             cr = [
-                rmsd[0] / spread[0] if spread[0] > 0 else np.nan,
-                rmsd[1] / spread[1] if spread[1] > 0 else np.nan
+                (spread[0] / rmsd[0])**2 if rmsd[0] > 0 else np.nan,
+                (spread[1] / rmsd[1])**2 if rmsd[1] > 0 else np.nan
             ]
 
             return rmsd, innov, spread, vartype, cr
@@ -250,7 +251,7 @@ def plot_ob_type(obname, cycle_meta, args):
     if args.cr:
         ax_cr = ax.twinx()
         ln4 = ax_cr.plot(minutes, cr, color='black', linestyle=':', label='Consistency Ratio', lw=1.5)
-        ax_cr.set_ylabel("Consistency Ratio [RMSD / Spread]", fontsize=12)
+        ax_cr.set_ylabel("Consistency Ratio [Spread² / RMSD²]", fontsize=12)
         ax_cr.axhline(1.0, color='gray', lw=1, alpha=0.5, linestyle='-')
         ax_cr.set_ylim([0, 2.5]) # CR usually hovers around 1.0
         lines += ln4
