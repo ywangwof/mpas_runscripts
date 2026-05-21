@@ -64,7 +64,6 @@ export I_MPI_ADJUST_GATHERV=2
 export I_MPI_ADJUST_SCATTER=2
 export I_MPI_ADJUST_SCATTERV=2
 
-export I_MPI_COLL_INTRANODE=pt2pt
 # End of special environments
 
 RUNMPCMD -n NOPART EXEDIR/atmosphere_model

@@ -15,6 +15,7 @@ q2                       Q2
 t2m                      T2
 th2m                     TH2
 updraft_helicity_max     UP_HELI_MAX
+updraft_helicity_min     UP_HELI_MIN
 w_velocity_max           W_UP_MAX
 updraft_helicity_max_01        UP_HELI_MAX01
 updraft_helicity_max_16        UP_HELI_MAX16
@@ -36,3 +37,8 @@ wind_speed_10m_max             WSPD10MAX
 wind_speed_10m_mean            SPDUV10MEAN
 u10m_mean                      U10MEAN
 v10m_mean                      V10MEAN
+vorticity_max_02               REL_VORT_MAX
+wind_speed_80m_max             WSPD80
+hailnc                         HAILNC
+max_hail_diameter_sfc_acc      HAIL_DIA_ACC_SFC
+max_hail_diameter_column_acc   HAIL_DIA_ACC_COL
