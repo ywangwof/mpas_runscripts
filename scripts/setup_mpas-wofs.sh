@@ -1747,6 +1747,110 @@ function check_obs_files {
         echo -n "$(basename ${cwpf})    "
     done
     echo -e " (${GREEN}$i${NC})\n"
+
+}
+
+########################################################################
+
+function check_verif_files {
+
+    nextdate=$(date -d "${eventdate} 1 day" +%Y%m%d)
+    #
+    # Check the Verification files RAD
+    #
+    mapfile -d $'\0' MRMS_files < <(find "${RT_OBSDIR}/MRMS/RAD_AZS_MSH/${eventdate:0:4}/${eventdate}_d1" -maxdepth 1 \( -name "wofs_MRMS_RAD_${eventdate}_[12]???.nc" -o -name "wofs_MRMS_RAD_${nextdate}_0???.nc"  \) -print0 2>/dev/null | sort -z)
+
+    mecho0 "Found ${GREEN}${#MRMS_files[@]}${NC} RAD files from ${LIGHT_BLUE}${RT_OBSDIR}/MRMS/RAD_AZS_MSH/${eventdate:0:4}/${eventdate}_d1${NC}"
+
+    i=0; basetime=""
+    for MRMSf in "${MRMS_files[@]}"; do
+        filename="$(basename ${MRMSf})"
+        bftime="${filename:23:2}"
+        if [[ ${bftime} != "${basetime}" ]]; then
+            basetime="${bftime}"
+            if [[ $i -ne 0 ]]; then echo -e " (${GREEN}$i${NC})"; fi
+            mecho0n "  ${UNDERLINE}${bftime}${NC}: "
+            i=1
+        else
+            if (( i%2 == 0 )); then echo ""; mecho0n "      "; fi
+            (( i += 1))
+        fi
+        echo -n "$(basename ${MRMSf})    "
+    done
+    echo -e " (${GREEN}$i${NC})\n"
+
+    #
+    # Check the Verification files QPE
+    #
+    mapfile -d $'\0' QPE_files < <(find "${RT_OBSDIR}/MRMS/QPE/${eventdate:0:4}/${eventdate}_d1" -maxdepth 1 \( -name "wofs_MRMS_QPE_${eventdate}_[12]???.nc" -o -name "wofs_MRMS_QPE_${nextdate}_0???.nc" \) -print0 2>/dev/null | sort -z)
+
+    mecho0 "Found ${GREEN}${#QPE_files[@]}${NC} QPE files from ${LIGHT_BLUE}${RT_OBSDIR}/MRMS/QPE/${eventdate:0:4}/${eventdate}_d1${NC}"
+
+    i=0; basetime=""
+    for QPEf in "${QPE_files[@]}"; do
+        filename="$(basename ${QPEf})"
+        bftime="${filename:23:2}"
+        if [[ ${bftime} != "${basetime}" ]]; then
+            basetime="${bftime}"
+            if [[ $i -ne 0 ]]; then echo -e " (${GREEN}$i${NC})"; fi
+            mecho0n "  ${UNDERLINE}${bftime}${NC}: "
+            i=1
+        else
+            if (( i%2 == 0 )); then echo ""; mecho0n "      "; fi
+            (( i += 1))
+        fi
+        echo -n "$(basename ${QPEf})    "
+    done
+    echo -e " (${GREEN}$i${NC})\n"
+
+    #
+    # Check the Verification files ASOS
+    #
+    mapfile -d $'\0' ASOS_files < <(find "${RT_OBSDIR}/ASOS/${eventdate:0:4}" -maxdepth 1 \( -name "${eventdate}_[12]???.nc" -o -name "${nextdate}_0???.nc" \) -print0 2>/dev/null | sort -z)
+
+    mecho0 "Found ${GREEN}${#ASOS_files[@]}${NC} ASOS files from ${LIGHT_BLUE}${RT_OBSDIR}/ASOS/${eventdate:0:4}${NC}"
+
+    i=0; basetime=""
+    for ASOSf in "${ASOS_files[@]}"; do
+        filename="$(basename ${ASOSf})"
+        bftime="${filename:9:2}"
+        if [[ ${bftime} != "${basetime}" ]]; then
+            basetime="${bftime}"
+            if [[ $i -ne 0 ]]; then echo -e " (${GREEN}$i${NC})"; fi
+            mecho0n "  ${UNDERLINE}${bftime}${NC}: "
+            i=1
+        else
+            if (( i%2 == 0 )); then echo ""; mecho0n "      "; fi
+            (( i += 1))
+        fi
+        echo -n "$(basename ${ASOSf})    "
+    done
+    echo -e " (${GREEN}$i${NC})\n"
+
+    #
+    # Check the Verification files LSR_WWA
+    #
+    mapfile -d $'\0' LSR_files < <(find "${RT_OBSDIR}/LSR_WWA/${eventdate:0:4}" -maxdepth 1 \( -name "lsr_${eventdate}1200_${nextdate}1200.csv" -o -name "wwa_${eventdate}1200_${nextdate}1200.*" \) -print0 2>/dev/null | sort -z)
+
+    mecho0 "Found ${GREEN}${#LSR_files[@]}${NC} LSR_WWA files from ${LIGHT_BLUE}${RT_OBSDIR}/LSR_WWA/${eventdate:0:4}${NC}"
+
+    i=0; basetime=""
+    for LSRf in "${LSR_files[@]}"; do
+        filename="$(basename ${LSRf})"
+        bftime="${filename:0:3}"
+        if [[ ${bftime} != "${basetime}" ]]; then
+            basetime="${bftime}"
+            if [[ $i -ne 0 ]]; then echo -e " (${GREEN}$i${NC})"; fi
+            mecho0n "  ${UNDERLINE}${bftime}${NC}: "
+            i=1
+        else
+            if (( i%2 == 0 )); then echo ""; mecho0n "       "; fi
+            (( i += 1))
+        fi
+        echo -n "$(basename ${LSRf})    "
+    done
+    echo -e " (${GREEN}$i${NC})\n"
+
 }
 
 #%%%#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1879,7 +1983,7 @@ hrrr_sub_lbc="mem"         # + 2-digit member string
 hrrrfile0="${site_hrrr_dir}/${eventdate}/${hrrr_time_ics}/${hrrr_sub_ics}01/wrfnat_hrrre_newse_mem0001_01.grib2"
 #hrrrfile0="/lfs5/NAGAPE/hpc-wof1/ywang/NCAR_JEDI/fix_files/GEFS_0p5_degree_grib_files/2022062218/ens_1/gep01.t18z.pgrb2.0p50.f000"
 
-if [[ " ${jobs[*]} " =~ [[:space:]]check(bg|obs)*[[:space:]]  ]]; then
+if [[ " ${jobs[*]} " =~ [[:space:]]check(bg|obs|verif)*[[:space:]]  ]]; then
     if [[ " ${jobs[*]} " == " check " ]]; then
         checkmodel=true
         checkobs=true
@@ -1891,6 +1995,10 @@ if [[ " ${jobs[*]} " =~ [[:space:]]check(bg|obs)*[[:space:]]  ]]; then
 
     if [[ " ${jobs[*]} " == " checkobs " || ${checkobs} == true ]]; then
         check_obs_files
+    fi
+
+    if [[ " ${jobs[*]} " == " checkverif " ]]; then
+        check_verif_files
     fi
     exit 0
 fi

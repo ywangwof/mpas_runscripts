@@ -231,6 +231,9 @@ else
 fi
 
 if [[ -f ${config_file} ]]; then
+    if [[ ${noscript} == false ]]; then
+        echo -e "Reading case configuration file: ${CYAN}${config_file}${NC} ...."
+    fi
     readconf "${config_file}" COMMON fcst compression || exit $?
 else
     echo " "
@@ -712,7 +715,7 @@ nccompress )
             [JOBNAME]="${jobname}"
             [CPUSPEC]="${cpuspec}"
             [MACHINE]="${machine}"
-            [WRKDIRS]="(${wrkdirs[*]})"
+            [TASKLIST]="(${wrkdirs[*]})"
             [EVENTDATE]="${eventdate}"
             [AFFIX]="${affix}"
             [MEMBERS]="${ens_size}"

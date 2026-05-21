@@ -293,7 +293,7 @@ if [[ ! -e done.zigzag ]]; then
         -o "radar_rw, mrms_refl,cwp,cwp_night,adpsfc_ps187,adpsfc_q181,adpsfc_q183,adpsfc_q187,adpsfc_t187,adpsfc_uv287"
         -m 36
         -c 15
-        --type "all" --cr)
+        --type "all" --cr -n)
 
     [[ -n ${affix} ]] && cmds+=(-x "${affix}")
     [[ ${verb} == true ]] && cmds+=(-v)

@@ -190,7 +190,8 @@ compress_task() {
 
             for jedi_dir in "jedi_solver" "jedi_post"; do
                 if [[ -d "${jedi_dir}/ana" ]]; then
-                    compress_ncfiles "${jedi_dir}/ana" "${max_mem_jobs}" || exit 1
+                    ( compress_ncfiles "${jedi_dir}/ana" "${max_mem_jobs}" || exit 1 ) &
+                    wait $! || failed=1
                 fi
             done
         ) &

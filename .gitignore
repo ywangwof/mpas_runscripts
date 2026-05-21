@@ -42,7 +42,6 @@ fix_files/jedi/prepbufr_rassda.yaml
 fix_files/jedi/bufr2ioda_cris.yaml
 fix_files/jedi/bufr_atms_mapping.yaml
 fix_files/jedi/atms_beamwidth.txt
-fix_files/jedi/geovars.yaml
 fix_files/jedi/ioda_empty.nc
 fix_files/jedi/keptvars.yaml
 fix_files/jedi/obsop_name_map.yaml
@@ -75,6 +74,5 @@ fix_files/ccn_activate.bin
 fix_files/freeze_water_data_tempo_v3
 fix_files/qr_acr_qg_data_tempo_v3
 fix_files/qr_acr_qs_data_tempo_v3
-fix_files/jedi/stream_list/**
 fix_files/jedi/streams.atmosphere.getkf
 yaml

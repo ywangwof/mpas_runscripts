@@ -424,9 +424,9 @@ for pkg in "${packages[@]}"; do
         parm_files=(prepbufr_ascatw.yaml  prepbufr_satwnd.yaml  prepbufr_aircft.yaml  \
                     prepbufr_adpsfc.yaml  prepbufr_gpsipw.yaml  prepbufr_sfcshp.yaml  \
                     prepbufr_adpupa.yaml  prepbufr_msonet.yaml  prepbufr_vadwnd.yaml  \
-                    prepbufr_aircar.yaml  prepbufr_proflr.yaml  prepbufr_rassda.yaml  \
-                    bufr2ioda_cris.yaml  bufr_atms_mapping.yaml  \
-                    streams.atmosphere.getkf )
+                    prepbufr_aircar.yaml  prepbufr_proflr.yaml  prepbufr_rassda.yaml  )
+                    #bufr2ioda_cris.yaml  bufr_atms_mapping.yaml  \
+                    #streams.atmosphere.getkf )
 
         for fn in "${parm_files[@]}"; do
             ln -sf "${srcmodel}/parm/$fn" .
@@ -435,7 +435,7 @@ for pkg in "${packages[@]}"; do
         #
         # FIX files
         #
-        fix_files=(atms_beamwidth.txt  geovars.yaml ioda_empty.nc keptvars.yaml obsop_name_map.yaml )
+        fix_files=( ioda_empty.nc keptvars.yaml obsop_name_map.yaml )
         for fn in "${fix_files[@]}"; do
             ln -sf "${srcmodel}/fix/jedi/$fn" .
         done
@@ -450,18 +450,18 @@ for pkg in "${packages[@]}"; do
         #       cp "${srcmodel}/parm/$fn" .
         #    fi
         #done
-        ln -sf "${srcmodel}/fix/jedi/convinfo.rrfs" convinfo
+        #ln -sf "${srcmodel}/fix/jedi/convinfo.rrfs" convinfo
         #ln -sf getkf_solver.yaml getkf_post.yaml
 
         #
         # Stream_list files
         #
         #fix_dirs=(stream_list)
-        if [[ ! -d stream_list ]]; then
-            mkdir -p stream_list
-        fi
-        ln -sf "${srcmodel}"/fix/stream_list/convection_permitting/* stream_list
-        ln -sf "${srcmodel}"/fix/stream_list/convection_permitting/stream_list.atmosphere.da_state "${desdir}/stream_list.atmosphere.da_state"
+        #if [[ ! -d stream_list ]]; then
+        #    mkdir -p stream_list
+        #fi
+        #ln -sf "${srcmodel}"/fix/stream_list/convection_permitting/* stream_list
+        ln -sf jedi/stream_list/convection_permitting/stream_list.atmosphere.da_state "${desdir}/stream_list.atmosphere.da_state"
         ;;
     * )
         echo "Argument should be one of [${default_packages[*]}]. get \"${pkg}\"."
