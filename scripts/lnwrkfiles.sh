@@ -435,7 +435,7 @@ for pkg in "${packages[@]}"; do
         #
         # FIX files
         #
-        fix_files=( ioda_empty.nc keptvars.yaml obsop_name_map.yaml )
+        fix_files=( ioda_empty.nc keptvars.yaml )
         for fn in "${fix_files[@]}"; do
             ln -sf "${srcmodel}/fix/jedi/$fn" .
         done

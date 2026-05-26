@@ -503,7 +503,6 @@ post )
         if [[ ! -e ${run_dir}/FCST/${eventdate}${affix}/fcst_${enddatetime}_start ]]; then
             # To make sure the correct FCST files are used, "-c"
             cmds=("${script_dir}/lnmpasfcst.sh" -c -b "$fcstbegs" -s "${startdatetime}" -e "${enddatetime}" "${config_file}")
-            cmds+=("${eventdate}")
             if [[ -z ${show} ]]; then echo -e "${GREEN}${cmds[*]}${NC}"; fi
             ${show} "${cmds[@]}"
         fi

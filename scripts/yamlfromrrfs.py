@@ -248,7 +248,7 @@ def load_convinfo(confilename='convinfo'):
                             'msgtype': fields[8],
                         }
                     else:
-                        sys.stderr.write(f"read_convinfo Warning: expected 9 fields\n{line}\n")
+                        sys.stderr.write(f"load_convinfo Warning: expected 9 fields\n{line}\n")
     return dcConvInfo
 
 
@@ -305,11 +305,16 @@ def get_all_obs(data, shallow=False):
 
         is_sat_radiance = any("name: CRTM" in data[i] for i in range(cur, next_one))
 
-        if name.endswith("_night"):
+        # 'name'  - the full observer name from the obs space block, e.g. "adpsfc_t181", "refl10cm_clear"
+        # 'sname' - the short name used to look up obs-type-specific template sections:
+        #           * kept identical to 'name' for _night/_clear suffixes and satellite radiance observers
+        #           * otherwise the platform prefix (e.g. "adpsfc_", "aircft_") is stripped,
+        #             leaving just the variable+type suffix (e.g. "t181", "uv284", "ztd")
+        if name.endswith("_night") or name.endswith("_clear") or is_sat_radiance:
             sname = name
         else:
             tmp = name.split("_", 1)
-            if len(tmp) > 1 and not is_sat_radiance:
+            if len(tmp) > 1:
                 sname = tmp[1].strip()
             else:
                 sname = name

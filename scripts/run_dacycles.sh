@@ -293,8 +293,12 @@ function run_ioda {
         run_ioda_mrms_refl ${wrkdir} ${iseconds}
     fi
 
+    #------------------------------------------------------
+    # Process radar_rw for radial wind
+    #------------------------------------------------------
+
     if [[ ${config_use_VR} == true ]]; then
-        obs_ids+=("rw")
+        run_ioda_rw ${wrkdir} ${iseconds}
     fi
 
     #------------------------------------------------------
@@ -416,7 +420,7 @@ function run_ioda_mrms_refl {
        || -f $wrkdir/ioda_mrms_refl/done.ioda_mrms_refl      \
        || -f $wrkdir/ioda_mrms_refl/queue.ioda_refl ]]; then
         # shellcheck disable=SC2034
-        local ids_refl10cm=("refl10cm")
+        local ids_refl10cm=("refl10cm" "refl10cm_clear")
         join_arrays obs_ids ids_refl10cm
         return
     fi
@@ -487,7 +491,7 @@ function run_ioda_mrms_refl {
         #mecho0 "Using radar data from: ${LIGHT_BLUE}$(head -n 1 filelist_mrms | xargs dirname)${NC}"
         #mecho0 "NSSL grib2 file levels = ${YELLOW}$numgrib2${NC}"
 
-        obs_ids+=("refl10cm")
+        obs_ids+=("refl10cm" "refl10cm_clear")
     else
         echo ""
         mecho0 "${YELLOW}INFO${NC}: Not enough radar reflectivity files from ${LIGHT_BLUE}${config_OBS_REF_DIR}/${anlys_date}${NC} available for cycle ${anlys_date}${anlys_hour}${anlys_min}."
@@ -564,6 +568,168 @@ EOF
     fi
 
     submit_a_job $wrkdir/ioda_mrms_refl "ioda_refl" jobParms ${config_TEMPDIR}/$jobscript $jobscript ""
+}
+
+########################################################################
+run_ioda_rw() {
+    # $1        $2
+    # wrkdir    iseconds
+    # ---------------------------------------
+    # Process radar radial wind (RW) observations
+    #
+    # **`obs/ioda_rw_obs.nc`** (radar radial wind) was produced by concatenating per-radar IODA files
+    # with `ncrcat`:
+    #
+    # ```
+    # ncrcat ioda_KAMA_VR_*.nc4 ioda_KDDC_VR_*.nc4 ... ioda_VR_*.nc4 ioda_rw_obs.nc4
+    # ```
+    #
+    # The upstream converter (`ioda_tools.py`) wrote all float variables with `_FillValue = -999.f`,
+    # but HDF5/IODA internally stores the standard IEEE float fill property as `9.96921e+36`
+    # (`NC_FILL_FLOAT`). The two conflict on every float variable:
+    # | Variable | NetCDF `_FillValue` | HDF5 fill property |
+    # |---|---|---|
+    # | `MetaData/height` | `-999.f` | `9.96921e+36` |
+    # | `MetaData/latitude` | `-999.f` | `9.96921e+36` |
+    # | `MetaData/longitude` | `-999.f` | `9.96921e+36` |
+    # | `MetaData/radarAzimuth` | `-999.f` | `9.96921e+36` |
+    # | `MetaData/radarTilt` | `-999.f` | `9.96921e+36` |
+    # | `MetaData/sinTilt` | `-999.f` | `9.96921e+36` |
+    # | `MetaData/cosAzimuthCosTilt` | `-999.f` | `9.96921e+36` |
+    # | `MetaData/sinAzimuthCosTilt` | `-999.f` | `9.96921e+36` |
+    # | `ObsValue/radialVelocity` | `-999.f` | `9.96921e+36` |
+    # | `ObsError/radialVelocity` | `-999.f` | `9.96921e+36` |
+    #
+    # IODA resolves the conflict in favour of the NetCDF attribute (`-999`). This is **potentially
+    # dangerous**: any observation with a value of exactly `-999` (e.g., a height or velocity) would be
+    # silently treated as missing.
+    #
+    # ### Fix
+    #
+    # **Option A (preferred) — Fix the converter upstream (`ioda_tools.py`):**
+    #
+    # Replace the legacy fill value with the standard IODA float fill value:
+    #
+    # ```python
+    # # Before:
+    # FILL_VALUE = -999.0
+    #
+    # # After:
+    # FILL_VALUE = 9.96921e+36   # NC_FILL_FLOAT — IODA standard
+    # ```
+    #
+    # **Option B — Post-process the concatenated file with NCO before running JEDI:**
+    #
+    # First replace `-999` data values in float fields, then update the `_FillValue` attribute:
+    #
+    # ```bash
+    # # Replace -999.0 data values with the standard fill before changing the attribute
+    # ncap2 -s 'where(radialVelocity==-999.f) radialVelocity=9.96921e+36f' obs/ioda_rw_obs.nc
+    # # ... repeat for each affected variable, then:
+    # ncatted -a _FillValue,,m,f,9.96921e+36 obs/ioda_rw_obs.nc
+    # ```
+    #
+    # Option A is cleaner and fixes the problem permanently for all future cycles.
+    #
+    # ----------------------------------------
+
+    local wrkdir=$1               # DA directory for this cycle
+    local iseconds=$2
+
+    if [[ -f ${wrkdir}/ioda_rw/running.ioda_rw || -f ${wrkdir}/ioda_rw/done.ioda_rw || -f ${wrkdir}/ioda_rw/queue.ioda_rw ]]; then
+        return
+    fi
+
+    local anlys_date anlys_hour anlys_min originalvrfile
+
+    anlys_date=$(date -u -d @$iseconds  +%Y%m%d)
+    anlys_hour=$(date -u -d @$iseconds  +%H)
+    anlys_min=$(date -u -d @$iseconds   +%M)
+
+    originalvrfile="${config_OBS_VEL_DIR}/${anlys_date}/ioda_VR_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
+    if [[ ! -s ${originalvrfile} ]]; then
+        mecho0 "${YELLOW}INFO${NC}: No radar radial wind file from ${LIGHT_BLUE}${config_OBS_VEL_DIR}/${anlys_date}${NC} available for cycle ${anlys_date}${anlys_hour}${anlys_min}."
+        return
+    fi
+
+    mkwrkdir ${wrkdir}/ioda_rw 1      # 0: Keep existing directory as is
+                                     # 1: Remove existing same name directory
+    cd ${wrkdir}/ioda_rw || exit $?
+
+    # MetaData/height,
+    # MetaData/latitude,
+    # MetaData/longitude,
+    # MetaData/radarAzimuth,
+    # MetaData/radarTilt,
+    # MetaData/sinTilt,
+    # MetaData/cosAzimuthCosTilt,
+    # MetaData/sinAzimuthCosTilt,
+    # ObsValue/radialVelocity,
+    # ObsError/radialVelocity,
+
+    # Define the output file name cleanly as a reusable variable
+    radar_vrfile="ioda_VR_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
+
+    # Ensure paths are named cleanly
+    local INPUT_FILE="${originalvrfile}"
+    local OUTPUT_FILE="${radar_vrfile}"
+
+    # 1. Initialize the output file by copying the input over
+    cp -f "${INPUT_FILE}" "${OUTPUT_FILE}"
+
+    # 2. In one pass: replace -999 data values and set correct typed _FillValue
+    #    attributes for every variable in the file.  Uses h5py so HDF5 group
+    #    paths are handled natively and integer variables keep their proper
+    #    fill values (avoiding the JEDI ioda fill-value mismatch WARNING).
+    python3 - "${OUTPUT_FILE}" <<HEREDOC
+import sys, h5py, numpy as np
+
+FILL_F32 = np.float32(9.96921e+36)
+FILL_I64 = np.int64(-9223372036854775806)   # NC_FILL_INT64
+FILL_I32 = np.int32(-2147483647)            # NC_FILL_INT
+
+REPLACE_VARS = {
+    "ObsValue/radialVelocity",
+    "ObsError/radialVelocity",
+    "MetaData/height",
+    "MetaData/latitude",
+    "MetaData/longitude",
+    "MetaData/radarAzimuth",
+    "MetaData/radarTilt",
+    "MetaData/sinTilt",
+    "MetaData/cosAzimuthCosTilt",
+    "MetaData/sinAzimuthCosTilt",
+}
+
+FILL_FOR_DTYPE = {
+    np.float32: FILL_F32,
+    np.int64:   FILL_I64,
+    np.int32:   FILL_I32,
+}
+
+def process(grp, path=""):
+    for name, item in grp.items():
+        item_path = (path + "/" + name).lstrip("/")
+        if isinstance(item, h5py.Dataset):
+            fill = FILL_FOR_DTYPE.get(item.dtype.type)
+            if fill is not None and "_FillValue" in item.attrs:
+                item.attrs["_FillValue"] = fill
+            if item_path in REPLACE_VARS and item.dtype == np.float32:
+                data = item[:]
+                mask = data == np.float32(-999.0)
+                if mask.any():
+                    data[mask] = FILL_F32
+                    item[:] = data
+        elif isinstance(item, h5py.Group):
+            process(item, "/" + item_path)
+
+with h5py.File(sys.argv[1], "r+") as f:
+    process(f)
+HEREDOC
+
+    obs_ids+=("rw")
+
+    touch done.ioda_rw
 }
 
 ########################################################################
@@ -1093,10 +1259,13 @@ function get_convinfo {
     local -n obs_list="$3"
 
     #IFS=',' read -ra obs_list <<<"$3"
+    local wofs_obs_list=("refl10cm" "refl10cm_clear" "rw" "cwp" "lwp" "iwp" "cwp_night" "lwp_night" "iwp_night")
+    local iend jstart
 
     if [[ -s ${outfile} ]]; then
         rm -f ${outfile}
     fi
+
 
     #file_content=$(< "${config_FIXDIR}/jedi/convinfo") # read in all content
     while read -r line; do
@@ -1125,15 +1294,20 @@ function get_convinfo {
             #iuse=${fields[3]}
 
             for obs in "${obs_list[@]}"; do
-                if [[ "$obs" == "$atype" ]]; then
+                if [[ "${obs}" == "$atype" ]]; then
                     found=true
                     break
                 fi
             done
+
+            iend=19; jstart=23
+            if [[ " ${wofs_obs_list[*]} " == *" ${atype} "* ]]; then
+                iend=25; jstart=29
+            fi
             if [[ $found == true ]]; then
-                echo " ${line:0:19}  1 ${line:23}" >> "${outfile}"
+                echo " ${line:0:${iend}}  1 ${line:${jstart}}" >> "${outfile}"
             else
-                echo " ${line:0:19}  0 ${line:23}" >> "${outfile}"
+                echo " ${line:0:${iend}}  0 ${line:${jstart}}" >> "${outfile}"
             fi
         fi
     done < "${infile}"
@@ -1182,10 +1356,16 @@ function jedi_preparation {
             else
                 observer_obs_del+=("refl10cm")
             fi
+            radar_clearfile="${datetime_dir}/ioda_mrms_refl/ioda_mrms_clear_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
+            if [[ -s ${radar_clearfile} ]]; then
+                observer_obs_use+=("refl10cm_clear")
+            else
+                observer_obs_del+=("refl10cm_clear")
+            fi
         fi
 
         if [[ ${config_use_VR} == true && ${icycle} -gt 0 ]]; then
-            radar_vrfile="${config_OBS_VEL_DIR}/${anlys_date}/ioda_VR_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
+            radar_vrfile="${datetime_dir}/ioda_rw/ioda_VR_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
             if [[ -s ${radar_vrfile} ]]; then
                 observer_obs_use+=("rw")
             else
@@ -1221,7 +1401,8 @@ function jedi_preparation {
         for file in "${obs_files[@]}"; do
             tmp="${file##*_}"    # Remove the path and prefix: ../jedi_observer/jdiag_
             name="${tmp%.nc}"    # Remove the suffix: .nc
-            if [[ "${name}" == "refl" ]];  then name="refl10cm";  fi
+            if [[ "${name}" == "refl" ]];   then name="refl10cm";  fi
+            if [[ "${name}" == "clear" ]];  then name="refl10cm_clear";  fi
             if [[ "${name}" == "night" ]]; then
                 tmp="${file##*jdiag_}"
                 name="${tmp%.nc}"
@@ -1474,6 +1655,7 @@ function run_jedi_observer {
     local -a conditions
     local re_cwp="[[:space:]](${cwp_obs_regex})[[:space:]]"
     [[ " ${obs_ids[*]} " =~ " refl10cm " ]] && conditions=("${datimedir}/ioda_mrms_refl/done.ioda_mrms_refl")
+    [[ " ${obs_ids[*]} " =~ " rw " ]]       && conditions+=("${datimedir}/ioda_rw/done.ioda_rw")
     [[ "${#obs_categories[@]}" -gt 0     ]] && conditions+=("${datimedir}/ioda_bufr/done.ioda_bufr")
     [[ " ${obs_ids[*]} " =~ ${re_cwp} ]]    && conditions+=("${datimedir}/ioda_cwp/done.ioda_cwp")
 
@@ -1540,7 +1722,8 @@ function run_jedi_observer {
 
     if [[ " ${obs_ids[*]} " =~ " refl10cm " ]]; then
         mappings["ioda_mrms_refl.nc"]="${radar_reffile}"
-        obs_lists+=("ioda_mrms_refl.nc")
+        mappings["ioda_mrms_clear.nc"]="${radar_clearfile}"
+        obs_lists+=("ioda_mrms_refl.nc" "ioda_mrms_clear.nc")
     fi
 
     if [[ " ${obs_ids[*]} " =~ " rw " ]]; then

@@ -1,7 +1,7 @@
 #!/bin/bash
 
-script_dir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
-rootdir=$(realpath "$(dirname "${script_dir}")")
+#script_dir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
+#rootdir=$(realpath "$(dirname "${script_dir}")")
 
 eventdateDF=$(date -u +%Y%m%d)
 
@@ -10,39 +10,39 @@ fcstintvl=300
 fcstmems=18
 
 # shellcheck source=/dev/null
-source "${script_dir}/Site_Runtime.sh" || exit $?
-
-setup_machine "" "${rootdir}" false false false
-
-# shellcheck disable=SC2154
-mpasworkdir="${site_workdir}"
+#source "${script_dir}/Site_Runtime.sh" || exit $?
+#
+#setup_machine "" "${rootdir}" false false false
+#
+## shellcheck disable=SC2154
+#mpasworkdir="${site_workdir}"
 
 #-----------------------------------------------------------------------
 
 function usage {
     echo " "
-    echo "    USAGE: $0 [options] DATETIME"
+    echo "    USAGE: $0 [options] [DATETIME] CONFIG_FILE"
     echo " "
     echo "    PURPOSE: Link the MPASSIT processed MPAS forecast files for WoFS post-processing."
     echo " "
-    echo "    DATETIME - Case date as YYYYmmdd."
+    echo "    CONFIG_FILE - Configuration file for the forecast."
+    echo "    DATETIME    - Case date as YYYYmmdd. (Optional if the date can be parsed from CONFIG_FILE)"
     echo " "
     echo "    OPTIONS:"
     echo "              -h                  Display this message"
     echo "              -n                  Show command to be run and generate job scripts only"
     echo "              -v                  Verbose mode"
-    echo "              -src  fcst_root     FCST cycles directory. Default: ${mpasworkdir}"
+    echo "              -src  fcst_root     FCST cycles directory. Default: \${fcst_root} is the directory of CONFIG_FILE"
     echo "              -dest dest_root     WRF FCST directory name. Default: \${fcst_root}/FCST"
     echo "              -s    starttime     in HHMM or YYYYmmddHHMM. Default: 1700"
     echo "              -e    endtime       in HHMM or YYYYmmddHHMM. Default: 0300"
     echo "              -b    5             Forecast first available time in minutes. Default: 5 minutes"
     echo "              -c                  Overwritten existing files, otherwise, keep existing files"
-    echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
     echo " "
     echo "   DEFAULTS:"
     echo "              eventdt    = $eventdateDF"
-    echo "              fcst_root  = $mpasworkdir"
-    echo "              dest_root  = $mpasworkdir/FCST"
+    echo "              fcst_root  = \${fcst_root}"
+    echo "              dest_root  = \${fcst_root}/FCST"
     echo " "
     echo "                                     -- By Y. Wang (2024.04.17)"
     echo " "
@@ -161,34 +161,30 @@ parse_args "$@"
 [[ -v args["force_clean"] ]] && force_clean=${args["force_clean"]} || force_clean=false
 [[ -v args["fcstbeg"] ]]     && fcstbeg=${args["fcstbeg"]}         || fcstbeg=5
 
-[[ -v args["fcst_root"] ]] && fcst_root=${args["fcst_root"]} || fcst_root="${mpasworkdir}"
-[[ -v args["dest_root"] ]] && dest_root=${args["fcst_root"]} || dest_root="${fcst_root}/FCST"
+[[ -v args["fcst_root"] ]] && fcst_root=${args["fcst_root"]}
+[[ -v args["dest_root"] ]] && dest_root=${args["fcst_root"]}
 
-[[ -v args["eventdate"] ]] && eventdate=${args["eventdate"]} || eventdate=${eventdateDF}
+[[ -v args["eventdate"] ]] && eventdate=${args["eventdate"]}
 [[ -v args["starttime"] ]] && starttime=${args["starttime"]} || starttime="1700"
 [[ -v args["endtime"] ]]   && endtime=${args["endtime"]}     || endtime="0300"
-
-[[ -v args["config_file"] ]] && config_file=${args["config_file"]} || config_file="${fcst_root}/config.${eventdate}"
 
 if [[ -v args["config_file"] ]]; then
     config_file=${args["config_file"]}
 
-    if [[ "$config_file" =~ "/" ]]; then
-        fcst_root=$(realpath "$(dirname "${config_file}")")
-    else
+    if [[ "$config_file" != "/"* ]]; then
         config_file="${fcst_root}/${config_file}"
     fi
 
-    if [[ ${config_file} =~ config\.([0-9]{8})(.*) ]]; then
-        [[ -v args["eventdate"] ]] || eventdate="${BASH_REMATCH[1]}"
-        affix="${BASH_REMATCH[2]}"
-    else
-        echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not the right format config.YYYYmmdd[_*]."
-        exit 1
-    fi
 else
     config_file="${fcst_root}/config.${eventdate}"
-    affix=""
+fi
+
+if [[ ${config_file} =~ config\.([0-9]{8})(.*) ]]; then
+    [[ -z ${eventdate} ]] && eventdate="${BASH_REMATCH[1]}"
+    affix="${BASH_REMATCH[2]}"
+else
+    echo -e "${RED}ERROR${NC}: Config file ${CYAN}${config_file}${NC} not in the right format ${YELLOW}config.YYYYmmdd[_*]${NC}."
+    exit 1
 fi
 
 if [[ -f ${config_file} ]]; then
@@ -198,9 +194,18 @@ if [[ -f ${config_file} ]]; then
     fcstmems=${members[-1]}
 else
     echo " "
-    echo "ERROR: Config file - ${config_file} not exist."
+    echo -e "${RED}ERROR${NC}: Config file - ${CYAN}${config_file}${NC} not exist."
     usage 1
 fi
+
+if [[ -z ${fcst_root} ]]; then
+    fcst_root="$(realpath "$(dirname "${config_file}")")"
+fi
+
+if [[ -z ${dest_root} ]]; then
+    dest_root="${fcst_root}/FCST"
+fi
+
 
 fcstdir="fcst${affix}"
 
@@ -210,6 +215,10 @@ if [[ ! -d ${fcst_root}/${eventdate}/${fcstdir} ]]; then
     usage 1
 fi
 
+echo "INFO: Use fcst_root: ${fcst_root}/${eventdate}/${fcstdir} "
+echo "INFO: Use dest_root: ${dest_root}/${eventdate}${affix} "
+
+exit 0
 #-----------------------------------------------------------------------
 # Set Event End Date and Time
 #-----------------------------------------------------------------------

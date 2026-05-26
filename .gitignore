@@ -44,7 +44,6 @@ fix_files/jedi/bufr_atms_mapping.yaml
 fix_files/jedi/atms_beamwidth.txt
 fix_files/jedi/ioda_empty.nc
 fix_files/jedi/keptvars.yaml
-fix_files/jedi/obsop_name_map.yaml
 modules/env.mpas_smiol
 run_dirs
 fix_files/MP_TEMPO_QRacrQG_DATA.DBL

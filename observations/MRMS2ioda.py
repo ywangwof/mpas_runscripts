@@ -75,7 +75,25 @@ dtypes = {'string': object,
           'double': np.float64}
 
 
-def main(file_names, output_file, obstime):
+def read_namelist_mosaic(namelist_file):
+    """Parse a Fortran namelist file and return clear-air threshold values."""
+    import re
+    result = {'clear_air_dbz_thresh': 0.0, 'clear_air_dbz_value': 0.0}
+    try:
+        with open(namelist_file, 'r') as f:
+            content = f.read()
+        for key in result:
+            m = re.search(rf'\b{key}\s*=\s*([+-]?\d+\.?\d*)', content, re.IGNORECASE)
+            if m:
+                result[key] = float(m.group(1))
+        logging.info(f"Read from {namelist_file}: clear_air_dbz_thresh={result['clear_air_dbz_thresh']}, "
+                     f"clear_air_dbz_value={result['clear_air_dbz_value']}")
+    except FileNotFoundError:
+        logging.warning(f"Namelist file '{namelist_file}' not found, using defaults: {result}")
+    return result['clear_air_dbz_thresh'], result['clear_air_dbz_value']
+
+
+def main(file_names, output_file, obstime, clear_air_dbz_thresh=0.0, clear_air_dbz_value=0.0, output_clear_file=None):
 
     # Initialize
     varDict = defaultdict(lambda: DefaultOrderedDict(dict))
@@ -134,8 +152,18 @@ def main(file_names, output_file, obstime):
     #    keep_idx = [i for i in keep_idx if i not in remove_set]
 
     keep_idx = check_obs_within_domain(bdyLons[1],bdyLats[1],data['longitude'], data['latitude'], )
+    logging.info(f"Number of points inside MPAS domain: {len(keep_idx)}")
 
-    nlocs = len(keep_idx)
+    # Split into precipitation and clear-air observations based on clear_air_dbz_thresh
+    refl_vals = np.array([data['equivalentReflectivityFactor'][i] for i in keep_idx])
+    precip_mask   = refl_vals > clear_air_dbz_thresh
+    clear_mask    = refl_vals <= clear_air_dbz_thresh
+    precip_idx    = np.array(keep_idx)[precip_mask]
+    clear_air_idx = np.array(keep_idx)[clear_mask]
+    logging.info(f"Precipitation obs: {len(precip_idx)}, clear-air obs: {len(clear_air_idx)}")
+
+    # --- Write precipitation observations to main output file ---
+    nlocs = len(precip_idx)
 
     DimDict = {'Location': nlocs}
 
@@ -156,14 +184,13 @@ def main(file_names, output_file, obstime):
         if locationKeyList[meta_keys.index(key)][2]:
             varAttrs[(key, metaDataName)]['units'] = locationKeyList[meta_keys.index(key)][2]
         #varAttrs[(key, metaDataName)]['_FillValue'] = missing_vals[dtypestr]
-        obs_data[(key, metaDataName)] = np.array([data[key][i] for i in keep_idx], dtype=dtypes[dtypestr])
+        obs_data[(key, metaDataName)] = np.array([data[key][i] for i in precip_idx], dtype=dtypes[dtypestr])
 
     obserr = np.full(nlocs, obserrlist[0], dtype=np.float32)
-    #obserr[keep_idx] = obserrvalue
 
     # Transfer from the 1-D data vectors and ensure output data (obs_data) types using numpy.
     for n, iodavar in enumerate(obsvars):
-        obs_data[(iodavar, obsValName)] = np.array([data[iodavar][i] for i in keep_idx], dtype=np.float32)
+        obs_data[(iodavar, obsValName)] = np.array([data[iodavar][i] for i in precip_idx], dtype=np.float32)
         obs_data[(iodavar, obsErrName)] = obserr                        #np.full(nlocs, obserrlist[n], dtype=np.float32)
         obs_data[(iodavar, qcName)] = np.full(nlocs, 2, dtype=np.int32)
         #varAttrs[(iodavar, obsValName)]['_FillValue'] = float_missing_value
@@ -172,13 +199,51 @@ def main(file_names, output_file, obstime):
     for vname in obsvars:
         VarDims[vname] = ['Location']
 
-    logging.debug(f"Writing output file: {output_file}")
+    logging.debug(f"Writing precipitation output file: {output_file}")
 
     # setup the IODA writer
     writer = iconv.IodaWriter(output_file, locationKeyList, DimDict)
 
     # write everything out
     writer.BuildIoda(obs_data, VarDims, varAttrs, AttrData)
+
+    # --- Write clear-air observations to a separate output file ---
+    if output_clear_file and len(clear_air_idx) > 0:
+        clear_vname = 'equivalentReflectivityFactor_clear'
+        clear_obs_data = {}
+        clear_varDict = defaultdict(lambda: DefaultOrderedDict(dict))
+        clear_varAttrs = DefaultOrderedDict(lambda: DefaultOrderedDict(dict))
+        nlocs_clear = len(clear_air_idx)
+        clear_DimDict = {'Location': nlocs_clear}
+
+        clear_varDict[clear_vname]['valKey'] = clear_vname, obsValName
+        clear_varDict[clear_vname]['errKey'] = clear_vname, obsErrName
+        clear_varDict[clear_vname]['qcKey'] = clear_vname, qcName
+        clear_varAttrs[clear_vname, obsValName]['coordinates'] = 'longitude latitude'
+        clear_varAttrs[clear_vname, obsErrName]['coordinates'] = 'longitude latitude'
+        clear_varAttrs[clear_vname, qcName]['coordinates'] = 'longitude latitude'
+        clear_varAttrs[clear_vname, obsValName]['units'] = obsvars_units[0]
+        clear_varAttrs[clear_vname, obsErrName]['units'] = obsvars_units[0]
+
+        for key in meta_keys:
+            dtypestr = locationKeyList[meta_keys.index(key)][1]
+            if locationKeyList[meta_keys.index(key)][2]:
+                clear_varAttrs[(key, metaDataName)]['units'] = locationKeyList[meta_keys.index(key)][2]
+            clear_obs_data[(key, metaDataName)] = np.array([data[key][i] for i in clear_air_idx], dtype=dtypes[dtypestr])
+
+        clear_obserr = np.full(nlocs_clear, obserrlist[0], dtype=np.float32)
+        clear_obs_data[(clear_vname, obsValName)] = np.full(nlocs_clear, clear_air_dbz_value, dtype=np.float32)
+        clear_obs_data[(clear_vname, obsErrName)] = clear_obserr
+        clear_obs_data[(clear_vname, qcName)] = np.full(nlocs_clear, 2, dtype=np.int32)
+
+        clear_VarDims = {clear_vname: ['Location']}
+        clear_AttrData = dict(AttrData)
+        clear_AttrData['description'] = 'Clear-air MRMS radar reflectivity'
+
+        logging.debug(f"Writing clear-air output file: {output_clear_file}")
+        clear_writer = iconv.IodaWriter(output_clear_file, locationKeyList, clear_DimDict)
+        clear_writer.BuildIoda(clear_obs_data, clear_VarDims, clear_varAttrs, clear_AttrData)
+        logging.info(f"Wrote {nlocs_clear} clear-air obs to {output_clear_file}")
 
 
 def read_netcdf(input_file, obsvars):
@@ -395,6 +460,12 @@ if __name__ == "__main__":
                           help='enable debug messages')
     optional.add_argument('--verbose', action='store_true',
                           help='enable verbose debug messages')
+    optional.add_argument('-n', '--namelist', dest='namelist_file',
+                          action='store', default='namelist.mosaic',
+                          help='Fortran namelist file for clear-air thresholds (default: namelist.mosaic)')
+    optional.add_argument('--output-clear-file', dest='output_clear_file',
+                          action='store', default=None,
+                          help='output file for clear-air reflectivity observations')
 
     args = parser.parse_args()
 
@@ -412,4 +483,9 @@ if __name__ == "__main__":
         if not os.path.isfile(file_name):
             parser.error('Input (-i option) file: ', file_name, ' does not exist')
 
-    main(args.file_names, args.output_file, args.radartime)
+    clear_air_dbz_thresh, clear_air_dbz_value = read_namelist_mosaic(args.namelist_file)
+
+    main(args.file_names, args.output_file, args.radartime,
+         clear_air_dbz_thresh=clear_air_dbz_thresh,
+         clear_air_dbz_value=clear_air_dbz_value,
+         output_clear_file=args.output_clear_file)

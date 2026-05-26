@@ -448,6 +448,9 @@ def strim_convinfo(data, convinfo_file, task):
 
     dcObs = yf.get_all_obs(data, shallow=True)
     for name, observer in dcObs.items():
+        # skip sfcshp temporarily since they are not in convinfo and not used in solver
+        if name.startswith("sfcshp"): continue
+
         sname = observer["sname"]
         tmp = data[observer["pos1"]:observer["pos2"]]
 

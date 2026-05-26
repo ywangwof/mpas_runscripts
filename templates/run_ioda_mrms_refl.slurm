@@ -70,15 +70,17 @@ ulimit -s unlimited
         # Run ioda converter to generate radar reflectivity ioda file
         #
         #-----------------------------------------------------------------------
-	    exec 3> >(sed 's/^\++/DEBUG: /') # Send trace to a subshell that prefixes lines
-            BASH_XTRACEFD=3               # Tell Bash to use file descriptor 3 for xtrace
+	    #exec 3> >(sed 's/^\++/DEBUG: /') # Send trace to a subshell that prefixes lines
+            #BASH_XTRACEFD=3               # Tell Bash to use file descriptor 3 for xtrace
 
-	    set -x
+	    #set -x
             # pyioda libraries
             PYIODALIB=$(echo "${HOMErrfs}"/sorc/RDASApp/build/lib/python3.*)
             export PYTHONPATH=${PYIODALIB}:${PYTHONPATH}
-            "ROOTDIR/observations/MRMS2ioda.py" -i ./Gridded_ref.nc -c "${YYYY}-${MM}-${DD}T${HH}:${min}:00" -o "ioda_mrms_${YYYYMMDD}_${HH}${min}.nc4" -g grid.nc
-	    set +x
+            "ROOTDIR/observations/MRMS2ioda.py" -i ./Gridded_ref.nc -c "${YYYY}-${MM}-${DD}T${HH}:${min}:00" \
+            -g grid.nc -o "ioda_mrms_${YYYYMMDD}_${HH}${min}.nc4" \
+            -n namelist.mosaic --output-clear-file "ioda_mrms_clear_${YYYYMMDD}_${HH}${min}.nc4" --debug
+	    #set +x
         fi
 
         # file count sanity check and copy to COMOUT
