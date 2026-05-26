@@ -502,23 +502,28 @@ function run_ioda_mrms_refl {
     # Create namelist file
     #-----------------------------------------------------------------------
 
-    RADAR_REF_THINNING=1
-    if [ ${RADAR_REF_THINNING} -eq 2 ]; then     # heavy data thinning, typically used for EnKF
-        precipdbzhorizskip=1
-        precipdbzvertskip=2
-        clearairdbzhorizskip=2
-        clearairdbzvertskip=4
-    elif [ ${RADAR_REF_THINNING} -eq 1 ]; then   # light data thinning, typically used for hybrid EnVar
-        precipdbzhorizskip=1
-        precipdbzvertskip=1
-        clearairdbzhorizskip=1
-        clearairdbzvertskip=1
-    else                                         # no data thinning
-        precipdbzhorizskip=0
-        precipdbzvertskip=0
-        clearairdbzhorizskip=0
-        clearairdbzvertskip=0
-    fi
+    #RADAR_REF_THINNING=1
+    #if [ ${RADAR_REF_THINNING} -eq 2 ]; then     # heavy data thinning, typically used for EnKF
+    #    precipdbzhorizskip=1
+    #    precipdbzvertskip=2
+    #    clearairdbzhorizskip=2
+    #    clearairdbzvertskip=4
+    #elif [ ${RADAR_REF_THINNING} -eq 1 ]; then   # light data thinning, typically used for hybrid EnVar
+    #    precipdbzhorizskip=1
+    #    precipdbzvertskip=1
+    #    clearairdbzhorizskip=1
+    #    clearairdbzvertskip=1
+    #else                                         # no data thinning
+    #    precipdbzhorizskip=0
+    #    precipdbzvertskip=0
+    #    clearairdbzhorizskip=0
+    #    clearairdbzvertskip=0
+    #fi
+
+    precipdbzhorizskip=0
+    precipdbzvertskip=0
+    clearairdbzhorizskip=1
+    clearairdbzvertskip=1
 
     cat << EOF > namelist.mosaic
 &setup

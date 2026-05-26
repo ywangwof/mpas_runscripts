@@ -379,5 +379,4 @@ if __name__ == "__main__":
     for ob in cli_args.obs:
         if cli_args.number:
             plot_gross_error(ob, meta_list, cli_args)
-        else:
-            plot_ob_type(ob, meta_list, cli_args)
+        plot_ob_type(ob, meta_list, cli_args)
