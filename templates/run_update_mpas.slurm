@@ -20,7 +20,7 @@ ulimit -s unlimited
 
 cd WRKDIR || exit $?
 
-rm -f queue.update_mpas
+rm -f queue.update_mpas error.update_mpas
 touch running.update_mpas
 
 DEBUG=true

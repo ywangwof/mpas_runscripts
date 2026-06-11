@@ -402,7 +402,8 @@ function run_ioda_bufr {
 
 ########################################################################
 
-function run_ioda_mrms_refl {
+# shellcheck disable=SC2329
+function run_ioda_mrms_refl_rrfs {
     # $1        $2
     # wrkdir    iseconds
 
@@ -463,7 +464,7 @@ function run_ioda_mrms_refl {
                 echo -en " ${WHITE}${curr_time}${NC}\n"
                 mecho0 "Found ${YELLOW}${#fileslist[@]}${NC} GRIB-2 files from ${CYAN}${config_OBS_REF_DIR}/${curr_date}${NC}"
                 for nsslfile in "${fileslist[@]}"; do
-                    ${cpcmd}   "${nsslfile}" .
+                    ln -sf  "${nsslfile}" .
                     base_filename=$(basename "${nsslfile}")
                     echo "${base_filename}" >> filelist_mrms
                     if [[ ${verbose} == true ]]; then mecho0 "Copying MRMS files ${CYAN}${base_filename}${NC} ...."; fi
@@ -502,48 +503,48 @@ function run_ioda_mrms_refl {
     # Create namelist file
     #-----------------------------------------------------------------------
 
-    #RADAR_REF_THINNING=1
-    #if [ ${RADAR_REF_THINNING} -eq 2 ]; then     # heavy data thinning, typically used for EnKF
-    #    precipdbzhorizskip=1
-    #    precipdbzvertskip=2
-    #    clearairdbzhorizskip=2
-    #    clearairdbzvertskip=4
-    #elif [ ${RADAR_REF_THINNING} -eq 1 ]; then   # light data thinning, typically used for hybrid EnVar
-    #    precipdbzhorizskip=1
-    #    precipdbzvertskip=1
-    #    clearairdbzhorizskip=1
-    #    clearairdbzvertskip=1
-    #else                                         # no data thinning
-    #    precipdbzhorizskip=0
-    #    precipdbzvertskip=0
-    #    clearairdbzhorizskip=0
-    #    clearairdbzvertskip=0
-    #fi
+    RADAR_REF_THINNING=1
+    if [ ${RADAR_REF_THINNING} -eq 2 ]; then     # heavy data thinning, typically used for EnKF
+        precipdbzhorizskip=1
+        precipdbzvertskip=2
+        clearairdbzhorizskip=2
+        clearairdbzvertskip=4
+    elif [ ${RADAR_REF_THINNING} -eq 1 ]; then   # light data thinning, typically used for hybrid EnVar
+        precipdbzhorizskip=1
+        precipdbzvertskip=1
+        clearairdbzhorizskip=1
+        clearairdbzvertskip=1
+    else                                         # no data thinning
+        precipdbzhorizskip=0
+        precipdbzvertskip=0
+        clearairdbzhorizskip=0
+        clearairdbzvertskip=0
+    fi
 
-    precipdbzhorizskip=0
-    precipdbzvertskip=0
-    clearairdbzhorizskip=1
-    clearairdbzvertskip=1
+    #precipdbzhorizskip=1
+    #precipdbzvertskip=0
+    #clearairdbzhorizskip=1
+    #clearairdbzvertskip=1
 
-    cat << EOF > namelist.mosaic
-&setup
-    analysis_time = ${anlys_date}${anlys_hour}${anlys_min},
-    dataPath = './',
-/
-&setup_netcdf
-    output_netcdf            = .true.,
-    max_height               = 11001.0,
-    use_clear_air_type       = .true.,
-    precip_dbz_thresh        = 10.0,
-    clear_air_dbz_thresh     = 5.0,
-    clear_air_dbz_value      = 0.0,
-    precip_dbz_horiz_skip    = ${precipdbzhorizskip},
-    precip_dbz_vert_skip     = ${precipdbzvertskip},
-    clear_air_dbz_horiz_skip = ${clearairdbzhorizskip},
-    clear_air_dbz_vert_skip  = ${clearairdbzvertskip},
-    grid_spacing_deg         = 0.03
-/
-EOF
+    cat <<- EOF > namelist.mosaic
+		&setup
+		    analysis_time = ${anlys_date}${anlys_hour}${anlys_min},
+		    dataPath = './',
+		/
+		&setup_netcdf
+		    output_netcdf            = .true.,
+		    max_height               = 11001.0,
+		    use_clear_air_type       = .true.,
+		    precip_dbz_thresh        = 10.0,
+		    clear_air_dbz_thresh     = 5.0,
+		    clear_air_dbz_value      = 0.0,
+		    precip_dbz_horiz_skip    = ${precipdbzhorizskip},
+		    precip_dbz_vert_skip     = ${precipdbzvertskip},
+		    clear_air_dbz_horiz_skip = ${clearairdbzhorizskip},
+		    clear_air_dbz_vert_skip  = ${clearairdbzvertskip},
+		    grid_spacing_deg         = 0.03
+		/
+	EOF
 
     #------------------------------------------------------
     # Run process_NSSL_mosaic.exe
@@ -576,7 +577,63 @@ EOF
 }
 
 ########################################################################
-run_ioda_rw() {
+
+function run_ioda_mrms_refl {
+    # $1        $2
+    # wrkdir    iseconds
+
+    local wrkdir=$1               # DA directory for this cycle
+    local iseconds=$2
+
+    #------------------------------------------------------
+    # Run ioda_mrms_refl for MRMS observation files
+    #------------------------------------------------------
+
+    anlys_date=$(date -u -d @$iseconds  +%Y%m%d)
+    anlys_hour=$(date -u -d @$iseconds  +%H)
+    anlys_min=$(date -u -d @$iseconds   +%M)
+
+    originalreffile="${config_OBS_REF_DIR}/${anlys_date}/ioda_mrms_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
+    originalclrfile="${config_OBS_REF_DIR}/${anlys_date}/ioda_mrms_${anlys_date}_${anlys_hour}${anlys_min}_clear.nc4"
+
+    local ids_refl10cm=()
+    if [[ -s ${originalreffile} ]]; then
+        ids_refl10cm+=("refl10cm")
+    else
+        mecho0 "${YELLOW}INFO${NC}: No MRMS reflectivity file from ${LIGHT_BLUE}${config_OBS_REF_DIR}/${anlys_date}${NC} for cycle ${anlys_date}${anlys_hour}${anlys_min}."
+    fi
+
+    if [[ -s ${originalclrfile} ]]; then
+        ids_refl10cm+=("refl10cm_clear")
+    else
+        mecho0 "${YELLOW}INFO${NC}: No MRMS clear reflectivity file from ${LIGHT_BLUE}${config_OBS_REF_DIR}/${anlys_date}${NC} for cycle ${anlys_date}${anlys_hour}${anlys_min}."
+    fi
+
+    if [[ ${#ids_refl10cm[@]} -eq 0 ]]; then
+        mecho0 "${YELLOW}INFO${NC}: No MRMS observation file found for cycle ${anlys_date}${anlys_hour}${anlys_min}."
+        return
+    fi
+
+    mkwrkdir $wrkdir/ioda_mrms_refl 1     # 0: Keep existing directory as is
+                                          # 1: Remove existing same name directory
+    cd $wrkdir/ioda_mrms_refl || exit $?
+
+    #
+    #-------------------------------------------------------------------
+    # Link the MRMS  data file
+    #-------------------------------------------------------------------
+    #
+    ${lncmd} "${originalreffile}" "ioda_mrms_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
+    ${lncmd} "${originalclrfile}" "ioda_mrms_clear_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
+
+    join_arrays obs_ids ids_refl10cm
+
+    touch done.ioda_mrms_refl
+}
+
+########################################################################
+
+function run_ioda_rw {
     # $1        $2
     # wrkdir    iseconds
     # ---------------------------------------
@@ -686,51 +743,51 @@ run_ioda_rw() {
     #    attributes for every variable in the file.  Uses h5py so HDF5 group
     #    paths are handled natively and integer variables keep their proper
     #    fill values (avoiding the JEDI ioda fill-value mismatch WARNING).
-    python3 - "${OUTPUT_FILE}" <<HEREDOC
-import sys, h5py, numpy as np
+    python3 - "${OUTPUT_FILE}" <<- HEREDOC
+		import sys, h5py, numpy as np
 
-FILL_F32 = np.float32(9.96921e+36)
-FILL_I64 = np.int64(-9223372036854775806)   # NC_FILL_INT64
-FILL_I32 = np.int32(-2147483647)            # NC_FILL_INT
+		FILL_F32 = np.float32(9.96921e+36)
+		FILL_I64 = np.int64(-9223372036854775806)   # NC_FILL_INT64
+		FILL_I32 = np.int32(-2147483647)            # NC_FILL_INT
 
-REPLACE_VARS = {
-    "ObsValue/radialVelocity",
-    "ObsError/radialVelocity",
-    "MetaData/height",
-    "MetaData/latitude",
-    "MetaData/longitude",
-    "MetaData/radarAzimuth",
-    "MetaData/radarTilt",
-    "MetaData/sinTilt",
-    "MetaData/cosAzimuthCosTilt",
-    "MetaData/sinAzimuthCosTilt",
-}
+		REPLACE_VARS = {
+		    "ObsValue/radialVelocity",
+		    "ObsError/radialVelocity",
+		    "MetaData/height",
+		    "MetaData/latitude",
+		    "MetaData/longitude",
+		    "MetaData/radarAzimuth",
+		    "MetaData/radarTilt",
+		    "MetaData/sinTilt",
+		    "MetaData/cosAzimuthCosTilt",
+		    "MetaData/sinAzimuthCosTilt",
+		}
 
-FILL_FOR_DTYPE = {
-    np.float32: FILL_F32,
-    np.int64:   FILL_I64,
-    np.int32:   FILL_I32,
-}
+		FILL_FOR_DTYPE = {
+		    np.float32: FILL_F32,
+		    np.int64:   FILL_I64,
+		    np.int32:   FILL_I32,
+		}
 
-def process(grp, path=""):
-    for name, item in grp.items():
-        item_path = (path + "/" + name).lstrip("/")
-        if isinstance(item, h5py.Dataset):
-            fill = FILL_FOR_DTYPE.get(item.dtype.type)
-            if fill is not None and "_FillValue" in item.attrs:
-                item.attrs["_FillValue"] = fill
-            if item_path in REPLACE_VARS and item.dtype == np.float32:
-                data = item[:]
-                mask = data == np.float32(-999.0)
-                if mask.any():
-                    data[mask] = FILL_F32
-                    item[:] = data
-        elif isinstance(item, h5py.Group):
-            process(item, "/" + item_path)
+		def process(grp, path=""):
+		    for name, item in grp.items():
+		        item_path = (path + "/" + name).lstrip("/")
+		        if isinstance(item, h5py.Dataset):
+		            fill = FILL_FOR_DTYPE.get(item.dtype.type)
+		            if fill is not None and "_FillValue" in item.attrs:
+		                item.attrs["_FillValue"] = fill
+		            if item_path in REPLACE_VARS and item.dtype == np.float32:
+		                data = item[:]
+		                mask = data == np.float32(-999.0)
+		                if mask.any():
+		                    data[mask] = FILL_F32
+		                    item[:] = data
+		        elif isinstance(item, h5py.Group):
+		            process(item, "/" + item_path)
 
-with h5py.File(sys.argv[1], "r+") as f:
-    process(f)
-HEREDOC
+		with h5py.File(sys.argv[1], "r+") as f:
+		    process(f)
+	HEREDOC
 
     obs_ids+=("rw")
 
@@ -877,142 +934,143 @@ function create_namelist {
     # the ratio of radt to dt is 15
     # config_h_scalar_eddy_visc4      = ${config_h_scalar_eddy_visc4}
 
-    cat << EOF_MPAS > "${filename}"
-&nhyd_model
-    config_time_integration_order   = 2
-    config_dt                       = ${config_time_step}
-    config_start_time               = '${currtime_str}'
-    config_run_duration             = '00:${fcstmin_str}:00'
-    config_split_dynamics_transport = true
-    config_number_of_sub_steps      = 4
-    config_dynamics_split_steps     = 3
-    config_h_mom_eddy_visc2         = 0.0
-    config_h_mom_eddy_visc4         = ${config_h_mom_eddy_visc4}
-    config_v_mom_eddy_visc2         = 0.0
-    config_h_theta_eddy_visc2       = 0.0
-    config_h_theta_eddy_visc4       = ${config_h_theta_eddy_visc4}
-    config_v_theta_eddy_visc2       = 0.0
-    config_horiz_mixing             = '2d_smagorinsky'
-    config_len_disp                 = 3000.0
-    config_visc4_2dsmag             = ${config_visc4_2dsmag}
-    config_w_adv_order              = 3
-    config_theta_adv_order          = 3
-    config_scalar_adv_order         = 3
-    config_u_vadv_order             = 3
-    config_w_vadv_order             = 3
-    config_theta_vadv_order         = 3
-    config_scalar_vadv_order        = 3
-    config_scalar_advection         = true
-    config_monotonic                = true
-    config_coef_3rd_order           = ${config_coef_3rd_order}
-    config_epssm                    = 0.1
-    config_smdiv                    = ${config_smdiv}
-    config_smagorinsky_coef         = ${config_smagorinsky_coef}
-/
-&damping
-    config_mpas_cam_coef             = 2.0
-    config_rayleigh_damp_u           = true
-    config_zd                        = 16000.0
-    config_xnutr                     = 0.2
-    config_number_cam_damping_levels = 8
-/
-&limited_area
-    config_apply_lbcs                = true
-/
-&io
-    config_pio_num_iotasks           = NNNODE
-    config_pio_stride                = NNCORE
-/
-&decomposition
-    config_block_decomp_file_prefix  = '${domname}.graph.info.part.'
-/
-&restart
-    config_do_restart                = ${do_restart}
-    config_do_DAcycling              = ${do_dacyle}
-/
-&printout
-    config_print_global_minmax_sca   = true
-    config_print_global_minmax_vel   = true
-    config_print_detailed_minmax_vel = false
-/
-&IAU
-    config_IAU_option                = 'off'
-    config_IAU_window_length_s       = 21600.
-/
-&physics
-    config_sst_update                = false
-    config_sstdiurn_update           = false
-    config_deepsoiltemp_update       = false
-    config_radtlw_interval           = '00:05:00'
-    config_radtsw_interval           = '00:05:00'
-    config_bucket_update             = 'none'
-    config_lsm_scheme                = '${config_MPASLSM}'
-    num_soil_layers                  = ${config_MPASNFLS}
-    config_microp_re                 = true
-    config_physics_suite             = '${config_physics_suite}'
-    config_convection_scheme         = 'off'
+    cat <<- EOF_MPAS > "${filename}"
+		&nhyd_model
+		    config_time_integration_order   = 2
+		    config_dt                       = ${config_time_step}
+		    config_start_time               = '${currtime_str}'
+		    config_run_duration             = '00:${fcstmin_str}:00'
+		    config_split_dynamics_transport = true
+		    config_number_of_sub_steps      = 4
+		    config_dynamics_split_steps     = 3
+		    config_h_mom_eddy_visc2         = 0.0
+		    config_h_mom_eddy_visc4         = ${config_h_mom_eddy_visc4}
+		    config_v_mom_eddy_visc2         = 0.0
+		    config_h_theta_eddy_visc2       = 0.0
+		    config_h_theta_eddy_visc4       = ${config_h_theta_eddy_visc4}
+		    config_v_theta_eddy_visc2       = 0.0
+		    config_horiz_mixing             = '2d_smagorinsky'
+		    config_len_disp                 = 3000.0
+		    config_visc4_2dsmag             = ${config_visc4_2dsmag}
+		    config_w_adv_order              = 3
+		    config_theta_adv_order          = 3
+		    config_scalar_adv_order         = 3
+		    config_u_vadv_order             = 3
+		    config_w_vadv_order             = 3
+		    config_theta_vadv_order         = 3
+		    config_scalar_vadv_order        = 3
+		    config_scalar_advection         = true
+		    config_monotonic                = true
+		    config_coef_3rd_order           = ${config_coef_3rd_order}
+		    config_epssm                    = 0.1
+		    config_smdiv                    = ${config_smdiv}
+		    config_smagorinsky_coef         = ${config_smagorinsky_coef}
+		/
+		&damping
+		    config_mpas_cam_coef             = 2.0
+		    config_rayleigh_damp_u           = true
+		    config_zd                        = 16000.0
+		    config_xnutr                     = 0.2
+		    config_number_cam_damping_levels = 8
+		/
+		&limited_area
+		    config_apply_lbcs                = true
+		    config_lbc_w                     = 'zero'
+		/
+		&io
+		    config_pio_num_iotasks           = NNNODE
+		    config_pio_stride                = NNCORE
+		/
+		&decomposition
+		    config_block_decomp_file_prefix  = '${domname}.graph.info.part.'
+		/
+		&restart
+		    config_do_restart                = ${do_restart}
+		    config_do_DAcycling              = ${do_dacyle}
+		/
+		&printout
+		    config_print_global_minmax_sca   = true
+		    config_print_global_minmax_vel   = true
+		    config_print_detailed_minmax_vel = false
+		/
+		&IAU
+		    config_IAU_option                = 'off'
+		    config_IAU_window_length_s       = 21600.
+		/
+		&physics
+		    config_sst_update                = false
+		    config_sstdiurn_update           = false
+		    config_deepsoiltemp_update       = false
+		    config_radtlw_interval           = '00:05:00'
+		    config_radtsw_interval           = '00:05:00'
+		    config_bucket_update             = 'none'
+		    config_lsm_scheme                = '${config_MPASLSM}'
+		    num_soil_layers                  = ${config_MPASNFLS}
+		    config_microp_re                 = true
+		    config_physics_suite             = '${config_physics_suite}'
+		    config_convection_scheme         = 'off'
 
-    config_frac_seaice         = true
-EOF_MPAS
+		    config_frac_seaice         = true
+	EOF_MPAS
 
     if [[ ${sfcscheme} == "sf_mynn" && ${config_mpscheme} != "mp_tcwa2" ]]; then
-        cat << EOF >> "${filename}"
-    config_pbl_scheme          = 'bl_mynnedmf'
-    config_gwdo_scheme         = 'bl_ugwp_gwdo'
-    config_gvf_update          = false
-EOF
+        cat <<- EOF >> "${filename}"
+		    config_pbl_scheme          = 'bl_mynnedmf'
+		    config_gwdo_scheme         = 'bl_ugwp_gwdo'
+		    config_gvf_update          = false
+		EOF
         [[ "${taskname}" == "MPAS" ]] &&  \
         echo "    config_mynn_version        = 1" >> "${filename}"
     else
-        cat << EOF >> "${filename}"
-    config_pbl_scheme          = '${pblscheme}'
-    config_gwdo_scheme         = 'bl_ysu_gwdo'
-EOF
+        cat <<- EOF >> "${filename}"
+		    config_pbl_scheme          = '${pblscheme}'
+		    config_gwdo_scheme         = 'bl_ysu_gwdo'
+		EOF
     fi
 
     if [[ ${config_mpscheme} == "mp_nssl2m" ]]; then
-        cat << EOF >> "${filename}"
-    config_sfclayer_scheme           = '${sfcscheme}'
-    config_microp_scheme             = '${config_mpscheme}'
-/
-&nssl_mp_params
-    ehw0                             = 0.9
-    ehlw0                            = 0.9
-    icefallfac                       = 1.5
-    snowfallfac                      = 1.25
-    iusewetsnow                      = 0
-/
-EOF
+        cat <<- EOF >> "${filename}"
+		    config_sfclayer_scheme           = '${sfcscheme}'
+		    config_microp_scheme             = '${config_mpscheme}'
+		/
+		&nssl_mp_params
+		    ehw0                             = 0.9
+		    ehlw0                            = 0.9
+		    icefallfac                       = 1.5
+		    snowfallfac                      = 1.25
+		    iusewetsnow                      = 0
+		/
+		EOF
     elif [[ ${config_mpscheme} == "mp_tempo" ]]; then
-        cat << EOF >> "${filename}"
-    config_sfclayer_scheme           = '${sfcscheme/sf_mynn/sf_mynnsfclay}'
-    config_microp_scheme             = '${config_mpscheme}'
-    config_mynn_mixnumcon            = 0
-/
-&physics_mp_tempo
-    config_tempo_aerosolaware        = .true.
-    config_tempo_hailaware           = .true.
-    config_tempo_ml_for_bl_nc        = .true.
-/
-EOF
+        cat <<- EOF >> "${filename}"
+		    config_sfclayer_scheme           = '${sfcscheme/sf_mynn/sf_mynnsfclay}'
+		    config_microp_scheme             = '${config_mpscheme}'
+		    config_mynn_mixnumcon            = 0
+		/
+		&physics_mp_tempo
+		    config_tempo_aerosolaware        = .true.
+		    config_tempo_hailaware           = .true.
+		    config_tempo_ml_for_bl_nc        = .true.
+		/
+		EOF
     else
-        cat << EOF >> "${filename}"
-    config_microp_scheme             = '${config_mpscheme}'
-/
-EOF
+        cat <<- EOF >> "${filename}"
+		    config_microp_scheme             = '${config_mpscheme}'
+		/
+		EOF
     fi
 
-    cat << EOF >> "${filename}"
-&soundings
-    config_sounding_interval         = 'none'
-/
-&assimilation
-    config_jedi_da                   = true
-/
-&development
-    config_halo_exch_method          = 'mpas_halo'
-/
-EOF
+    cat <<- EOF >> "${filename}"
+		&soundings
+		    config_sounding_interval         = 'none'
+		/
+		&assimilation
+		    config_jedi_da                   = true
+		/
+		&development
+		    config_halo_exch_method          = 'mpas_halo'
+		/
+	EOF
 }
 
 ########################################################################
@@ -1026,154 +1084,154 @@ function create_streams {
     #echo "icycle_extinvl_str=${icycle_extinvl_str}"
 
     if [[ ${scheme} == "MPAS" ]]; then
-        cat << EOF_MPAS > "${filename}"
-<streams>
-<immutable_stream name="invariant"
-                  type="input"
-                  filename_template="${domname}.invariant.nc"
-                  input_interval="initial_only" />
+        cat <<- EOF_MPAS > "${filename}"
+			<streams>
+			<immutable_stream name="invariant"
+			                  type="input"
+			                  filename_template="${domname}.invariant.nc"
+			                  input_interval="initial_only" />
 
-<immutable_stream name="input"
-                  type="input"
-                  filename_template="${mpas_inputfile_template}"
-                  input_interval="initial_only" />
+			<immutable_stream name="input"
+			                  type="input"
+			                  filename_template="${mpas_inputfile_template}"
+			                  input_interval="initial_only" />
 
-<stream name="da_state"
-                  type="input;output"
-                  precision="single"
-                  clobber_mode="truncate"
-                  filename_template="${domname}_${memstr}.mpasout.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-                  packages="jedi_da"
-                  io_type="pnetcdf,cdf5"
-                  input_interval="initial_only"
-                  output_interval="${OUTINVL_STR}" >
-                  <file name="stream_list.atmosphere.da_state"/>
-</stream>
+			<stream name="da_state"
+			                  type="input;output"
+			                  precision="single"
+			                  clobber_mode="truncate"
+			                  filename_template="${domname}_${memstr}.mpasout.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+			                  packages="jedi_da"
+			                  io_type="pnetcdf,cdf5"
+			                  input_interval="initial_only"
+			                  output_interval="${OUTINVL_STR}" >
+			                  <file name="stream_list.atmosphere.da_state"/>
+			</stream>
 
-<immutable_stream name="restart"
-                  type="input;output"
-                  filename_template="${domname}_${memstr}.restart.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-                  io_type="${config_OUTIOTYPE}"
-                  input_interval="initial_only"
-                  clobber_mode="replace_files"
-                  output_interval="${RSTINVL_STR}" />
+			<immutable_stream name="restart"
+			                  type="input;output"
+			                  filename_template="${domname}_${memstr}.restart.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+			                  io_type="${config_OUTIOTYPE}"
+			                  input_interval="initial_only"
+			                  clobber_mode="replace_files"
+			                  output_interval="${RSTINVL_STR}" />
 
-<stream name="output"
-                  type="output"
-                  filename_template="${domname}_${memstr}.history.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-                  io_type="${config_OUTIOTYPE}"
-                  clobber_mode="replace_files"
-                  output_interval="${RSTINVL_STR}" >
+			<stream name="output"
+			                  type="output"
+			                  filename_template="${domname}_${memstr}.history.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+			                  io_type="${config_OUTIOTYPE}"
+			                  clobber_mode="replace_files"
+			                  output_interval="${RSTINVL_STR}" >
 
-                <file name="stream_list.atmosphere.output"/>
-</stream>
+			                <file name="stream_list.atmosphere.output"/>
+			</stream>
 
-<stream name="diagnostics"
-                  type="output"
-                  filename_template="${domname}_${memstr}.diag.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-                  io_type="${config_OUTIOTYPE}"
-                  clobber_mode="replace_files"
-                  output_interval="${OUTINVL_STR}" >
+			<stream name="diagnostics"
+			                  type="output"
+			                  filename_template="${domname}_${memstr}.diag.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+			                  io_type="${config_OUTIOTYPE}"
+			                  clobber_mode="replace_files"
+			                  output_interval="${OUTINVL_STR}" >
 
-                <file name="${diag_stream}"/>
-</stream>
+			                <file name="${diag_stream}"/>
+			</stream>
 
-<stream name="surface"
-                  type="input"
-                  filename_template="${domname}_${memstr}.sfc_update.nc"
-                  filename_interval="none"
-                  input_interval="none" >
+			<stream name="surface"
+			                  type="input"
+			                  filename_template="${domname}_${memstr}.sfc_update.nc"
+			                  filename_interval="none"
+			                  input_interval="none" >
 
-                <file name="stream_list.atmosphere.surface"/>
-</stream>
+			                <file name="stream_list.atmosphere.surface"/>
+			</stream>
 
-<immutable_stream name="iau"
-                  type="input"
-                  filename_template="${domname}_${memstr}.AmB.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-                  filename_interval="none"
-                  packages="iau"
-                  input_interval="initial_only" />
+			<immutable_stream name="iau"
+			                  type="input"
+			                  filename_template="${domname}_${memstr}.AmB.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+			                  filename_interval="none"
+			                  packages="iau"
+			                  input_interval="initial_only" />
 
-<immutable_stream name="lbc_in"
-                  type="input"
-                  filename_template="${domname}_${memstr}.lbc.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-                  filename_interval="input_interval"
-                  packages="limited_area"
-                  input_interval="${icycle_extinvl_str}" />
+			<immutable_stream name="lbc_in"
+			                  type="input"
+			                  filename_template="${domname}_${memstr}.lbc.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+			                  filename_interval="input_interval"
+			                  packages="limited_area"
+			                  input_interval="${icycle_extinvl_str}" />
 
-<immutable_stream name="ugwp_oro_data_in"
-                  type="input"
-                  filename_template="${domname}.ugwp_oro_data.nc"
-                  input_interval="initial_only" />
-EOF_MPAS
+			<immutable_stream name="ugwp_oro_data_in"
+			                  type="input"
+			                  filename_template="${domname}.ugwp_oro_data.nc"
+			                  input_interval="initial_only" />
+		EOF_MPAS
 
         echo "</streams>" >> "${filename}"
 
     elif [[ ${scheme} == "GETKF" ]]; then
 
-        cat << EOF_GETKF > "${filename}"
-<streams>
-<immutable_stream name="invariant"
-                  type="input"
-                  precision="single"
-                  filename_template="invariant.nc"
-                  io_type="pnetcdf,cdf5"
-                  input_interval="initial_only" />
+        cat <<- EOF_GETKF > "${filename}"
+			<streams>
+			<immutable_stream name="invariant"
+			                  type="input"
+			                  precision="single"
+			                  filename_template="invariant.nc"
+			                  io_type="pnetcdf,cdf5"
+			                  input_interval="initial_only" />
 
-<stream name="background"
-        type="input;output"
-        precision="single"
-        io_type="pnetcdf,cdf5"
-        filename_template="foo1.nc"
-        input_interval="none"
-        output_interval="none"
-        clobber_mode="overwrite">
-        <file name="stream_list.atmosphere.background"/>
-</stream>
+			<stream name="background"
+			        type="input;output"
+			        precision="single"
+			        io_type="pnetcdf,cdf5"
+			        filename_template="foo1.nc"
+			        input_interval="none"
+			        output_interval="none"
+			        clobber_mode="overwrite">
+			        <file name="stream_list.atmosphere.background"/>
+			</stream>
 
-<stream name="analysis"
-        type="output"
-        precision="single"
-        io_type="pnetcdf,cdf5"
-        filename_template="foo2.nc"
-        output_interval="none"
-        gattr_update="no"
-        clobber_mode="overwrite">
-        <file name="stream_list.atmosphere.analysis"/>
-</stream>
+			<stream name="analysis"
+			        type="output"
+			        precision="single"
+			        io_type="pnetcdf,cdf5"
+			        filename_template="foo2.nc"
+			        output_interval="none"
+			        gattr_update="no"
+			        clobber_mode="overwrite">
+			        <file name="stream_list.atmosphere.analysis"/>
+			</stream>
 
-<stream name="control"
-        type="input;output"
-        precision="single"
-        io_type="pnetcdf,cdf5"
-        filename_template="foo4.nc"
-        input_interval="none"
-        output_interval="none"
-        clobber_mode="overwrite">
-        <file name="stream_list.atmosphere.control"/>
-</stream>
+			<stream name="control"
+			        type="input;output"
+			        precision="single"
+			        io_type="pnetcdf,cdf5"
+			        filename_template="foo4.nc"
+			        input_interval="none"
+			        output_interval="none"
+			        clobber_mode="overwrite">
+			        <file name="stream_list.atmosphere.control"/>
+			</stream>
 
-<stream name="output"
-        type="none"
-        filename_template="foo5.nc"
-        output_interval="0_01:00:00" >
-</stream>
-<stream name="diagnostics"
-        type="none"
-        filename_template="foo6.nc"
-        output_interval="0_01:00:00" >
-</stream>
-<immutable_stream name="lbc_in"
-                  type="input"
-                  filename_template="lbc.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-                  filename_interval="input_interval"
-                  io_type="pnetcdf,cdf5"
-                  packages="limited_area"
-                  input_interval="1:00:00" />
+			<stream name="output"
+			        type="none"
+			        filename_template="foo5.nc"
+			        output_interval="0_01:00:00" >
+			</stream>
+			<stream name="diagnostics"
+			        type="none"
+			        filename_template="foo6.nc"
+			        output_interval="0_01:00:00" >
+			</stream>
+			<immutable_stream name="lbc_in"
+			                  type="input"
+			                  filename_template="lbc.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+			                  filename_interval="input_interval"
+			                  io_type="pnetcdf,cdf5"
+			                  packages="limited_area"
+			                  input_interval="1:00:00" />
 
 
-</streams>
-EOF_GETKF
+			</streams>
+		EOF_GETKF
     else
         mecho1 "${RED}ERROR${NC}: Unsupported streams scheme, got ${PURPLE}${scheme}${NC}."
         exit 1
@@ -1321,14 +1379,14 @@ function get_convinfo {
 ########################################################################
 
 function jedi_preparation {
-    # $1       $2      $3      $4
-    # taskname wrkdir  icycle  iseconds
+    # $1       $2      $3
+    # taskname icycle  iseconds
+    #
+    # NOTE: do NOT change working directory in this function
+    #
     local taskname=$1
-    local wrkdir=$2
-    local icycle=$3
-    local iseconds=$4
-
-    cd $wrkdir || return
+    local icycle=$2
+    local iseconds=$3
 
     anlys_date=$(date -u -d @$iseconds  +%Y%m%d)
     anlys_hour=$(date -u -d @$iseconds  +%H)
@@ -1337,9 +1395,10 @@ function jedi_preparation {
     timesec_pre=$((iseconds-config_intvl_sec))
     event_pre=$(date -u -d @${timesec_pre}   +%H%M)
 
+    local datetime_dir datedir casedir
 
-    datetime_dir=$(dirname "${wrkdir}")
-    parentdir=$(dirname "${datetime_dir}")
+    datetime_dir=$(dirname "$(pwd)")
+    datedir=$(dirname "${datetime_dir}")
     casedir="${rundir}"
 
     #------------------------------------------------------
@@ -1354,14 +1413,20 @@ function jedi_preparation {
     observer )
         # Fix observation string in case run_ioda was not executed
 
+        local mrms_dir rw_dir cwp_dir
+
+        mrms_dir="${datetime_dir}/ioda_mrms_refl"
+        rw_dir="${datetime_dir}/ioda_rw"
+        cwp_dir="${datetime_dir}/ioda_cwp"
+
         if [[ ${config_use_REF} == true ]]; then
-            radar_reffile="${datetime_dir}/ioda_mrms_refl/ioda_mrms_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
+            radar_reffile="${mrms_dir}/ioda_mrms_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
             if [[ -s ${radar_reffile} ]]; then
                 observer_obs_use+=("refl10cm")
             else
                 observer_obs_del+=("refl10cm")
             fi
-            radar_clearfile="${datetime_dir}/ioda_mrms_refl/ioda_mrms_clear_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
+            radar_clearfile="${mrms_dir}/ioda_mrms_clear_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
             if [[ -s ${radar_clearfile} ]]; then
                 observer_obs_use+=("refl10cm_clear")
             else
@@ -1370,7 +1435,7 @@ function jedi_preparation {
         fi
 
         if [[ ${config_use_VR} == true && ${icycle} -gt 0 ]]; then
-            radar_vrfile="${datetime_dir}/ioda_rw/ioda_VR_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
+            radar_vrfile="${rw_dir}/ioda_VR_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
             if [[ -s ${radar_vrfile} ]]; then
                 observer_obs_use+=("rw")
             else
@@ -1381,7 +1446,7 @@ function jedi_preparation {
 
         if [[ ${config_use_CWP} == true ]]; then
             for cwpobs in "${cwp_obs_initial[@]}"; do
-                filename="${datetime_dir}/ioda_cwp/ioda_${cwpobs}_obs.nc"
+                filename="${cwp_dir}/ioda_${cwpobs}_obs.nc"
                 if [[ -s ${filename} ]]; then
                     observer_obs_use+=("${cwpobs}")
                 else
@@ -1429,7 +1494,6 @@ function jedi_preparation {
     #------------------------------------------------------
     # 2. Prepare MPAS/JEDI runtime files
     #------------------------------------------------------
-    # DATA=wrkdir
     if [[ ${#obs_ids[@]} -gt 0 ]]; then
         physics_convection_permitting=( CAM_ABS_DATA.DBL CAM_AEROPT_DATA.DBL CCN_ACTIVATE_DATA
                                         GENPARM.TBL      LANDUSE.TBL
@@ -1497,10 +1561,10 @@ function jedi_preparation {
             if [[ $icycle -eq 0 ]]; then
                 input_file_="${casedir}/init/${domname}_${mem}.init.nc"
             else
-                input_file_="${parentdir}/${event_pre}/fcst_${mem}/${domname}_${mem}.mpasout.${currtime_fil}.nc"
+                input_file_="${datedir}/${event_pre}/fcst_${mem}/${domname}_${mem}.mpasout.${currtime_fil}.nc"
             fi
 
-            ( ${cpcmd} "${input_file_}" "ens/mem0${mem}.nc" ) &
+            ( ln -sfr "${input_file_}" "ens/mem0${mem}.nc" ) &
         done
         wait
     fi
@@ -1511,7 +1575,7 @@ function jedi_preparation {
         for file in "${obs_files[@]}"; do
             display_filename=$(realpath -m --relative-to ${WORKDIR} ${file})
             mecho0 "    ${display_filename}"
-            ln -snfr "${file}" jdiag/
+            ln -sfr "${file}" jdiag/
         done
     fi
 
@@ -1669,11 +1733,9 @@ function run_jedi_observer {
     #------------------------------------------------------
     # Prepare runtime files
     #------------------------------------------------------
-    # DATA=wrkdir
-
     taskname="observer"
 
-    jedi_preparation "${taskname}" "${wrkdir}" $2 $3
+    jedi_preparation "${taskname}" $2 $3
 
     if [[ ${#obs_ids[@]} -le 0 ]]; then
         touch done.observer
@@ -1753,16 +1815,11 @@ function run_jedi_observer {
         if [[ -s "${obs_file}" ]]; then
             display_name=$(realpath -m --relative-to=${WORKDIR} "${obs_file}")
             mecho0 "    ${CYAN}${display_name}${NC}"
-            ${cpcmd} "${obs_file}"  "obs/${dst_file}"
+            ln -sfr "${obs_file}"  "obs/${dst_file}"
         else
             [[ ${verbose} == true ]] && mecho0 "${PURPLE}WARNING${NC}: ${CYAN}${obs_file}${NC} does not exist!"
         fi
     done
-
-    #
-    # enter the run directory again
-    #
-    cd "${wrkdir}" || exit 1
 
     #------------------------------------------------------
     # Run mpasjedi_enkf.x
@@ -1833,16 +1890,13 @@ function run_jedi_solver {
     #------------------------------------------------------
     # Prepare runtime files
     #------------------------------------------------------
-    # DATA=wrkdir
     taskname="solver"
 
-    jedi_preparation "${taskname}" "${wrkdir}" $2 $3
+    jedi_preparation "${taskname}"  $2 $3
 
     #
     # enter the run directory again
     #
-    cd "${wrkdir}" || exit 1
-
     if [[ ${#obs_ids[@]} -le 0 ]]; then
         cd ana || exit $?
         ln -sf ../ens/* .
@@ -1937,7 +1991,6 @@ function run_jedi_post {
     #------------------------------------------------------
     # Prepare runtime files
     #------------------------------------------------------
-    # DATA=wrkdir
     taskname="post"
 
     #
@@ -1947,7 +2000,7 @@ function run_jedi_post {
         return
     fi
 
-    jedi_preparation "${taskname}" "${wrkdir}" $2 $3
+    jedi_preparation "${taskname}" $2 $3
 
     #------------------------------------------------------
     # Run mpasjedi_enkf.x
@@ -2021,7 +2074,7 @@ function run_add_noise {
     #------------------------------------------------------
 
     if [[ ! " ${obs_ids[*]} " =~ " refl10cm " ]]; then
-        mecho0 "${YELLOW}WARNING${NC}: No MRMS reflectivity observation, skipping run_add_noise ...."
+        mecho0 "${YELLOW}WARNING${NC}: No MRMS reflectivity observation, skipping run_add_noise."
         touch done.add_noise
         return
     fi
@@ -3418,11 +3471,7 @@ mp_thompson_aers|mp_tempo )
 esac
 
 if [[ ${config_update_in_place} == true ]]; then
-    if ${config_relative_path}; then
-        lncmd="ln -sfnr"
-    else
-        lncmd="ln -sf"
-    fi
+    lncmd="ln -sf"
     cpcmd="${lncmd}"
 else
     cpcmd="cp"

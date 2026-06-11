@@ -551,6 +551,7 @@ function run_mpas {
 /
 &limited_area
     config_apply_lbcs                = true
+    config_lbc_w                     = 'zero'
 /
 &io
     config_pio_num_iotasks           = NNNODE

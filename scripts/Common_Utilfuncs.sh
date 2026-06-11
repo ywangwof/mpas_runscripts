@@ -114,7 +114,7 @@ function submit_a_job {
     # wrkdir jobname jobparms jobtemp jobscript joboption
     #
     # Use global variables: $verbose, $dorun, $runcmd, $exedir
-    #          ${config_relative_path}, $rootdir, $modulename, $machine
+    #          $rootdir, $modulename, $machine
     #          $config_job_account_str, $config_job_exclusive_str
     #          $config_job_runexe_str, $config_job_runmpexe_str
     #
@@ -147,12 +147,7 @@ function submit_a_job {
     local sedfile
     sedfile=$(mktemp -t ${myjobname}.sed_XXXX)
 
-    # shellcheck disable=SC2154
-    case ${config_relative_path} in
-    true  ) jobdir="."         ;;
-    false ) jobdir="${mywrkdir}" ;;
-    *     ) mecho0 "${RED}ERROR${NC}: Hi, what is this config_relative_path=<${config_relative_path}>?"; jobdir="${mywrkdir}";; #exit 1;;
-    esac
+    jobdir="${mywrkdir}"
     #
     # Common parameters for all jobs
     #
@@ -996,7 +991,7 @@ wait_for_conditions () {
                     sleep 10
                 done
             fi
-            echo " found."
+            echo " FOUND."
         done
     fi
 }

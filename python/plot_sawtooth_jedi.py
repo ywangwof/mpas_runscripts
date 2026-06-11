@@ -253,7 +253,9 @@ def plot_ob_type(obname, cycle_meta, args):
         ln4 = ax_cr.plot(minutes, cr, color='black', linestyle=':', label='Consistency Ratio', lw=1.5)
         ax_cr.set_ylabel("Consistency Ratio [Spread² / RMSD²]", fontsize=12)
         ax_cr.axhline(1.0, color='gray', lw=1, alpha=0.5, linestyle='-')
-        ax_cr.set_ylim([0, 2.5]) # CR usually hovers around 1.0
+        cr_valid = np.array([v for v in cr if not np.isnan(v)])
+        cr_max = np.max(cr_valid) if len(cr_valid) > 0 else 2.5
+        ax_cr.set_ylim([0, max(2.5, cr_max * 1.15)])
         lines += ln4
 
     # --- Dynamic Y-Axis Scaling ---

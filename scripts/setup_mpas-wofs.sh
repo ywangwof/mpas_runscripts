@@ -1357,7 +1357,6 @@ function write_config {
     job_runexe_str="${site_job_runexe_str}"
     runcmd_str="${site_runcmd_str}"
 
-    relative_path=${relative_path}
 #
 # MPAS_OPTIONS apply to both [dacycles] & [fcst]. For debugging the MPAS dynamic core
 # and should not be usually changed.
@@ -1929,16 +1928,13 @@ export runcmd
 
 [[ -v args["caseconfig"] ]] && caseconfig="${args['caseconfig']}" || caseconfig="${WORKDIR}/config.${eventdate}${affix}"
 
-relative_path=false
-
 # shellcheck disable=SC2034
 {
-config_relative_path=${relative_path}
-config_job_account_str="${site_job_account_str}"
-config_job_exclusive_str="${site_job_exclusive_str}"
-config_job_runexe_str="${site_job_runexe_str}"
-config_job_runmpexe_str="${site_job_runmpexe_str}"
-config_EXEDIR="${EXEDIR}"
+    config_job_account_str="${site_job_account_str}"
+    config_job_exclusive_str="${site_job_exclusive_str}"
+    config_job_runexe_str="${site_job_runexe_str}"
+    config_job_runmpexe_str="${site_job_runmpexe_str}"
+    config_EXEDIR="${EXEDIR}"
 }
 
 #
