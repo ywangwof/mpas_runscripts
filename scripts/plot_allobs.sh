@@ -260,7 +260,7 @@ for ((s=start_s;s<=end_s;s+=900)); do
         done
     fi
 
-    ioda_file="${run_dir}/${eventdate}/${dadir}/${timestr}/ioda_mrms_refl/ioda_mrms_${datestr}_${timestr}.nc4"
+    ioda_file="${run_dir}/${eventdate}/${dadir}/${timestr}/ioda_refl/ioda_mrms_${datestr}_${timestr}.nc4"
 
     if [[ ! -e "done.${timestr}" ]]; then
 

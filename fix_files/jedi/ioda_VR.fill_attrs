@@ -1,0 +1,12 @@
+MetaData/cosAzimuthCosTilt	f	9.96921e+36
+MetaData/dateTime		ll	-9223372036854775806
+MetaData/height			f	9.96921e+36
+MetaData/latitude		f	9.96921e+36
+MetaData/longitude		f	9.96921e+36
+MetaData/radarAzimuth		f	9.96921e+36
+MetaData/radarTilt		f	9.96921e+36
+MetaData/sinAzimuthCosTilt	f	9.96921e+36
+MetaData/sinTilt		f	9.96921e+36
+ObsError/radialVelocity		f	9.96921e+36
+ObsValue/radialVelocity		f	9.96921e+36
+PreQC/radialVelocity		i	-2147483647

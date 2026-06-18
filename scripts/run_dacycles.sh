@@ -287,10 +287,10 @@ function run_ioda {
     fi
 
     #------------------------------------------------------
-    # Run ioda_mrms_refl for reflectivity
+    # Run ioda_refl for reflectivity
     #------------------------------------------------------
     if [[ ${config_use_REF} == true ]]; then
-        run_ioda_mrms_refl ${wrkdir} ${iseconds}
+        run_ioda_refl ${wrkdir} ${iseconds}
     fi
 
     #------------------------------------------------------
@@ -578,7 +578,7 @@ function run_ioda_mrms_refl_rrfs {
 
 ########################################################################
 
-function run_ioda_mrms_refl {
+function run_ioda_refl {
     # $1        $2
     # wrkdir    iseconds
 
@@ -586,7 +586,7 @@ function run_ioda_mrms_refl {
     local iseconds=$2
 
     #------------------------------------------------------
-    # Run ioda_mrms_refl for MRMS observation files
+    # Run ioda_refl for MRMS observation files
     #------------------------------------------------------
 
     anlys_date=$(date -u -d @$iseconds  +%Y%m%d)
@@ -598,12 +598,14 @@ function run_ioda_mrms_refl {
 
     local ids_refl10cm=()
     if [[ -s ${originalreffile} ]]; then
+        mecho0 "Using MRMS reflectivity file ${CYAN}${originalreffile}${NC}"
         ids_refl10cm+=("refl10cm")
     else
         mecho0 "${YELLOW}INFO${NC}: No MRMS reflectivity file from ${LIGHT_BLUE}${config_OBS_REF_DIR}/${anlys_date}${NC} for cycle ${anlys_date}${anlys_hour}${anlys_min}."
     fi
 
     if [[ -s ${originalclrfile} ]]; then
+        mecho0 "Using MRMS clear reflectivity file ${CYAN}${originalclrfile}${NC}"
         ids_refl10cm+=("refl10cm_clear")
     else
         mecho0 "${YELLOW}INFO${NC}: No MRMS clear reflectivity file from ${LIGHT_BLUE}${config_OBS_REF_DIR}/${anlys_date}${NC} for cycle ${anlys_date}${anlys_hour}${anlys_min}."
@@ -614,9 +616,9 @@ function run_ioda_mrms_refl {
         return
     fi
 
-    mkwrkdir $wrkdir/ioda_mrms_refl 1     # 0: Keep existing directory as is
+    mkwrkdir $wrkdir/ioda_refl 1     # 0: Keep existing directory as is
                                           # 1: Remove existing same name directory
-    cd $wrkdir/ioda_mrms_refl || exit $?
+    cd $wrkdir/ioda_refl || exit $?
 
     #
     #-------------------------------------------------------------------
@@ -628,7 +630,7 @@ function run_ioda_mrms_refl {
 
     join_arrays obs_ids ids_refl10cm
 
-    touch done.ioda_mrms_refl
+    touch done.ioda_refl
 }
 
 ########################################################################
@@ -709,7 +711,9 @@ function run_ioda_rw {
     anlys_min=$(date -u -d @$iseconds   +%M)
 
     originalvrfile="${config_OBS_VEL_DIR}/${anlys_date}/ioda_VR_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
-    if [[ ! -s ${originalvrfile} ]]; then
+    if [[ -s ${originalvrfile} ]]; then
+        mecho0 "Using radar radial wind file ${CYAN}${originalvrfile}${NC}"
+    else
         mecho0 "${YELLOW}INFO${NC}: No radar radial wind file from ${LIGHT_BLUE}${config_OBS_VEL_DIR}/${anlys_date}${NC} available for cycle ${anlys_date}${anlys_hour}${anlys_min}."
         return
     fi
@@ -739,55 +743,75 @@ function run_ioda_rw {
     # 1. Initialize the output file by copying the input over
     cp -f "${INPUT_FILE}" "${OUTPUT_FILE}"
 
-    # 2. In one pass: replace -999 data values and set correct typed _FillValue
-    #    attributes for every variable in the file.  Uses h5py so HDF5 group
-    #    paths are handled natively and integer variables keep their proper
-    #    fill values (avoiding the JEDI ioda fill-value mismatch WARNING).
-    python3 - "${OUTPUT_FILE}" <<- HEREDOC
-		import sys, h5py, numpy as np
+    # 2. Replace -999 data values and set correct typed _FillValue attributes
+    #    for every variable in the file.  Use netCDF4 plus ncatted instead of
+    #    h5py because h5py can be binary-incompatible with the active numpy.
+    #
+    # generate reusable fill attributes file for ncatted
+    #
+#    local fill_attrs_file="${OUTPUT_FILE}.fill_attrs.$$"
+#    python3 - "${OUTPUT_FILE}" <<- HEREDOC > "${fill_attrs_file}"
+#		import sys
+#
+#		import netCDF4 as nc
+#		import numpy as np
+#
+#		FILL_F32 = np.float32(9.96921e+36)
+#		FILL_I64 = np.int64(-9223372036854775806)   # NC_FILL_INT64
+#		FILL_I32 = np.int32(-2147483647)            # NC_FILL_INT
+#
+#		REPLACE_VARS = {
+#		    "ObsValue/radialVelocity",
+#		    "ObsError/radialVelocity",
+#		    "MetaData/height",
+#		    "MetaData/latitude",
+#		    "MetaData/longitude",
+#		    "MetaData/radarAzimuth",
+#		    "MetaData/radarTilt",
+#		    "MetaData/sinTilt",
+#		    "MetaData/cosAzimuthCosTilt",
+#		    "MetaData/sinAzimuthCosTilt",
+#		}
+#
+#		NCO_FILL_FOR_DTYPE = {
+#		    np.dtype("float32"): ("f",  "9.96921e+36"),
+#		    np.dtype("int64"):   ("ll", "-9223372036854775806"),
+#		    np.dtype("int32"):   ("i",  "-2147483647"),
+#		}
+#
+#		def process(grp, path=""):
+#		    for name, item in grp.variables.items():
+#		        item_path = (path + "/" + name).lstrip("/")
+#		        item.set_auto_mask(False)
+#		        nco_fill = NCO_FILL_FOR_DTYPE.get(item.dtype)
+#		        if nco_fill is not None and "_FillValue" in item.ncattrs():
+#		            print(f"{item_path}\t{nco_fill[0]}\t{nco_fill[1]}")
+#		        if item_path in REPLACE_VARS and item.dtype == np.dtype("float32"):
+#		                data = item[:]
+#		                mask = data == np.float32(-999.0)
+#		                if mask.any():
+#		                    data[mask] = FILL_F32
+#		                    item[:] = data
+#		    for name, item in grp.groups.items():
+#		        item_path = (path + "/" + name).lstrip("/")
+#		        process(item, "/" + item_path)
+#
+#		with nc.Dataset(sys.argv[1], "r+") as f:
+#		    process(f)
+#	HEREDOC
+#    local istatus=$?
+#    if [[ ${istatus} -ne 0 ]]; then
+#        rm -f "${fill_attrs_file}"
+#        exit "${istatus}"
+#    fi
 
-		FILL_F32 = np.float32(9.96921e+36)
-		FILL_I64 = np.int64(-9223372036854775806)   # NC_FILL_INT64
-		FILL_I32 = np.int32(-2147483647)            # NC_FILL_INT
+    local fill_attrs_file
+    fill_attrs_file="${config_FIXDIR}/jedi/ioda_VR.fill_attrs"
 
-		REPLACE_VARS = {
-		    "ObsValue/radialVelocity",
-		    "ObsError/radialVelocity",
-		    "MetaData/height",
-		    "MetaData/latitude",
-		    "MetaData/longitude",
-		    "MetaData/radarAzimuth",
-		    "MetaData/radarTilt",
-		    "MetaData/sinTilt",
-		    "MetaData/cosAzimuthCosTilt",
-		    "MetaData/sinAzimuthCosTilt",
-		}
-
-		FILL_FOR_DTYPE = {
-		    np.float32: FILL_F32,
-		    np.int64:   FILL_I64,
-		    np.int32:   FILL_I32,
-		}
-
-		def process(grp, path=""):
-		    for name, item in grp.items():
-		        item_path = (path + "/" + name).lstrip("/")
-		        if isinstance(item, h5py.Dataset):
-		            fill = FILL_FOR_DTYPE.get(item.dtype.type)
-		            if fill is not None and "_FillValue" in item.attrs:
-		                item.attrs["_FillValue"] = fill
-		            if item_path in REPLACE_VARS and item.dtype == np.float32:
-		                data = item[:]
-		                mask = data == np.float32(-999.0)
-		                if mask.any():
-		                    data[mask] = FILL_F32
-		                    item[:] = data
-		        elif isinstance(item, h5py.Group):
-		            process(item, "/" + item_path)
-
-		with h5py.File(sys.argv[1], "r+") as f:
-		    process(f)
-	HEREDOC
+    local var_path nco_type fill_value
+    while IFS=$'\t' read -r var_path nco_type fill_value; do
+        ncatted -O -h -a "_FillValue,/${var_path},m,${nco_type},${fill_value}" "${OUTPUT_FILE}" "${OUTPUT_FILE}" || exit $?
+    done < "${fill_attrs_file}"
 
     obs_ids+=("rw")
 
@@ -1415,7 +1439,7 @@ function jedi_preparation {
 
         local mrms_dir rw_dir cwp_dir
 
-        mrms_dir="${datetime_dir}/ioda_mrms_refl"
+        mrms_dir="${datetime_dir}/ioda_refl"
         rw_dir="${datetime_dir}/ioda_rw"
         cwp_dir="${datetime_dir}/ioda_cwp"
 
@@ -1723,7 +1747,7 @@ function run_jedi_observer {
     #
     local -a conditions
     local re_cwp="[[:space:]](${cwp_obs_regex})[[:space:]]"
-    [[ " ${obs_ids[*]} " =~ " refl10cm " ]] && conditions=("${datimedir}/ioda_mrms_refl/done.ioda_mrms_refl")
+    [[ " ${obs_ids[*]} " =~ " refl10cm " ]] && conditions=("${datimedir}/ioda_refl/done.ioda_refl")
     [[ " ${obs_ids[*]} " =~ " rw " ]]       && conditions+=("${datimedir}/ioda_rw/done.ioda_rw")
     [[ "${#obs_categories[@]}" -gt 0     ]] && conditions+=("${datimedir}/ioda_bufr/done.ioda_bufr")
     [[ " ${obs_ids[*]} " =~ ${re_cwp} ]]    && conditions+=("${datimedir}/ioda_cwp/done.ioda_cwp")
