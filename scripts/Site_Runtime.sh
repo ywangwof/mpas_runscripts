@@ -11,8 +11,7 @@ function setup_machine {
     local machine_name=$1
     local root_dir=$2
     local use_python=$3
-    local initialize=$4
-    local set_up=$5
+    local set_up=$4
 
     if [[ -n ${machine_name} ]]; then
         machine=${machine_name}
@@ -31,7 +30,7 @@ function setup_machine {
         fi
     fi
 
-    [[ -z $set_up ]] && set_up=true
+    [[ -z ${set_up} ]] && set_up=true
 
     #-----------------------------------------------------------------------
     #
@@ -41,9 +40,9 @@ function setup_machine {
 
     site_runcmd="sbatch"
 
-    [[ $set_up == true ]] && echo -e "\nLoading working environment on ${LIGHT_RED}${machine}${NC} ...."
+    [[ ${set_up} == true ]] && echo -e "\nLoading working environment on ${LIGHT_RED}${machine}${NC} ...."
 
-    case $machine in
+    case ${machine} in
     Ursa )
         modulename="build_ursa_Rocky9_intel_hpxmpi_smiol"
 
@@ -67,43 +66,11 @@ function setup_machine {
             source /etc/profile.d/modules.sh
             module purge
             module use "${root_dir}/modules"
-            module load ${modulename}
+            module load "${modulename}"
             #module load wgrib2/2.0.8
         fi
         export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/home/Yunheng.Wang/local/lib
 
-        if [[ ${initialize} == true ]]; then
-            default_partition_wps="u1-compute"
-            default_partition_static="u1-compute"  ; default_claim_cpu_static="--cpus-per-task=12"
-            default_partition_create="u1-service"  ; default_claim_cpu_create="--mem-per-cpu=128G"
-
-            default_npestatic=96
-
-            site_mach="slurm"
-            site_job_exclusive_str="#SBATCH --exclusive"
-            site_job_account_str="#SBATCH -A ${hpcaccount-wof}"
-            site_job_runmpexe_str="srun"
-            site_job_runexe_str="srun"
-            site_runcmd_str=""
-
-            site_WPSGEOG_PATH="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/WPS_GEOG/"
-            #site_wgrib2path="/apps/wgrib2/3.1.3/gnu_11.4.1/wmo/bin/wgrib2"
-            site_nckspath="/apps/spack-2024-12/linux-rocky9-x86_64/gcc-11.4.1/nco-5.2.4-h2xd52tl4efe2ga4ayd6rjr3t5elfe6v/bin/ncks"
-            site_gpmetis="/scratch3/NAGAPE/wof/ywang/tools/bin/gpmetis"
-
-            site_OBS_DIR_BUFR="/scratch3/NAGAPE/wof/kknopfmeier/PB"
-            site_OBS_DIR_REF="/scratch3/NAGAPE/wof/kknopfmeier/MRMS"
-            site_OBS_DIR_VEL="/scratch3/NAGAPE/wof/kknopfmeier/VR"
-            site_OBS_DIR_CWP="/scratch3/NAGAPE/wof/kknopfmeier/CWP"
-            site_hrrr_dir="/scratch3/NAGAPE/wof/kknopfmeier/HRRRE"
-
-            #site_OBS_DIR_BUFR="/scratch4/BMC/rtrr/RRFS2_RETRO_DATA/May2024/obs_rap"
-            #site_OBS_DIR_REF="/scratch4/BMC/rtrr/RRFS2_RETRO_DATA/May2024/reflectivity"
-            #site_OBS_DIR_VEL="/scratch3/NAGAPE/wof/kknopfmeier/MRMS"
-            #site_OBS_DIR_CWP="/scratch3/NAGAPE/wof/ywang/rt_obs/CWP"
-
-            #site_hrrr_dir="/scratch3/NAGAPE/wof/ywang/HRRRE"
-        fi
         ;;
     Hercules )
         modulename="build_hercules_intel"
@@ -111,37 +78,10 @@ function setup_machine {
         if [[ ${set_up} == true ]]; then
             module purge
             module use "${root_dir}"/modules
-            module load ${modulename}
+            module load "${modulename}"
         fi
 
         site_workdir="/work2/noaa/wof/ywang/MPAS/MPAS_PROJECT/run_dirs"
-
-        if [[ ${initialize} == true ]]; then
-            default_partition_wps="batch"
-            default_partition_static="batch"  ; default_claim_cpu_static="--cpus-per-task=12"
-            default_partition_create="batch"  ; default_claim_cpu_create="--mem-per-cpu=128G"
-
-            default_npestatic=40
-
-            site_mach="slurm"
-            site_job_exclusive_str="#SBATCH --exclusive"
-            site_job_account_str="#SBATCH -A ${hpcaccount-wof}"
-            site_job_runmpexe_str="srun"
-            site_job_runexe_str="srun"
-            site_runcmd_str=""
-
-            site_WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
-            #site_wgrib2path="/work2/noaa/wof/ywang/tools/hpc-stack/intel-oneapi-compilers-2022.2.1/wgrib2/2.0.8/bin/wgrib2"
-            site_nckspath="/work2/noaa/wof/ywang/tools/hpc-stack/intel-oneapi-compilers-2022.2.1/nco/5.0.6/bin/ncks"
-            site_gpmetis="/home/yhwang/local/bin/gpmetis"
-
-            site_OBS_DIR_BUFR="/work2/noaa/wof/ywang/MPAS/OBSGEN"
-            site_OBS_DIR_REF="/work2/noaa/wof/ywang/MPAS/MRMS"
-            site_OBS_DIR_VEL="/work2/noaa/wof/ywang/MPAS/VR"
-            site_OBS_DIR_CWP="/work2/noaa/wof/ywang/MPAS/CWP"
-
-            site_hrrr_dir="/work2/noaa/wof/ywang/MPAS/MODEL_DATA/HRRRE"
-        fi
 
         ;;
     Cheyenne )
@@ -149,34 +89,6 @@ function setup_machine {
         modulename="defaults"
 
         site_workdir="/glade/scratch/wofs_mpas/run_dirs"
-
-        if [[ ${initialize} == true ]]; then
-            ncores_static=32
-            default_partition_wps="main"
-            default_partition_static="main" ; default_claim_cpu_static="ncpus=${ncores_static}"
-            default_partition_create="main" ; default_claim_cpu_create="ncpus=${ncores_static}"
-
-            default_npestatic=72
-
-            site_mach="pbs"
-            site_job_exclusive_str="#PBS -l job_priority=economy"
-            site_job_account_str="#PBS -A ${hpcaccount-NMMM0021}"
-            site_job_runmpexe_str="mpiexec"
-            site_job_runexe_str="mpiexec"
-            site_runcmd_str=""
-
-            site_WPSGEOG_PATH="/glade/work/ywang/WPS_GEOG/"
-            #site_wgrib2path="/glade/u/apps/derecho/23.09/spack/opt/spack/wgrib2/3.1.1/gcc/7.5.0/i5h5/bin/wgrib2"
-            site_nckspath="/glade/u/apps/derecho/23.09/spack/opt/spack/nco/5.2.4/gcc/12.2.0/c2uf/bin/ncks"
-            site_gpmetis="/glade/work/ywang/tools/bin/gpmetis"
-
-            site_OBS_DIR_BUFR="/glade/work/ywang/observations"
-            site_OBS_DIR_REF="/glade/work/ywang/MRMS"
-            site_OBS_DIR_VEL="/glade/work/ywang/MRMS"
-            site_OBS_DIR_CWP="/glade/work/ywang/CWP"
-
-            site_hrrr_dir="/glade/derecho/scratch/ywang/tmp"
-        fi
 
         ;;
     wof-epyc* )
@@ -199,36 +111,6 @@ function setup_machine {
         site_postdir="/home/yunheng.wang/MPAS/frdd-wofs-post"
         RT_OBSDIR="/work/rt_obs"
 
-        if [[ ${initialize} == true ]]; then
-            default_partition_wps="batch"
-            default_partition_static="batch"    ; default_claim_cpu_static=""
-            default_partition_create="batch"    ; default_claim_cpu_create="--mem-per-cpu=128G"
-
-            default_npestatic=24
-
-            site_mach="slurm"
-            #job_exclusive_str="#SBATCH --exclude=cn11,cn14"
-            site_job_exclusive_str="#SBATCH --exclusive"
-            site_job_account_str=""
-            site_job_runmpexe_str="srun"
-            site_job_runexe_str="srun"
-            site_runcmd_str="srun -n 1"
-
-            site_WPSGEOG_PATH="/scratch/wofs_mpas/WPS_GEOG/"   # Should keep last /
-            #site_wgrib2path="/home/yunheng.wang/tools/gnu/bin/wgrib2"
-            site_nckspath="/home/yunheng.wang/tools/micromamba/envs/wofs_an/bin/ncks"
-            site_gpmetis="/home/yunheng.wang/tools/bin/gpmetis"
-            export LD_LIBRARY_PATH="/home/yunheng.wang/tools/lib"
-            site_nclpath="/scratch/software/miniconda3/bin/ncl"
-
-            site_OBS_DIR_BUFR="/scratch/wofs_mpas/OBS_SEQ.reduced"
-            site_OBS_DIR_REF="/scratch/wofs_mpas/MRMS"
-            site_OBS_DIR_VEL="/scratch/wofs_mpas/MRMS"
-            site_OBS_DIR_CWP="/scratch/wofs_mpas/CWP"
-
-            #hrrr_dir="/scratch2/wofuser/MODEL_DATA/HRRRE"
-            site_hrrr_dir="/scratch/wofs/wofuser/MODEL_DATA/HRRRE"
-        fi
         ;;
     esac
 
@@ -243,21 +125,142 @@ function setup_machine {
 
     export machine site_runcmd site_workdir site_postdir
     export MPAS_DIR mpas_modulename rrfs_dir rrfs_modulename JEDI_DIR jedi_modulename
+}
 
-    if [[ ${initialize} == true ]]; then
-        # Will be used by 'setup_mpas-wofs.sh' for static processing.
-        # For other programs, the information is in the runtime configuration file and
-        # users can modify 'default_site_settings' below for the default settings
-        # before running 'setup_mpas-wofs.sh', after that just modify
-        # the runtime configuration file.
-        #
-        export site_mach site_runcmd_str
-        export site_job_exclusive_str site_job_account_str site_job_runmpexe_str site_job_runexe_str
-        export default_partition_wps default_partition_static default_partition_create
-        export default_npestatic default_claim_cpu_static default_claim_cpu_create
-        export site_WPSGEOG_PATH site_nckspath site_gpmetis site_nclpath
-        export site_OBS_DIR_BUFR site_OBS_DIR_REF site_OBS_DIR_VEL site_OBS_DIR_CWP site_hrrr_dir
-    fi
+########################################################################
+
+function initialize4static {
+    # This function prepares defaults for static processing.
+    # will be called from setup_mpas-wofs.sh only wrapper
+    local machine_name=$1
+
+    case "${machine_name}" in
+    Ursa )
+        default_partition_wps="u1-compute"
+        default_partition_static="u1-compute"  ; default_claim_cpu_static="--cpus-per-task=12"
+        default_partition_create="u1-service"  ; default_claim_cpu_create="--mem-per-cpu=128G"
+
+        default_npestatic=96
+
+        site_mach="slurm"
+        site_job_exclusive_str="#SBATCH --exclusive"
+        site_job_account_str="#SBATCH -A ${hpcaccount-wof}"
+        site_job_runmpexe_str="srun"
+        site_job_runexe_str="srun"
+        site_runcmd_str=""
+
+        site_WPSGEOG_PATH="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/WPS_GEOG/"
+        #site_wgrib2path="/apps/wgrib2/3.1.3/gnu_11.4.1/wmo/bin/wgrib2"
+        site_nckspath="/apps/spack-2024-12/linux-rocky9-x86_64/gcc-11.4.1/nco-5.2.4-h2xd52tl4efe2ga4ayd6rjr3t5elfe6v/bin/ncks"
+        site_gpmetis="/scratch3/NAGAPE/wof/ywang/tools/bin/gpmetis"
+
+        site_OBS_DIR_BUFR="/scratch3/NAGAPE/wof/kknopfmeier/PB"
+        site_OBS_DIR_REF="/scratch3/NAGAPE/wof/kknopfmeier/MRMS"
+        site_OBS_DIR_VEL="/scratch3/NAGAPE/wof/kknopfmeier/VR"
+        site_OBS_DIR_CWP="/scratch3/NAGAPE/wof/kknopfmeier/CWP"
+        site_hrrr_dir="/scratch3/NAGAPE/wof/kknopfmeier/HRRRE"
+
+        #site_OBS_DIR_BUFR="/scratch4/BMC/rtrr/RRFS2_RETRO_DATA/May2024/obs_rap"
+        #site_OBS_DIR_REF="/scratch4/BMC/rtrr/RRFS2_RETRO_DATA/May2024/reflectivity"
+        #site_OBS_DIR_VEL="/scratch3/NAGAPE/wof/kknopfmeier/MRMS"
+        #site_OBS_DIR_CWP="/scratch3/NAGAPE/wof/ywang/rt_obs/CWP"
+
+        #site_hrrr_dir="/scratch3/NAGAPE/wof/ywang/HRRRE"
+        ;;
+    Hercules )
+        default_partition_wps="batch"
+        default_partition_static="batch"  ; default_claim_cpu_static="--cpus-per-task=12"
+        default_partition_create="batch"  ; default_claim_cpu_create="--mem-per-cpu=128G"
+
+        default_npestatic=40
+
+        site_mach="slurm"
+        site_job_exclusive_str="#SBATCH --exclusive"
+        site_job_account_str="#SBATCH -A ${hpcaccount-wof}"
+        site_job_runmpexe_str="srun"
+        site_job_runexe_str="srun"
+        site_runcmd_str=""
+
+        site_WPSGEOG_PATH="/lfs4/NAGAPE/hpc-wof1/ywang/MPAS/WPS_GEOG/"
+        #site_wgrib2path="/work2/noaa/wof/ywang/tools/hpc-stack/intel-oneapi-compilers-2022.2.1/wgrib2/2.0.8/bin/wgrib2"
+        site_nckspath="/work2/noaa/wof/ywang/tools/hpc-stack/intel-oneapi-compilers-2022.2.1/nco/5.0.6/bin/ncks"
+        site_gpmetis="/home/yhwang/local/bin/gpmetis"
+
+        site_OBS_DIR_BUFR="/work2/noaa/wof/ywang/MPAS/OBSGEN"
+        site_OBS_DIR_REF="/work2/noaa/wof/ywang/MPAS/MRMS"
+        site_OBS_DIR_VEL="/work2/noaa/wof/ywang/MPAS/VR"
+        site_OBS_DIR_CWP="/work2/noaa/wof/ywang/MPAS/CWP"
+
+        site_hrrr_dir="/work2/noaa/wof/ywang/MPAS/MODEL_DATA/HRRRE"
+        ;;
+    Cheyenne )
+        ncores_static=32
+        default_partition_wps="main"
+        default_partition_static="main" ; default_claim_cpu_static="ncpus=${ncores_static}"
+        default_partition_create="main" ; default_claim_cpu_create="ncpus=${ncores_static}"
+
+        default_npestatic=72
+
+        site_mach="pbs"
+        site_job_exclusive_str="#PBS -l job_priority=economy"
+        site_job_account_str="#PBS -A ${hpcaccount-NMMM0021}"
+        site_job_runmpexe_str="mpiexec"
+        site_job_runexe_str="mpiexec"
+        site_runcmd_str=""
+
+        site_WPSGEOG_PATH="/glade/work/ywang/WPS_GEOG/"
+        #site_wgrib2path="/glade/u/apps/derecho/23.09/spack/opt/spack/wgrib2/3.1.1/gcc/7.5.0/i5h5/bin/wgrib2"
+        site_nckspath="/glade/u/apps/derecho/23.09/spack/opt/spack/nco/5.2.4/gcc/12.2.0/c2uf/bin/ncks"
+        site_gpmetis="/glade/work/ywang/tools/bin/gpmetis"
+
+        site_OBS_DIR_BUFR="/glade/work/ywang/observations"
+        site_OBS_DIR_REF="/glade/work/ywang/MRMS"
+        site_OBS_DIR_VEL="/glade/work/ywang/MRMS"
+        site_OBS_DIR_CWP="/glade/work/ywang/CWP"
+
+        site_hrrr_dir="/glade/derecho/scratch/ywang/tmp"
+        ;;
+    wof-epyc* )
+        ;;
+    * )
+        default_partition_wps="batch"
+        default_partition_static="batch"    ; default_claim_cpu_static=""
+        default_partition_create="batch"    ; default_claim_cpu_create="--mem-per-cpu=128G"
+
+        default_npestatic=24
+
+        site_mach="slurm"
+        #job_exclusive_str="#SBATCH --exclude=cn11,cn14"
+        site_job_exclusive_str="#SBATCH --exclusive"
+        site_job_account_str=""
+        site_job_runmpexe_str="srun"
+        site_job_runexe_str="srun"
+        site_runcmd_str="srun -n 1"
+
+        site_WPSGEOG_PATH="/scratch/wofs_mpas/WPS_GEOG/"   # Should keep last /
+        #site_wgrib2path="/home/yunheng.wang/tools/gnu/bin/wgrib2"
+        site_nckspath="/home/yunheng.wang/tools/micromamba/envs/wofs_an/bin/ncks"
+        site_gpmetis="/home/yunheng.wang/tools/bin/gpmetis"
+        export LD_LIBRARY_PATH="/home/yunheng.wang/tools/lib"
+        site_nclpath="/scratch/software/miniconda3/bin/ncl"
+
+        site_OBS_DIR_BUFR="/scratch/wofs_mpas/OBS_SEQ.reduced"
+        site_OBS_DIR_REF="/scratch/wofs_mpas/MRMS"
+        site_OBS_DIR_VEL="/scratch/wofs_mpas/MRMS"
+        site_OBS_DIR_CWP="/scratch/wofs_mpas/CWP"
+
+        #hrrr_dir="/scratch2/wofuser/MODEL_DATA/HRRRE"
+        site_hrrr_dir="/scratch/wofs/wofuser/MODEL_DATA/HRRRE"
+        ;;
+    esac
+
+    export site_mach site_runcmd_str
+    export site_job_exclusive_str site_job_account_str site_job_runmpexe_str site_job_runexe_str
+    export site_WPSGEOG_PATH site_nckspath site_gpmetis site_nclpath
+    export site_OBS_DIR_BUFR site_OBS_DIR_REF site_OBS_DIR_VEL site_OBS_DIR_CWP site_hrrr_dir
+
+    export default_partition_wps default_partition_static default_partition_create
+    export default_npestatic default_claim_cpu_static default_claim_cpu_create
 }
 
 ########################################################################
@@ -265,9 +268,10 @@ function setup_machine {
 function default_site_settings {
     #-------------------------------------------------------------------
     # Machine specific setting for init, lbc, dacycles & fcst
+    # Will be called from setup_mpas-wofs.sh only
     #-------------------------------------------------------------------
 
-    case $machine in
+    case ${machine} in
     "Ursa" )
         default_claim_cpu_ungrib="--cpus-per-task=96"   # --mem-per-cpu=10G"
 
@@ -361,8 +365,8 @@ function default_site_settings {
         default_partition_dafcst="preempt" ; default_claim_cpu_dafcst="ncpus=${default_ncores_dafcst}"
         default_partition_filter="preempt" ; default_claim_cpu_filter="ncpus=${default_ncores_filter}"
 
-        default_npefilter=128     ; default_nnodes_filter=$(( default_npefilter/default_ncores_filter   ))
-        default_npedafcst=128     ; default_nnodes_dafcst=$(( default_npefcst/default_ncores_dafcst ))
+        default_npefilter=128     ; default_nnodes_filter=$(( default_npefilter/default_ncores_filter ))
+        default_npedafcst=128     ; default_nnodes_dafcst=$(( default_npedafcst/default_ncores_dafcst ))
 
         default_claim_cpu_ioda="ncpus=1"
         default_claim_cpu_ioda_refl="ncpus=2"

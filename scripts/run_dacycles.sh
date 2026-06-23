@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2317,SC1090,SC1091,SC2086,SC2154
+# shellcheck disable=SC2317,SC1090,SC2086,SC2154
 
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
 rootdir=$(realpath "$(dirname "${scpdir}")")
@@ -109,7 +109,7 @@ function usage {
     echo "    PURPOSE: Run MPAS-WOFS DA cycles."
     echo " "
     echo "    DATETIME - Case date as YYYYmmdd, Default eventdate is ${eventdateDF}."
-    echo "               YYYYmmdd:     run all cycles from $eventtimeDF to 0300 UTC. Or use options \"-s\" & \"-e\" to specify cycles."
+    echo "               YYYYmmdd:     run all cycles from ${eventtimeDF} to 0300 UTC. Or use options \"-s\" & \"-e\" to specify cycles."
     echo "    WORKDIR  - Run Directory"
     echo "    CONFIG   - MPAS-WoFS runtime configuration file with full path."
     echo "               WORKDIR & DATETIME will be extracted from the CONFIG name unless they are given explicitly."
@@ -135,9 +135,9 @@ function usage {
     echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
     echo " "
     echo "   DEFAULTS:"
-    echo "              eventdate = $eventdateDF"
-    echo "              rootdir   = $rootdir"
-    echo "              WORKDIR   = $mpasworkdir/run_dirs"
+    echo "              eventdate = ${eventdateDF}"
+    echo "              rootdir   = ${rootdir}"
+    echo "              WORKDIR   = ${mpasworkdir}/run_dirs"
     echo " "
     echo "                                     -- By Y. Wang (2023.05.31)"
     echo " "
@@ -161,7 +161,7 @@ function parse_args {
     while [[ $# -gt 0 ]]; do
         key="$1"
 
-        case $key in
+        case ${key} in
             -h)
                 usage 0
                 ;;
@@ -184,7 +184,7 @@ function parse_args {
                 fi
                 ;;
             -c | -a | -d )
-                args["cleanoption"]="$key"
+                args["cleanoption"]="${key}"
                 if [[ "$2" == "filter" || "$2" == "mpas" ]]; then
                     args["cleanjobs"]+=" $2"
                     shift
@@ -237,21 +237,21 @@ function parse_args {
                 shift
                 ;;
             -*)
-                echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
+                echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}${key}${NC}"
                 usage 2
                 ;;
             ioda* | jedi_* | update_* | mpas* | clean* )
                 args["jobs"]="${key//,/ }"
                 ;;
             *)
-                if [[ $key =~ ^[0-9]{8}$ ]]; then
+                if [[ ${key} =~ ^[0-9]{8}$ ]]; then
                     args["eventdate"]="${key}"
-                elif [[ -d $key ]]; then
+                elif [[ -d ${key} ]]; then
                     args["WORKDIR"]="${key}"
-                elif [[ -f $key ]]; then
+                elif [[ -f ${key} ]]; then
                     args["config_file"]="${key}"
                 else
-                    echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}$key${NC}."
+                    echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}${key}${NC}."
                     usage 3
                 fi
                 ;;
@@ -269,14 +269,14 @@ function run_ioda {
     local wrkdir=$1               # DA directory for this cycle
     local iseconds=$2
 
-    if [[ ! -d $wrkdir ]]; then
-        mecho0 "run_ioda: Working directory $wrkdir not exist"
+    if [[ ! -d ${wrkdir} ]]; then
+        mecho0 "run_ioda: Working directory ${wrkdir} not exist"
         exit 1
     fi
 
-    anlys_datehr=$(date -u -d @$iseconds  +%Y%m%d%H)
-    anlys_hour=$(date -u -d @$iseconds  +%H)
-    anlys_min=$(date -u -d @$iseconds   +%M)
+    anlys_datehr=$(date -u -d @${iseconds}  +%Y%m%d%H)
+    anlys_hour=$(date   -u -d @${iseconds}  +%H)
+    anlys_min=$(date    -u -d @${iseconds}  +%M)
 
     #------------------------------------------------------
     # Run ioda_bufr for all bufr observation files
@@ -322,15 +322,15 @@ function run_ioda_bufr {
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/ioda_bufr/running.ioda_bufr || -f $wrkdir/ioda_bufr/done.ioda_bufr || -f $wrkdir/ioda_bufr/queue.ioda_bufr ]]; then
+    if [[ -f ${wrkdir}/ioda_bufr/running.ioda_bufr || -f ${wrkdir}/ioda_bufr/done.ioda_bufr || -f ${wrkdir}/ioda_bufr/queue.ioda_bufr ]]; then
         return
     fi
 
     anlys_datetime_ref="$(date -u -d @${iseconds} +%Y-%m-%dT%H:%M:%SZ)"    # ${CDATE:0:4}-${CDATE:4:2}-${CDATE:6:2}T${CDATE:8:2}:00:00Z
-    anlys_date=$(date -u -d @$iseconds    +%Y%m%d)
-    anlys_datehr=$(date -u -d @$iseconds  +%Y%m%d%H)
-    anlys_time=$(date -u -d @$iseconds  +%H%M)
-    anlys_hour=$(date -u -d @$iseconds  +%H)
+    anlys_date=$(date   -u -d @${iseconds}  +%Y%m%d)
+    anlys_datehr=$(date -u -d @${iseconds}  +%Y%m%d%H)
+    anlys_time=$(date   -u -d @${iseconds}  +%H%M)
+    anlys_hour=$(date   -u -d @${iseconds}  +%H)
 
     #-------------------------------------------------------------------
     # Run ioda_bufr for all bufr observation files (only assimilates
@@ -357,9 +357,9 @@ function run_ioda_bufr {
         return
     fi
 
-    mkwrkdir $wrkdir/ioda_bufr 1        # 0: Keep existing directory as is
+    mkwrkdir ${wrkdir}/ioda_bufr 1        # 0: Keep existing directory as is
                                         # 1: Remove existing same name directory
-    cd $wrkdir/ioda_bufr || exit $?
+    cd ${wrkdir}/ioda_bufr || exit $?
 
     ${cpcmd} "${prepbufr}" prepbufr
 
@@ -388,7 +388,7 @@ function run_ioda_bufr {
         [OBSSTR]="${obs_categories[*]}"    # "adpsfc adpupa aircft aircar satwnd"
         [FIXDIR]="${config_FIXDIR}"
         [ROOTDIR]="${rootdir}"
-        [GRIDFILE]="${rundir}/$domname/${domname}.grid.nc"
+        [GRIDFILE]="${rundir}/${domname}/${domname}.grid.nc"
         [RRFSDIR]="${rrfs_dir}"
         [MODULE]="${rrfs_modulename}"
     )
@@ -397,7 +397,7 @@ function run_ioda_bufr {
         jobParms[NCORES]="1"
     fi
 
-    submit_a_job $wrkdir/ioda_bufr "ioda_bufr" jobParms ${config_TEMPDIR}/$jobscript $jobscript ""
+    submit_a_job ${wrkdir}/ioda_bufr "ioda_bufr" jobParms ${config_TEMPDIR}/${jobscript} ${jobscript} ""
 }
 
 ########################################################################
@@ -417,29 +417,29 @@ function run_ioda_mrms_refl_rrfs {
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/ioda_mrms_refl/running.ioda_mrms_refl   \
-       || -f $wrkdir/ioda_mrms_refl/done.ioda_mrms_refl      \
-       || -f $wrkdir/ioda_mrms_refl/queue.ioda_refl ]]; then
+    if [[ -f ${wrkdir}/ioda_mrms_refl/running.ioda_mrms_refl   \
+       || -f ${wrkdir}/ioda_mrms_refl/done.ioda_mrms_refl      \
+       || -f ${wrkdir}/ioda_mrms_refl/queue.ioda_refl ]]; then
         # shellcheck disable=SC2034
         local ids_refl10cm=("refl10cm" "refl10cm_clear")
         join_arrays obs_ids ids_refl10cm
         return
     fi
 
-    mkwrkdir $wrkdir/ioda_mrms_refl 1     # 0: Keep existing directory as is
-                                     # 1: Remove existing same name directory
-    cd $wrkdir/ioda_mrms_refl || exit $?
+    mkwrkdir ${wrkdir}/ioda_mrms_refl 1     # 0: Keep existing directory as is
+                                            # 1: Remove existing same name directory
+    cd ${wrkdir}/ioda_mrms_refl || exit $?
 
-    anlys_date=$(date -u -d @$iseconds  +%Y%m%d)
-    anlys_hour=$(date -u -d @$iseconds  +%H)
-    anlys_min=$(date -u -d @$iseconds   +%M)
+    anlys_date=$(date -u -d @${iseconds}  +%Y%m%d)
+    anlys_hour=$(date -u -d @${iseconds}  +%H)
+    anlys_min=$(date  -u -d @${iseconds}  +%M)
 
     #
     #-----------------------------------------------------------------------
     # link or copy background files
     #-----------------------------------------------------------------------
     #
-    gridfile="${rundir}/$domname/${domname}.grid.nc"
+    gridfile="${rundir}/${domname}/${domname}.grid.nc"
 
     #mecho0 "meshgrid file is ${CYAN}${gridfile}${NC}"
     ${lncmd} "${gridfile}" grid.nc
@@ -450,17 +450,18 @@ function run_ioda_mrms_refl_rrfs {
     #
     obs_appendix="grib2"
 
-    if [ -f filelist_mrms ]; then rm -f filelist_mrms; fi
+    if [[ -f filelist_mrms ]]; then rm -f filelist_mrms; fi
 
     mecho0n "Looking for reflectivity data valid:"
     for (( j=0; j < 5; $((j=j+1)) )); do
         for l in -1 1; do
             curr_sec=$(( iseconds + l*j*60))
-            curr_time=$(date -u -d @$curr_sec +%Y%m%d-%H%M)
-            curr_date=$(date -u -d @$curr_sec +%Y%m%d)
+            curr_time=$(date -u -d @${curr_sec} +%Y%m%d-%H%M)
+            curr_date=$(date -u -d @${curr_sec} +%Y%m%d)
 
+            # shellcheck disable=SC2312
             mapfile -t fileslist < <(compgen -G "${config_OBS_REF_DIR}/${curr_date}/*MergedReflectivityQC_*_${curr_time}??.${obs_appendix}" | sort -V)
-            if [ ${#fileslist[@]} -ge 10 ] && [ ! -e filelist_mrms ]; then
+            if [[ ${#fileslist[@]} -ge 10  && ! -e filelist_mrms ]]; then
                 echo -en " ${WHITE}${curr_time}${NC}\n"
                 mecho0 "Found ${YELLOW}${#fileslist[@]}${NC} GRIB-2 files from ${CYAN}${config_OBS_REF_DIR}/${curr_date}${NC}"
                 for nsslfile in "${fileslist[@]}"; do
@@ -474,15 +475,15 @@ function run_ioda_mrms_refl_rrfs {
                 echo -en " ${DARK}${curr_time}${NC},"
             fi
 
-            [[ $j -eq 0 ]] && break
+            [[ ${j} -eq 0 ]] && break
         done
     done
     #
     #
-    if [ ! -s filelist_mrms ]; then rm -f filelist_mrms; fi
+    if [[ ! -s filelist_mrms ]]; then rm -f filelist_mrms; fi
 
-    if [ -s filelist_mrms ]; then
-        if [ "${obs_appendix}" == "grib2.gz" ]; then
+    if [[ -s filelist_mrms ]]; then
+        if [[ "${obs_appendix}" == "grib2.gz" ]]; then
            gzip -d ./*.gz
            mv filelist_mrms filelist_mrms_org
            ls "MergedReflectivityQC_*_${curr_time}??.grib2" > filelist_mrms
@@ -504,12 +505,12 @@ function run_ioda_mrms_refl_rrfs {
     #-----------------------------------------------------------------------
 
     RADAR_REF_THINNING=1
-    if [ ${RADAR_REF_THINNING} -eq 2 ]; then     # heavy data thinning, typically used for EnKF
+    if [[ ${RADAR_REF_THINNING} -eq 2 ]]; then     # heavy data thinning, typically used for EnKF
         precipdbzhorizskip=1
         precipdbzvertskip=2
         clearairdbzhorizskip=2
         clearairdbzvertskip=4
-    elif [ ${RADAR_REF_THINNING} -eq 1 ]; then   # light data thinning, typically used for hybrid EnVar
+    elif [[ ${RADAR_REF_THINNING} -eq 1 ]]; then   # light data thinning, typically used for hybrid EnVar
         precipdbzhorizskip=1
         precipdbzvertskip=1
         clearairdbzhorizskip=1
@@ -573,7 +574,7 @@ function run_ioda_mrms_refl_rrfs {
         jobParms[NCORES]="1"
     fi
 
-    submit_a_job $wrkdir/ioda_mrms_refl "ioda_refl" jobParms ${config_TEMPDIR}/$jobscript $jobscript ""
+    submit_a_job ${wrkdir}/ioda_mrms_refl "ioda_refl" jobParms ${config_TEMPDIR}/${jobscript} ${jobscript} ""
 }
 
 ########################################################################
@@ -589,9 +590,9 @@ function run_ioda_refl {
     # Run ioda_refl for MRMS observation files
     #------------------------------------------------------
 
-    anlys_date=$(date -u -d @$iseconds  +%Y%m%d)
-    anlys_hour=$(date -u -d @$iseconds  +%H)
-    anlys_min=$(date -u -d @$iseconds   +%M)
+    anlys_date=$(date -u -d @${iseconds}  +%Y%m%d)
+    anlys_hour=$(date -u -d @${iseconds}  +%H)
+    anlys_min=$(date  -u -d @${iseconds}  +%M)
 
     originalreffile="${config_OBS_REF_DIR}/${anlys_date}/ioda_mrms_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
     originalclrfile="${config_OBS_REF_DIR}/${anlys_date}/ioda_mrms_${anlys_date}_${anlys_hour}${anlys_min}_clear.nc4"
@@ -616,9 +617,9 @@ function run_ioda_refl {
         return
     fi
 
-    mkwrkdir $wrkdir/ioda_refl 1     # 0: Keep existing directory as is
+    mkwrkdir ${wrkdir}/ioda_refl 1     # 0: Keep existing directory as is
                                           # 1: Remove existing same name directory
-    cd $wrkdir/ioda_refl || exit $?
+    cd ${wrkdir}/ioda_refl || exit $?
 
     #
     #-------------------------------------------------------------------
@@ -706,9 +707,9 @@ function run_ioda_rw {
 
     local anlys_date anlys_hour anlys_min originalvrfile
 
-    anlys_date=$(date -u -d @$iseconds  +%Y%m%d)
-    anlys_hour=$(date -u -d @$iseconds  +%H)
-    anlys_min=$(date -u -d @$iseconds   +%M)
+    anlys_date=$(date -u -d @${iseconds}  +%Y%m%d)
+    anlys_hour=$(date -u -d @${iseconds}  +%H)
+    anlys_min=$(date  -u -d @${iseconds}  +%M)
 
     originalvrfile="${config_OBS_VEL_DIR}/${anlys_date}/ioda_VR_${anlys_date}_${anlys_hour}${anlys_min}.nc4"
     if [[ -s ${originalvrfile} ]]; then
@@ -827,7 +828,7 @@ function run_ioda_cwp {
     local wrkdir=$1               # DA directory for this cycle
     local iseconds=$2
 
-    if [[ $icyc -le 0 ]]; then return; fi
+    if [[ ${icyc} -le 0 ]]; then return; fi
 
     #------------------------------------------------------
     # Check conditions for the IODA_CWP processing
@@ -835,11 +836,11 @@ function run_ioda_cwp {
 
     local cwpobs_list=()
 
-    anlys_eventtime=$(date -u -d @$iseconds  +%Y%m%d%H%M)
+    anlys_eventtime=$(date -u -d @${iseconds}  +%Y%m%d%H%M)
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/ioda_cwp/done.ioda_cwp ]]; then
+    if [[ -f ${wrkdir}/ioda_cwp/done.ioda_cwp ]]; then
 
         for cwpobs in "${cwp_obs_initial[@]}"; do
             filename="${wrkdir}/ioda_cwp/ioda_${cwpobs}_obs.nc"
@@ -862,9 +863,9 @@ function run_ioda_cwp {
         #for l in -1 1; do
         l=-1            # looking back only
             curr_sec=$(( iseconds + l*j*60))
-            #curr_year=$(date -u -d @$curr_sec +%Y)
-            curr_date=$(date -u -d @$curr_sec +%Y%m%d)
-            curr_datetime=$(date -u -d @$curr_sec +%Y%m%d%H%M)
+            #curr_year=$(date -u -d @"${curr_sec}" +%Y)
+            curr_date=$(date -u -d @"${curr_sec}" +%Y%m%d)
+            curr_datetime=$(date -u -d @"${curr_sec}" +%Y%m%d%H%M)
 
             cwpfile="${config_OBS_CWP_DIR}/${curr_date}/${curr_datetime}_GOES19_CWP_OBS.nc"
 
@@ -893,9 +894,9 @@ function run_ioda_cwp {
     # Run ioda_cwp for the found observation file
     #------------------------------------------------------
 
-    mkwrkdir $wrkdir/ioda_cwp 1      # 0: Keep existing directory as is
+    mkwrkdir ${wrkdir}/ioda_cwp 1      # 0: Keep existing directory as is
                                      # 1: Remove existing same name directory
-    cd $wrkdir/ioda_cwp || exit $?
+    cd ${wrkdir}/ioda_cwp || exit $?
 
     #-----------------------------------------------------------------------
     # Process the GOES CWP data file
@@ -918,7 +919,7 @@ function run_ioda_cwp {
 
     local istatus=$?
     # shellcheck disable=SC2181
-    if [ $istatus -eq 0 ]; then
+    if [[ ${istatus} -eq 0 ]]; then
         touch done.ioda_cwp
         for cwpobs in "${cwp_obs_initial[@]}"; do
             filename="ioda_${cwpobs}_obs.nc"
@@ -1104,7 +1105,7 @@ function create_streams {
     local scheme="$1"
     local filename="$2"
 
-    icycle_extinvl_str=$(date -d@${icycle_lbcgap} -u +%H:%M:%S)
+    icycle_extinvl_str=$(date -d@"${icycle_lbcgap}" -u +%H:%M:%S)
     #echo "icycle_extinvl_str=${icycle_extinvl_str}"
 
     if [[ ${scheme} == "MPAS" ]]; then
@@ -1288,7 +1289,7 @@ function read_convinfo_initial {
         read -r aline <<< "${line}"
 
         found=false
-        if [[ $aline == "!"* ]]; then
+        if [[ ${aline} == "!"* ]]; then
             :
             #echo "${line}" >> "${outfile}"
         else
@@ -1317,11 +1318,11 @@ function read_convinfo_initial {
                 if [[ " ${atype} " =~ ${re_cwp} ]]; then
                     cwp_list+=("${atype}")
                 else
-                    obs_list+=("$atype")
+                    obs_list+=("${atype}")
                     if [[ ${itype} -ne 0 ]]; then
                         icategory="${icat%%,*}"
                         local icategory_lc="${icategory,,}"
-                        if [[ ! " ${obs_category[*]} " == *" ${icategory_lc} "* ]]; then
+                        if [[ " ${obs_category[*]} " != *" ${icategory_lc} "* ]]; then
                             obs_category+=("${icategory_lc}")
                         fi
                     fi
@@ -1360,7 +1361,7 @@ function get_convinfo {
         read -r aline <<< "${line}"
 
         found=false
-        if [[ $aline == "!"* ]]; then
+        if [[ ${aline} == "!"* ]]; then
             echo "${line}" >> "${outfile}"
         else
             read -ra fields <<< "${aline}"
@@ -1381,7 +1382,7 @@ function get_convinfo {
             #iuse=${fields[3]}
 
             for obs in "${obs_list[@]}"; do
-                if [[ "${obs}" == "$atype" ]]; then
+                if [[ "${obs}" == "${atype}" ]]; then
                     found=true
                     break
                 fi
@@ -1391,7 +1392,7 @@ function get_convinfo {
             if [[ " ${wofs_obs_list[*]} " == *" ${atype} "* ]]; then
                 iend=25; jstart=29
             fi
-            if [[ $found == true ]]; then
+            if [[ ${found} == true ]]; then
                 echo " ${line:0:${iend}}  1 ${line:${jstart}}" >> "${outfile}"
             else
                 echo " ${line:0:${iend}}  0 ${line:${jstart}}" >> "${outfile}"
@@ -1412,16 +1413,17 @@ function jedi_preparation {
     local icycle=$2
     local iseconds=$3
 
-    anlys_date=$(date -u -d @$iseconds  +%Y%m%d)
-    anlys_hour=$(date -u -d @$iseconds  +%H)
-    anlys_min=$(date -u -d @$iseconds   +%M)
+    anlys_date=$(date -u -d @"${iseconds}" +%Y%m%d)
+    anlys_hour=$(date -u -d @"${iseconds}" +%H)
+    anlys_min=$(date  -u -d @"${iseconds}" +%M)
 
     timesec_pre=$((iseconds-config_intvl_sec))
-    event_pre=$(date -u -d @${timesec_pre}   +%H%M)
+    event_pre=$(date -u -d @"${timesec_pre}" +%H%M)
 
-    local datetime_dir datedir casedir
+    local datetime_dir datedir casedir wrkdir
 
-    datetime_dir=$(dirname "$(pwd)")
+    wrkdir="$(pwd)"
+    datetime_dir=$(dirname "${wrkdir}")
     datedir=$(dirname "${datetime_dir}")
     casedir="${rundir}"
 
@@ -1582,7 +1584,7 @@ function jedi_preparation {
 
     if [[ -d "ens" ]]; then           # Link ensembles to ens/ for tasks observer and solver
         for mem in $(seq -w 01 "${config_ENS_SIZE}"); do
-            if [[ $icycle -eq 0 ]]; then
+            if [[ ${icycle} -eq 0 ]]; then
                 input_file_="${casedir}/init/${domname}_${mem}.init.nc"
             else
                 input_file_="${datedir}/${event_pre}/fcst_${mem}/${domname}_${mem}.mpasout.${currtime_fil}.nc"
@@ -1593,8 +1595,8 @@ function jedi_preparation {
         wait
     fi
 
-    if [[ -d "jdiag" ]]; then        # Link observations for jdiag/ for task solver and post
-        currdir=$(realpath -m --relative-to ${WORKDIR} "$(pwd)")
+    if [[ -d "jdiag" ]]; then        # Link observations to jdiag/ for task solver and post
+        currdir=$(realpath -m --relative-to ${WORKDIR} "${wrkdir}")
         [[ ${#obs_files[@]} -gt 0 ]] && mecho0 "Linking observer output files to ${currdir}/jdiag for task = ${PURPLE}${taskname}${NC} ..."
         for file in "${obs_files[@]}"; do
             display_filename=$(realpath -m --relative-to ${WORKDIR} ${file})
@@ -1651,10 +1653,10 @@ function jedi_preparation {
             num_processors=${config_npefilter}
         fi
 
-        if [[ ! -f $casedir/${domname}/${domname}.graph.info.part.${num_processors} ]]; then
-            split_graph "${config_gpmetis}" "${domname}.graph.info" "${num_processors}" "${rundir}/${domname}" "$dorun" "$verbose"
+        if [[ ! -f ${casedir}/${domname}/${domname}.graph.info.part.${num_processors} ]]; then
+            split_graph "${config_gpmetis}" "${domname}.graph.info" "${num_processors}" "${rundir}/${domname}" "${dorun}" "${verbose}"
         fi
-        ${lncmd} $casedir/${domname}/${domname}.graph.info.part.${num_processors} .
+        ${lncmd} ${casedir}/${domname}/${domname}.graph.info.part.${num_processors} .
 
         ln -sf "${config_FIXDIR}"/jedi/stream_list/* .
 
@@ -1670,9 +1672,9 @@ function jedi_preparation {
 
         # generate getkf.yaml based on how YAML_GEN_METHOD is set
         local analysisDate bseconds beginDate lenwind
-        analysisDate="$(date -u -d @${iseconds} +%Y-%m-%dT%H:%M:%SZ)"
+        analysisDate="$(date -u -d @"${iseconds}" +%Y-%m-%dT%H:%M:%SZ)"
         bseconds=$((iseconds - 1800))
-        beginDate="$(date -u -d @${bseconds} +%Y-%m-%dT%H:%M:%SZ)"
+        beginDate="$(date -u -d @"${bseconds}" +%Y-%m-%dT%H:%M:%SZ)"
         lenwind="PT60M"
 
         # generate the JEDI yaml files using templates from the fix_files/jedi/letkf.yaml
@@ -1725,7 +1727,7 @@ function run_jedi_observer {
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/running.observer || -f $wrkdir/done.observer || -f $wrkdir/queue.jedi_observer ]]; then
+    if [[ -f ${wrkdir}/running.observer || -f ${wrkdir}/done.observer || -f ${wrkdir}/queue.jedi_observer ]]; then
         return
     fi
 
@@ -1738,9 +1740,9 @@ function run_jedi_observer {
     #
     # Build working directory
     #
-    mkwrkdir $wrkdir 0              # 0: Keep existing directory as is
+    mkwrkdir ${wrkdir} 0              # 0: Keep existing directory as is
                                     # 1: Remove existing same name directory
-    cd $wrkdir || return
+    cd ${wrkdir} || return
 
     #
     # Waiting for job conditions
@@ -1869,7 +1871,7 @@ function run_jedi_observer {
         jobParms[NCORES]="${config_ncores_filter}"
     fi
 
-    submit_a_job "${wrkdir}" "jedi_${taskname}" "jobParms" "${config_TEMPDIR}/$jobscript" "run_mpasjedi_${taskname}.${mach}" ""
+    submit_a_job "${wrkdir}" "jedi_${taskname}" "jobParms" "${config_TEMPDIR}/${jobscript}" "run_mpasjedi_${taskname}.${mach}" ""
 }
 
 ########################################################################
@@ -1881,12 +1883,12 @@ function run_jedi_solver {
     local icycle=$2
     local iseconds=$3
 
-    local wrkdir="$datimedir/jedi_solver"
+    local wrkdir="${datimedir}/jedi_solver"
 
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/running.solver || -f $wrkdir/done.solver || -f $wrkdir/queue.jedi_solver ]]; then
+    if [[ -f ${wrkdir}/running.solver || -f ${wrkdir}/done.solver || -f ${wrkdir}/queue.jedi_solver ]]; then
         return
     fi
 
@@ -1899,9 +1901,9 @@ function run_jedi_solver {
     #
     # Build working directory
     #
-    mkwrkdir $wrkdir 0               # 0: Keep existing directory as is
+    mkwrkdir ${wrkdir} 0               # 0: Keep existing directory as is
                                      # 1: Remove existing same name directory
-    cd $wrkdir || return
+    cd ${wrkdir} || return
 
     #
     # Waiting for job conditions
@@ -1964,7 +1966,7 @@ function run_jedi_solver {
         jobParms[NCORES]="${config_ncores_filter}"
     fi
 
-    submit_a_job "${wrkdir}" "jedi_${taskname}" "jobParms" "${config_TEMPDIR}/run_mpasjedi.${mach}" "$jobscript" ""
+    submit_a_job "${wrkdir}" "jedi_${taskname}" "jobParms" "${config_TEMPDIR}/run_mpasjedi.${mach}" "${jobscript}" ""
 }
 
 ########################################################################
@@ -1976,17 +1978,17 @@ function run_jedi_post {
     local icycle=$2
     local iseconds=$3
 
-    local wrkdir="$datimedir/jedi_post"
+    local wrkdir="${datimedir}/jedi_post"
 
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/done.post ]]; then
+    if [[ -f ${wrkdir}/done.post ]]; then
         #mecho0 "POST job is already done."
         return
     fi
 
-    if [[ -f $wrkdir/running.post || -f $wrkdir/queue.jedi_post ]]; then
+    if [[ -f ${wrkdir}/running.post || -f ${wrkdir}/queue.jedi_post ]]; then
         mecho0 "POST job is running or is queued."
         return
     fi
@@ -2000,9 +2002,9 @@ function run_jedi_post {
     #
     # Build working directory
     #
-    mkwrkdir $wrkdir 0               # 0: Keep existing directory as is
+    mkwrkdir ${wrkdir} 0               # 0: Keep existing directory as is
                                      # 1: Remove existing same name directory
-    cd $wrkdir || return
+    cd ${wrkdir} || return
 
     #
     # Waiting for job conditions
@@ -2056,7 +2058,7 @@ function run_jedi_post {
         jobParms[NCORES]="${config_ncores_post}"
     fi
 
-    submit_a_job "${wrkdir}" "jedi_${taskname}" "jobParms" "${config_TEMPDIR}/run_mpasjedi.${mach}" "$jobscript" ""
+    submit_a_job "${wrkdir}" "jedi_${taskname}" "jobParms" "${config_TEMPDIR}/run_mpasjedi.${mach}" "${jobscript}" ""
 }
 
 ########################################################################
@@ -2078,7 +2080,7 @@ function run_add_noise {
     #
     cd ${wrkdir} || return
 
-    timestr_cur=$(date  -u -d @$iseconds    +%Y%m%d%H%M)
+    timestr_cur=$(date  -u -d @${iseconds}    +%Y%m%d%H%M)
 
     #
     # Return if is running or is done
@@ -2122,7 +2124,7 @@ function run_add_noise {
         mecho0 "Running ${WHITE}${scpdir}/wofs_addnoise/grid_refl_obs.py${NC} and ${WHITE}${scpdir}/wofs_addnoise/add_pert_where_high_refl.py${NC} at ${YELLOW}${timestr_cur}${NC}"
     fi
 
-    invfile="$rundir/init/${domname}.invariant.nc"
+    invfile="${rundir}/init/${domname}.invariant.nc"
     #
     # Create job script and submit it
     #
@@ -2148,7 +2150,7 @@ function run_add_noise {
         jobParms[NCORES]="1"
     fi
 
-    submit_a_job $wrkdir "add_noise" "jobParms" "${config_TEMPDIR}/$jobscript" "$jobscript" ""
+    submit_a_job "${wrkdir}" "add_noise" "jobParms" "${config_TEMPDIR}/${jobscript}" "${jobscript}" ""
 }
 
 ########################################################################
@@ -2164,12 +2166,12 @@ function run_update_bc {
     local icycle=$2
     local iseconds=$3
 
-    cd $wrkdir || return
+    cd ${wrkdir} || return
 
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/running.update_bc || -f $wrkdir/done.update_bc || -f $wrkdir/queue.update_bc ]]; then
+    if [[ -f ${wrkdir}/running.update_bc || -f ${wrkdir}/done.update_bc || -f ${wrkdir}/queue.update_bc ]]; then
         return
     fi
 
@@ -2198,7 +2200,7 @@ function run_update_bc {
     #
     # init files
     #
-    if [[ $icycle -eq 0 && ${init_da} == false ]]; then
+    if [[ ${icycle} -eq 0 && ${init_da} == false ]]; then
         initorigfile="${casedir}/init/${domname}_\${memstr}.init.nc"
     else
         initorigfile="${wrkdir}/jedi_solver/ana/mem0\${memstr}.nc"
@@ -2219,34 +2221,34 @@ function run_update_bc {
     for iens in $(seq 1 ${config_ENS_SIZE}); do
         #(( jindex=iens-1 ))
 
-        memstr=$(printf "%02d" $iens)
+        memstr=$(printf "%02d" ${iens})
 
-        memwrkdir=${wrkdir}/fcst_$memstr
-        mkwrkdir $memwrkdir 0
-        cd $memwrkdir  || return
+        memwrkdir=${wrkdir}/fcst_${memstr}
+        mkwrkdir ${memwrkdir} 0
+        cd ${memwrkdir}  || return
 
         #
         # lbc files
         #
         jens=$(( (iens-1)%config_nenslbc+1 ))
-        mlbcstr=$(printf "%02d" $jens)                # get LBC member string
+        mlbcstr=$(printf "%02d" ${jens})                # get LBC member string
 
-        mem_map[$iens]="${mlbcstr}"
+        mem_map[${iens}]="${mlbcstr}"
 
         if [[ ${verbose} == true ]]; then
-            mecho0 "Member: $iens use lbc files from ${lbcdir}:"
+            mecho0 "Member: ${iens} use lbc files from ${lbcdir}:"
             mecho0 "        ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc  ${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc";
         fi
 
 
-        jobarrays+=("$iens")
+        jobarrays+=("${iens}")
     done
 
     #------------------------------------------------------
     # Run update_bc for all ensemble members as a job array
     #------------------------------------------------------
 
-    cd $wrkdir || return
+    cd ${wrkdir} || return
 
     jobscript="run_update_bc.${mach}"
 
@@ -2302,7 +2304,7 @@ function run_update_bc {
         jobParms[NCORES]="1"
     fi
 
-    submit_a_job "${wrkdir}" "update_bc" jobParms ${config_TEMPDIR}/$jobscript "run_update_bc.${mach}" "${joboptions[*]}"
+    submit_a_job "${wrkdir}" "update_bc" jobParms ${config_TEMPDIR}/${jobscript} "run_update_bc.${mach}" "${joboptions[*]}"
 }
 
 ########################################################################
@@ -2315,12 +2317,12 @@ function run_update_mpas {
     local icycle=$2
     local iseconds=$3
 
-    cd $wrkdir || return
+    cd ${wrkdir} || return
 
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/running.update_mpas || -f $wrkdir/done.update_mpas || -f $wrkdir/queue.update_mpas ]]; then
+    if [[ -f ${wrkdir}/running.update_mpas || -f ${wrkdir}/done.update_mpas || -f ${wrkdir}/queue.update_mpas ]]; then
         return
     fi
 
@@ -2334,7 +2336,7 @@ function run_update_mpas {
 
     wait_for_conditions "${conditions[*]}"
 
-    timestr_cur=$(date -u -d @$iseconds +%Y%m%d%H%M)
+    timestr_cur=$(date -u -d @${iseconds} +%Y%m%d%H%M)
     jdiagfile="${wrkdir}/jedi_observer/jdiag_mrms_refl.nc"
     invfile="${casedir}/init/${domname}.invariant.nc"
 
@@ -2348,7 +2350,7 @@ function run_update_mpas {
     #
     # init files
     #
-    if [[ $icycle -eq 0 && ${init_da} == false ]]; then
+    if [[ ${icycle} -eq 0 && ${init_da} == false ]]; then
         initorigfile="${casedir}/init/${domname}_\${memstr}.init.nc"
     else
         initorigfile="${wrkdir}/jedi_solver/ana/mem0\${memstr}.nc"
@@ -2357,36 +2359,36 @@ function run_update_mpas {
     # isec_nlbc1, isec_nlbc2, isec_elbc and icycle_lbcgap are set in the caller
 
     # External GRIB file provided file times
-    lbctime_str1=$(date -u -d @${isec_nlbc1} +%Y-%m-%d_%H.%M.%S)
-    lbctime_str2=$(date -u -d @${isec_nlbc2} +%Y-%m-%d_%H.%M.%S)
+    lbctime_str1=$(date -u -d @"${isec_nlbc1}" +%Y-%m-%d_%H.%M.%S)
+    lbctime_str2=$(date -u -d @"${isec_nlbc2}" +%Y-%m-%d_%H.%M.%S)
 
     # MPAS expected boundary file times
-    mpastime_str1=$(date -u -d @${iseconds}   +%Y-%m-%d_%H.%M.%S)
-    mpastime_str2=$(date -u -d @${isec_elbc}  +%Y-%m-%d_%H.%M.%S)
+    mpastime_str1=$(date -u -d @"${iseconds}"   +%Y-%m-%d_%H.%M.%S)
+    mpastime_str2=$(date -u -d @"${isec_elbc}"  +%Y-%m-%d_%H.%M.%S)
 
     declare -A mem_map=()
     declare -a jobarrays=()
     for iens in $(seq 1 ${config_ENS_SIZE}); do
-        memstr=$(printf "%02d" $iens)
+        memstr=$(printf "%02d" ${iens})
 
-        memwrkdir=${wrkdir}/fcst_$memstr
-        mkwrkdir $memwrkdir 0
-        cd $memwrkdir  || return
+        memwrkdir=${wrkdir}/fcst_${memstr}
+        mkwrkdir ${memwrkdir} 0
+        cd ${memwrkdir}  || return
 
         #
         # lbc files
         #
         jens=$(( (iens-1)%config_nenslbc+1 ))
-        mlbcstr=$(printf "%02d" $jens)                # get LBC member string
+        mlbcstr=$(printf "%02d" "${jens}")                # get LBC member string
 
-        mem_map[$iens]="${mlbcstr}"
+        mem_map[${iens}]="${mlbcstr}"
 
         if [[ ${verbose} == true ]]; then
-            mecho0 "Member: $iens use lbc files from ${lbcdir}:"
+            mecho0 "Member: ${iens} use lbc files from ${lbcdir}:"
             mecho0 "        ${domname}_${mlbcstr}.lbc.${lbctime_str1}.nc  ${domname}_${mlbcstr}.lbc.${lbctime_str2}.nc";
         fi
 
-        jobarrays+=("$iens")
+        jobarrays+=("${iens}")
     done
 
     run_add_noise="noaddnoise"
@@ -2402,6 +2404,7 @@ function run_update_mpas {
 
     mem_map_str="( "
     for k in "${!mem_map[@]}"; do
+        # shellcheck disable=SC2250
         mem_map_str+="[$k]='${mem_map[$k]}' "
     done
     mem_map_str+=" )"
@@ -2456,7 +2459,7 @@ function run_update_mpas {
         jobParms[NCORES]="${nopart}"
     fi
 
-    submit_a_job "${wrkdir}" "update_mpas" jobParms ${config_TEMPDIR}/$jobscript "run_update_mpas.${mach}" ""
+    submit_a_job "${wrkdir}" "update_mpas" jobParms ${config_TEMPDIR}/${jobscript} "run_update_mpas.${mach}" ""
 }
 
 ########################################################################
@@ -2475,13 +2478,13 @@ function run_mpas {
     #
     # Build working directory
     #
-    mkwrkdir $wrkdir 0
-    cd $wrkdir || exit $?
+    mkwrkdir ${wrkdir} 0
+    cd ${wrkdir} || exit $?
 
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/running.fcst || -f $wrkdir/done.fcst || -f $wrkdir/queue.fcst ]]; then
+    if [[ -f ${wrkdir}/running.fcst || -f ${wrkdir}/done.fcst || -f ${wrkdir}/queue.fcst ]]; then
         return
     fi
 
@@ -2489,15 +2492,15 @@ function run_mpas {
     # Waiting for job conditions
     #
     local -a conditions
-    conditions=("$wrkdir/done.update_mpas")
+    conditions=("${wrkdir}/done.update_mpas")
 
     wait_for_conditions "${conditions[*]}"
 
     #
     # Preparation for all members
     #
-    if [[ ! -f $rundir/$domname/$domname.graph.info.part.${config_npefcst} ]]; then
-        split_graph "${config_gpmetis}" "${domname}.graph.info" "${config_npefcst}" "$rundir/$domname" "$dorun" "$verbose"
+    if [[ ! -f ${rundir}/${domname}/${domname}.graph.info.part.${config_npefcst} ]]; then
+        split_graph "${config_gpmetis}" "${domname}.graph.info" "${config_npefcst}" "${rundir}/${domname}" "${dorun}" "${verbose}"
     fi
 
     #fcst_sec=$(( iseconds + config_intvl_sec ))
@@ -2509,26 +2512,26 @@ function run_mpas {
     #
     jobarrays=()
     for iens in $(seq 1 ${config_ENS_SIZE}); do
-        memstr=$(printf "%02d" $iens)
+        memstr=$(printf "%02d" "${iens}")
         basen=$(( (iens-1)%6 ))
-        if [[ $basen -lt 2 ]]; then     # map to 0,1,2
+        if [[ ${basen} -lt 2 ]]; then     # map to 0,1,2
             idx=0
-        elif [[ $basen -lt 4 ]]; then
+        elif [[ ${basen} -lt 4 ]]; then
             idx=1
         else
             idx=2
         fi
-        pblscheme=${config_pbl_schemes[$idx]}
-        sfcscheme=${config_sfclayer_schemes[$idx]}
+        pblscheme=${config_pbl_schemes[${idx}]}
+        sfcscheme=${config_sfclayer_schemes[${idx}]}
 
-        memwrkdir=$wrkdir/fcst_$memstr
-        mkwrkdir $memwrkdir 0
-        cd $memwrkdir  || return
+        memwrkdir=${wrkdir}/fcst_${memstr}
+        mkwrkdir ${memwrkdir} 0
+        cd ${memwrkdir}  || return
 
         #
         # init files
         #
-        if [[ $icycle -eq 0 || ${config_damode} == "init" ]]; then
+        if [[ ${icycle} -eq 0 || ${config_damode} == "init" ]]; then
             do_restart="false"
             do_dacyle="false"
             mpas_inputfile_template="${domname}_${memstr}.init.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
@@ -2554,7 +2557,7 @@ function run_mpas {
 
         mem_initfile=$(eval echo "${initfile}")
         if [[ ${verbose} == true ]]; then
-            mecho0 "Member $iens init file: ${mem_initfile}";
+            mecho0 "Member ${iens} init file: ${mem_initfile}";
         fi
 
         if [[ ! -e ${mem_initfile} && ${dorun} == true ]]; then
@@ -2573,7 +2576,7 @@ function run_mpas {
 
         streamlists=("${diag_stream}" stream_list.atmosphere.output stream_list.atmosphere.surface stream_list.atmosphere.da_state)
         for fn in "${streamlists[@]}"; do
-            cp -f ${config_FIXDIR}/$fn .
+            cp -f ${config_FIXDIR}/${fn} .
         done
 
         datafiles=(  CAM_ABS_DATA.DBL  CAM_AEROPT_DATA.DBL GENPARM.TBL       LANDUSE.TBL    \
@@ -2582,7 +2585,7 @@ function run_mpas {
                      VEGPARM.TBL )
 
         for fn in "${datafiles[@]}"; do
-            ln -sf ${config_FIXDIR}/$fn .
+            ln -sf ${config_FIXDIR}/${fn} .
         done
 
         if [[ "${config_mpscheme}" == "mp_tempo" ]]; then
@@ -2591,19 +2594,19 @@ function run_mpas {
             tempo_tables=( qr_acr_qs_data_tempo_v3 qr_acr_qg_data_tempo_v3 freeze_water_data_tempo_v3 ccn_activate.bin )
 
             for fn in "${tempo_tables[@]}"; do
-                if [[ ! -s ${config_FIXDIR}/$fn ]]; then
-                    mecho0 "${RED}ERROR${NC}: ${config_FIXDIR}/$fn not found."
+                if [[ ! -s ${config_FIXDIR}/${fn} ]]; then
+                    mecho0 "${RED}ERROR${NC}: ${config_FIXDIR}/${fn} not found."
                     mecho0 "${YELLOW}INFO${NC}: Please run ${CYAN}${config_FIXDIR}/run_build_tables.${mach}${NC} once."
                     exit 1
                 fi
-                ln -sf ${config_FIXDIR}/$fn .
+                ln -sf ${config_FIXDIR}/${fn} .
             done
         elif [[ "${config_mpscheme}" == "mp_thompson" ]]; then
             thompson_tables=( MP_THOMPSON_QRacrQG_DATA.DBL   MP_THOMPSON_QRacrQS_DATA.DBL   \
                               MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL CCN_ACTIVATE.BIN )
 
             for fn in "${thompson_tables[@]}"; do
-                ln -sf ${config_FIXDIR}/$fn .
+                ln -sf ${config_FIXDIR}/${fn} .
             done
         fi
 
@@ -2611,10 +2614,10 @@ function run_mpas {
 
         create_streams MPAS streams.atmosphere
 
-        jobarrays+=("$iens")
+        jobarrays+=("${iens}")
     done
 
-    cd $wrkdir || return
+    cd ${wrkdir} || return
 
     #
     # Create job script for MPAS forecast and submit it
@@ -2637,7 +2640,7 @@ function run_mpas {
         jobParms[NCORES]="${config_ncores_fcst}"
     fi
 
-    submit_a_job "$wrkdir" "fcst" "jobParms" "${config_TEMPDIR}/run_mpas_array.${mach}" "$mpas_jobscript" "${jobarraystr}"
+    submit_a_job "${wrkdir}" "fcst" "jobParms" "${config_TEMPDIR}/run_mpas_array.${mach}" "${mpas_jobscript}" "${jobarraystr}"
 }
 
 ########################################################################
@@ -2664,22 +2667,22 @@ function dacycle_driver() {
     #
     # Build working directory
     #
-    wrkdir="$rundir/dacycles${daffix}"
-    mkwrkdir $wrkdir $overwrite
-    cd $wrkdir || return
+    wrkdir="${rundir}/dacycles${daffix}"
+    mkwrkdir "${wrkdir}" "${overwrite}"
+    cd "${wrkdir}" || return
 
     #------------------------------------------
     # Time Cylces start here
     #------------------------------------------
     local date_beg date_end intvl_min n_cycles
-    date_beg=$(date -u -d @$start_sec +%Y%m%d%H%M)
-    date_end=$(date -u -d @$end_sec +%Y%m%d%H%M)
+    date_beg=$(date -u -d @${start_sec} +%Y%m%d%H%M)
+    date_end=$(date -u -d @${end_sec} +%Y%m%d%H%M)
     intvl_min=$((config_intvl_sec/60))
     n_cycles=$(( (end_sec-start_sec)/config_intvl_sec+1 ))
 
     echo -e "Total ${n_cycles} cycles from ${WHITE}${date_beg}${NC} to ${WHITE}${date_end}${NC} will be run every ${YELLOW}${intvl_min}${NC} minutes."
 
-    if [[ $dorun == true ]]; then
+    if [[ ${dorun} == true ]]; then
         num_resubmit=2               # resubmit failed jobs
     else
         num_resubmit=0               # Just check job status
@@ -2698,16 +2701,17 @@ function dacycle_driver() {
     declare -a obs_ids obs_categories
 
     local icyc=$(( (start_sec-init_sec)/config_intvl_sec ))
-    for isec in $(seq $start_sec $config_intvl_sec $end_sec ); do
-        timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
-        eventtime=$(date -u -d @$isec +%H%M)
+    for isec in $(seq ${start_sec} ${config_intvl_sec} ${end_sec} ); do
+        timestr_curr=$(date -u -d @${isec} +%Y%m%d%H%M)
+        eventtime=$(date -u -d @${isec} +%H%M)
 
         dawrkdir=${wrkdir}/${eventtime}
-        mkwrkdir $dawrkdir 0    # keep original directory
-        cd $dawrkdir || return
+        mkwrkdir "${dawrkdir}" 0    # keep original directory
+        cd "${dawrkdir}" || return
 
         echo ""
-        echo -e "- Cycle $icyc at ${DARK}$(TZ="America/Chicago" date +'%m-%d %H:%M:%S')${NC} for ${WHITE}${timestr_curr}${NC}"
+        # shellcheck disable=SC2312
+        echo -e "- Cycle ${icyc} at ${DARK}$(TZ="America/Chicago" date +'%m-%d %H:%M:%S')${NC} for ${WHITE}${timestr_curr}${NC}"
         time1=$(date +%s)
 
         #------------------------------------------------------
@@ -2717,7 +2721,7 @@ function dacycle_driver() {
         isec_nlbc1=$(( isec - isec%config_EXTINVL ))            # get whole hour in seconds
         isec_nlbc2=$(( isec_nlbc1 + config_EXTINVL ))           # next whole hour
         isec_elbc=$(( isec + config_intvl_sec ))
-        while [[ $isec_elbc -gt $isec_nlbc2 ]]; do
+        while [[ ${isec_elbc} -gt ${isec_nlbc2} ]]; do
             (( isec_nlbc2+=config_EXTINVL ))
         done
         isec_elbc=${isec_nlbc2}                      # use variant lbc interval or not
@@ -2726,19 +2730,19 @@ function dacycle_driver() {
         #------------------------------------------------------
         # 0. Check forecast status of the early cycle or inital boundary status
         #------------------------------------------------------
-        if [[ $dorun == true ]]; then
-            if [[ $icyc -eq 0 ]]; then
+        if [[ ${dorun} == true ]]; then
+            if [[ ${icyc} -eq 0 ]]; then
                 if [[ ! -e ${rundir}/lbc/done.${domname} ]]; then
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-                    check_job_status "lbc ${domname} ${domname}" $rundir/lbc ${config_nenslbc} run_lbc.${mach}
+                    check_job_status "lbc ${domname} ${domname}" ${rundir}/lbc ${config_nenslbc} run_lbc.${mach}
                 fi
-            else   #if [[ $icyc -gt 0 ]]; then
+            else   #if [[ ${icyc} -gt 0 ]]; then
                 timesec_pre=$((isec-config_intvl_sec))
-                event_pre=$(date -u -d @$timesec_pre  +%H%M)
+                event_pre=$(date -u -d @"${timesec_pre}"  +%H%M)
                 wrkdir_pre=${wrkdir}/${event_pre}
                 if [[ ! -e ${wrkdir_pre}/done.fcst ]]; then
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-                    check_job_status "fcst" $wrkdir_pre ${config_ENS_SIZE} run_mpas.${mach}
+                    check_job_status "fcst" "${wrkdir_pre}" "${config_ENS_SIZE}" "run_mpas.${mach}"
                 fi
             fi
         fi
@@ -2752,7 +2756,7 @@ function dacycle_driver() {
         #
         # init files
         #
-        if [[ $icyc -eq 0 || ${config_damode} == "init" ]]; then
+        if [[ ${icyc} -eq 0 || ${config_damode} == "init" ]]; then
             initfile="./${domname}_\${memstr}.init.${currtime_fil}.nc"
         else
             initfile="./${domname}_\${memstr}.${config_damode}.${currtime_fil}.nc"
@@ -2771,32 +2775,32 @@ function dacycle_driver() {
         # 1. Run ioda
         #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " ioda" && ${icyc} -gt 0 ]]; then
-            if [[ ${verbose} == true ]]; then echo "  Run ioda at $eventtime"; fi
-            run_ioda $dawrkdir $isec
+            if [[ ${verbose} == true ]]; then echo "  Run ioda at ${eventtime}"; fi
+            run_ioda "${dawrkdir}" "${isec}"
         fi
 
         #------------------------------------------------------
         # 2. Run observer
         #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " jedi_observer " ]]; then
-            if [[ ${verbose} == true ]]; then echo "  Run jedi_observer at $eventtime"; fi
-            run_jedi_observer $dawrkdir $icyc $isec
+            if [[ ${verbose} == true ]]; then echo "  Run jedi_observer at ${eventtime}"; fi
+            run_jedi_observer "${dawrkdir}" "${icyc}" "${isec}"
         fi
 
         #------------------------------------------------------
         # 3. Run solver
         #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " jedi_solver " ]]; then
-            if [[ ${verbose} == true ]]; then echo "  Run jedi_solver at $eventtime"; fi
-            run_jedi_solver $dawrkdir $icyc $isec
+            if [[ ${verbose} == true ]]; then echo "  Run jedi_solver at ${eventtime}"; fi
+            run_jedi_solver "${dawrkdir}" "${icyc}" "${isec}"
         fi
 
         #------------------------------------------------------
         # 4. Run update_mpas (both update_bc and add_noise) for all ensemble members
         #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " update_mpas " ]]; then
-            if [[ ${verbose} == true ]]; then echo "  Run update_mpas (update_bc + add_noise) at $eventtime"; fi
-            run_update_mpas $dawrkdir $icyc $isec
+            if [[ ${verbose} == true ]]; then echo "  Run update_mpas (update_bc + add_noise) at ${eventtime}"; fi
+            run_update_mpas "${dawrkdir}" "${icyc}" "${isec}"
         fi
 
         #------------------------------------------------------
@@ -2810,14 +2814,14 @@ function dacycle_driver() {
             #    check_job_status "update_bc fcst update_bc" ${dawrkdir} ${config_ENS_SIZE} run_update_bc.${mach} ${num_resubmit}
             #fi
 
-            if [[ ${verbose} == true ]]; then echo "  Run advance model at $eventtime"; fi
+            if [[ ${verbose} == true ]]; then echo "  Run advance model at ${eventtime}"; fi
 
             mpas_jobscript="run_mpas.${mach}"
-            run_mpas $dawrkdir $icyc $isec
+            run_mpas "${dawrkdir}" "${icyc}" "${isec}"
 
             if [[ ! -e done.fcst ]]; then
                 #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-                check_job_status "fcst" ${dawrkdir} ${config_ENS_SIZE} $mpas_jobscript ${num_resubmit}
+                check_job_status "fcst" "${dawrkdir}" "${config_ENS_SIZE}" "${mpas_jobscript}" "${num_resubmit}"
             fi
         fi
 
@@ -2825,8 +2829,8 @@ function dacycle_driver() {
         # 6.1 Run post (if requested)
         #------------------------------------------------------
         if [[ " ${jobs[*]} " =~ " jedi_post " ]]; then
-            if [[ ${verbose} == true ]]; then echo "  Run jedi_post at $eventtime"; fi
-            run_jedi_post $dawrkdir $icyc $isec
+            if [[ ${verbose} == true ]]; then echo "  Run jedi_post at ${eventtime}"; fi
+            run_jedi_post "${dawrkdir}" "${icyc}" "${isec}"
         fi
 
         #------------------------------------------------------
@@ -2835,8 +2839,8 @@ function dacycle_driver() {
         # Interpolate the forecast datasets to a virtual WRF grid
 
         if [[ " ${jobs[*]} " =~ " mpassit_mean " ]]; then
-            if [[ ${verbose} == true ]]; then echo "  Run MPASSIT at $eventtime"; fi
-            run_mpassit_mean $dawrkdir ${isec}
+            if [[ ${verbose} == true ]]; then echo "  Run MPASSIT at ${eventtime}"; fi
+            run_mpassit_mean "${dawrkdir}" "${isec}"
         fi
 
         #------------------------------------------------------
@@ -2845,11 +2849,11 @@ function dacycle_driver() {
         # Interpolate the forecast datasets to a virtual WRF grid
 
         if [[ " ${jobs[*]} " =~ " mpassit " ]]; then
-            if [[ ${verbose} == true ]]; then echo "  Run MPASSIT at $eventtime"; fi
+            if [[ ${verbose} == true ]]; then echo "  Run MPASSIT at ${eventtime}"; fi
 
-            run_mpassit $dawrkdir ${isec}
+            run_mpassit "${dawrkdir}" "${isec}"
 
-            check_job_status "mpassit mem mpasssit" ${dawrkdir}/mpassit ${config_ENS_SIZE} run_mpassit.${mach} ${num_resubmit}
+            check_job_status "mpassit mem mpasssit" "${dawrkdir}/mpassit" "${config_ENS_SIZE}" "run_mpassit.${mach}" "${num_resubmit}"
         #else
             # Clean not needed files in each member's forecast directory after
             # the MPAS forward forecast, Keep it for post-diagnositic purpose
@@ -2862,7 +2866,7 @@ function dacycle_driver() {
         # This DA cycle is done
         #------------------------------------------------------
         time2=$(date +%s); (( secoffset = time2-time1 ))
-        if [[ $secoffset -gt 1 ]]; then
+        if [[ ${secoffset} -gt 1 ]]; then
             (( minoffset = secoffset/60, secoffset = secoffset%60 ))
             echo -e "= Cycle ${eventtime} took ${CYAN}${minoffset}:${secoffset}${NC} minutes:seconds."
         fi
@@ -2883,8 +2887,8 @@ function run_mpassit_mean {
     # Build working directory
     #
     local wrkdir=${dawrkdir}/mpassit_mean
-    mkwrkdir $wrkdir 0
-    cd $wrkdir || return
+    mkwrkdir "${wrkdir}" 0
+    cd "${wrkdir}" || return
 
     #
     # Waiting for job conditions
@@ -2908,12 +2912,12 @@ function run_mpassit_mean {
     # Linking working file for this member
     parmfiles=(diaglist histlist_2d histlist_3d )
     for fn in "${parmfiles[@]}"; do
-        if [[ ! -e $fn ]]; then
+        if [[ ! -e ${fn} ]]; then
             #if [[ ${verbose} == true ]]; then echo "Linking $fn ..."; fi
             if [[ -e ${config_FIXDIR}/MPASSIT/${fn}.${fileappend}_analysis_mean ]]; then
-                ln -sf ${config_FIXDIR}/MPASSIT/${fn}.${fileappend}_analysis_mean $fn
+                ln -sf "${config_FIXDIR}/MPASSIT/${fn}.${fileappend}_analysis_mean" "${fn}"
             elif [[ -e ${config_FIXDIR}/MPASSIT/${fn}_analysis_mean ]]; then
-                ln -sf ${config_FIXDIR}/MPASSIT/${fn}_analysis_mean $fn
+                ln -sf "${config_FIXDIR}/MPASSIT/${fn}_analysis_mean" "${fn}"
             else
                 mecho0 "${RED}ERROR${NC}: file ${BLUE}${config_FIXDIR}/MPASSIT/${fn}_analysis_mean${NC} not exist."
                 return
@@ -2922,10 +2926,10 @@ function run_mpassit_mean {
     done
 
     fn="histlist_soil"
-    if [[ ! -e $fn ]]; then
+    if [[ ! -e ${fn} ]]; then
         #if [[ ${verbose} == true ]]; then echo "Linking $fn ..."; fi
         if [[ -e ${config_FIXDIR}/MPASSIT/${fn} ]]; then
-            ln -sf ${config_FIXDIR}/MPASSIT/${fn} $fn
+            ln -sf "${config_FIXDIR}/MPASSIT/${fn}" "${fn}"
         else
             mecho0 "${RED}ERROR${NC}: file ${BLUE}${config_FIXDIR}/MPASSIT/${fn}${NC} not exist."
             return
@@ -2935,7 +2939,7 @@ function run_mpassit_mean {
     #
     # prepare_mpassit
     fcst_lauch_time=$(date -u -d @${iseconds} +%H%M)
-    fcst_time_str=$(date -u -d @$iseconds +%Y-%m-%d_%H.%M.%S)
+    fcst_time_str=$(date -u -d @${iseconds} +%Y-%m-%d_%H.%M.%S)
 
     # shellcheck disable=SC2034
     prior_file="${dawrkdir}/jedi_solver/prior_mean.nc"
@@ -2966,18 +2970,18 @@ function run_mpassit_mean {
         org_file="${!file_ref}"
         filename="./${stage}_mean.nc"
 
-        if [[ $dorun == true ]]; then
+        if [[ ${dorun} == true ]]; then
             while [[ ! -f ${org_file} ]]; do
                 if [[ ${verbose} == true ]]; then
-                    mecho0 "Waiting for $org_file ..."
+                    mecho0 "Waiting for ${org_file} ..."
                 fi
                 sleep 10
             done
             {
                 echo -e "\nCopying the stage file:\n"
                 echo "cp ${org_file} ${filename}"
-                cp ${org_file} ${filename}
-            } &> merge_${stage}.log
+                cp "${org_file}" "${filename}"
+            } &> "merge_${stage}.log"
 
             # Take background file, look for every variable except those listed in ${var_list},
             # and append them into the analysis file.
@@ -2985,12 +2989,12 @@ function run_mpassit_mean {
             {
                 echo -e "\nRunning NCO to merge background static datasets to the stage file:\n"
                 echo "${config_runcmd_str} ncks -A -C -x -v ${anlys_varstr} ${bkg_file} ${filename}"
-                ${config_runcmd_str} ncks -A -C -x -v ${anlys_varstr} "${bkg_file}" "${filename}"
-            } &>> merge_${stage}.log
+                ${config_runcmd_str} ncks -A -C -x -v "${anlys_varstr}" "${bkg_file}" "${filename}"
+            } &>> "merge_${stage}.log"
         fi
 
         nmlfile="namelist.fcst_${stage}"
-        cat << EOF > $nmlfile
+        cat << EOF > "${nmlfile}"
 &config
     grid_file_input_grid = "${rundir}/init/${domname}.invariant.nc"
     hist_file_input_grid = "${filename}"
@@ -3023,7 +3027,7 @@ EOF
             jobParms[NCORES]="${config_ncores_post}"
         fi
 
-        submit_a_job "$wrkdir" "mpassit${stage}" "jobParms" "${config_TEMPDIR}/run_mpassit.${mach}" "$jobscript" ""
+        submit_a_job "${wrkdir}" "mpassit${stage}" "jobParms" "${config_TEMPDIR}/run_mpassit.${mach}" "${jobscript}" ""
     done
 }
 
@@ -3038,9 +3042,9 @@ function run_mpassit {
     #
     # Build working directory
     #
-    local wrkdir=$wrkdir/mpassit
-    mkwrkdir $wrkdir 0
-    cd $wrkdir || return
+    local wrkdir=${wrkdir}/mpassit
+    mkwrkdir "${wrkdir}" 0
+    cd "${wrkdir}" || return
 
     #
     # Check MPASSIT status
@@ -3063,7 +3067,7 @@ function run_mpassit {
     minstr=$(printf "%02d" $((config_intvl_sec/60)) )
     #minstr="00"
     fcst_minutes=()
-    if [[ ${config_damode} == "init" || $icyc -eq 0 ]]; then
+    if [[ ${config_damode} == "init" || ${icyc} -eq 0 ]]; then
         fcst_minutes=("00")
     fi
     fcst_minutes+=("${minstr}")
@@ -3080,34 +3084,34 @@ function run_mpassit {
 
         jobarrays=()
         for mem in $(seq 1 ${config_ENS_SIZE}); do
-            memstr=$(printf "%02d" $mem)
-            memdir=$wrkdir/mem$memstr
-            mkwrkdir $memdir 0
-            cd $memdir || return
+            memstr=$(printf "%02d" ${mem})
+            memdir=${wrkdir}/mem${memstr}
+            mkwrkdir "${memdir}" 0
+            cd "${memdir}" || return
 
             rm -f core.*           # Maybe core-dumped, resubmission will solves the problem if the machine is unstable.
 
             # Linking working file for this member
             parmfiles=(diaglist histlist_2d histlist_3d histlist_soil)
             for fn in "${parmfiles[@]}"; do
-                if [[ ! -e $fn ]]; then
+                if [[ ! -e ${fn} ]]; then
                     #if [[ ${verbose} == true ]]; then echo "Linking $fn ..."; fi
                     if [[ -e ${config_FIXDIR}/MPASSIT/${fn}.${fileappend} ]]; then
-                        ln -sf ${config_FIXDIR}/MPASSIT/${fn}.${fileappend} $fn
+                        ln -sf "${config_FIXDIR}/MPASSIT/${fn}.${fileappend}" "${fn}"
                     elif [[ -e ${config_FIXDIR}/MPASSIT/${fn} ]]; then
-                        ln -sf ${config_FIXDIR}/MPASSIT/$fn .
+                        ln -sf "${config_FIXDIR}/MPASSIT/${fn}" "${fn}"
                     else
                         mecho0 "${RED}ERROR${NC}: file ${BLUE}${config_FIXDIR}/MPASSIT/${fn}${NC} not exist."
                         return
                     fi
                 fi
             done
-            jobarrays+=("$mem")
+            jobarrays+=("${mem}")
         done
 
         jobarrays_str=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
-        cd $wrkdir || return
+        cd "${wrkdir}" || return
 
         run_mpassit_alltimes "${wrkdir}" "${iseconds}" "${fcst_minutes[*]}" "${jobarrays_str}"
     fi
@@ -3125,7 +3129,7 @@ function run_mpassit_alltimes {
 
     IFS=" " read -r -a fcsttimes <<< "$3"
 
-    cd $wrkdir || return
+    cd "${wrkdir}" || return
 
     # Loop over forecast minutes
     local minsec=3600
@@ -3133,10 +3137,10 @@ function run_mpassit_alltimes {
 
     for minstr in "${fcsttimes[@]}"; do
         (( i=10#${minstr}*60 ))
-        (( i > maxsec )) && maxsec=$i
-        (( i < minsec )) && minsec=$i
+        (( i > maxsec )) && maxsec=${i}
+        (( i < minsec )) && minsec=${i}
 
-        prepare_mpassit_onetime $wrkdir ${iseconds} $i 5
+        prepare_mpassit_onetime "${wrkdir}" "${iseconds}" "${i}" 5
         local estatus=$?               # number of missing members
         if [[ ${estatus} -gt 0 ]]; then
             echo -e "${PURPLE}${estatus}${NC} files missing"
@@ -3147,7 +3151,7 @@ function run_mpassit_alltimes {
     #
     # Create job script and submit it
     #
-    cd $wrkdir || return
+    cd "${wrkdir}" || return
 
     jobscript="run_mpassit.${mach}"
 
@@ -3168,7 +3172,7 @@ function run_mpassit_alltimes {
         jobParms[NCORES]="${config_ncores_post}"
     fi
 
-    submit_a_job "$wrkdir" "mpassit" "jobParms" "${config_TEMPDIR}/run_mpassit_array.${mach}" "$jobscript" "$jobarraystr"
+    submit_a_job "${wrkdir}" "mpassit" "jobParms" "${config_TEMPDIR}/run_mpassit_array.${mach}" "${jobscript}" "${jobarraystr}"
 }
 
 ########################################################################
@@ -3185,57 +3189,57 @@ function prepare_mpassit_onetime {
     local -r fctseconds=$3
     local -r waitseconds=$4   # run all time together, it does not have to wait
 
-    cd $wrkdir || return
+    cd "${wrkdir}" || return
 
     fminstr=$(printf "%03d" $((fctseconds/60)))
     fcst_lauch_time=$(date -u -d @${iseconds} +%H%M)
 
     isec=$(( iseconds+fctseconds ))
-    fcst_time_str=$(date -u -d @$isec +%Y-%m-%d_%H.%M.%S)
+    fcst_time_str=$(date -u -d @"${isec}" +%Y-%m-%d_%H.%M.%S)
 
     outdone=false
     jobarrays=()
     for mem in $(seq 1 ${config_ENS_SIZE}); do
-        memstr=$(printf "%02d" $mem)
-        memdir=$wrkdir/mem$memstr
-        mkwrkdir $memdir 0
-        cd $memdir || return
+        memstr=$(printf "%02d" ${mem})
+        memdir=${wrkdir}/mem${memstr}
+        mkwrkdir "${memdir}" 0
+        cd "${memdir}" || return
 
         rm -f core.*           # Maybe core-dumped, resubmission will solves the problem if the machine is unstable.
 
-        fcstmemdir=$(get_parent_dir $memdir 2)
-        histfile="$fcstmemdir/fcst_$memstr/${domname}_${memstr}.history.${fcst_time_str}.nc"
-        diagfile="$fcstmemdir/fcst_$memstr/${domname}_${memstr}.diag.${fcst_time_str}.nc"
+        fcstmemdir=$(get_parent_dir "${memdir}" 2)
+        histfile="${fcstmemdir}/fcst_${memstr}/${domname}_${memstr}.history.${fcst_time_str}.nc"
+        diagfile="${fcstmemdir}/fcst_${memstr}/${domname}_${memstr}.diag.${fcst_time_str}.nc"
 
-        if [[ $dorun == true ]]; then
-            for fn in $histfile $diagfile; do
-                if [[ $outdone == false ]]; then
-                    mecho0 "Checking forecast files at $fminstr for all ${config_ENS_SIZE} memebers from dacycles${daffix}/${fcst_lauch_time} ..."
+        if [[ ${dorun} == true ]]; then
+            for fn in ${histfile} ${diagfile}; do
+                if [[ ${outdone} == false ]]; then
+                    mecho0 "Checking forecast files at ${fminstr} for all ${config_ENS_SIZE} memebers from dacycles${daffix}/${fcst_lauch_time} ..."
                     outdone=true
                 fi
-                while [[ ! -f $fn ]]; do
+                while [[ ! -f ${fn} ]]; do
                     if [[ ${verbose} == true ]]; then
-                        mecho0 "Waiting for $fn ..."
+                        mecho0 "Waiting for ${fn} ..."
                     fi
                     sleep 10
                 done
-                fileage=$(( $(date +%s) - $(stat -c %Y -- "$fn") ))
-                if [[ $fileage -lt $waitseconds ]]; then
-                    if [[ ${verbose} == true ]]; then mecho0 "Waiting for $fn ..."; fi
-                    sleep "$waitseconds"
+                fileage=$(( $(date +%s) - $(stat -c %Y -- "${fn}") ))
+                if [[ ${fileage} -lt ${waitseconds} ]]; then
+                    if [[ ${verbose} == true ]]; then mecho0 "Waiting for ${fn} ..."; fi
+                    sleep "${waitseconds}"
                 fi
             done
         fi
 
-        nmlfile="namelist.fcst_$fminstr"
-        cat << EOF > $nmlfile
+        nmlfile="namelist.fcst_${fminstr}"
+        cat << EOF > "${nmlfile}"
 &config
-    grid_file_input_grid = "$rundir/init/${domname}_${memstr}.init.nc"
-    hist_file_input_grid = "$histfile"
-    diag_file_input_grid = "$diagfile"
-    file_target_grid     = "$rundir/${domname/*_/geo_}/geo_em.d01.nc"
+    grid_file_input_grid = "${rundir}/init/${domname}_${memstr}.init.nc"
+    hist_file_input_grid = "${histfile}"
+    diag_file_input_grid = "${diagfile}"
+    file_target_grid     = "${rundir}/${domname/*_/geo_}/geo_em.d01.nc"
     target_grid_type     = "file"
-    output_file          = "$memdir/MPASSIT_${memstr}.${fcst_time_str}.nc"
+    output_file          = "${memdir}/MPASSIT_${memstr}.${fcst_time_str}.nc"
     interp_diag          = .true.
     interp_hist          = .true.
     wrf_mod_vars         = .true.
@@ -3244,7 +3248,7 @@ function prepare_mpassit_onetime {
 EOF
     done
 
-    cd $wrkdir || return
+    cd "${wrkdir}" || return
 
     return 0
 }
@@ -3260,9 +3264,9 @@ function run_clean {
     local jobs
     read -r -a jobs <<< "$4"
 
-    wrkdir="$rundir/dacycles${daffix}"
+    wrkdir="${rundir}/dacycles${daffix}"
 
-    if [[ "$coption" == "-a" ]]; then
+    if [[ "${coption}" == "-a" ]]; then
         declare -A cleanmsg=(
             [mpas]="all MPAS forecast files"
             [filter]="the whole DA cycle directory"
@@ -3274,14 +3278,15 @@ function run_clean {
 
         for job in "${jobs[@]}"; do
 
-            mecho0  "${YELLOW}WARNING${NC}: Delete ${cleanmsg[$job]} from $(date -u -d @${start_sec} +%Y%m%d_%H:%M:%S) to $(date -u -d @${end_sec} +%Y%m%d_%H:%M:%S)"
+            # shellcheck disable=SC2312
+            mecho0  "${YELLOW}WARNING${NC}: Delete ${cleanmsg[${job}]} from $(date -u -d @${start_sec} +%Y%m%d_%H:%M:%S) to $(date -u -d @${end_sec} +%Y%m%d_%H:%M:%S)"
             mecho0  "         in ${CYAN}${wrkdir}${NC}\n"
 
             select_option "Do it? " "${options[@]}"
-            selected=$?; result="${options[$selected]}"; result="${result^^}"
+            selected=$?; result="${options[${selected}]}"; result="${result^^}"
 
             if [[ ${result} == "YES" ]]; then
-                mecho0 "${YELLOW}WARNING${NC}: ${cleanmsg[$job]} will be cleaned."
+                mecho0 "${YELLOW}WARNING${NC}: ${cleanmsg[${job}]} will be cleaned."
             else
                 mecho0 "Got ${PURPLE}${result}${NC}, do nothing."
                 return
@@ -3291,26 +3296,26 @@ function run_clean {
 
     local isec
     local show="echo"
-    if [[ $dorun == true ]]; then
+    if [[ ${dorun} == true ]]; then
         show=""
     fi
 
-    for isec in $(seq $start_sec ${config_intvl_sec} $end_sec ); do
-        timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
-        eventtime=$(date    -u -d @$isec +%H%M)
-        timestr_file=$(date -u -d @$isec +%Y-%m-%d_%H.%M.%S)
+    for isec in $(seq ${start_sec} ${config_intvl_sec} ${end_sec} ); do
+        timestr_curr=$(date -u -d @"${isec}" +%Y%m%d%H%M)
+        eventtime=$(date    -u -d @"${isec}" +%H%M)
+        timestr_file=$(date -u -d @"${isec}" +%Y-%m-%d_%H.%M.%S)
 
-        dawrkdir=$wrkdir/$eventtime
-        if [[ -d $dawrkdir ]]; then
-            cd $dawrkdir || return
+        dawrkdir="${wrkdir}/${eventtime}"
+        if [[ -d "${dawrkdir}" ]]; then
+            cd "${dawrkdir}" || return
 
-            if [[ ${verbose} == true ]]; then mecho0 "Cleaning working directory ${CYAN}$dawrkdir${NC}"; fi
+            if [[ ${verbose} == true ]]; then mecho0 "Cleaning working directory ${CYAN}${dawrkdir}${NC}"; fi
 
             for dirname in "${jobs[@]}"; do
 
-                cd $dawrkdir || continue
+                cd "${dawrkdir}" || continue
 
-                case $dirname in
+                case ${dirname} in
                 mpas )
                     ${show} rm -f fcst_??/error.fcst_* fcst_??/log.????.abort fcst_??/dart_log.*
                     ${show} rm -f fcst_??/log.atmosphere.????.{out,err}  fcst_??/namelist.output fcst_*_*.log
@@ -3324,11 +3329,11 @@ function run_clean {
                     fi
 
                     ${show} rm -f fcst_??/mpas_XYZ.pkl fcst_??/wofs_mpas_grid_kdtree.pkl fcst_??/refl_*.{txt,pkl}
-                    if [[ "$coption" == "-c" ]]; then
+                    if [[ "${coption}" == "-c" ]]; then
                         ${show} rm -f fcst_??/${domname}_??.{restart,init,prior}.*.nc
-                    elif [[ "$coption" == "-a" ]]; then
+                    elif [[ "${coption}" == "-a" ]]; then
                         ${show} rm -rf fcst_??
-                    elif [[ "$coption" == "-d" ]]; then
+                    elif [[ "${coption}" == "-d" ]]; then
                         ${show} rm -f fcst_??/${domname}_??.{restart,init,prior}.*.nc
                         ${show} rm -rf fcst_??/done.fcst_* fcst_??/done.update_{bc,states}_*
                     fi
@@ -3339,13 +3344,13 @@ function run_clean {
                         ${show} rm -f preassim_*.nc #output_*.nc
                         ${show} find OBSDIR -type f -not -name "obs_seq.${timestr_curr}" -exec rm -f {} \;
                         ${show} rm -f noise_mask_*.log noise_pert_*.log mpas_XYZ.pkl wofs_mpas_grid_kdtree.pkl refl_*.{txt,pkl}
-                        if [[ "$coption" == "-c" ]]; then
+                        if [[ "${coption}" == "-c" ]]; then
                             ${show} rm -f ${domname}_??.analysis
-                        elif [[ "$coption" == "-a" ]]; then
-                            cd $wrkdir || return
-                            ${show} rm -rf $eventtime
+                        elif [[ "${coption}" == "-a" ]]; then
+                            cd "${wrkdir}" || return
+                            ${show} rm -rf "${eventtime}"
                             break
-                        elif [[ "$coption" == "-d" ]]; then
+                        elif [[ "${coption}" == "-d" ]]; then
                             ${show} rm -f ${domname}_??.analysis
                             ${show} rm -f done.fcst done.filter done.update_bc
                         fi
@@ -3356,10 +3361,13 @@ function run_clean {
                         ${show} rm -f error.update_bc update_bc_*.log
                     fi
                     ;;
+                * )
+                    mecho0 "${RED}ERROR${NC}: ${CYAN}${dirname}${NC} is not supported for cleaning."
+                    ;;
                 esac
             done
         else
-            mecho0 "${RED}ERROR${NC}: ${CYAN}$dawrkdir${NC} not exist."
+            mecho0 "${RED}ERROR${NC}: ${CYAN}${dawrkdir}${NC} not exist."
         fi
     done
 }
@@ -3370,7 +3378,7 @@ function run_clean {
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-source $scpdir/Common_Utilfuncs.sh || exit $?
+source "${scpdir}/Common_Utilfuncs.sh" || exit $?
 
 #-----------------------------------------------------------------------
 #
@@ -3411,9 +3419,9 @@ fi
 
 source "${scpdir}/Site_Runtime.sh" || exit $?
 
-setup_machine "${args['machine']}" "$rootdir" true false
+setup_machine "${args['machine']}" "${rootdir}" true false
 
-[[ $dorun == false ]] && runcmd="echo ${site_runcmd}" || runcmd="${site_runcmd}"
+[[ "${dorun}" == false ]] && runcmd="echo ${site_runcmd}" || runcmd="${site_runcmd}"
 export runcmd
 
 WORKDIR=${args["WORKDIR"]:-"${site_workdir}"}
@@ -3422,7 +3430,7 @@ WORKDIR=${args["WORKDIR"]:-"${site_workdir}"}
 # Set Event Date
 #-----------------------------------------------------------------------
 
-eventdate="${args['eventdate']:-"$eventdateDF"}"
+eventdate="${args['eventdate']:-"${eventdateDF}"}"
 
 #-----------------------------------------------------------------------
 # read configurations that is not set from command line
@@ -3431,8 +3439,8 @@ eventdate="${args['eventdate']:-"$eventdateDF"}"
 if [[ -v args["config_file"] ]]; then
     config_file="${args['config_file']}"
 
-    if [[ "$config_file" =~ "/" ]]; then
-        WORKDIR=$(realpath "$(dirname ${config_file})")
+    if [[ "${config_file}" =~ "/" ]]; then
+        WORKDIR=$(realpath "$(dirname "${config_file}")")
     else
         config_file="${WORKDIR}/${config_file}"
     fi
@@ -3446,7 +3454,7 @@ if [[ -v args["config_file"] ]]; then
         exit 1
     fi
 else
-    config_file="$WORKDIR/config.${eventdate}"
+    config_file="${WORKDIR}/config.${eventdate}"
     daffix=""
 fi
 
@@ -3515,7 +3523,7 @@ if [[ ${#eventtime} -eq 12 ]]; then
     startdatetime=${eventtime}
     eventtime=${eventtime:8:4}
 else
-    (( 10#$eventtime < 10#$inittime )) && startday="1 day"
+    (( 10#${eventtime} < 10#${inittime} )) && startday="1 day"
     startdatetime="${eventdate}${eventtime}"
 fi
 
@@ -3523,15 +3531,15 @@ endday=""
 if [[ ${#endtime} -eq 12 ]]; then
     enddatetime=${endtime}
 else
-    (( 10#$endtime < 10#$inittime )) && endday="1 day"
+    (( 10#${endtime} < 10#${inittime} )) && endday="1 day"
     enddatetime="${eventdate}${endtime}"
 fi
 
-inittime_sec=$(date  -u -d "${eventdate}         ${inittime}"                    +%s)
-starttime_sec=$(date -u -d "${startdatetime:0:8} ${startdatetime:8:4} $startday" +%s)
-stoptime_sec=$(date  -u -d "${enddatetime:0:8}   ${enddatetime:8:4}   $endday"   +%s)
+inittime_sec=$(date  -u -d "${eventdate}         ${inittime}"                      +%s)
+starttime_sec=$(date -u -d "${startdatetime:0:8} ${startdatetime:8:4} ${startday}" +%s)
+stoptime_sec=$(date  -u -d "${enddatetime:0:8}   ${enddatetime:8:4}   ${endday}"   +%s)
 
-enddatetime=$(date   -u -d @$stoptime_sec +%Y%m%d%H%M)
+enddatetime=$(date   -u -d @${stoptime_sec} +%Y%m%d%H%M)
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
@@ -3540,14 +3548,15 @@ enddatetime=$(date   -u -d @$stoptime_sec +%Y%m%d%H%M)
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
 
-rundir="$WORKDIR/${eventdate}"
-if [[ ! -d $rundir ]]; then
-    mkdir -p $rundir
+rundir="${WORKDIR}/${eventdate}"
+if [[ ! -d ${rundir} ]]; then
+    mkdir -p ${rundir}
 fi
 
 echo    ""
+# shellcheck disable=SC2312
 echo -e "---- Jobs (${YELLOW}$$${NC}) started at ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} on host ${LIGHT_RED}$(hostname)${NC} ----\n"
-echo -e "  Event  date: ${WHITE}$eventdate${NC} ${YELLOW}${eventtime}${NC} --> ${WHITE}${enddatetime:0:8}${NC} ${YELLOW}${enddatetime:8:4}${NC}"
+echo -e "  Event  date: ${WHITE}${eventdate}${NC} ${YELLOW}${eventtime}${NC} --> ${WHITE}${enddatetime:0:8}${NC} ${YELLOW}${enddatetime:8:4}${NC}"
 echo -e "  ROOT    dir: ${rootdir}${BROWN}/scripts${NC}"
 echo -e "  TEMP    dir: ${config_TEMPDIR}"
 echo -e "  FIXED   dir: ${config_FIXDIR}"
@@ -3575,7 +3584,7 @@ OUTINVL_STR=$(printf "00:%02d:00" $((OUTINVL/60)) )
 # $1    $2    $3
 # init start  end
 if [[ " ${jobs[*]} " =~ " "(ioda_|jedi_|mpas|update_).*" " ]]; then
-    dacycle_driver $inittime_sec $starttime_sec $stoptime_sec
+    dacycle_driver ${inittime_sec} ${starttime_sec} ${stoptime_sec}
 elif [[ " ${jobs[*]} " =~ " clean " ]]; then
 
     if [[ ${#cleanjobs[@]} -eq 0 ]]; then
@@ -3584,6 +3593,7 @@ elif [[ " ${jobs[*]} " =~ " clean " ]]; then
     run_clean "${starttime_sec}" "${stoptime_sec}" "${cleanoption}" "${cleanjobs[*]}"
 fi
 
+# shellcheck disable=SC2312
 echo -e "\n==== Jobs done ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} ====\n"
 
 exit 0

@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2317,SC1090,SC1091,SC2086,SC2329
+# shellcheck disable=SC2086,SC2329
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
@@ -308,9 +308,9 @@ function parse_args {
 #
 # Extract WRF domain attributes
 #
+# shellcheck disable=SC2312
 function ncattget {
-    # shellcheck disable=SC2154
-    if which ${site_nckspath} 2> /dev/null ; then
+    if command -v ${site_nckspath} > /dev/null 2>&1 ; then
         if ! ${site_nckspath} -x -M "$1" | grep -E "(corner_lats|corner_lons|CEN_LAT|CEN_LON|TRUELAT[12]|STAND_LON|MOAD_CEN_LAT|DX|DY|[ij]_parent)"; then
             mecho0 "${RED}ERROR${NC}: Command failed: ${BLUE}${site_nckspath} -x -M \"$1\" | grep${NC}"
             exit 1
@@ -422,6 +422,7 @@ EOF
 
 ########################################################################
 
+# shellcheck disable=SC2312,SC2154,SC2153,SC2206
 function run_createWOFS {
 
     conditions=()
@@ -484,9 +485,7 @@ function run_createWOFS {
     geofile=$(dirname ${conditions[0]})/geo_em.d01.nc
     wrfdomain=$(ncattget ${geofile})
 
-    # shellcheck disable=SC2206
     IFS=$'\n' domelements=(${wrfdomain})
-    # shellcheck disable=SC2206
     for var in "${domelements[@]}"; do
         IFS='= ' keyval=(${var%%;})
         wrfkey=${keyval[0]:1}
@@ -526,34 +525,29 @@ function run_createWOFS {
     #echo $corner_lons_min, $corner_lons_max
     #exit 0
 
-    # shellcheck disable=SC2154
+
     lat_s=$(echo "${corner_lats_min}-0.2" | bc -l)
-    # shellcheck disable=SC2154
     lat_n=$(echo "${corner_lats_max}+0.2" | bc -l)
-    # shellcheck disable=SC2154
     lon_sw=$(echo "${corner_lons_min}+0.5" | bc -l)
     lon_nw=$(echo "${corner_lons_min}-0.2" | bc -l)
-    # shellcheck disable=SC2154
     lon_ne=$(echo "${corner_lons_max}+0.2" | bc -l)
     lon_se=$(echo "${corner_lons_max}-0.5" | bc -l)
 
-    # shellcheck disable=SC2153
-    cat <<EOF > ${domname}.custom.pts
-Name: ${domname}
-Type: custom
-Point: ${CEN_LAT}, ${CEN_LON}
-${lat_n}, ${lon_nw}
-${lat_n}, ${lon_ne}
-${lat_s}, ${lon_se}
-${lat_s}, ${lon_sw}
-EOF
+    cat <<-EOF > ${domname}.custom.pts
+		Name: ${domname}
+		Type: custom
+		Point: ${CEN_LAT}, ${CEN_LON}
+		${lat_n}, ${lon_nw}
+		${lat_n}, ${lon_ne}
+		${lat_s}, ${lon_se}
+		${lat_s}, ${lon_sw}
+		EOF
 
     #
     # Create job script and submit it
     #
     jobscript="run_createWOFS.slurm"
 
-    # shellcheck disable=SC2154
     declare -A jobParms=(
         [PARTION]="${default_partition_create}"
         [CPUSPEC]="${default_claim_cpu_create}"
@@ -564,6 +558,7 @@ EOF
 
 ########################################################################
 
+# shellcheck disable=SC2312,SC2206,SC2154,SC2153
 function run_projectHexes {
 
     conditions=()
@@ -607,9 +602,7 @@ function run_projectHexes {
     geofile=$(dirname ${conditions[0]})/geo_em.d01.nc
     wrfdomain=$(ncattget ${geofile})
 
-    # shellcheck disable=SC2206
     IFS=$'\n' domelements=(${wrfdomain})
-    # shellcheck disable=SC2206
     for var in "${domelements[@]}"; do
         IFS='= ' keyval=(${var%%;})
         wrfkey=${keyval[0]:1}
@@ -658,18 +651,13 @@ function run_projectHexes {
     #echo $corner_lons_min, $corner_lons_max
     #exit 0
 
-    ## shellcheck disable=SC2154
     #lat_s=$(echo "$corner_lats_min-0.2" | bc -l)
-    ## shellcheck disable=SC2154
     #lat_n=$(echo "$corner_lats_max+0.2" | bc -l)
-    ## shellcheck disable=SC2154
     #lon_sw=$(echo "$corner_lons_min+0.5" | bc -l)
     #lon_nw=$(echo "$corner_lons_min-0.2" | bc -l)
-    ## shellcheck disable=SC2154
     #lon_ne=$(echo "$corner_lons_max+0.2" | bc -l)
     #lon_se=$(echo "$corner_lons_max-0.5" | bc -l)
 
-    # shellcheck disable=SC2153
     cat <<EOF > namelist.projections
 &mesh
   cell_spacing_km  =      3.,
@@ -706,6 +694,7 @@ EOF
 
 ########################################################################
 
+# shellcheck disable=SC2312,SC2206
 function run_static {
 
     conditions=()
@@ -873,6 +862,7 @@ EOF
 
 ########################################################################
 
+# shellcheck disable=SC2312,SC2206
 function run_rotate {
 
     conditions=()
@@ -916,9 +906,7 @@ function run_rotate {
     geofile=$(dirname ${conditions[0]})/geo_em.d01.nc
     wrfdomain=$(ncattget ${geofile})
 
-    # shellcheck disable=SC2206
     IFS=$'\n' domelements=(${wrfdomain})
-    # shellcheck disable=SC2206
     for var in "${domelements[@]}"; do
         IFS='= ' keyval=(${var%%;})
         wrfkey=${keyval[0]:1}
@@ -1242,7 +1230,9 @@ function run_clean {
                 fi
             fi
             ;;
-
+        * )
+            mecho0 "Unknown directory name: ${BROWN}${dirname}${NC}, skip."
+            ;;
         esac
     done
 }
@@ -1485,6 +1475,7 @@ EOF
 
 ########################################################################
 
+# shellcheck disable=SC2312
 function check_hrrr_subdir {
 
     rstatus=0
@@ -1606,6 +1597,7 @@ function check_hrrr_files {
 
 ########################################################################
 
+# shellcheck disable=SC2312
 function check_obs_files {
 
     nextdate=$(date -d "${eventdate} 1 day" +%Y%m%d)
@@ -1624,7 +1616,7 @@ function check_obs_files {
         filename=$(basename ${bufrf})
         bftime="${filename:8:2}"
         if [[ ${bftime} != "${basetime}" ]]; then
-            if [[ $i -ne 0 ]]; then echo  -e " (${GREEN}$i${NC})"; fi
+            if [[ ${i} -ne 0 ]]; then echo  -e " (${GREEN}${i}${NC})"; fi
             mecho0n "  ${UNDERLINE}${bftime}${NC}: ${filename}    "
             basetime="${bftime}"
             i=1
@@ -1635,7 +1627,7 @@ function check_obs_files {
         fi
 
     done
-    echo -e " (${GREEN}$i${NC})\n"
+    echo -e " (${GREEN}${i}${NC})\n"
 
     #
     # Check the MRMS files availability
@@ -1649,10 +1641,10 @@ function check_obs_files {
     match_count=0
 
     for (( i=0; i<${#ref_files[@]}; i++ )); do
-        filename=$(basename "${ref_files[$i]}")
+        filename=$(basename "${ref_files[${i}]}")
 
         # On the first iteration, just initialize
-        if [[ $i -eq 0 ]]; then
+        if [[ ${i} -eq 0 ]]; then
             shrunk_files+=("${filename}")
             current_header="${filename:0:13}" # Take first 42 chars as initial guess
             heights["${current_header}"]="${filename:42:5}"
@@ -1686,7 +1678,7 @@ function check_obs_files {
         current_header="${filename:0:13}"
         bftime="${filename:9:2}"
         if [[ ${bftime} != "${basetime}" ]]; then
-            if [[ $i -ne 0 ]]; then mecho0  ""; fi
+            if [[ ${i} -ne 0 ]]; then mecho0  ""; fi
             mecho0n "  ${UNDERLINE}${bftime}${NC}: "
             basetime="${bftime}"
             i=1
@@ -1710,7 +1702,7 @@ function check_obs_files {
         filename="$(basename ${velf})"
         bftime="${filename:17:2}"
         if [[ ${bftime} != "${basetime}" ]]; then
-            if [[ $i -ne 0 ]]; then echo -e " (${GREEN}$i${NC})"; fi
+            if [[ ${i} -ne 0 ]]; then echo -e " (${GREEN}${i}${NC})"; fi
             mecho0n "  ${UNDERLINE}${bftime}${NC}: "
             basetime="${bftime}"
             i=1
@@ -1720,7 +1712,7 @@ function check_obs_files {
         fi
         echo -n "${filename}    "
     done
-    echo -e " (${GREEN}$i${NC})\n"
+    echo -e " (${GREEN}${i}${NC})\n"
 
     #
     # Check the CWP files availability
@@ -1736,7 +1728,7 @@ function check_obs_files {
         bftime="${filename:8:2}"
         if [[ ${bftime} != "${basetime}" ]]; then
             basetime="${bftime}"
-            if [[ $i -ne 0 ]]; then echo -e " (${GREEN}$i${NC})"; fi
+            if [[ ${i} -ne 0 ]]; then echo -e " (${GREEN}${i}${NC})"; fi
             mecho0n "  ${UNDERLINE}${bftime}${NC}: "
             i=1
         else
@@ -1745,12 +1737,13 @@ function check_obs_files {
         fi
         echo -n "$(basename ${cwpf})    "
     done
-    echo -e " (${GREEN}$i${NC})\n"
+    echo -e " (${GREEN}${i}${NC})\n"
 
 }
 
 ########################################################################
 
+# shellcheck disable=SC2312
 function check_verif_files {
 
     nextdate=$(date -d "${eventdate} 1 day" +%Y%m%d)
@@ -1767,7 +1760,7 @@ function check_verif_files {
         bftime="${filename:23:2}"
         if [[ ${bftime} != "${basetime}" ]]; then
             basetime="${bftime}"
-            if [[ $i -ne 0 ]]; then echo -e " (${GREEN}$i${NC})"; fi
+            if [[ ${i} -ne 0 ]]; then echo -e " (${GREEN}${i}${NC})"; fi
             mecho0n "  ${UNDERLINE}${bftime}${NC}: "
             i=1
         else
@@ -1776,7 +1769,7 @@ function check_verif_files {
         fi
         echo -n "$(basename ${MRMSf})    "
     done
-    echo -e " (${GREEN}$i${NC})\n"
+    echo -e " (${GREEN}${i}${NC})\n"
 
     #
     # Check the Verification files QPE
@@ -1791,7 +1784,7 @@ function check_verif_files {
         bftime="${filename:23:2}"
         if [[ ${bftime} != "${basetime}" ]]; then
             basetime="${bftime}"
-            if [[ $i -ne 0 ]]; then echo -e " (${GREEN}$i${NC})"; fi
+            if [[ ${i} -ne 0 ]]; then echo -e " (${GREEN}${i}${NC})"; fi
             mecho0n "  ${UNDERLINE}${bftime}${NC}: "
             i=1
         else
@@ -1800,7 +1793,7 @@ function check_verif_files {
         fi
         echo -n "$(basename ${QPEf})    "
     done
-    echo -e " (${GREEN}$i${NC})\n"
+    echo -e " (${GREEN}${i}${NC})\n"
 
     #
     # Check the Verification files ASOS
@@ -1815,7 +1808,7 @@ function check_verif_files {
         bftime="${filename:9:2}"
         if [[ ${bftime} != "${basetime}" ]]; then
             basetime="${bftime}"
-            if [[ $i -ne 0 ]]; then echo -e " (${GREEN}$i${NC})"; fi
+            if [[ ${i} -ne 0 ]]; then echo -e " (${GREEN}${i}${NC})"; fi
             mecho0n "  ${UNDERLINE}${bftime}${NC}: "
             i=1
         else
@@ -1824,7 +1817,7 @@ function check_verif_files {
         fi
         echo -n "$(basename ${ASOSf})    "
     done
-    echo -e " (${GREEN}$i${NC})\n"
+    echo -e " (${GREEN}${i}${NC})\n"
 
     #
     # Check the Verification files LSR_WWA
@@ -1839,7 +1832,7 @@ function check_verif_files {
         bftime="${filename:0:3}"
         if [[ ${bftime} != "${basetime}" ]]; then
             basetime="${bftime}"
-            if [[ $i -ne 0 ]]; then echo -e " (${GREEN}$i${NC})"; fi
+            if [[ ${i} -ne 0 ]]; then echo -e " (${GREEN}${i}${NC})"; fi
             mecho0n "  ${UNDERLINE}${bftime}${NC}: "
             i=1
         else
@@ -1848,7 +1841,7 @@ function check_verif_files {
         fi
         echo -n "$(basename ${LSRf})    "
     done
-    echo -e " (${GREEN}$i${NC})\n"
+    echo -e " (${GREEN}${i}${NC})\n"
 
 }
 
@@ -1937,6 +1930,8 @@ export runcmd
     config_EXEDIR="${EXEDIR}"
 }
 
+initialize4static "${machine}"
+
 #
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
@@ -1946,6 +1941,7 @@ export runcmd
 #% ENTRY
 
 echo     ""
+# shellcheck disable=SC2312
 echo -e  "---- Jobs (${YELLOW}$$${NC}) started at ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} on host ${LIGHT_RED}$(hostname)${NC} ----\n"
 echo -e  "  Event  date: ${WHITE}${eventdate}${NC} ${YELLOW}${eventtime}${NC}"
 echo -e  "  ROOT    dir: ${rootdir}/${BROWN}scripts${NC}"
@@ -2052,6 +2048,7 @@ for job in "${jobs[@]}"; do
     "run_${job}" ${jobargs[${job}]}
 done
 
+# shellcheck disable=SC2312
 echo -e "\n==== Jobs done ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} ====\n"
 
 exit 0

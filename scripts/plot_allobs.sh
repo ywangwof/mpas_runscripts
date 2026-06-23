@@ -13,8 +13,8 @@ outdir2="1500"
 
 #-----------------------------------------------------------------------
 
-source "${script_dir}/Common_Colors.sh"
-source "${script_dir}/Site_Runtime.sh" || exit $?
+source "${script_dir}/Common_Colors.sh" || exit $?
+source "${script_dir}/Site_Runtime.sh"  || exit $?
 
 ########################################################################
 
@@ -42,10 +42,10 @@ function usage {
     echo    "              -e endtime          as HHMM or YYYYmmddHHMM. Default: 0300"
     echo    " "
     echo    "   DEFAULTS:"
-    echo    "              eventdate  = $eventdateDF"
+    echo    "              eventdate  = ${eventdateDF}"
     echo    "              WORKDIR    = \$site_workdir/run_dirs"
-    echo    "              rootdir    = $rootdir"
-    echo    "              script_dir = $script_dir"
+    echo    "              rootdir    = ${rootdir}"
+    echo    "              script_dir = ${script_dir}"
     echo    " "
     echo    "                                     -- By Y. Wang (2024.04.17)"
     echo    " "
@@ -65,7 +65,7 @@ function parse_args {
     while [[ $# -gt 0 ]]; do
         key="$1"
 
-        case $key in
+        case ${key} in
             -h)
                 usage 0
                 ;;
@@ -112,19 +112,19 @@ function parse_args {
                 ;;
 
             -*)
-                echo "Unknown option: $key"
+                echo "Unknown option: ${key}"
                 usage 2
                 ;;
             *)
-                if [[ $key =~ ^[0-9]{8}$ ]]; then
+                if [[ ${key} =~ ^[0-9]{8}$ ]]; then
                     args["eventdate"]=${key}
-                elif [[ -d $key ]]; then
-                    args["run_dir"]=$key
-                elif [[ -f $key ]]; then
+                elif [[ -d ${key} ]]; then
+                    args["run_dir"]=${key}
+                elif [[ -f ${key} ]]; then
                     args["config_file"]="${key}"
                 else
                     echo ""
-                    echo "ERROR: unknown argument, get [$key]."
+                    echo "ERROR: unknown argument, get [${key}]."
                     usage 3
                 fi
                 ;;
@@ -153,7 +153,7 @@ parse_args "$@"
 #    exit 1
 #fi
 
-setup_machine "${machine}" "$rootdir" true false false
+setup_machine "${machine}" "${rootdir}" true false
 
 [[ -v args["eventdate"] ]]   && eventdate=${args["eventdate"]}     || eventdate=${eventdateDF}
 [[ -v args["run_dir"] ]]     && run_dir=${args["run_dir"]}         || run_dir="${site_workdir}"
@@ -165,7 +165,7 @@ setup_machine "${machine}" "$rootdir" true false false
 if [[ -v args["config_file"] ]]; then
     config_file=${args["config_file"]}
 
-    if [[ "$config_file" =~ "/" ]]; then
+    if [[ "${config_file}" =~ "/" ]]; then
         run_dir=$(realpath "$(dirname "${config_file}")")
     else
         config_file="${run_dir}/${config_file}"
@@ -212,7 +212,7 @@ startday=""
 if [[ ${#starttime} -eq 12 ]]; then
     startdatetime=${starttime}
 else
-    (( 10#$starttime < 1500 )) && startday="1 day"
+    (( 10#${starttime} < 1500 )) && startday="1 day"
     startdatetime="${eventdate}${starttime}"
 fi
 
@@ -220,15 +220,15 @@ endday=""
 if [[ ${#endtime} -eq 12 ]]; then
     enddatetime=${endtime}
 else
-    (( 10#$endtime < 1500 )) && endday="1 day"
+    (( 10#${endtime} < 1500 )) && endday="1 day"
     enddatetime="${eventdate}${endtime}"
 fi
 
-start_s=$(date -u -d "${startdatetime:0:8} ${startdatetime:8:4} $startday" +%s)
-end_s=$(date   -u -d "${enddatetime:0:8}   ${enddatetime:8:4}   $endday"   +%s)
+start_s=$(date -u -d "${startdatetime:0:8} ${startdatetime:8:4} ${startday}" +%s)
+end_s=$(date   -u -d "${enddatetime:0:8}   ${enddatetime:8:4}   ${endday}"   +%s)
 
-startdatetime=$(date -u -d @$start_s +%Y%m%d%H%M)
-enddatetime=$(date   -u -d @$end_s +%Y%m%d%H%M)
+startdatetime=$(date -u -d @"${start_s}" +%Y%m%d%H%M)
+enddatetime=$(date   -u -d @"${end_s}" +%Y%m%d%H%M)
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
@@ -248,8 +248,8 @@ cd "${run_dir}/${eventdate}/${dadir}/${outdir1}" || exit
 grid_file="${run_dir}/${eventdate}/wofs_mpas/wofs_mpas.grid.nc"
 
 for ((s=start_s;s<=end_s;s+=900)); do
-    timestr=$(date -u -d @$s +%H%M)
-    datestr=$(date -u -d @$s +%Y%m%d)
+    timestr=$(date -u -d @"${s}" +%H%M)
+    datestr=$(date -u -d @"${s}" +%Y%m%d)
 
     donefile="${run_dir}/${eventdate}/${dadir}/${timestr}/jedi_solver/done.solver"
 
@@ -300,7 +300,7 @@ if [[ ! -e done.zigzag ]]; then
 
     ${show} "${cmds[@]}"
 
-    if [[ $machine == Ursa ]]; then
+    if [[ ${machine} == Ursa ]]; then
         module load imagemagick
     fi
     imagedir="${run_dir}/image_files"
@@ -311,14 +311,14 @@ if [[ ! -e done.zigzag ]]; then
         [[ ! -d ${image_destdir} ]] && mkdir -p "${image_destdir}"
 
         # Standard post-processing (resize/trim)
-        if [[ $verb == true ]]; then
+        if [[ ${verb} == true ]]; then
             echo "Convert to 1100x1100 and Trim for the web visualization."
         fi
 
         estatus=0
-        for fn in sawtooth_${eventdate}_*.png; do
+        for fn in sawtooth_"${eventdate}"_*.png; do
             destfn="${fn}_f360.png"
-            convert "$fn" -resize 1100x1100 -trim "${image_destdir}/${destfn}"
+            convert "${fn}" -resize 1100x1100 -trim "${image_destdir}/${destfn}"
             (( estatus+=$? ))
         done
 
@@ -326,12 +326,13 @@ if [[ ! -e done.zigzag ]]; then
 
         if [[ ${estatus} -eq 0 ]]; then
             "${script_dir}/process_da_json.py" "${post_dir}/json/wofs_run_metadata_obsdiag.json" \
-                                            "${image_destdir}/wofs_run_metadata.json"
+                                               "${image_destdir}/wofs_run_metadata.json"
             touch "done.zigzag"
         fi
     fi
 else
-    echo "Found $(pwd)/done.zigzag. Skipping sawtooth generation."
+    wrkdir=$(pwd)
+    echo "Found ${wrkdir}/done.zigzag. Skipping sawtooth generation."
 fi
 
 exit 0

@@ -35,10 +35,10 @@ function usage {
     echo "              -c cntLevels        Contour levels, [cmin,cmax,cinc]"
     echo " "
     echo "   DEFAULTS:"
-    echo "              eventdt    = $eventdateDF"
-    echo "              rootdir    = $rootdir"
-    echo "              run_dir    = $run_dir"
-    echo "              script_dir = $script_dir"
+    echo "              eventdt    = ${eventdateDF}"
+    echo "              rootdir    = ${rootdir}"
+    echo "              run_dir    = ${run_dir}"
+    echo "              script_dir = ${script_dir}"
     echo " "
     echo "                                     -- By Y. Wang (2024.08.05)"
     echo " "
@@ -77,7 +77,7 @@ cntopts=()
 while [[ $# -gt 0 ]]; do
     key="$1"
 
-    case $key in
+    case ${key} in
         -h)
             usage 0
             ;;
@@ -118,17 +118,17 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -*)
-            echo "Unknown option: $key"
+            echo "Unknown option: ${key}"
             usage 2
             ;;
         diag | history )
-            filetype="$key"
+            filetype="${key}"
             ;;
         *)
-            if [[ $key =~ ^[0-9]{8}$ ]]; then
+            if [[ ${key} =~ ^[0-9]{8}$ ]]; then
                 eventdate=${key}
             else
-                IFS="," read -r -a varnames <<< "$key"
+                IFS="," read -r -a varnames <<< "${key}"
                 #varname="$key"
                 # echo ""
                 # echo "ERROR: unknown argument, get [$key]."
@@ -159,7 +159,7 @@ fi
 # First, initialize Python environment
 
 if [[ -z ${MAMBA_EXE} || -t 0 ]]; then   # not set micromamba
-    if [[ "$host" =~ ^vecna.*$ ]]; then
+    if [[ "${host}" =~ ^vecna.*$ ]]; then
         micromamba_dir='/home/yunheng.wang/tools/micromamba'
         myenv="wofs_an"
     else
@@ -177,7 +177,7 @@ if [[ -z ${MAMBA_EXE} || -t 0 ]]; then   # not set micromamba
     if __mamba_setup="$("$MAMBA_EXE" shell hook --shell bash --root-prefix "$MAMBA_ROOT_PREFIX" 2> /dev/null)"; then
         eval "$__mamba_setup"
     else
-        micromamba() { "$MAMBA_EXE"; }  # Fallback on help from mamba activate
+        micromamba() { "${MAMBA_EXE}"; }  # Fallback on help from mamba activate
     fi
     unset __mamba_setup
 
@@ -233,7 +233,7 @@ for runtime in "${runtimes[@]}"; do
 
         echo "Current Working Directory: ${wrkdir}"
         for ((i=begin_sec;i<=end_sec;i+=300)); do
-            time_str=$(date -d @$i +%Y-%m-%d_%H.%M.%S)
+            time_str=$(date -d @"${i}" +%Y-%m-%d_%H.%M.%S)
             fcst_file="${fcst_dir}/${domname}_${memstr}.${filetype}.${time_str}.nc"
 
             for varname in "${varnames[@]}"; do
@@ -247,12 +247,12 @@ for runtime in "${runtimes[@]}"; do
 
         # 3. Make APNG using magick
 
-        if which magick >& /dev/null; then
+        if command -v magick >& /dev/null; then
             time_str="${eventdate}${runtime}"
             for varname in "${varnames[@]}"; do
                 for lvl in "${levels[@]}"; do
-                    lvlstr=$(printf "%02d" $lvl)
-                    echo -e "\nMaking APNG for var = $varname, level = $lvl ...."
+                    lvlstr=$(printf "%02d" "${lvl}")
+                    echo -e "\nMaking APNG for var = ${varname}, level = ${lvl} ...."
                     #magick -delay 50 -loop 0 "${wrkdir}/${varname}."*"_K${lvl}".png APNG:"${wrkdir}/${varname}_${time_str}_K${lvl}.png"
                     #ffmpeg -i "${wrkdir}/${varname}_${time_str}_K${lvl}.png" -movflags faststart -pix_fmt yuv420p -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" "${wrkdir}/${varname}_${time_str}_K${lvl}.mp4"
                     ${show} convert -delay 60 "${wrkdir}/${varname}."*"_K${lvlstr}".png "${wrkdir}/${varname}_${time_str}_K${lvlstr}.mp4"

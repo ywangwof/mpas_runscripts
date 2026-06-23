@@ -12,7 +12,7 @@ fcstmems=18
 # shellcheck source=/dev/null
 #source "${script_dir}/Site_Runtime.sh" || exit $?
 #
-#setup_machine "" "${rootdir}" false false false
+#setup_machine "" "${rootdir}" false false
 #
 ## shellcheck disable=SC2154
 #mpasworkdir="${site_workdir}"
@@ -40,7 +40,7 @@ function usage {
     echo "              -c                  Overwritten existing files, otherwise, keep existing files"
     echo " "
     echo "   DEFAULTS:"
-    echo "              eventdt    = $eventdateDF"
+    echo "              eventdt    = ${eventdateDF}"
     echo "              fcst_root  = \${fcst_root}"
     echo "              dest_root  = \${fcst_root}/FCST"
     echo " "
@@ -66,7 +66,7 @@ function parse_args {
     while [[ $# -gt 0 ]]; do
         key="$1"
 
-        case $key in
+        case ${key} in
             -h)
                 usage 0
                 ;;
@@ -127,17 +127,17 @@ function parse_args {
                 ;;
 
             -* )
-                echo "Unknown option: $key"
+                echo "Unknown option: ${key}"
                 usage 2
                 ;;
             * )
-                if [[ $key =~ ^[0-9]{8}$ ]]; then
+                if [[ ${key} =~ ^[0-9]{8}$ ]]; then
                     args["eventdate"]=${key}
-                elif [[ -f $key ]]; then
+                elif [[ -f ${key} ]]; then
                     args["config_file"]="${key}"
                 else
                     echo ""
-                    echo "ERROR: unknown argument, get [$key]."
+                    echo "ERROR: unknown argument, get [${key}]."
                     usage 3
                 fi
                 ;;
@@ -162,7 +162,7 @@ parse_args "$@"
 [[ -v args["fcstbeg"] ]]     && fcstbeg=${args["fcstbeg"]}         || fcstbeg=5
 
 [[ -v args["fcst_root"] ]] && fcst_root=${args["fcst_root"]}
-[[ -v args["dest_root"] ]] && dest_root=${args["fcst_root"]}
+[[ -v args["dest_root"] ]] && dest_root=${args["dest_root"]}
 
 [[ -v args["eventdate"] ]] && eventdate=${args["eventdate"]}
 [[ -v args["starttime"] ]] && starttime=${args["starttime"]} || starttime="1700"
@@ -171,7 +171,7 @@ parse_args "$@"
 if [[ -v args["config_file"] ]]; then
     config_file=${args["config_file"]}
 
-    if [[ "$config_file" != "/"* ]]; then
+    if [[ "${config_file}" != "/"* ]]; then
         config_file="${fcst_root}/${config_file}"
     fi
 
@@ -187,6 +187,7 @@ else
     exit 1
 fi
 
+# shellcheck disable=SC2312
 if [[ -f ${config_file} ]]; then
     fcstlength=$(grep '^ *fcst_length_seconds=' "${config_file}" | cut -d'=' -f2 | cut -d' ' -f1 | tr -d '(')
     fcstintvl=$(grep '^ *OUTINVL='              "${config_file}" | cut -d'=' -f2)
@@ -218,7 +219,6 @@ fi
 echo "INFO: Use fcst_root: ${fcst_root}/${eventdate}/${fcstdir} "
 echo "INFO: Use dest_root: ${dest_root}/${eventdate}${affix} "
 
-exit 0
 #-----------------------------------------------------------------------
 # Set Event End Date and Time
 #-----------------------------------------------------------------------
@@ -227,7 +227,7 @@ startday=""
 if [[ ${#starttime} -eq 12 ]]; then
     startdatetime=${starttime}
 else
-    (( 10#$starttime < 1500 )) && startday="1 day"
+    (( 10#${starttime} < 1500 )) && startday="1 day"
     startdatetime="${eventdate}${starttime}"
 fi
 
@@ -235,19 +235,19 @@ endday=""
 if [[ ${#endtime} -eq 12 ]]; then
     enddatetime=${endtime}
 else
-    (( 10#$endtime < 1500 )) && endday="1 day"
+    (( 10#${endtime} < 1500 )) && endday="1 day"
     enddatetime="${eventdate}${endtime}"
 fi
 
-start_s=$(date -u -d "${startdatetime:0:8} ${startdatetime:8:4} $startday" +%s)
-end_s=$(date   -u -d "${enddatetime:0:8}   ${enddatetime:8:4}   $endday"   +%s)
+start_s=$(date -u -d "${startdatetime:0:8} ${startdatetime:8:4} ${startday}" +%s)
+end_s=$(date   -u -d "${enddatetime:0:8}   ${enddatetime:8:4}   ${endday}"   +%s)
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
 
 for ((s=start_s;s<=end_s;s+=3600)); do
-    evtime=$(date -u -d @$s +%H%M)
-    evttime_str=$(date -u -d @$s +%Y%m%d%H%M)
+    evtime=$(date -u -d @"${s}" +%H%M)
+    evttime_str=$(date -u -d @"${s}" +%Y%m%d%H%M)
 
     evttime_dir="${fcst_root}/${eventdate}/${fcstdir}/${evtime}/mpassit"
     for mem in $(seq 1 "${fcstmems}"); do
@@ -255,7 +255,7 @@ for ((s=start_s;s<=end_s;s+=3600)); do
         memdir="${evttime_dir}/mem_${memstr}"
 
         desdir="${dest_root}/${eventdate}${affix}/${evtime}/ENS_MEM_${memstr}"
-        if [[ ! -d $desdir ]]; then
+        if [[ ! -d ${desdir} ]]; then
             mkdir -p "${desdir}"
         fi
         cd "${desdir}" || exit 0
@@ -263,8 +263,8 @@ for ((s=start_s;s<=end_s;s+=3600)); do
         #echo "Linking member $memstr from $memdir to $desdir ...."
         for ((i=fcstbeg*60;i<=fcstlength;i+=fcstintvl)); do
             (( fcsttime = s+i ))
-            fcsttimestr=$(date -u -d @${fcsttime} +%Y-%m-%d_%H.%M.%S)
-            wrftimestr=$(date -u -d @${fcsttime}  +%Y-%m-%d_%H:%M:%S)
+            fcsttimestr=$(date -u -d @"${fcsttime}" +%Y-%m-%d_%H.%M.%S)
+            wrftimestr=$(date -u -d @"${fcsttime}"  +%Y-%m-%d_%H:%M:%S)
             memfile="MPASSIT_${memstr}.${fcsttimestr}.nc"
             desfile="wrfwof_d01_${wrftimestr}"
             if [[ ! -f ${desfile} || ${force_clean} == true ]]; then
@@ -283,8 +283,8 @@ for ((s=start_s;s<=end_s;s+=3600)); do
 
         if [[ ${fcstbeg} -gt 0 ]]; then
             (( begs = s + fcstbeg*60 ))
-            wrftimestr0=$(date -u -d @$s    +%Y-%m-%d_%H:%M:%S)
-            wrftimestr1=$(date -u -d @$begs +%Y-%m-%d_%H:%M:%S)
+            wrftimestr0=$(date -u -d @"${s}"    +%Y-%m-%d_%H:%M:%S)
+            wrftimestr1=$(date -u -d @"${begs}" +%Y-%m-%d_%H:%M:%S)
             ln -sf "wrfwof_d01_${wrftimestr1}" "wrfwof_d01_${wrftimestr0}"
         fi
     done

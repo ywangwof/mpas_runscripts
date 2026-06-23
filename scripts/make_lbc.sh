@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2317,SC1090,SC1091,SC2086,SC2154,SC2329
+# shellcheck disable=SC2329
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
@@ -84,7 +84,7 @@ function usage {
     echo " "
     echo "                                     -- By Y. Wang (2023.05.25)"
     echo " "
-    exit $1
+    exit "$1"
 }
 
 ########################################################################
@@ -206,8 +206,8 @@ function run_ungrib {
     gribtime=$2
 
     wrkdir=${rundir}/lbc/ungrib
-    mkwrkdir ${wrkdir} 0
-    cd ${wrkdir} || return
+    mkwrkdir "${wrkdir}" 0
+    cd "${wrkdir}" || return
 
     if [[ -f running.ungrib || -f done.ungrib || -f queue.ungrib ]]; then
         return 0                   # skip
@@ -229,8 +229,8 @@ function run_ungrib {
 
     jobarrays=()
     # shellcheck disable=SC2154
-    for mem in $(seq 1 ${config_nenslbc}); do
-        memstr=$(printf "%02d" ${mem})
+    for mem in $(seq 1 "${config_nenslbc}"); do
+        memstr=$(printf "%02d" "${mem}")
 
         inits=$(date  -u -d "${hdate}             ${htime}"             +%s)
         starts=$(date -u -d "${startdatetime:0:8} ${startdatetime:8:4}" +%s)
@@ -244,7 +244,7 @@ function run_ungrib {
         mecho0 "GRIB files from ${grib_dir}:"
         gribfiles=(); gribfiles2=()
         for (( h=starthr;h<=endhr;h+=$((config_EXTINVL/3600)) )); do
-            hstr=$(printf "%02d" ${h})
+            hstr=$(printf "%02d" "${h}")
             if [[ ${config_hrrr_subdir} == "pgrb2ap5" ]]; then
                 gribfilename="gefs.${eventdate}/${gribtime}/${config_hrrr_subdir}/gep${memstr}.t${gribtime}z.pgrb2a.0p50.f0${hstr}"
                 gribfilename2="gefs.${eventdate}/${gribtime}/${config_hrrr_subdir/pgrb2ap5/pgrb2bp5}/gep${memstr}.t${gribtime}z.pgrb2b.0p50.f0${hstr}"
@@ -267,12 +267,12 @@ function run_ungrib {
         done
 
         mywrkdir="${wrkdir}/ungrib_${memstr}"
-        mkwrkdir ${mywrkdir} 1
-        cd ${mywrkdir} || return
+        mkwrkdir "${mywrkdir}" 1
+        cd "${mywrkdir}" || return
 
         rm -f GRIBFILE.??? >& /dev/null
         for i in "${!gribfiles[@]}"; do
-            char3=$(get_3char_order ${i})
+            char3=$(get_3char_order "${i}")
             if [[ ${#gribfiles2[@]} -gt 0 ]]; then
                 cp "${gribfiles[${i}]}" "GRIBFILE.${char3}"
                 cat "${gribfiles2[${i}]}" >> "GRIBFILE.${char3}"
@@ -282,33 +282,33 @@ function run_ungrib {
         done
 
         # shellcheck disable=SC2154
-        ln -sf ${config_FIXDIR}/WRFV4.0/${config_hrrrvtable} Vtable
+        ln -sf "${config_FIXDIR}/WRFV4.0/${config_hrrrvtable}" Vtable
 
-        cat << EOF > namelist.wps
-&share
-  wrf_core = 'ARW',
-  max_dom = 1,
-  start_date = '${gribstart_str}',
-  end_date = '${gribendtm_str}',
-  interval_seconds = ${config_EXTINVL}
-  io_form_geogrid = 2,
-/
-&geogrid
-/
-&ungrib
-  out_format = 'WPS',
-  prefix = '${config_EXTHEAD}${memstr}',
-/
-&metgrid
-/
-EOF
+        cat <<- EOF > namelist.wps
+			&share
+			  wrf_core = 'ARW',
+			  max_dom = 1,
+			  start_date = '${gribstart_str}',
+			  end_date = '${gribendtm_str}',
+			  interval_seconds = ${config_EXTINVL}
+			  io_form_geogrid = 2,
+			/
+			&geogrid
+			/
+			&ungrib
+			  out_format = 'WPS',
+			  prefix = '${config_EXTHEAD}${memstr}',
+			/
+			&metgrid
+			/
+			EOF
         jobarrays+=("${mem}")
     done
 
     #
     # Create job script and submit it
     #
-    cd ${wrkdir} || return
+    cd "${wrkdir}" || return
 
     if [[ ${#jobarrays[@]} -gt 0 ]]; then
         jobscript="run_ungrib.${mach}"
@@ -327,7 +327,7 @@ EOF
 
     if [[ ${dorun} == true && ${jobwait} -eq 1 ]]; then
         #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-        check_job_status "ungrib" ${wrkdir} ${config_nenslbc} ${jobscript} 2
+        check_job_status "ungrib" "${wrkdir}" "${config_nenslbc}" "${jobscript}" 2
     fi
 }
 
@@ -339,130 +339,130 @@ function create_namelist {
 
     if [[ "${scheme}" == "GSL" ]]; then
 
-       cat << EOF_GSL > "${filename}"
-&nhyd_model
-    config_init_case              = 9
-    config_start_time             = '${starttime_str}'
-    config_stop_time              = '${endtime_str}'
-    config_theta_adv_order        = 3
-    config_coef_3rd_order         = 0.25
-/
-&dimensions
-    config_nvertlevels            = ${nvertlevels}
-    config_nsoillevels            = ${config_MPASNFLS}
-    config_nfglevels              = ${config_EXTNFGL}
-    config_nfgsoillevels          = ${config_EXTNFLS}
-    config_nsoilcat               = 16
-    config_nvegopt                = 2
-/
-&data_sources
-    config_geog_data_path         = '${config_WPSGEOG_PATH}'
-    config_met_prefix             = '${config_EXTHEAD}${memstr}'
-    config_sfc_prefix             = 'SST'
-    config_fg_interval            = ${config_EXTINVL}
-    config_landuse_data           = 'MODIFIED_IGBP_MODIS_NOAH_15s'
-    config_topo_data              = 'GMTED2010'
-    config_vegfrac_data           = 'MODIS'
-    config_albedo_data            = 'MODIS'
-    config_maxsnowalbedo_data     = 'MODIS'
-    config_supersample_factor     = 3
-    config_30s_supersample_factor = 1
-    config_use_spechumd           = true
-    config_soilcat_data           = 'BNU'
-/
-&vertical_grid
-    config_ztop                   = 25878.712
-    config_nsmterrain             = 1
-    config_smooth_surfaces        = true
-    config_dzmin                  = 0.3
-    config_nsm                    = 30
-    config_tc_vertical_grid       = true
-    config_blend_bdy_terrain      = true
-    config_specified_zeta_levels  = '${config_vertLevel_file}'
-/
-&interpolation_control
-    config_extrap_airtemp         = 'lapse-rate'
-/
-&preproc_stages
-    config_static_interp          = false
-    config_native_gwd_static      = false
-    config_native_gwd_static      = false
-    config_vertical_grid          = true
-    config_met_interp             = true
-    config_input_sst              = false
-    config_frac_seaice            = true
-    config_tempo_rap              = false
-/
-&physics
-    config_tsk_seaice_threshold   = 271.4
-/
-&io
-    config_pio_num_iotasks = 0
-    config_pio_stride = 1
-/
-&decomposition
-    config_block_decomp_file_prefix = '${domname}.graph.info.part.'
-/
-EOF_GSL
+        cat <<- EOF_GSL > "${filename}"
+		&nhyd_model
+		    config_init_case              = 9
+		    config_start_time             = '${starttime_str}'
+		    config_stop_time              = '${endtime_str}'
+		    config_theta_adv_order        = 3
+		    config_coef_3rd_order         = 0.25
+		/
+		&dimensions
+		    config_nvertlevels            = ${nvertlevels}
+		    config_nsoillevels            = ${config_MPASNFLS}
+		    config_nfglevels              = ${config_EXTNFGL}
+		    config_nfgsoillevels          = ${config_EXTNFLS}
+		    config_nsoilcat               = 16
+		    config_nvegopt                = 2
+		/
+		&data_sources
+		    config_geog_data_path         = '${config_WPSGEOG_PATH}'
+		    config_met_prefix             = '${config_EXTHEAD}${memstr}'
+		    config_sfc_prefix             = 'SST'
+		    config_fg_interval            = ${config_EXTINVL}
+		    config_landuse_data           = 'MODIFIED_IGBP_MODIS_NOAH_15s'
+		    config_topo_data              = 'GMTED2010'
+		    config_vegfrac_data           = 'MODIS'
+		    config_albedo_data            = 'MODIS'
+		    config_maxsnowalbedo_data     = 'MODIS'
+		    config_supersample_factor     = 3
+		    config_30s_supersample_factor = 1
+		    config_use_spechumd           = true
+		    config_soilcat_data           = 'BNU'
+		/
+		&vertical_grid
+		    config_ztop                   = 25878.712
+		    config_nsmterrain             = 1
+		    config_smooth_surfaces        = true
+		    config_dzmin                  = 0.3
+		    config_nsm                    = 30
+		    config_tc_vertical_grid       = true
+		    config_blend_bdy_terrain      = true
+		    config_specified_zeta_levels  = '${config_vertLevel_file}'
+		/
+		&interpolation_control
+		    config_extrap_airtemp         = 'lapse-rate'
+		/
+		&preproc_stages
+		    config_static_interp          = false
+		    config_native_gwd_static      = false
+		    config_native_gwd_static      = false
+		    config_vertical_grid          = true
+		    config_met_interp             = true
+		    config_input_sst              = false
+		    config_frac_seaice            = true
+		    config_tempo_rap              = false
+		/
+		&physics
+		    config_tsk_seaice_threshold   = 271.4
+		/
+		&io
+		    config_pio_num_iotasks = 0
+		    config_pio_stride = 1
+		/
+		&decomposition
+		    config_block_decomp_file_prefix = '${domname}.graph.info.part.'
+		/
+		EOF_GSL
     elif [[ "${scheme}" == "NCAR" ]]; then
 
-       cat << EOF_NCAR > "${filename}"
-&nhyd_model
-    config_init_case          = 9
-    config_start_time         = '${starttime_str}'
-    config_stop_time          = '${endtime_str}'
-    config_theta_adv_order    = 3
-    config_coef_3rd_order     = 0.25
-   config_interface_projection = 'layer_integral'
-/
-&dimensions
-    config_nvertlevels        = ${nvertlevels}
-    config_nsoillevels        = ${config_MPASNFLS}
-    config_nfglevels          = ${config_EXTNFGL}
-    config_nfgsoillevels      = ${config_EXTNFLS}
-/
-&data_sources
-    config_geog_data_path     = '${config_WPSGEOG_PATH}'
-    config_met_prefix         = '${config_EXTHEAD}${memstr}'
-    config_sfc_prefix         = 'SST'
-    config_fg_interval        = ${config_EXTINVL}
-    config_landuse_data       = 'MODIFIED_IGBP_MODIS_NOAH'
-    config_topo_data          = 'GMTED2010'
-    config_vegfrac_data       = 'MODIS'
-    config_albedo_data        = 'MODIS'
-    config_maxsnowalbedo_data = 'MODIS'
-    config_supersample_factor = 3
-    config_use_spechumd       = false
-/
-&vertical_grid
-    config_ztop               = 25878.712
-    config_nsmterrain         = 1
-    config_smooth_surfaces    = true
-    config_dzmin              = 0.3
-    config_nsm                = 30
-    config_tc_vertical_grid   = true
-    config_blend_bdy_terrain  = true
-    config_specified_zeta_levels = '${config_vertLevel_file}'
-/
-&interpolation_control
-    config_extrap_airtemp     = 'linear'
-/
-&preproc_stages
-   config_static_interp      = .false.
-   config_native_gwd_static  = .false.
-   config_vertical_grid      = .false.
-   config_met_interp         = .false.
-   config_input_sst          = .false.
-   config_frac_seaice        = .false.
-/
-&io
-   config_pio_num_iotasks    = 0
-   config_pio_stride         = 1
-/
-&decomposition
-   config_block_decomp_file_prefix = '${domname}.graph.info.part.'
-/
-EOF_NCAR
+        cat <<- EOF_NCAR > "${filename}"
+		&nhyd_model
+		    config_init_case          = 9
+		    config_start_time         = '${starttime_str}'
+		    config_stop_time          = '${endtime_str}'
+		    config_theta_adv_order    = 3
+		    config_coef_3rd_order     = 0.25
+		   config_interface_projection = 'layer_integral'
+		/
+		&dimensions
+		    config_nvertlevels        = ${nvertlevels}
+		    config_nsoillevels        = ${config_MPASNFLS}
+		    config_nfglevels          = ${config_EXTNFGL}
+		    config_nfgsoillevels      = ${config_EXTNFLS}
+		/
+		&data_sources
+		    config_geog_data_path     = '${config_WPSGEOG_PATH}'
+		    config_met_prefix         = '${config_EXTHEAD}${memstr}'
+		    config_sfc_prefix         = 'SST'
+		    config_fg_interval        = ${config_EXTINVL}
+		    config_landuse_data       = 'MODIFIED_IGBP_MODIS_NOAH'
+		    config_topo_data          = 'GMTED2010'
+		    config_vegfrac_data       = 'MODIS'
+		    config_albedo_data        = 'MODIS'
+		    config_maxsnowalbedo_data = 'MODIS'
+		    config_supersample_factor = 3
+		    config_use_spechumd       = false
+		/
+		&vertical_grid
+		    config_ztop               = 25878.712
+		    config_nsmterrain         = 1
+		    config_smooth_surfaces    = true
+		    config_dzmin              = 0.3
+		    config_nsm                = 30
+		    config_tc_vertical_grid   = true
+		    config_blend_bdy_terrain  = true
+		    config_specified_zeta_levels = '${config_vertLevel_file}'
+		/
+		&interpolation_control
+		    config_extrap_airtemp     = 'linear'
+		/
+		&preproc_stages
+		   config_static_interp      = .false.
+		   config_native_gwd_static  = .false.
+		   config_vertical_grid      = .false.
+		   config_met_interp         = .false.
+		   config_input_sst          = .false.
+		   config_frac_seaice        = .false.
+		/
+		&io
+		   config_pio_num_iotasks    = 0
+		   config_pio_stride         = 1
+		/
+		&decomposition
+		   config_block_decomp_file_prefix = '${domname}.graph.info.part.'
+		/
+		EOF_NCAR
     else
        echo -e "${RED}ERROR${NC}: Unsupported lateral boundary scheme: ${PURPLE}${scheme}${NC}."
        usage 1
@@ -477,39 +477,39 @@ function create_streams {
     local scheme=$1
     local filename=$2
 
-    cat << EOF > "${filename}"
-<streams>
-<immutable_stream name="input"
-                  type="input"
-                  filename_template="${domname}_${memstr}.init.nc"
-                  input_interval="initial_only" />
+    cat <<- EOF > "${filename}"
+		<streams>
+		<immutable_stream name="input"
+		                  type="input"
+		                  filename_template="${domname}_${memstr}.init.nc"
+		                  input_interval="initial_only" />
 
-<immutable_stream name="output"
-                  type="output"
-                  filename_template="${domname}.none.nc"
-                  io_type="netcdf"
-                  packages="initial_conds"
-                  clobber_mode="replace_files"
-                  output_interval="initial_only" />
+		<immutable_stream name="output"
+		                  type="output"
+		                  filename_template="${domname}.none.nc"
+		                  io_type="netcdf"
+		                  packages="initial_conds"
+		                  clobber_mode="replace_files"
+		                  output_interval="initial_only" />
 
-<immutable_stream name="surface"
-                  type="output"
-                  filename_template="${domname}_${memstr}.sfc_update.nc"
-                  filename_interval="none"
-                  packages="sfc_update"
-                  output_interval="24:00:00" />
+		<immutable_stream name="surface"
+		                  type="output"
+		                  filename_template="${domname}_${memstr}.sfc_update.nc"
+		                  filename_interval="none"
+		                  packages="sfc_update"
+		                  output_interval="24:00:00" />
 
-<immutable_stream name="lbc"
-                  type="output"
-                  filename_template="${domname}_${memstr}.lbc.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
-                  filename_interval="output_interval"
-                  packages="lbcs"
-                  io_type="${config_LBCIOTYPE}"
-                  clobber_mode="replace_files"
-                  output_interval="${EXTINVL_STR}" />
+		<immutable_stream name="lbc"
+		                  type="output"
+		                  filename_template="${domname}_${memstr}.lbc.\$Y-\$M-\$D_\$h.\$m.\$s.nc"
+		                  filename_interval="output_interval"
+		                  packages="lbcs"
+		                  io_type="${config_LBCIOTYPE}"
+		                  clobber_mode="replace_files"
+		                  output_interval="${EXTINVL_STR}" />
 
-</streams>
-EOF
+		</streams>
+		EOF
 }
 
 ########################################################################
@@ -552,34 +552,34 @@ function run_lbc {
                 fi
 
                 # shellcheck disable=SC2154
-                check_job_status "ics ${domname} ${domname}" ${rundir}/init ${config_nensics}
-                check_job_status "ungrib" ${rundir}/lbc/ungrib ${config_nenslbc}
+                check_job_status "ics ${domname} ${domname}" "${rundir}/init" "${config_nensics}"
+                check_job_status "ungrib" "${rundir}/lbc/ungrib" "${config_nenslbc}"
                 sleep 10
             done
         done
-        cd ${rundir}/init || return
-        ln -sf ${domname}_01.init.nc ${domname}.invariant.nc
+        cd "${rundir}/init" || return
+        ln -sf "${domname}_01.init.nc" "${domname}.invariant.nc"
     fi
 
-    mkwrkdir ${wrkdir} ${overwrite}
-    cd ${wrkdir} || return
+    mkwrkdir "${wrkdir}" "${overwrite}"
+    cd "${wrkdir}" || return
 
     jobarrays=()
-    for mem in $(seq 1 ${config_nenslbc}); do
-        memstr=$(printf "%02d" ${mem})
+    for mem in $(seq 1 "${config_nenslbc}"); do
+        memstr=$(printf "%02d" "${mem}")
         memwrkdir="${wrkdir}/${domname}_${memstr}"
 
-        mkwrkdir ${memwrkdir} 1
-        cd ${memwrkdir} || return
+        mkwrkdir "${memwrkdir}" 1
+        cd "${memwrkdir}" || return
 
-        ln -sf ../ungrib/${config_EXTHEAD}${memstr}:* .
-        ln -sf ${rundir}/init/${domname}_${memstr}.init.nc .
+        ln -sf ../ungrib/"${config_EXTHEAD}${memstr}":* .
+        ln -sf "${rundir}/init/${domname}_${memstr}.init.nc" .
         #ln -sf $rundir/init/${domname}.invariant.nc .
 
-        if [[ ! -f ${rundir}/${domname}/${domname}.graph.info.part.${config_npelbc} ]]; then
+        if [[ ! -f "${rundir}/${domname}/${domname}.graph.info.part.${config_npelbc}" ]]; then
             split_graph "${config_gpmetis}" "${domname}.graph.info" "${config_npelbc}" "${rundir}/${domname}" "${dorun}" "${verbose}"
         fi
-        ln -sf ${rundir}/${domname}/${domname}.graph.info.part.${config_npelbc} .
+        ln -sf "${rundir}/${domname}/${domname}.graph.info.part.${config_npelbc}" .
 
         create_namelist "${config_lbcscheme}" "namelist.init_atmosphere"
         create_streams  "${config_lbcscheme}" "streams.init_atmosphere"
@@ -615,7 +615,7 @@ function run_lbc {
 
     if [[ ${dorun} == true && ${jobwait} -eq 1 ]]; then
         #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-        check_job_status "${domname}" ${wrkdir} ${config_nenslbc} ${jobscript} 2
+        check_job_status "${domname}" "${wrkdir}" "${config_nenslbc}" "${jobscript}" 2
     fi
 }
 
@@ -691,7 +691,7 @@ function run_time_intrp {
     #done
 
     jobarrays=()
-    for mem in $(seq 1 ${config_nenslbc}); do
+    for mem in $(seq 1 "${config_nenslbc}"); do
         jobarrays+=("${mem}")
     done
     #
@@ -724,7 +724,7 @@ function run_time_intrp {
 
     if [[ ${dorun} == true && ${jobwait} -eq 1 ]]; then
         #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-        check_job_status "${domname}" ${wrkdir} ${config_nenslbc} ${jobscript} 2
+        check_job_status "${domname}" "${wrkdir}" "${config_nenslbc}" "${jobscript}" 2
     fi
 }
 
@@ -767,7 +767,7 @@ function run_clean {
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-source ${scpdir}/Common_Utilfuncs.sh || exit $?
+source "${scpdir}/Common_Utilfuncs.sh" || exit $?
 
 #-----------------------------------------------------------------------
 #
@@ -803,7 +803,7 @@ cleanall=${args["cleanall"]:-false}
 source "${scpdir}/Site_Runtime.sh" || exit $?
 
 
-setup_machine "${args['machine']}" "${rootdir}" ${usepython} false
+setup_machine "${args['machine']}" "${rootdir}" "${usepython}" false
 
 [[ ${dorun} == false ]] && runcmd="echo ${site_runcmd}" || runcmd="${site_runcmd}"
 export runcmd
@@ -817,8 +817,8 @@ export runcmd
 #-----------------------------------------------------------------------
 [[ -v args["eventdate"] ]] && eventdate="${args['eventdate']}" || eventdate="${eventdateDF}"
 [[ -v args["eventtime"] ]] && eventtime="${args['eventtime']}" || eventtime="1500"
-[[ -v args["endtime"] ]]   && endtime="${args['endtime']}"     || endtime="0900"
-[[ -v args["stoptime"] ]]  && stoptime="${args['stoptime']}"   || stoptime="0300"
+[[ -v args["endtime"]   ]] && endtime="${args['endtime']}"     || endtime="0900"
+[[ -v args["stoptime"]  ]] && stoptime="${args['stoptime']}"   || stoptime="0300"
 
 #-----------------------------------------------------------------------
 #
@@ -829,7 +829,7 @@ if [[ -v args["config_file"] ]]; then
     config_file="${args['config_file']}"
 
     if [[ "${config_file}" =~ "/" ]]; then
-        WORKDIR=$(realpath "$(dirname ${config_file})")
+        WORKDIR=$(realpath "$(dirname "${config_file}")")
     else
         config_file="${WORKDIR}/${config_file}"
     fi
@@ -845,14 +845,14 @@ else
     echo -e "       Please run ${GREEN}setup_mpas-wofs.sh${NC} first or use ${BLUE}-h${NC} to show help."
     exit 2
 fi
-readconf ${config_file} COMMON lbc || exit $?
+readconf "${config_file}" COMMON lbc || exit $?
 # get config_EXTINVL, config_LBCIOTYPE
 
 domname="${config_domname}"
 mach="${config_mach}"
 
 if [[ -e ${config_vertLevel_file} ]]; then
-    nvertlevels=$(grep -cve '^\s*$' ${config_vertLevel_file})
+    nvertlevels=$(grep -cve '^\s*$' "${config_vertLevel_file}")
     (( nvertlevels -= 1 ))
 else
     echo -e "${RED}ERROR${NC}: vertLevel_file=${BLUE}${config_vertLevel_file}${NC} not exist."
@@ -895,10 +895,11 @@ fi
 #% ENTRY
 rundir="${WORKDIR}/${eventdate}"
 if [[ ! -d ${rundir} ]]; then
-    mkdir -p ${rundir}
+    mkdir -p "${rundir}"
 fi
 
 echo    ""
+# shellcheck disable=SC2312
 echo -e "---- Jobs (${YELLOW}$$${NC}) started at ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} on host ${LIGHT_RED}$(hostname)${NC} ----\n"
 echo -e "  Event  date: ${WHITE}${startdatetime}${NC} --> ${WHITE}${enddatetime:0:8}${NC} ${YELLOW}${enddatetime:8:4}${NC}"
 echo -e "  ROOT    dir: ${rootdir}/${BROWN}scripts${NC}"
@@ -933,9 +934,10 @@ for job in "${jobs[@]}"; do
         echo "    run_${job} ${jobargs[${job}]}"
     fi
 
-    run_${job} ${jobargs[${job}]}
+    "run_${job}" "${jobargs[${job}]}"
 done
 
+# shellcheck disable=SC2312
 echo -e "\n==== Jobs done ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} ====\n"
 
 exit 0

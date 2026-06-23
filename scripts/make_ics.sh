@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2317,SC1091,SC1090,SC2086,SC2154,SC2329
+# shellcheck disable=SC2329
 
 #rootdir="/scratch/ywang/MPAS/mpas_runscripts"
 scpdir="$( cd "$( dirname "$0" )" && pwd )"              # dir of script
@@ -174,6 +174,7 @@ function parse_args {
 
 ########################################################################
 
+
 function run_ungrib {
     grib_dir=$1
     gribtime=$2
@@ -248,7 +249,7 @@ EOF
         #
         # Create job script and submit it
         #
-        cd ${wrkdir} || return
+        cd "${wrkdir}" || return
 
         # shellcheck disable=SC2154
         if [[ ${#jobarrays[@]} -gt 0 ]]; then
@@ -558,7 +559,7 @@ function run_init4invariant {
     if [[ ! -f ${rundir}/${domname}/${domname}.graph.info.part.${config_npeics} ]]; then
         split_graph "${config_gpmetis}" "${domname}.graph.info" "${config_npeics}" "${rundir}/${domname}" "${dorun}" "${verbose}"
     fi
-    ln -sf ${rundir}/${domname}/${domname}.graph.info.part.${config_npeics} .
+    ln -sf "${rundir}/${domname}/${domname}.graph.info.part.${config_npeics}" .
 
     cat << EOF > namelist.init_atmosphere
 &nhyd_model
@@ -699,7 +700,7 @@ function run_init {
     wrkdir=${rundir}/init
     if [[ -f ${wrkdir}/done.${domname} ]]; then
         mecho0 "Job init is already done"
-        ln -sf ${domname}_01.init.nc ${domname}.invariant.nc
+        ln -sf "${domname}_01.init.nc" "${domname}.invariant.nc"
         return 0
     fi
 
@@ -752,10 +753,10 @@ function run_init {
         ln -sf "${rundir}/${domname}/${domname}.static.nc" .
         #ln -sf ../${domname}.invariant.nc .
 
-        if [[ ! -f ${rundir}/${domname}/${domname}.graph.info.part.${config_npeics} ]]; then
+        if [[ ! -f "${rundir}/${domname}/${domname}.graph.info.part.${config_npeics}" ]]; then
             split_graph "${config_gpmetis}" "${domname}.graph.info" "${config_npeics}" "${rundir}/${domname}" "${dorun}" "${verbose}"
         fi
-        ln -sf ${rundir}/${domname}/${domname}.graph.info.part.${config_npeics} .
+        ln -sf "${rundir}/${domname}/${domname}.graph.info.part.${config_npeics}" .
 
         create_namelist "${config_initscheme}" namelist.init_atmosphere
 
@@ -791,7 +792,7 @@ function run_init {
 
     if [[ ${dorun} == true && ${jobwait} -eq 1 ]]; then
         #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-        check_job_status "${domname}" ${wrkdir} ${config_nensics} ${jobscript} 2
+        check_job_status "${domname}" "${wrkdir}" "${config_nensics}" "${jobscript}" 2
     fi
 }
 
@@ -833,7 +834,7 @@ function run_clean {
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-source ${scpdir}/Common_Utilfuncs.sh || exit $?
+source "${scpdir}/Common_Utilfuncs.sh" || exit $?
 
 #-----------------------------------------------------------------------
 #
@@ -890,7 +891,7 @@ if [[ -v args["config_file"] ]]; then
     config_file="${args['config_file']}"
 
     if [[ "${config_file}" =~ "/" ]]; then
-        WORKDIR=$(realpath "$(dirname ${config_file})")
+        WORKDIR=$(realpath "$(dirname "${config_file}")")
     else
         config_file="${WORKDIR}/${config_file}"
     fi
@@ -906,14 +907,14 @@ else
     echo -e "       Please run ${GREEN}setup_mpas-wofs.sh${NC} first or use ${BLUE}-h${NC} to show help."
     exit 2
 fi
-readconf ${config_file} COMMON init || exit $?
+readconf "${config_file}" COMMON init || exit $?
 # get config_EXTINVL, config_domname
 
 domname="${config_domname}"
 mach="${config_mach}"
 
 if [[ -e ${config_vertLevel_file} ]]; then
-    nvertlevels=$(grep -cve '^\s*$' ${config_vertLevel_file})
+    nvertlevels=$(grep -cve '^\s*$' "${config_vertLevel_file}")
     (( nvertlevels -= 1 ))
 else
     echo -e "${RED}ERROR${NC}: vertLevel_file=${BLUE}${config_vertLevel_file}${NC} not exist."
@@ -928,11 +929,12 @@ fi
 #% ENTRY
 
 rundir="${WORKDIR}/${eventdate}"
-if [[ ! -d ${rundir} ]]; then
-    mkdir -p ${rundir}
+if [[ ! -d "${rundir}" ]]; then
+    mkdir -p "${rundir}"
 fi
 
 echo    ""
+# shellcheck disable=SC2312
 echo -e "---- Jobs (${YELLOW}$$${NC}) started at ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} on host ${LIGHT_RED}$(hostname)${NC} ----\n"
 echo -e "  Event  date: ${WHITE}${eventdate}${NC} ${YELLOW}${eventtime}${NC}"
 echo -e "  ROOT    dir: ${rootdir}/${BROWN}scripts${NC}"
@@ -967,9 +969,10 @@ for job in "${jobs[@]}"; do
         echo "    run_${job} ${jobargs[${job}]}"
     fi
 
-    run_${job} ${jobargs[${job}]}
+    "run_${job}" "${jobargs[${job}]}"
 done
 
+# shellcheck disable=SC2312
 echo -e "\n==== Jobs done ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} ====\n"
 
 exit 0

@@ -117,7 +117,7 @@ function usage {
     echo "    PURPOSE: Run MPAS free forecast based on analysis from the WoFS workflow."
     echo " "
     echo "    DATETIME - Case date and time as YYYYmmdd, Default eventdate is ${eventdateDF}"
-    echo "               YYYYmmdd:     run all cycles from $eventtime to 0300. Or use options \"-s\" & \"-e\" to specify cycles."
+    echo "               YYYYmmdd:     run all cycles from ${eventtime} to 0300. Or use options \"-s\" & \"-e\" to specify cycles."
     echo "    WORKDIR  - Run Directory"
     echo "    CONFIG   - MPAS-WoFS runtime configuration file with full path."
     echo "               WORKDIR & DATETIME will be extracted from the CONFIG name unless they are given explicitly."
@@ -145,9 +145,9 @@ function usage {
     echo "              -f conf_file        Configuration file for this case. Default: \${WORKDIR}/config.\${eventdate}"
     echo " "
     echo "   DEFAULTS:"
-    echo "              eventdate = $eventdateDF"
-    echo "              rootdir   = $rootdir"
-    echo "              WORKDIR   = $mpasworkdir/run_dirs"
+    echo "              eventdate = ${eventdateDF}"
+    echo "              rootdir   = ${rootdir}"
+    echo "              WORKDIR   = ${mpasworkdir}/run_dirs"
     echo " "
     echo "                                     -- By Y. Wang (2023.06.01)"
     echo " "
@@ -171,7 +171,7 @@ function parse_args {
     while [[ $# -gt 0 ]]; do
         key="$1"
 
-        case $key in
+        case ${key} in
             -h)
                 usage 0
                 ;;
@@ -197,7 +197,7 @@ function parse_args {
                 args["jobwait"]=1
                 ;;
             -c | -a | -d )
-                args["cleanoption"]="$key"
+                args["cleanoption"]="${key}"
                 if [[ "$2" == "mpassit" || "$2" == "mpas" ]]; then
                     args["cleanjobs"]+=" $2"
                     shift
@@ -250,21 +250,21 @@ function parse_args {
                 shift
                 ;;
             -*)
-                echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}$key${NC}"
+                echo -e "${RED}ERROR${NC}: Unknown option: ${PURPLE}${key}${NC}"
                 usage 2
                 ;;
             mpassit* | mpas* | upp* | clean* )
                 args["jobs"]="${key//,/ }"
                 ;;
             *)
-                if [[ $key =~ ^[0-9]{8}$ ]]; then
+                if [[ ${key} =~ ^[0-9]{8}$ ]]; then
                     args["eventdate"]="${key}"
-                elif [[ -d $key ]]; then
+                elif [[ -d ${key} ]]; then
                     args["WORKDIR"]="${key}"
-                elif [[ -f $key ]]; then
+                elif [[ -f ${key} ]]; then
                     args["config_file"]="${key}"
                 else
-                    echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}$key${NC}."
+                    echo  -e "${RED}ERROR${NC}: unknown argument, get ${PURPLE}${key}${NC}."
                     usage 3
                 fi
                 ;;
@@ -281,7 +281,7 @@ function run_intrp_bc {
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/running.intrp_bc || -f $wrkdir/done.intrp_bc || -f $wrkdir/queue.intrp_bc ]]; then
+    if [[ -f ${wrkdir}/running.intrp_bc || -f ${wrkdir}/done.intrp_bc || -f ${wrkdir}/queue.intrp_bc ]]; then
         return
     fi
 
@@ -307,7 +307,7 @@ function run_intrp_bc {
         jobParms[NCORES]="1"
     fi
 
-    submit_a_job $wrkdir "intrp_bc" jobParms ${config_TEMPDIR}/$jobscript $jobscript "${jobarraystr}"
+    submit_a_job ${wrkdir} "intrp_bc" jobParms "${config_TEMPDIR}/${jobscript}" "${jobscript}" "${jobarraystr}"
 }
 
 ########################################################################
@@ -327,10 +327,10 @@ function run_mpas {
     #
     # Return if is running or is done
     #
-    if [[ -f $wrkdir/running.fcst || -f $wrkdir/queue.fcst ]]; then
+    if [[ -f ${wrkdir}/running.fcst || -f ${wrkdir}/queue.fcst ]]; then
         mecho0 "FCST job is running or is already queued."
         return
-    elif [[ -f $wrkdir/done.fcst ]]; then
+    elif [[ -f ${wrkdir}/done.fcst ]]; then
         mecho0 "FCST job is already done."
         return
     fi
@@ -353,11 +353,11 @@ function run_mpas {
     #
     # Preparation for all members
     #
-    if [[ ! -f $rundir/$domname/$domname.graph.info.part.${config_npefcst} ]]; then
-        split_graph "${config_gpmetis}" "${domname}.graph.info" "${config_npefcst}" "$rundir/$domname" "$dorun" "${verbose}"
+    if [[ ! -f ${rundir}/${domname}/${domname}.graph.info.part.${config_npefcst} ]]; then
+        split_graph "${config_gpmetis}" "${domname}.graph.info" "${config_npefcst}" "${rundir}/${domname}" "${dorun}" "${verbose}"
     fi
 
-    currtime_str=$(date -u -d @$iseconds +%Y-%m-%d_%H:%M:%S)
+    currtime_str=$(date -u -d @${iseconds} +%Y-%m-%d_%H:%M:%S)
     currtime_fil=${currtime_str//:/.}
 
     #
@@ -379,22 +379,22 @@ function run_mpas {
     local da_dir case_dir
 
     jobarrays=()
-    for iens in $(seq 1 $config_ENS_SIZE); do
-        memstr=$(printf "%02d" $iens)
+    for iens in $(seq 1 ${config_ENS_SIZE}); do
+        memstr=$(printf "%02d" ${iens})
         basen=$(( (iens-1)%6 ))
-        if [[ $basen -lt 2 ]]; then     # map to 0,1,2
+        if [[ ${basen} -lt 2 ]]; then     # map to 0,1,2
             idx=0
-        elif [[ $basen -lt 4 ]]; then
+        elif [[ ${basen} -lt 4 ]]; then
             idx=1
         else
             idx=2
         fi
-        pblscheme=${config_pbl_schemes[$idx]}
-        sfcscheme=${config_sfclayer_schemes[$idx]}
+        pblscheme=${config_pbl_schemes[${idx}]}
+        sfcscheme=${config_sfclayer_schemes[${idx}]}
 
-        memwrkdir=$wrkdir/fcst_$memstr
-        mkwrkdir $memwrkdir 1
-        cd $memwrkdir || return
+        memwrkdir=${wrkdir}/fcst_${memstr}
+        mkwrkdir ${memwrkdir} 1
+        cd ${memwrkdir} || return
 
         if ${config_relative_path}; then
             case_dir=$(realpath -m --relative-to=. ${rundir})
@@ -422,19 +422,19 @@ function run_mpas {
         ln -sf "${case_dir}/${domname}/${domname}.ugwp_oro_data.nc" .
 
         if [[ ${verbose} == true ]]; then
-            mecho0 "Member: $iens init file: ${initfile}";
+            mecho0 "Member: ${iens} init file: ${initfile}";
         fi
 
         #
         # lbc files
         #
         jens=$(( (iens-1)%config_nenslbc+1 ))
-        mlbcstr=$(printf "%02d" $jens)
+        mlbcstr=$(printf "%02d" "${jens}")
 
-        mpastime_str=$(date -u -d @$iseconds +%Y-%m-%d_%H.%M.%S)
+        mpastime_str=$(date -u -d @${iseconds} +%Y-%m-%d_%H.%M.%S)
         lbc_dafile=${da_dir}/fcst_${memstr}/${domname}_${memstr}.lbc.${mpastime_str}.nc
         lbc_myfile=${domname}_${memstr}.lbc.${mpastime_str}.nc
-        if [[ $dorun == true ]]; then
+        if [[ ${dorun} == true ]]; then
             while [[ ! -e ${lbc_dafile} ]]; do     # Maybe forward forecast and this forecast start simultanously
                 lbs_1stfile=$(realpath -m --relative-to "${WORKDIR}" "${lbc_dafile}")
                 mecho0 "${YELLOW}INFO${NC}: Waiting for ${lbs_1stfile} ...."
@@ -443,24 +443,24 @@ function run_mpas {
         fi
         ln -sf ${lbc_dafile} ${lbc_myfile}
         if [[ ${verbose} == true ]]; then
-            mecho0 "Member: $iens lbc file ${mpastime_str}: ${lbc_dafile}";
+            mecho0 "Member: ${iens} lbc file ${mpastime_str}: ${lbc_dafile}";
         fi
 
         exp_lbc_times=(); ext_lbc_time1=(); ext_lbc_time2=()
         for ((i=icycle_lbcgap;i<=fcst_seconds;i+=icycle_lbcgap)); do
             isec=$(( iseconds+i ))                # MPAS expects time
             jsec=$(( isec-isec%config_EXTINVL ))  # External model provided GRIB file time
-            lbctime_str=$(date  -u -d @$jsec +%Y-%m-%d_%H.%M.%S)
-            mpastime_str=$(date -u -d @$isec +%Y-%m-%d_%H.%M.%S)
+            lbctime_str=$(date  -u -d @"${jsec}" +%Y-%m-%d_%H.%M.%S)
+            mpastime_str=$(date -u -d @"${isec}" +%Y-%m-%d_%H.%M.%S)
             lbc_file="${case_dir}/lbc/${domname}_${mlbcstr}.lbc.${lbctime_str}.nc"
             if [[ ${isec} -eq ${jsec} ]]; then
-                ln -sf $lbc_file ${domname}_${memstr}.lbc.${mpastime_str}.nc
-                [[ ${verbose} == true ]] && mecho0 "Member: $iens lbc file ${mpastime_str}: ${lbc_file}";
+                ln -sf ${lbc_file} ${domname}_${memstr}.lbc.${mpastime_str}.nc
+                [[ ${verbose} == true ]] && mecho0 "Member: ${iens} lbc file ${mpastime_str}: ${lbc_file}";
             else
                 nsec=$((jsec+config_EXTINVL))
-                ntime_str=$(date -u -d @$nsec +%Y-%m-%d_%H.%M.%S)
+                ntime_str=$(date -u -d @"${nsec}" +%Y-%m-%d_%H.%M.%S)
                 lbc_filen="${case_dir}/lbc/${domname}_${mlbcstr}.lbc.${ntime_str}.nc"
-                [[ ${verbose} == true ]] && mecho0 "Member: $iens lbc file ${mpastime_str} interpolate from:\n\t\t${lbc_file}\n\t\t${lbc_filen}"
+                [[ ${verbose} == true ]] && mecho0 "Member: ${iens} lbc file ${mpastime_str} interpolate from:\n\t\t${lbc_file}\n\t\t${lbc_filen}"
                 exp_lbc_times+=("${mpastime_str}")
                 ext_lbc_time1+=("${lbctime_str}")
                 ext_lbc_time2+=("${ntime_str}")
@@ -468,12 +468,12 @@ function run_mpas {
             fi
         done
 
-        ln -sf ${case_dir}/${domname}/$domname.graph.info.part.${config_npefcst} .
+        ln -sf ${case_dir}/${domname}/${domname}.graph.info.part.${config_npefcst} .
         ln -sf ${case_dir}/${domname}/${domname}.ugwp_oro_data.nc .
 
         streamlists=(stream_list.atmosphere.diagnostics_fcst stream_list.atmosphere.output stream_list.atmosphere.surface stream_list.atmosphere.da_state)
         for fn in "${streamlists[@]}"; do
-            cp -f ${config_FIXDIR}/$fn .
+            cp -f ${config_FIXDIR}/${fn} .
         done
 
         datafiles=(  CAM_ABS_DATA.DBL  CAM_AEROPT_DATA.DBL GENPARM.TBL       LANDUSE.TBL    \
@@ -482,7 +482,7 @@ function run_mpas {
                      VEGPARM.TBL )
 
         for fn in "${datafiles[@]}"; do
-            ln -sf ${config_FIXDIR}/$fn .
+            ln -sf ${config_FIXDIR}/${fn} .
         done
 
         if [[ "${config_mpscheme}" == "mp_tempo" ]]; then
@@ -491,19 +491,19 @@ function run_mpas {
             tempo_tables=( qr_acr_qs_data_tempo_v3 qr_acr_qg_data_tempo_v3 freeze_water_data_tempo_v3 ccn_activate.bin )
 
             for fn in "${tempo_tables[@]}"; do
-                if [[ ! -s ${config_FIXDIR}/$fn ]]; then
-                    mecho0 "${RED}ERROR${NC}: ${config_FIXDIR}/$fn not found."
+                if [[ ! -s ${config_FIXDIR}/${fn} ]]; then
+                    mecho0 "${RED}ERROR${NC}: ${config_FIXDIR}/${fn} not found."
                     mecho0 "${YELLOW}INFO${NC}: Please run ${CYAN}${config_FIXDIR}/run_build_tables.${mach}${NC} once."
                     exit 1
                 fi
-                ln -sf ${config_FIXDIR}/$fn .
+                ln -sf ${config_FIXDIR}/${fn} .
             done
         elif [[ "${config_mpscheme}" == "Thompson" ]]; then
             thompson_tables=( MP_THOMPSON_QRacrQG_DATA.DBL   MP_THOMPSON_QRacrQS_DATA.DBL   \
                               MP_THOMPSON_freezeH2O_DATA.DBL MP_THOMPSON_QIautQS_DATA.DBL CCN_ACTIVATE.BIN)
 
             for fn in "${thompson_tables[@]}"; do
-                ln -sf ${config_FIXDIR}/$fn .
+                ln -sf ${config_FIXDIR}/${fn} .
             done
         fi
 
@@ -743,21 +743,21 @@ EOF
 
         echo "</streams>" >> streams.atmosphere
 
-        jobarrays+=("$iens")
+        jobarrays+=("${iens}")
     done
 
 
     #
     # Create job script and submit it
     #
-    cd $wrkdir || return
+    cd ${wrkdir} || return
 
     jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
 
     if [[ ${#exp_lbc_times[@]} -gt 0 ]]; then
         run_intrp_bc     # jobarrays, exp_lbc_times, ext_lbc_time1, ext_lbc_time2
         while [[ ! -e done.intrp_bc ]]; do    # wait forever
-            check_job_status "intrp_bc fcst_ intrp_bc" $wrkdir $config_ENS_SIZE "run_intrp_bc.${mach}" 1
+            check_job_status "intrp_bc fcst_ intrp_bc" ${wrkdir} ${config_ENS_SIZE} "run_intrp_bc.${mach}" 1
         done
     fi
 
@@ -821,9 +821,9 @@ function run_mpassit {
     for ((i=diag_start;i<=fcst_seconds;i+=config_OUTINVL)); do
         minstr=$(printf "%03d" $((i/60)))
 
-        if [[ -f running.mpassit$minstr || -f queue.mpassit$minstr ]]; then
-            check_job_status "mpassit$minstr mem mpassit$minstr" $wrkdir $config_ENS_SIZE run_mpassit_$minstr.${mach} ${num_resubmit}
-            if [[ -f done.mpassit$minstr ]]; then
+        if [[ -f running.mpassit${minstr} || -f queue.mpassit${minstr} ]]; then
+            check_job_status "mpassit${minstr} mem mpassit${minstr}" ${wrkdir} ${config_ENS_SIZE} "run_mpassit_${minstr}.${mach}" "${num_resubmit}"
+            if [[ -f done.mpassit${minstr} ]]; then
                 mecho0 "MPASSIT done for ensemble forecasts at ${minstr}"
                 (( n+=1 ))
             else
@@ -832,14 +832,14 @@ function run_mpassit {
             continue
         fi
 
-        if [[ -f done.mpassit$minstr ]]; then
+        if [[ -f done.mpassit${minstr} ]]; then
             mecho0 "MPASSIT done for ensemble forecasts at ${minstr}"
             #done_mins+=("${minstr}")
             (( n+=1 ))
             continue
         fi
 
-        if [[ -f error.mpassit$minstr ]]; then
+        if [[ -f error.mpassit${minstr} ]]; then
             mecho0 "MPASSIT failed for forecast at ${minstr}"
             continue
         fi
@@ -852,7 +852,7 @@ function run_mpassit {
     #fi
 
     n_fcst=$(( (fcst_seconds-diag_start)/config_OUTINVL+1 ))
-    if [[ $n -eq $n_fcst ]]; then
+    if [[ ${n} -eq ${n_fcst} ]]; then
         touch done.mpassit
         rm -rf done.mpassit???
         mecho0 "MPASSIT done for all forecast minutes"
@@ -869,10 +869,10 @@ function run_mpassit {
         fi
 
         jobarrays=()
-        for mem in $(seq 1 $config_ENS_SIZE); do
-            memstr=$(printf "%02d" $mem)
+        for mem in $(seq 1 ${config_ENS_SIZE}); do
+            memstr=$(printf "%02d" "${mem}")
             memdir="${wrkdir}/mem_${memstr}"
-            mkwrkdir $memdir 0
+            mkwrkdir ${memdir} 0
             cd ${memdir} || return
 
             rm -f core.*           # Maybe core-dumped, resubmission will solves the problem if the machine is unstable.
@@ -880,24 +880,24 @@ function run_mpassit {
             # Linking working file for this member
             parmfiles=(diaglist histlist_2d histlist_3d histlist_soil)
             for fn in "${parmfiles[@]}"; do
-                if [[ ! -e $fn ]]; then
+                if [[ ! -e ${fn} ]]; then
                     #if [[ ${verbose} == true ]]; then echo "Linking $fn ..."; fi
                     if [[ -e ${config_FIXDIR}/MPASSIT/${fn}.${fileappend} ]]; then
-                        ln -sf ${config_FIXDIR}/MPASSIT/${fn}.${fileappend} $fn
+                        ln -sf "${config_FIXDIR}/MPASSIT/${fn}.${fileappend}" ${fn}
                     elif [[ -e ${config_FIXDIR}/MPASSIT/${fn} ]]; then
-                        ln -sf ${config_FIXDIR}/MPASSIT/$fn .
+                        ln -sf ${config_FIXDIR}/MPASSIT/${fn} ${fn}
                     else
                         mecho0 "${RED}ERROR${NC}: file ${BLUE}${config_FIXDIR}/MPASSIT/${fn}${NC} not exist."
                         return
                     fi
                 fi
             done
-            jobarrays+=("$mem")
+            jobarrays+=("${mem}")
         done
 
         jobarrays_str=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
-        cd $wrkdir || return
+        cd ${wrkdir} || return
 
         local fcst_dir case_dir
         if ${config_relative_path}; then
@@ -908,7 +908,7 @@ function run_mpassit {
             fcst_dir="$(dirname ${wrkdir})"
         fi
 
-        if [[ $rt_run == true ]]; then
+        if [[ ${rt_run} == true ]]; then
             run_mpassit_onetime "${wrkdir}" "${iseconds}" "${fcst_minutes[*]}" "${jobarrays_str}"
         else
             run_mpassit_alltimes "${wrkdir}" "${iseconds}" "${fcst_minutes[*]}" "${jobarrays_str}"
@@ -928,7 +928,7 @@ function run_mpassit_onetime {
 
     IFS=" " read -r -a fcsttimes <<< "$3"
 
-    cd $wrkdir || return
+    cd "${wrkdir}" || return
 
     local fcst_lauch_time
     fcst_lauch_time=$(date -u -d @${iseconds} +%H%M)
@@ -940,7 +940,7 @@ function run_mpassit_onetime {
 
         mecho0n "Checking forecast files at ${WHITE}${minstr}${NC} for all ${config_ENS_SIZE} memebers from fcst${daffix}/${fcst_lauch_time} ..."
 
-        prepare_mpassit_onetime $wrkdir ${iseconds} $i 30
+        prepare_mpassit_onetime "${wrkdir}" "${iseconds}" "${i}" 30
         local estatus=$?               # number of missing members
         if [[ ${estatus} -gt 0 ]]; then
             echo -e " ${PURPLE}${estatus}${NC} missing"
@@ -952,7 +952,7 @@ function run_mpassit_onetime {
         #
         # Create job script and submit it
         #
-        jobscript="run_mpassit_$minstr.${mach}"
+        jobscript="run_mpassit_${minstr}.${mach}"
 
         local -A jobParms=(
             [PARTION]="${config_partition_post}"
@@ -960,7 +960,7 @@ function run_mpassit_onetime {
             [JOBNAME]="mpassit${minstr}_${eventtime}"
             [CPUSPEC]="${config_claim_cpu_fcst}"
             [CLAIMTIME]="${config_claim_time_mpassit_onetime}"
-            [HHMINSTR]="$minstr"
+            [HHMINSTR]="${minstr}"
             [FCST_START]="${i}"
             [FCST_END]="${i}"
             [FCST_INTVL]="${config_OUTINVL}"
@@ -970,7 +970,7 @@ function run_mpassit_onetime {
             jobParms[NCORES]="${config_ncores_post}"
         fi
 
-        submit_a_job "${wrkdir}" "mpassit$minstr" "jobParms" "${config_TEMPDIR}/run_mpassit_array.${mach}" "${jobscript}" "${jobarraystr}"
+        submit_a_job "${wrkdir}" "mpassit${minstr}" "jobParms" "${config_TEMPDIR}/run_mpassit_array.${mach}" "${jobscript}" "${jobarraystr}"
     done
 }
 
@@ -986,7 +986,7 @@ function run_mpassit_alltimes {
 
     IFS=" " read -r -a fcsttimes <<< "$3"
 
-    cd $wrkdir || return
+    cd "${wrkdir}" || return
 
     # Loop over forecast minutes
     local missed=false
@@ -1001,10 +1001,10 @@ function run_mpassit_alltimes {
     local n=0
     for minstr in "${fcsttimes[@]}"; do
         (( i=10#${minstr}*60 ))
-        (( i > maxsec )) && maxsec=$i
-        (( i < minsec )) && minsec=$i
+        (( i > maxsec )) && maxsec=${i}
+        (( i < minsec )) && minsec=${i}
 
-        if prepare_mpassit_onetime $wrkdir ${iseconds} $i 2; then
+        if prepare_mpassit_onetime "${wrkdir}" "${iseconds}" "${i}" 2; then
             echo -ne "    ${minstr} (${GREEN}Ready${NC})"
         else
             local missing=$?               # number of missing members
@@ -1022,7 +1022,7 @@ function run_mpassit_alltimes {
         #
         # Create job script and submit it
         #
-        cd $wrkdir || return
+        cd "${wrkdir}" || return
 
         jobscript="run_mpassit.${mach}"
 
@@ -1042,7 +1042,7 @@ function run_mpassit_alltimes {
             jobParms[NCORES]="${config_ncores_post}"
         fi
 
-        submit_a_job "$wrkdir" "mpassit" "jobParms" "${config_TEMPDIR}/run_mpassit_array.${mach}" "$jobscript" "$jobarraystr"
+        submit_a_job "${wrkdir}" "mpassit" "jobParms" "${config_TEMPDIR}/run_mpassit_array.${mach}" "${jobscript}" "${jobarraystr}"
     fi
 }
 
@@ -1060,12 +1060,12 @@ function prepare_mpassit_onetime {
     local -r fctseconds=$3
     local -r waitseconds=$4   # run all time together, it does not have to wait
 
-    cd $wrkdir || return
+    cd "${wrkdir}" || return
 
     minstr=$(printf "%03d" $((fctseconds/60)))
 
     isec=$(( iseconds+fctseconds ))
-    fcst_time_str=$(date -u -d @$isec +%Y-%m-%d_%H.%M.%S)
+    fcst_time_str=$(date -u -d @"${isec}" +%Y-%m-%d_%H.%M.%S)
 
     #if [[ $dorun == true ]]; then
     #    mecho0n "Checking forecast files at ${WHITE}$minstr${NC} for all $config_ENS_SIZE memebers from fcst${daffix}/${fcst_lauch_time} ..."
@@ -1073,55 +1073,55 @@ function prepare_mpassit_onetime {
 
     jobarrays=()
     missing=0
-    for mem in $(seq 1 $config_ENS_SIZE); do
-        memstr=$(printf "%02d" $mem)
+    for mem in $(seq 1 ${config_ENS_SIZE}); do
+        memstr=$(printf "%02d" ${mem})
         memdir="${wrkdir}/mem_${memstr}"
-        mkwrkdir $memdir 0
-        cd $memdir || return
+        mkwrkdir "${memdir}" 0
+        cd "${memdir}" || return
 
         rm -f core.*           # Maybe core-dumped, resubmission will solves the problem if the machine is unstable.
 
-        histfile="${fcst_dir}/fcst_$memstr/${domname}_${memstr}.history.${fcst_time_str}.nc"
-        diagfile="${fcst_dir}/fcst_$memstr/${domname}_${memstr}.diag.${fcst_time_str}.nc"
+        histfile="${fcst_dir}/fcst_${memstr}/${domname}_${memstr}.history.${fcst_time_str}.nc"
+        diagfile="${fcst_dir}/fcst_${memstr}/${domname}_${memstr}.diag.${fcst_time_str}.nc"
 
-        if [[ $dorun == true ]]; then
-            for fn in $histfile $diagfile; do
+        if [[ ${dorun} == true ]]; then
+            for fn in ${histfile} ${diagfile}; do
                 #mecho0 "Checking ${fn} ..."
-                while [[ ! -f $fn ]]; do
-                    if [[ $jobwait -eq 0 ]]; then    # do not wait for it
+                while [[ ! -f ${fn} ]]; do
+                    if [[ ${jobwait} -eq 0 ]]; then    # do not wait for it
                         (( missing+=1 ))
                         continue 3                   # go ahead to process next hour
                     fi
 
                     if [[ ${verbose} == true ]]; then
-                        mecho0 "Waiting for $fn ..."
+                        mecho0 "Waiting for ${fn} ..."
                     fi
                     sleep 10
                 done
-                fileage=$(( $(date +%s) - $(stat -c %Y -- "$fn") ))
-                if [[ $fileage -lt $waitseconds ]]; then
-                    if [[ ${verbose} == true ]]; then mecho0 "Waiting for $fn ..."; fi
-                    sleep "$waitseconds"
+                fileage=$(( $(date +%s) - $(stat -c %Y -- "${fn}") ))
+                if [[ ${fileage} -lt ${waitseconds} ]]; then
+                    if [[ ${verbose} == true ]]; then mecho0 "Waiting for ${fn} ..."; fi
+                    sleep "${waitseconds}"
                 fi
             done
         fi
 
-        if [[ $missing -eq 0 ]]; then
-            nmlfile="namelist.fcst_$minstr"
-            cat << EOF > $nmlfile
-&config
-    grid_file_input_grid = "${case_dir}/init/${domname}_${memstr}.init.nc"
-    hist_file_input_grid = "${histfile}"
-    diag_file_input_grid = "${diagfile}"
-    file_target_grid     = "${case_dir}/${domname/*_/geo_}/geo_em.d01.nc"
-    target_grid_type     = "file"
-    output_file          = "./MPASSIT_${memstr}.${fcst_time_str}.nc"
-    interp_diag          = .true.
-    interp_hist          = .true.
-    wrf_mod_vars         = .true.
-    esmf_log             = .false.
-/
-EOF
+        if [[ ${missing} -eq 0 ]]; then
+            nmlfile="namelist.fcst_${minstr}"
+            cat <<- EOF > "${nmlfile}"
+				&config
+				    grid_file_input_grid = "${case_dir}/init/${domname}_${memstr}.init.nc"
+				    hist_file_input_grid = "${histfile}"
+				    diag_file_input_grid = "${diagfile}"
+				    file_target_grid     = "${case_dir}/${domname/*_/geo_}/geo_em.d01.nc"
+				    target_grid_type     = "file"
+				    output_file          = "./MPASSIT_${memstr}.${fcst_time_str}.nc"
+				    interp_diag          = .true.
+				    interp_hist          = .true.
+				    wrf_mod_vars         = .true.
+				    esmf_log             = .false.
+				/
+				EOF
         fi
     done
 
@@ -1133,7 +1133,7 @@ EOF
     #    fi
     #fi
 
-    cd $wrkdir || return
+    cd ${wrkdir} || return
 
     return ${missing}
 }
@@ -1149,9 +1149,9 @@ function run_upp {
     #
     # Build working directory
     #
-    wrkdir=$wrkdir/upp
-    mkwrkdir $wrkdir 0
-    cd $wrkdir || return
+    wrkdir=${wrkdir}/upp
+    mkwrkdir ${wrkdir} 0
+    cd ${wrkdir} || return
 
     # these arrays are referred indirectly later
     # shellcheck disable=SC2034
@@ -1194,44 +1194,44 @@ function run_upp {
     fixdirs[SpcCoeff]="${config_FIXDIR}/UPP/crtm2_fix/SpcCoeff/Big_Endian"
     fixdirs[TauCoeff]="${config_FIXDIR}/UPP/crtm2_fix/TauCoeff/ODPS/Big_Endian"
 
-    eventtimestr=$(date -u -d @$iseconds +%Y%m%d%H%M)
+    eventtimestr=$(date -u -d @${iseconds} +%Y%m%d%H%M)
 
     for ((i=diag_start;i<=fcst_seconds;i+=config_OUTINVL)); do
         imin=$((i/60))
-        minstr=$(printf "%03d" $imin)
+        minstr=$(printf "%03d" "${imin}")
         ihour=$((imin/60))
         iminute=$((imin%60))
-        if [[ $iminute -eq 0 ]]; then
-            upptimestr=$(printf "%02d" $ihour)
+        if [[ ${iminute} -eq 0 ]]; then
+            upptimestr=$(printf "%02d" "${ihour}")
         else
-            upptimestr=$(printf "%02d.%02d" $ihour $iminute)
+            upptimestr=$(printf "%02d.%02d" "${ihour}" "${iminute}")
         fi
 
-        if [[  -f $wrkdir/done.upp$minstr || -f $wrkdir/queue.upp$minstr ]]; then
+        if [[  -f ${wrkdir}/done.upp${minstr} || -f ${wrkdir}/queue.upp${minstr} ]]; then
             continue      # already done, or is in queue, skip this hour
         fi
 
-        if [[  -f $wrkdir/running.upp$minstr ]]; then
-            fileage=$(( $(date +%s) - $(stat -c %Y -- "$wrkdir/running.upp$minstr") ))
-            if [[ $fileage -lt 300 ]]; then
+        if [[  -f ${wrkdir}/running.upp${minstr} ]]; then
+            fileage=$(( $(date +%s) - $(stat -c %Y -- "${wrkdir}/running.upp${minstr}") ))
+            if [[ ${fileage} -lt 300 ]]; then
                 continue                        # Job is running, skip
             else                                # > 5 minutes, May be a time out issue
-                rm $wrkdir/running.upp$minstr
+                rm ${wrkdir}/running.upp${minstr}
             fi
         fi
 
-        #if [[  -f $wrkdir/error.upp_$minstr ]]; then
+        #if [[  -f ${wrkdir}/error.upp_${minstr} ]]; then
             # resubmission may solve the problem
         #fi
 
-        mpassitdir=$(get_parent_dir $wrkdir 1)
+        mpassitdir=$(get_parent_dir ${wrkdir} 1)
 
-        donefile="$mpassitdir/mpassit/done.mpassit$minstr"
+        donefile="${mpassitdir}/mpassit/done.mpassit${minstr}"
 
-        if [[ $dorun == true ]]; then
-            mecho0 "Checking $donefile ...."
-            while [[ ! -f $donefile && ! -f "$mpassitdir/mpassit/done.mpassit" ]]; do
-                if [[ $jobwait -eq 0 ]]; then     # do not wait
+        if [[ ${dorun} == true ]]; then
+            mecho0 "Checking ${donefile} ...."
+            while [[ ! -f ${donefile} && ! -f "${mpassitdir}/mpassit/done.mpassit" ]]; do
+                if [[ ${jobwait} -eq 0 ]]; then     # do not wait
                     continue 2                    # go ahread to process next forecast hour
                 fi
 
@@ -1243,21 +1243,21 @@ function run_upp {
         fi
 
         isec=$(( iseconds+i ))
-        fcst_time_str=$(date -u -d @$isec +%Y-%m-%d_%H.%M.%S)
+        fcst_time_str=$(date -u -d @"${isec}" +%Y-%m-%d_%H.%M.%S)
 
         jobarrays=()
-        for mem in $(seq 1 $config_ENS_SIZE); do
-            memstr=$(printf "%02d" $mem)
+        for mem in $(seq 1 ${config_ENS_SIZE}); do
+            memstr=$(printf "%02d" "${mem}")
             memdir="${wrkdir}/mem_${memstr}"
             mkwrkdir "${memdir}" 0
             cd "${memdir}" || return
 
             mpassitmemdir=${memdir/upp/mpassit}
 
-            mpasfile="$mpassitmemdir/MPASSIT_${memstr}.${fcst_time_str}.nc"
+            mpasfile="${mpassitmemdir}/MPASSIT_${memstr}.${fcst_time_str}.nc"
 
-            mkwrkdir $memdir/post_$minstr 1
-            cd $memdir/post_$minstr || return
+            mkwrkdir "${memdir}/post_${minstr}" 1
+            cd "${memdir}/post_${minstr}" || return
 
             #for coeff in ${!fixfiles[@]}; do
             #    echo "$coeff"
@@ -1267,7 +1267,7 @@ function run_upp {
                 fixfilename="fixfiles_${coeff}[@]"
                 for fn in "${!fixfilename}"; do
                     #echo "$coeff -> ${fixdirs[$coeff]}/$fn"
-                    ln -sf ${fixdirs[$coeff]}/$fn .
+                    ln -sf ${fixdirs[${coeff}]}/${fn} .
                 done
             done
 
@@ -1288,27 +1288,27 @@ function run_upp {
             #
             parmfiles=(params_grib2_tbl_new post_avblflds.xml postcntrl.xml postxconfig-NT.txt )
             for fn in "${parmfiles[@]}"; do
-                ln -sf ${config_FIXDIR}/UPP/hrrr_$fn $fn
+                ln -sf ${config_FIXDIR}/UPP/hrrr_${fn} ${fn}
             done
 
             nmlfile="itag"
-            cat << EOF > $nmlfile
-$mpasfile
-netcdf
-grib2
-${fcst_time_str//./:}
-RAPR
-EOF
-            jobarrays+=("$mem")
+            cat <<- EOF > "${nmlfile}"
+				${mpasfile}
+				netcdf
+				grib2
+				${fcst_time_str//./:}
+				RAPR
+				EOF
+            jobarrays+=("${mem}")
         done
 
         #
         # Create job script and submit it
         #
-        cd $wrkdir || return
-        if [[ ${#jobarrays} -gt 0 ]]; then
-            jobscript="run_upp$minstr.slurm"
-            jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")
+        cd "${wrkdir}" || return
+        if [[ ${#jobarrays[@]} -gt 0 ]]; then
+            jobscript="run_upp${minstr}.slurm"
+            jobarraystr=$(get_jobarray_str "${mach}" "${jobarrays[@]}")
 
             # shellcheck disable=SC2034
             local -A jobParms=(
@@ -1316,11 +1316,11 @@ EOF
                 [NOPART]="${config_npepost}"
                 [CPUSPEC]="${config_claim_cpu_post}"
                 [JOBNAME]="upp${minstr}_${eventtime}"
-                [HHMINSTR]="$minstr"
-                [UPPDATE]="$upptimestr"
-                [EVENTDATE]="$eventtimestr"
+                [HHMINSTR]="${minstr}"
+                [UPPDATE]="${upptimestr}"
+                [EVENTDATE]="${eventtimestr}"
             )
-            submit_a_job "$wrkdir" "upp$minstr" "jobParms" "${config_TEMPDIR}/run_upp_array.slurm" "$jobscript" "$jobarraystr"
+            submit_a_job "${wrkdir}" "upp${minstr}" "jobParms" "${config_TEMPDIR}/run_upp_array.slurm" "${jobscript}" "${jobarraystr}"
         fi
     done
 }
@@ -1340,44 +1340,45 @@ function fcst_driver() {
     #
     # Build working directory
     #
-    wrkdir=$rundir/fcst${daffix}
-    mkwrkdir $wrkdir $overwrite
-    cd $wrkdir || return
+    wrkdir="${rundir}/fcst${daffix}"
+    mkwrkdir "${wrkdir}" "${overwrite}"
+    cd "${wrkdir}" || return
 
     #------------------------------------------
     # Time Cylces start here
     #------------------------------------------
     local date_beg date_end
-    date_beg=$(date -u -d @$start_sec +%Y%m%d%H%M)
-    date_end=$(date -u -d @$end_sec +%Y%m%d%H%M)
+    date_beg=$(date -u -d @${start_sec} +%Y%m%d%H%M)
+    date_end=$(date -u -d @${end_sec} +%Y%m%d%H%M)
 
-    echo -e "Forecasting cycles from ${GREEN}$date_beg${NC} to ${LIGHT_BLUE}$date_end${NC} ...."
+    echo -e "Forecasting cycles from ${GREEN}${date_beg}${NC} to ${LIGHT_BLUE}${date_end}${NC} ...."
 
     # config_fcst_length_seconds/config_fcst_launch_intvl from the config file
-    for ilaunch in $(seq $start_sec ${config_fcst_launch_intvl} $end_sec ); do
-        #timestr_curr=$(date -u -d @$ilaunch +%Y%m%d%H%M)
-        eventtime=$(date -u -d @$ilaunch +%H%M)
+    for ilaunch in $(seq ${start_sec} ${config_fcst_launch_intvl} ${end_sec} ); do
+        #timestr_curr=$(date -u -d @${ilaunch} +%Y%m%d%H%M)
+        eventtime=$(date -u -d @${ilaunch} +%H%M)
 
-        eventMM=$(date -u -d @$ilaunch +%M)
+        eventMM=$(date -u -d @${ilaunch} +%M)
         fcstindex=1
         icycle_lbcgap=${config_fcst_launch_intvl}
         if [[ "${eventMM}" == "00" ]]; then
             fcstindex=0;
             icycle_lbcgap=3600
         fi
-        fcst_seconds=${config_fcst_length_seconds[$fcstindex]}
+        fcst_seconds=${config_fcst_length_seconds[${fcstindex}]}
 
-        fcstwrkdir=$wrkdir/${eventtime}
-        mkwrkdir $fcstwrkdir 0        # keep original directory
-        cd $fcstwrkdir || return
+        fcstwrkdir="${wrkdir}/${eventtime}"
+        mkwrkdir "${fcstwrkdir}" 0        # keep original directory
+        cd "${fcstwrkdir}" || return
 
-        if [[ $dorun == true && $jobwait -eq 1 ]]; then
+        if [[ ${dorun} == true && ${jobwait} -eq 1 ]]; then
             num_resubmit=2               # resubmit failed jobs one more times (give it a 2nd chance)
         else
             num_resubmit=0               # Just check job status
         fi
 
         echo ""
+        # shellcheck disable=SC2312
         echo -e "- FCST Cycle for ${WHITE}${eventtime}${NC} at ${DARK}$(TZ="America/Chicago" date +'%m-%d %H:%M:%S')${NC}"
         time1=$(date +%s)
 
@@ -1385,31 +1386,31 @@ function fcst_driver() {
             #------------------------------------------------------
             # 1. Model forecast for all members
             #------------------------------------------------------
-            if [[ ${verbose} == true ]]; then echo "  Run MPAS model at $eventtime"; fi
+            if [[ ${verbose} == true ]]; then echo "  Run MPAS model at ${eventtime}"; fi
 
             mpas_jobscript="run_mpas.${mach}"
-            run_mpas $fcstwrkdir $ilaunch
+            run_mpas "${fcstwrkdir}" "${ilaunch}"
 
             #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-            check_job_status "fcst" $fcstwrkdir $config_ENS_SIZE $mpas_jobscript ${num_resubmit}
+            check_job_status "fcst" "${fcstwrkdir}" "${config_ENS_SIZE}" "${mpas_jobscript}" "${num_resubmit}"
         fi
 
         if [[ " ${jobs[*]} " =~ " mpassit " ]]; then
             #------------------------------------------------------
             # 2. Interpolate the forecast datasets to a virtual WRF grid
             #------------------------------------------------------
-            if [[ ${verbose} == true ]]; then echo "  Run MPASSIT at $eventtime"; fi
+            if [[ ${verbose} == true ]]; then echo "  Run MPASSIT at ${eventtime}"; fi
 
-            run_mpassit $fcstwrkdir $ilaunch
+            run_mpassit "${fcstwrkdir}" "${ilaunch}"
 
-            if [[ $rt_run == true ]]; then
+            if [[ ${rt_run} == true ]]; then
                 for ((i=diag_start;i<=fcst_seconds;i+=config_OUTINVL)); do
                     minstr=$(printf "%03d" $((i/60)))
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                    check_job_status "mpassit$minstr mem mpassit$minstr" $fcstwrkdir/mpassit $config_ENS_SIZE run_mpassit_$minstr.${mach} ${num_resubmit}
+                    check_job_status "mpassit${minstr} mem mpassit${minstr}" "${fcstwrkdir}/mpassit" "${config_ENS_SIZE}" "run_mpassit_${minstr}.${mach}" "${num_resubmit}"
                 done
             else
-                check_job_status "mpassit mem mpassit" $fcstwrkdir/mpassit $config_ENS_SIZE run_mpassit.${mach} ${num_resubmit}
+                check_job_status "mpassit mem mpassit" "${fcstwrkdir}/mpassit" "${config_ENS_SIZE}" "run_mpassit.${mach}" "${num_resubmit}"
             fi
         fi
 
@@ -1417,29 +1418,29 @@ function fcst_driver() {
             #------------------------------------------------------
             # 3. Post-processing the data on the WRF grid
             #------------------------------------------------------
-            if [[ $dorun == true ]]; then
-                if [[ $rt_run == true ]]; then
+            if [[ ${dorun} == true ]]; then
+                if [[ ${rt_run} == true ]]; then
                     for ((i=diag_start;i<=fcst_seconds;i+=config_OUTINVL)); do
                         minstr=$(printf "%03d" $((i/60)))
-                        if [[ ! -e $fcstwrkdir/mpassit/done.mpassit$minstr ]]; then
+                        if [[ ! -e ${fcstwrkdir}/mpassit/done.mpassit${minstr} ]]; then
                             #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-1}
-                            check_job_status "mpassit$minstr mem mpassit$minstr" $fcstwrkdir/mpassit $config_ENS_SIZE run_mpassit_$minstr.slurm
+                            check_job_status "mpassit${minstr} mem mpassit${minstr}" "${fcstwrkdir}/mpassit" "${config_ENS_SIZE}" "run_mpassit_${minstr}.slurm"
                         fi
                     done
                 else
-                    check_job_status "mpassit mem mpassit" $fcstwrkdir/mpassit $config_ENS_SIZE run_mpassit.slurm
+                    check_job_status "mpassit mem mpassit" "${fcstwrkdir}/mpassit" "${config_ENS_SIZE}" "run_mpassit.slurm"
                 fi
             fi
 
-            if [[ ${verbose} == true ]]; then echo "  Run UPP at $eventtime"; fi
+            if [[ ${verbose} == true ]]; then echo "  Run UPP at ${eventtime}"; fi
 
-            run_upp $fcstwrkdir $ilaunch
+            run_upp "${fcstwrkdir}" "${ilaunch}"
 
-            if [[ $dorun == true && $jobwait -eq 1 ]]; then
+            if [[ ${dorun} == true && ${jobwait} -eq 1 ]]; then
                 for ((i=diag_start;i<=fcst_seconds;i+=config_OUTINVL)); do
                     minstr=$(printf "%03d" $((i/60)))
                     #jobname=$1 mywrkdir=$2 donenum=$3 myjobscript=$4 numtries=${5-3}
-                    check_job_status "upp$minstr mem upp$minstr" $fcstwrkdir/upp $config_ENS_SIZE run_upp_$minstr.slurm ${num_resubmit}
+                    check_job_status "upp${minstr} mem upp${minstr}" "${fcstwrkdir}/upp" "${config_ENS_SIZE}" "run_upp_${minstr}.slurm" "${num_resubmit}"
                 done
             fi
         fi
@@ -1448,7 +1449,7 @@ function fcst_driver() {
         # This FCST cycle is done
         #------------------------------------------------------
         time2=$(date +%s)
-        if [[ $time2 -gt $time1 ]]; then
+        if [[ ${time2} -gt ${time1} ]]; then
             (( secoffset = time2-time1 )); (( minoffset = secoffset/60 )); (( secoffset = secoffset%60 ))
             echo -e "= Cycle ${eventtime} took ${CYAN}${minoffset}:${secoffset}${NC} minutes:seconds."
         fi
@@ -1467,9 +1468,9 @@ function run_clean {
     local jobs
     read -r -a jobs <<< "$4"
 
-    wrkdir=$rundir/fcst${daffix}
+    wrkdir=${rundir}/fcst${daffix}
 
-    if [[ "$coption" == "-a" ]]; then
+    if [[ "${coption}" == "-a" ]]; then
         declare -A cleanmsg=(
             [mpas]="all MPAS forecast files"
             [mpassit]="all MPASSIT converted files on WRF grid"
@@ -1477,12 +1478,13 @@ function run_clean {
         )
         for job in "${jobs[@]}"; do
             echo    ""
-            mecho0  "${BROWN}WARNING${NC}: Delete ${cleanmsg[$job]} from $(date -u -d @${start_sec} +%Y%m%d_%H:%M:%S) to $(date -u -d @${end_sec} +%Y%m%d_%H:%M:%S)"
+            # shellcheck disable=SC2312
+            mecho0  "${BROWN}WARNING${NC}: Delete ${cleanmsg[${job}]} from $(date -u -d @${start_sec} +%Y%m%d_%H:%M:%S) to $(date -u -d @${end_sec} +%Y%m%d_%H:%M:%S)"
             mecho0  "         in ${CYAN}${wrkdir}${NC} ?\n"
             mecho0n "[${YELLOW}YES,NO${NC}]? "
             read -r doit
             if [[ ${doit^^} == "YES" ]]; then
-                mecho0 "${BROWN}WARNING${NC}: ${cleanmsg[$job]} will be cleaned."
+                mecho0 "${BROWN}WARNING${NC}: ${cleanmsg[${job}]} will be cleaned."
             else
                 mecho0 "Got ${PURPLE}${doit^^}${NC}, do nothing."
                 return
@@ -1491,100 +1493,100 @@ function run_clean {
     fi
 
     local show="echo"
-    if [[ $dorun == true ]]; then
+    if [[ ${dorun} == true ]]; then
         show=""
     fi
 
     for isec in $(seq ${start_sec} ${config_fcst_launch_intvl} ${end_sec} ); do
         #timestr_curr=$(date -u -d @$isec +%Y%m%d%H%M)
-        eventtime=$(date -u -d @$isec +%H%M)
+        eventtime=$(date -u -d @${isec} +%H%M)
 
-        eventMM=$(date -u -d @$isec +%M)
+        eventMM=$(date -u -d @${isec} +%M)
         fcstindex=1
         if [[ "${eventMM}" == "00" ]]; then fcstindex=0; fi
-        fcst_seconds=${config_fcst_length_seconds[$fcstindex]}
+        fcst_seconds=${config_fcst_length_seconds[${fcstindex}]}
 
-        fcstwrkdir=$wrkdir/$eventtime
-        if [[ -d $fcstwrkdir ]]; then
-            cd $fcstwrkdir || return
+        fcstwrkdir=${wrkdir}/${eventtime}
+        if [[ -d ${fcstwrkdir} ]]; then
+            cd ${fcstwrkdir} || return
 
             if [[ ${verbose} == true ]]; then mecho0 "    Cleaning working directory ${CYAN}${fcstwrkdir}${NC}"; fi
 
             for dirname in "${jobs[@]}"; do
 
-                cd $fcstwrkdir || return
+                cd ${fcstwrkdir} || return
 
-                case $dirname in
+                case ${dirname} in
                 mpas )
                     ${show} rm -f fcst_??/error.fcst_* fcst_??/log.????.abort fcst_??/dart_log.*
                     ${show} rm -f fcst_??/log.atmosphere.????.{out,err}  fcst_??/namelist.output fcst_*_*.log
                     #echo "clean mpas in $fcstwrkdir"
                     #clean_mem_runfiles "fcst" $fcstwrkdir $config_ENS_SIZE
                     done=0
-                    for mem in $(seq 1 $config_ENS_SIZE); do
-                        memstr=$(printf "%02d" $mem)
-                        memdir="$fcstwrkdir/fcst_$memstr"
+                    for mem in $(seq 1 ${config_ENS_SIZE}); do
+                        memstr=$(printf "%02d" ${mem})
+                        memdir="${fcstwrkdir}/fcst_${memstr}"
 
-                        if [[ "$coption" == "-a" ]]; then
-                            ${show} rm -rf $memdir
+                        if [[ "${coption}" == "-a" ]]; then
+                            ${show} rm -rf ${memdir}
                             ${show} rm -f fcst_${mem}_*.log
                             (( done+=1 ))
                         else
-                            donefile="$memdir/done.fcst_$memstr"
-                            if [[ -e $donefile ]]; then
+                            donefile="${memdir}/done.fcst_${memstr}"
+                            if [[ -e ${donefile} ]]; then
                                 ${show} rm -f fcst_${mem}_*.log
                                 #rm $donefile
                                 (( done+=1 ))
                             fi
                             #ls $memdir/${domname}_??.{diag,history}.*.nc
-                            if [[ "$coption" == "-c" ]]; then
-                                ${show} rm -f $memdir/${domname}_??.{diag,history}.*.nc
-                            elif [[ "$coption" == "-d" ]]; then
-                                ${show} rm -f $memdir/${domname}_??.{diag,history}.*.nc
+                            if [[ "${coption}" == "-c" ]]; then
+                                ${show} rm -f ${memdir}/${domname}_??.{diag,history}.*.nc
+                            elif [[ "${coption}" == "-d" ]]; then
+                                ${show} rm -f ${memdir}/${domname}_??.{diag,history}.*.nc
                                 ${show} rm -f fcst_??/done.fcst_* done.fcst
                             fi
                         fi
                     done
-                    if [[ $done -eq $config_ENS_SIZE ]]; then
+                    if [[ ${done} -eq ${config_ENS_SIZE} ]]; then
                         rm -f queue.fcst
                         rm -f fcst_*/done.fcst_*
                         touch done.fcst
                     fi
                     ;;
                 mpassit )
-                    mywrkdir=$fcstwrkdir/mpassit
-                    if [[ -d $mywrkdir ]]; then
-                        if [[ "$coption" == "-a" ]]; then
-                            cd $fcstwrkdir || return
+                    mywrkdir=${fcstwrkdir}/mpassit
+                    if [[ -d ${mywrkdir} ]]; then
+                        if [[ "${coption}" == "-a" ]]; then
+                            cd ${fcstwrkdir} || return
                             ${show} rm -rf mpassit
                         else
-                            cd $mywrkdir || return
+                            cd ${mywrkdir} || return
                             for ((i=diag_start;i<=fcst_seconds;i+=config_OUTINVL)); do
                                 minstr=$(printf "%03d" $((i/60)))
 
                                 done=0
-                                for mem in $(seq 1 $config_ENS_SIZE); do
-                                    memstr=$(printf "%02d" $mem)
-                                    memdir="$mywrkdir/mem_${memstr}"
+                                for mem in $(seq 1 ${config_ENS_SIZE}); do
+                                    memstr=$(printf "%02d" ${mem})
+                                    memdir="${mywrkdir}/mem_${memstr}"
 
-                                    donefile="$memdir/done.mpassit${minstr}_$memstr"
-                                    if [[ -e $donefile ]]; then
-                                        ${show} rm -f $mywrkdir/mpassit${minstr}_${mem}_*.log
-                                        #rm $donefile
+                                    donefile="${memdir}/done.mpassit${minstr}_${memstr}"
+                                    if [[ -e ${donefile} ]]; then
+                                        ${show} rm -f ${mywrkdir}/mpassit${minstr}_${mem}_*.log
+                                        #rm ${donefile}
                                         (( done+=1 ))
                                     fi
-                                    ${show} rm -f $memdir/PET*.ESMF_LogFile
+                                    ${show} rm -f ${memdir}/PET*.ESMF_LogFile
                                 done
 
-                                if [[ $done -eq $config_ENS_SIZE ]]; then
-                                    rm -f queue.mpassit${minstr} running.mpassit$minstr
+                                if [[ ${done} -eq ${config_ENS_SIZE} ]]; then
+                                    rm -f queue.mpassit${minstr} running.mpassit${minstr}
                                     rm -f mem*/done.mpassit${minstr}_*
                                     touch done.mpassit${minstr}
                                 fi
                             done
-                            if [[ "$coption" == "-c" ]]; then
+                            if [[ "${coption}" == "-c" ]]; then
                                 ${show} rm -f ${mywrkdir}/mem??/MPASSIT_*.nc
-                            elif [[ "$coption" == "-d" ]]; then
+                            elif [[ "${coption}" == "-d" ]]; then
                                 ${show} rm -f ${mywrkdir}/mem??/MPASSIT_*.nc
                                 ${show} rm -f done.mpassit done.mpassit* mem*/done.mpassit*
                             fi
@@ -1592,41 +1594,44 @@ function run_clean {
                     fi
                     ;;
                 upp )
-                    mywrkdir=$fcstwrkdir/upp
-                    if [[ -r $mywrkdir ]]; then
-                        cd $mywrkdir || return
+                    mywrkdir=${fcstwrkdir}/upp
+                    if [[ -r ${mywrkdir} ]]; then
+                        cd ${mywrkdir} || return
                         for ((i=diag_start;i<=fcst_seconds;i+=config_OUTINVL)); do
                             minstr=$(printf "%03d" $((i/60)))
 
                             done=0
-                            for mem in $(seq 1 $config_ENS_SIZE); do
-                                memstr=$(printf "%02d" $mem)
-                                memdir="$mywrkdir/mem$memstr"
+                            for mem in $(seq 1 ${config_ENS_SIZE}); do
+                                memstr=$(printf "%02d" ${mem})
+                                memdir="${mywrkdir}/mem${memstr}"
 
-                                postdir="$memdir/post_${minstr}"
+                                postdir="${memdir}/post_${minstr}"
 
-                                if [[ "$coption" == "-a" ]]; then
-                                    ${show} rm -rf $memdir
-                                    ${show} rm -f $mywrkdir/upp${minstr}_${mem}_*.log
+                                if [[ "${coption}" == "-a" ]]; then
+                                    ${show} rm -rf ${memdir}
+                                    ${show} rm -f ${mywrkdir}/upp${minstr}_${mem}_*.log
                                     (( done+=1 ))
                                 else
-                                    donefile="$memdir/done.upp${minstr}_$memstr"
-                                    if [[ -e $donefile ]]; then
-                                        ${show} rm -f $mywrkdir/upp${minstr}_${mem}_*.log
-                                        ${show} rm -rf $postdir
+                                    donefile="${memdir}/done.upp${minstr}_${memstr}"
+                                    if [[ -e ${donefile} ]]; then
+                                        ${show} rm -f ${mywrkdir}/upp${minstr}_${mem}_*.log
+                                        ${show} rm -rf ${postdir}
                                         (( done+=1 ))
                                     fi
                                 fi
                             done
 
-                            if [[ $done -eq $config_ENS_SIZE ]]; then
-                                rm -f queue.upp${minstr} running.upp$minstr
+                            if [[ ${done} -eq ${config_ENS_SIZE} ]]; then
+                                rm -f queue.upp${minstr} running.upp${minstr}
                                 rm -f mem*/done.upp${minstr}_*
                                 touch done.upp${minstr}
                             fi
                         done
                     fi
                     ;;
+	            * )
+	                mecho0 "${RED}ERROR${NC}: Unknown job ${CYAN}${dirname}${NC} to clean."
+	                ;;
                 esac
             done
         else
@@ -1641,7 +1646,7 @@ function run_clean {
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-source $scpdir/Common_Utilfuncs.sh || exit $?
+source ${scpdir}/Common_Utilfuncs.sh || exit $?
 
 #-----------------------------------------------------------------------
 #
@@ -1677,9 +1682,9 @@ jobwait=${args["jobwait"]:-0}
 
 source "${scpdir}/Site_Runtime.sh" || exit $?
 
-setup_machine "${args['machine']}" "$rootdir" false false
+setup_machine "${args['machine']}" "${rootdir}" false false
 
-[[ $dorun == false ]] && runcmd="echo ${site_runcmd}" || runcmd="${site_runcmd}"
+[[ ${dorun} == false ]] && runcmd="echo ${site_runcmd}" || runcmd="${site_runcmd}"
 export runcmd
 
 [[ -v args["WORKDIR"] ]] && WORKDIR=${args["WORKDIR"]} || WORKDIR="${site_workdir}"
@@ -1689,7 +1694,7 @@ export runcmd
 # Set Event Date and Start Time
 #
 #-----------------------------------------------------------------------
-[[ -v args["eventdate"] ]] && eventdate="${args['eventdate']}" || eventdate="$eventdateDF"
+[[ -v args["eventdate"] ]] && eventdate="${args['eventdate']}" || eventdate="${eventdateDF}"
 
 #-----------------------------------------------------------------------
 #
@@ -1699,7 +1704,7 @@ export runcmd
 if [[  -v args["config_file"] ]]; then
     config_file="${args['config_file']}"
 
-    if [[ "$config_file" =~ "/" ]]; then
+    if [[ "${config_file}" =~ "/" ]]; then
         WORKDIR=$(realpath "$(dirname ${config_file})")
     else
         config_file="${WORKDIR}/${config_file}"
@@ -1715,7 +1720,7 @@ if [[  -v args["config_file"] ]]; then
         exit 1
     fi
 else
-    config_file="$WORKDIR/config.${eventdate}"
+    config_file="${WORKDIR}/config.${eventdate}"
     daffix=""
 fi
 
@@ -1764,7 +1769,7 @@ if [[ ${#eventtime} -eq 12 ]]; then
     startdatetime=${eventtime}
     eventtime=${eventtime:8:4}
 else
-    (( 10#$eventtime < 10#$inittime )) && startday="1 day"
+    (( 10#${eventtime} < 10#${inittime} )) && startday="1 day"
     startdatetime="${eventdate}${eventtime}"
 fi
 
@@ -1772,15 +1777,15 @@ endday=""
 if [[ ${#endtime} -eq 12 ]]; then
     enddatetime=${endtime}
 else
-    (( 10#$endtime < 10#$inittime )) && endday="1 day"
+    (( 10#${endtime} < 10#${inittime} )) && endday="1 day"
     enddatetime="${eventdate}${endtime}"
 fi
 
 #inittime_sec=$(date  -u -d "${eventdate}         ${inittime}"                    +%s)
-starttime_sec=$(date -u -d "${startdatetime:0:8} ${startdatetime:8:4} $startday" +%s)
-stoptime_sec=$(date  -u -d "${enddatetime:0:8}   ${enddatetime:8:4}   $endday"   +%s)
+starttime_sec=$(date -u -d "${startdatetime:0:8} ${startdatetime:8:4} ${startday}" +%s)
+stoptime_sec=$(date  -u -d "${enddatetime:0:8}   ${enddatetime:8:4}   ${endday}"   +%s)
 
-enddatetime=$(date   -u -d @$stoptime_sec +%Y%m%d%H%M%S)
+enddatetime=$(date   -u -d @${stoptime_sec} +%Y%m%d%H%M%S)
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #
@@ -1789,12 +1794,13 @@ enddatetime=$(date   -u -d @$stoptime_sec +%Y%m%d%H%M%S)
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 #% ENTRY
 
-rundir="$WORKDIR/${eventdate}"
-if [[ ! -d $rundir ]]; then
-    mkdir -p $rundir
+rundir="${WORKDIR}/${eventdate}"
+if [[ ! -d ${rundir} ]]; then
+    mkdir -p ${rundir}
 fi
 
 echo    ""
+# shellcheck disable=SC2312
 echo -e "---- Jobs (${YELLOW}$$${NC}) started at ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} on host ${LIGHT_RED}$(hostname)${NC} ----\n"
 echo -e "  Event  date: ${WHITE}${eventdate}${NC} ${YELLOW}${eventtime}${NC} --> ${WHITE}${enddatetime:0:8}${NC} ${YELLOW}${enddatetime:8:4}${NC}"
 echo -e "  ROOT    dir: ${rootdir}${BROWN}/scripts${NC}"
@@ -1815,7 +1821,7 @@ RSTINVL_STR="12:00:00"                      # turn off restart file output
 # Start the forecast driver
 #
 if [[ " ${jobs[*]} " =~ " mpas " || " ${jobs[*]} " =~ " mpassit " || " ${jobs[*]} " =~ " upp " ]]; then
-    fcst_driver $starttime_sec $stoptime_sec          #  $1: start     $2: end      in seconds
+    fcst_driver "${starttime_sec}" "${stoptime_sec}"          #  $1: start     $2: end      in seconds
 elif [[ " ${jobs[*]} " =~ " clean " ]]; then
     if [[ ${#cleanjobs[@]} -eq 0 ]]; then
         cleanjobs=("mpas" "mpassit" "upp")
@@ -1825,6 +1831,7 @@ fi
 
 
 echo    " "
+# shellcheck disable=SC2312
 echo -e "==== Jobs done ${DARK}$(date +'%m-%d %H:%M:%S (%Z)')${NC} ===="
 echo    " "
 

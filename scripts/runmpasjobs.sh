@@ -56,7 +56,7 @@ function usage {
     echo -e "              -p  machine         Post-processing machine, default: ${PURPLE}wof-epyc8${NC}."
     echo    " "
     echo    "   DEFAULTS:"
-    echo -e "              EVENTDATE  = ${DIR_CLR}${eventdateDF:0:8}$NC"
+    echo -e "              EVENTDATE  = ${DIR_CLR}${eventdateDF:0:8}${NC}"
     echo -e "              WORKDIR    = ${LIGHT_BLUE}\${site_workdir}${NC}      # from scripts/Site_Runtime.sh"
     echo    "              rootdir    = ${rootdir}"
     echo    "              script_dir = ${script_dir}"
@@ -80,7 +80,7 @@ function parse_args {
     while [[ $# -gt 0 ]]; do
         key="$1"
 
-        case $key in
+        case ${key} in
             -h )
                 usage 0
                 ;;
@@ -125,25 +125,25 @@ function parse_args {
                 shift
                 ;;
             -* )
-                echo -e "${RED}ERROR${NC}: Unknown option: ${YELLOW}$key${NC}"
+                echo -e "${RED}ERROR${NC}: Unknown option: ${YELLOW}${key}${NC}"
                 usage 2
                 ;;
             dacycles | fcst | post | plot | diag | verif | snd | atpost | nccompress )
-                args["task"]=$key
+                args["task"]=${key}
                 ;;
             noscript )
                 args["noscript"]=true
                 ;;
             * )
-                if [[ $key =~ ^[0-9]{8}$ ]]; then
+                if [[ ${key} =~ ^[0-9]{8}$ ]]; then
                     args["eventdate"]="${key}"
-                elif [[ -d $key ]]; then
+                elif [[ -d ${key} ]]; then
                     args["run_dir"]="${key}"
-                elif [[ -f $key ]]; then
+                elif [[ -f ${key} ]]; then
                     args["config_file"]="${key}"
                 else
                     echo ""
-                    echo -e "${RED}ERROR${NC}: unknown argument, get [${YELLOW}$key${NC}]."
+                    echo -e "${RED}ERROR${NC}: unknown argument, get [${YELLOW}${key}${NC}]."
                     usage 3
                 fi
                 ;;
@@ -167,9 +167,9 @@ parse_args "$@"
 [[ -v args["show"] ]]  && show=${args["show"]}   || show=""
 
 [[ -v args["post_machine"] ]] && post_machine=${args["post_machine"]^} || post_machine="Ursa"
-setup_machine "${post_machine}" "$rootdir" false false false
+setup_machine "${post_machine}" "${rootdir}" false false
 
-if [[ -n $show ]]; then
+if [[ -n ${show} ]]; then
     runcmd="echo ${site_runcmd}"
     dorun=false
 else
@@ -197,7 +197,7 @@ else
     eventdate=${eventdateDF:0:8}
     eventhour=${eventdateDF:8:2}
 
-    if ((10#$eventhour < 12)); then
+    if ((10#${eventhour} < 12)); then
         eventdate=$(date -u -d "${eventdate} 1 day ago" +%Y%m%d)
     fi
 fi
@@ -210,7 +210,7 @@ fi
 if [[ -v args["config_file"] ]]; then
     config_file="${args['config_file']}"
 
-    if [[ "$config_file" =~ "/" ]]; then
+    if [[ "${config_file}" =~ "/" ]]; then
         run_dir=$(realpath "$(dirname "${config_file}")")
     else
         config_file="${run_dir}/${config_file}"
@@ -259,9 +259,10 @@ if [[ -z ${task} ]]; then
 
     echo ""
     select_option "Select a task to get started: " "${options[@]}"
+    selected=$?
     echo ""
 
-    selected=$?; result="${options[${selected}]}"; task="${result%%:*}"
+    result="${options[${selected}]}"; task="${result%%:*}"
 
     if [[ "${task}" == "abort" ]]; then
         echo -e "${YELLOW}INFO${NC}: Aborting as requested."
@@ -288,14 +289,14 @@ if [[ ${#starttime} -eq 12 ]]; then
     startdatetime=${starttime}
     starttime=${starttime:8:4}
 else
-    (( 10#$starttime < default_datime )) && startdatetime="${nextdate}${starttime}" || startdatetime="${eventdate}${starttime}"
+    (( 10#${starttime} < default_datime )) && startdatetime="${nextdate}${starttime}" || startdatetime="${eventdate}${starttime}"
 fi
 
 if [[ ${#endtime} -eq 12 ]]; then
     enddatetime=${endtime}
     endtime=${endtime:8:4}
 else
-    (( 10#$endtime < default_datime )) && enddatetime="${nextdate}${endtime}" || enddatetime="${eventdate}${endtime}"
+    (( 10#${endtime} < default_datime )) && enddatetime="${nextdate}${endtime}" || enddatetime="${eventdate}${endtime}"
 fi
 
 fbeg_s=$(date -u -d "${startdatetime:0:8} ${startdatetime:8:4}" +%s)
@@ -317,7 +318,7 @@ fi
 
 log_file="${log_dir}/log${affix}.${task}"
 
-if [[ -z $show ]]; then                 # Actually run the task
+if [[ -z ${show} ]]; then                 # Actually run the task
     if [[ ! -t 1 ]]; then                       # at, batch or cron job
         exec 1>> "${log_file}" 2>&1
     elif [[ ${noscript} == false ]]; then       # interactive
@@ -332,7 +333,7 @@ fi
 
 ########################################################################
 
-case $task in
+case ${task} in
 post | plot | diag | verif | snd )
     #if [[ ! "${host}" == ${post_machine}* ]]; then
     #    echo -e "${RED}ERROR${NC}: Please run ${BROWN}$task${NC} on ${post_machine} only".
@@ -340,7 +341,7 @@ post | plot | diag | verif | snd )
     #fi
 
     # Load Python environment as needed
-    setup_machine "${post_machine}" "$rootdir" true false false
+    setup_machine "${post_machine}" "${rootdir}" true false
 
     : "${config_OUTINVL:?"ERROR: config_file not read?"}"
     : "${config_fcst_length_seconds:?"ERROR: config_file not read"}"
@@ -380,7 +381,7 @@ post | plot | diag | verif | snd )
     if [[ ! -f "${post_config}" ]]; then
         fcst_times=""
         for ((ftime=fbeg_s;ftime<=fend_s;ftime+=3600)); do
-            fcst_time=$(date -u -d @$ftime +%H%M)
+            fcst_time=$(date -u -d @"${ftime}" +%H%M)
             fcst_times+=" '${fcst_time}',"
         done
 
@@ -390,30 +391,31 @@ post | plot | diag | verif | snd )
             exit 1
         fi
 
+        # shellcheck disable=SC2312
         num_levels=$(wc -l "${config_vertLevel_file}"| cut -d' ' -f1)
         (( num_levels -= 1 ))
 
         # modify the configuration file
         sedfile=$(mktemp -t post.sed_XXXX)
-        cat << EOF > "${sedfile}"
-/^rundate :/s/: .*/: '${eventdate}'/
-/^date_ext :/s/: .*/: '${affix}'/
-/^process_times :/s/: .*/: [${fcst_times%,} ]/
-/^domain_name :/s/: .*/: '${wof_domain_name}'/
-/^nt :/s/: .*/: $nt/
-/^dt :/s/: .*/: $dt/
-/^fcstinterval :/s/: .*/: $dt/
-/^vert_levels :/s/: .*/: ${num_levels}/
-/^fcstpath: /s#: .*#: ${run_dir}/FCST/#
-/^sumpath: /s#: .*#: ${run_dir}/summary_files/#
-/^flagpath: /s#: .*#: ${run_dir}/image_files/flags/#
-/^wrfinputpath: /s#: .*#: ${run_dir}/#
-/^imagepath: /s#: .*#: ${run_dir}/image_files/#
-/^jsonpath: /s#: .*#: ${post_dir}/json/#
-/^mrmspath: /s#: .*#: ${RT_OBSDIR}/MRMS/#
-/^asospath: /s#: .*#: ${RT_OBSDIR}/ASOS/#
-/^lsrwwapath: /s#: .*#: ${RT_OBSDIR}/LSR_WWA/2026#
-EOF
+        cat <<- EOF > "${sedfile}"
+			/^rundate :/s/: .*/: '${eventdate}'/
+			/^date_ext :/s/: .*/: '${affix}'/
+			/^process_times :/s/: .*/: [${fcst_times%,} ]/
+			/^domain_name :/s/: .*/: '${wof_domain_name}'/
+			/^nt :/s/: .*/: ${nt}/
+			/^dt :/s/: .*/: ${dt}/
+			/^fcstinterval :/s/: .*/: ${dt}/
+			/^vert_levels :/s/: .*/: ${num_levels}/
+			/^fcstpath: /s#: .*#: ${run_dir}/FCST/#
+			/^sumpath: /s#: .*#: ${run_dir}/summary_files/#
+			/^flagpath: /s#: .*#: ${run_dir}/image_files/flags/#
+			/^wrfinputpath: /s#: .*#: ${run_dir}/#
+			/^imagepath: /s#: .*#: ${run_dir}/image_files/#
+			/^jsonpath: /s#: .*#: ${post_dir}/json/#
+			/^mrmspath: /s#: .*#: ${RT_OBSDIR}/MRMS/#
+			/^asospath: /s#: .*#: ${RT_OBSDIR}/ASOS/#
+			/^lsrwwapath: /s#: .*#: ${RT_OBSDIR}/LSR_WWA/2026#
+			EOF
         if [[ ! -f "${post_config_orig}" ]]; then
             echo " "
             echo -e "${RED}ERROR${NC}: Config template file - ${CYAN}${post_config_orig}${NC} not exist."
@@ -425,7 +427,7 @@ EOF
         rm  -f "${sedfile}"
     fi
 
-    if [[ "$task" == "verif" ]]; then
+    if [[ "${task}" == "verif" ]]; then
         # modify the verif script
         verif_script="${post_script_dir}/wofs_plot_verification_MPAS.py"
         sed -i "/plot_modes_qpe =/s/\[.*\]/${qpe_mode_string}/" "${verif_script}"
@@ -442,24 +444,28 @@ atpost )
     [[ "${starttime}" != "${default_datime}"  ]] && cmds+=(-s "${startdatetime}")
     [[ "${endtime}"   != "${default_endtime}" ]] && cmds+=(-e "${enddatetime}")
 
-    atjobstr=$(cat <<EOF
-if [[ $verb == true ]]; then
-    echo "at ${launchtime}        <<< \"${cmds[*]} post\""
-    echo "at ${launchtime}+1hours <<< \"${cmds[*]} diag\""
-    echo "at ${launchtime}+2hours <<< \"${cmds[*]} snd\""
-    echo "at ${launchtime}+3hours <<< \"${cmds[*]} verif\""
-    echo "at ${launchtime}+4hours <<< \"${cmds[*]} plot\""
-fi
+    atjobstr=$(cat <<- EOF
+		if [[ ${verb} == true ]]; then
+		    echo "at ${launchtime}        <<< \"${cmds[*]} post\""
+		    echo "at ${launchtime}+1hours <<< \"${cmds[*]} diag\""
+		    echo "at ${launchtime}+2hours <<< \"${cmds[*]} snd\""
+		    echo "at ${launchtime}+3hours <<< \"${cmds[*]} verif\""
+		    echo "at ${launchtime}+4hours <<< \"${cmds[*]} plot\""
+		fi
 
-if [[ -z "$show" ]]; then
-    at ${launchtime}        <<< "${cmds[*]} post"
-    at ${launchtime}+1hours <<< "${cmds[*]} diag"
-    at ${launchtime}+2hours <<< "${cmds[*]} snd"
-    at ${launchtime}+3hours <<< "${cmds[*]} verif"
-    at ${launchtime}+4hours <<< "${cmds[*]} plot"
-fi
-EOF
-)
+		if [[ -z "${show}" ]]; then
+		    at ${launchtime}        <<< "${cmds[*]} post"
+		    at ${launchtime}+1hours <<< "${cmds[*]} diag"
+		    at ${launchtime}+2hours <<< "${cmds[*]} snd"
+		    at ${launchtime}+3hours <<< "${cmds[*]} verif"
+		    at ${launchtime}+4hours <<< "${cmds[*]} plot"
+		fi
+		EOF
+    )
+    ;;
+* )
+    echo -e "${RED}ERROR${NC}: Unknown task: ${YELLOW}${task}${NC}"
+    exit 1
     ;;
 esac
 
@@ -468,9 +474,10 @@ esac
 #% ENTRY
 
 echo -e "=== AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA ===\n"
+# shellcheck disable=SC2312
 echo -e "${PURPLE}$(date +'%Y%m%d %H:%M:%S (%Z)')${NC} - ${BROWN}$0 ${saved_args}${NC}"
 
-case $task in
+case ${task} in
 #1. dacycles
 dacycles )
     cd "${script_dir}" || exit 1
@@ -497,12 +504,12 @@ post )
 
         fcstbegs="0"
         if [[ ${config_fcstmode} == "restart" ]]; then
-            fcstbegs="$dt"
+            fcstbegs="${dt}"
         fi
 
         if [[ ! -e ${run_dir}/FCST/${eventdate}${affix}/fcst_${enddatetime}_start ]]; then
             # To make sure the correct FCST files are used, "-c"
-            cmds=("${script_dir}/lnmpasfcst.sh" -c -b "$fcstbegs" -s "${startdatetime}" -e "${enddatetime}" "${config_file}")
+            cmds=("${script_dir}/lnmpasfcst.sh" -c -b "${fcstbegs}" -s "${startdatetime}" -e "${enddatetime}" "${config_file}")
             if [[ -z ${show} ]]; then echo -e "${GREEN}${cmds[*]}${NC}"; fi
             ${show} "${cmds[@]}"
         fi
@@ -525,10 +532,10 @@ post )
                 [PYTHONSCRIPT]="${post_script_dir}/wofs_${task}_summary_files_MPAS.py"
                 [CONFIGFILE]="${post_config}"
             )
-            cmds=(submit_a_job "${wrkdir}" "${task}_${eventdate}${affix}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" "")
+            cmds=(submit_a_job "${wrkdir}" "${task}_${eventdate}${affix}" "jobParms" "${rootdir}/templates/run_python.slurm" "${jobscript}" "")
         fi
     else
-        echo -e "${DARK}File ${CYAN}$donepost${NC} exist"
+        echo -e "${DARK}File ${CYAN}${donepost}${NC} exist"
         echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${config_file} ${eventdate} ${task}${NC} before reprocessing."
         exit 1
     fi
@@ -559,11 +566,11 @@ plot )
                 [PYTHONSCRIPT]="${post_script_dir}/wofs_${task}_summary_files_MPAS.py"
                 [CONFIGFILE]="${post_config}"
             )
-            cmds=(submit_a_job "$wrkdir" "${task}_${eventdate}${affix}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" "")
+            cmds=(submit_a_job "${wrkdir}" "${task}_${eventdate}${affix}" "jobParms" "${rootdir}/templates/run_python.slurm" "${jobscript}" "")
         fi
 
     else
-        echo -e "${DARK}File ${CYAN}$doneplot${NC} exist"
+        echo -e "${DARK}File ${CYAN}${doneplot}${NC} exist"
         echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} ${task}${NC} before reprocessing."
         exit 2
     fi
@@ -593,11 +600,11 @@ verif )
                 [PYTHONSCRIPT]="${post_script_dir}/wofs_plot_verification_MPAS.py"
                 [CONFIGFILE]="${post_config}"
             )
-            cmds=(submit_a_job "$wrkdir" "${task}_${eventdate}${affix}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" "")
+            cmds=(submit_a_job "${wrkdir}" "${task}_${eventdate}${affix}" "jobParms" "${rootdir}/templates/run_python.slurm" "${jobscript}" "")
         fi
 
     else
-        echo -e "${DARK}File ${CYAN}$doneverif${NC} exist"
+        echo -e "${DARK}File ${CYAN}${doneverif}${NC} exist"
         echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} ${task}${NC} before reprocessing."
         exit 2
     fi
@@ -627,11 +634,11 @@ snd )
                 [PYTHONSCRIPT]="${post_script_dir}/wofs_plot_sounding_MPAS.py"
                 [CONFIGFILE]="${post_config}"
             )
-            cmds=(submit_a_job "${wrkdir}" "${task}_${eventdate}${affix}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" "")
+            cmds=(submit_a_job "${wrkdir}" "${task}_${eventdate}${affix}" "jobParms" "${rootdir}/templates/run_python.slurm" "${jobscript}" "")
         fi
 
     else
-        echo -e "${DARK}File ${CYAN}$donesnd${NC} exist"
+        echo -e "${DARK}File ${CYAN}${donesnd}${NC} exist"
         echo -e "${DARK}Please clean them using ${GREEN}${script_dir}/cleanmpas.sh ${eventdate} ${task}${NC} before reprocessing."
         exit 2
     fi
@@ -661,14 +668,14 @@ diag )
             [PYTHONSCRIPT]="${cmds[*]}"
             [CONFIGFILE]=""
         )
-        cmds=(submit_a_job "${wrkdir}" "${task}_${eventdate}${affix}" "jobParms" "${rootdir}/templates/run_python.slurm" "$jobscript" "")
+        cmds=(submit_a_job "${wrkdir}" "${task}_${eventdate}${affix}" "jobParms" "${rootdir}/templates/run_python.slurm" "${jobscript}" "")
     fi
     ;;
 
 #8. atpost
 atpost )
     #echo "$host, $post_machine"
-    if [[ $support_interactive_job == true ]]; then
+    if [[ ${support_interactive_job} == true ]]; then
         if [[ "${host}" == ${post_machine}* ]]; then
             #cd "${script_dir}" || exit $?
             ${show} eval "${atjobstr}"
@@ -721,18 +728,19 @@ nccompress )
             [BEGINS]="${fbeg_s}"
             [ENDS]="${fend_s}"
         )
-        cmds=(submit_a_job "${run_dir}" "${jobname}" "jobParms" "${rootdir}/templates/${jobtemplate}" "$jobscript" "")
+        cmds=(submit_a_job "${run_dir}" "${jobname}" "jobParms" "${rootdir}/templates/${jobtemplate}" "${jobscript}" "")
     fi
     ;;
 * )
-    echo -e "${RED}ERROR${NC}: Unknown task - ${PURPLE}$task${NC}\n"
+    echo -e "${RED}ERROR${NC}: Unknown task - ${PURPLE}${task}${NC}\n"
     exit 3
     ;;
 esac
 
-if [ -t 1 ]; then # "interactive"
-    : #echo -e "\n${PURPLE}$(date +'%Y%m%d_%H:%M:%S (%Z)')${NC} - ${DARK}Interactivly running: ${BROWN}${task}${NC} from ${YELLOW}$(pwd)${NC}\n"
+if [[ -t 1 ]]; then # "interactive"
+    :   # echo -e "\n${PURPLE}$(date +'%Y%m%d_%H:%M:%S (%Z)')${NC} - ${DARK}Interactivly running: ${BROWN}${task}${NC} from ${YELLOW}$(pwd)${NC}\n"
 else
+    # shellcheck disable=SC2312
     echo -e "\n${PURPLE}$(date +'%Y%m%d %H:%M:%S (%Z)')${NC} - ${DARK}Background running: ${BROWN}${task}${NC} from ${BLYELLOWUE}$(pwd)${NC}\n"
 fi
 

@@ -13,7 +13,7 @@ import yamlfromrrfs as yf
 
 import argparse
 
-#########################################################################
+########################################################################
 
 def parse_arguments():
     """Parse command-line arguments."""
