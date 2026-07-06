@@ -934,7 +934,7 @@ for job in "${jobs[@]}"; do
         echo "    run_${job} ${jobargs[${job}]}"
     fi
 
-    "run_${job}" "${jobargs[${job}]}"
+    "run_${job}" ${jobargs[${job}]}
 done
 
 # shellcheck disable=SC2312
