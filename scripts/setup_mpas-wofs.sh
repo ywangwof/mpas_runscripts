@@ -1921,6 +1921,8 @@ export runcmd
 
 [[ -v args["caseconfig"] ]] && caseconfig="${args['caseconfig']}" || caseconfig="${WORKDIR}/config.${eventdate}${affix}"
 
+initialize4static "${machine}"
+
 # shellcheck disable=SC2034
 {
     config_job_account_str="${site_job_account_str}"
@@ -1930,7 +1932,6 @@ export runcmd
     config_EXEDIR="${EXEDIR}"
 }
 
-initialize4static "${machine}"
 
 #
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
