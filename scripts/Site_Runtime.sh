@@ -57,7 +57,7 @@ function setup_machine {
         JEDI_DIR="/scratch3/NAGAPE/wof/ywang/GSL_JEDI/rrfs-workflow/sorc/RDASApp"
         jedi_modulename="RDAS/ursa.intel"      # RRFS
 
-        site_workdir="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/run_dirs"
+        site_workdir="/scratch4/NAGAPE/wof/ywang/MPAS-WoFS/run_dirs"
         site_postdir="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS/frdd-wofs-post.mpas"
         RT_OBSDIR="/scratch3/NAGAPE/wof/kknopfmeier/VERIF"   # "/scratch3/NAGAPE/wof/ywang/rt_obs"
 
