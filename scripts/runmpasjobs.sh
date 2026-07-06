@@ -258,10 +258,10 @@ if [[ -z ${task} ]]; then
             )
 
     echo ""
-    select_option "Select a task to get started: " "${options[@]}"
+    select_option "Select a task to get started: " "${options[@]}"; selected=$?
     echo ""
 
-    selected=$?; result="${options[${selected}]}"; task="${result%%:*}"
+    result="${options[${selected}]}"; task="${result%%:*}"
 
     if [[ "${task}" == "abort" ]]; then
         echo -e "${YELLOW}INFO${NC}: Aborting as requested."
@@ -358,6 +358,9 @@ post | plot | diag | verif | snd )
 
     dt=$(( config_OUTINVL/60 ))
     nt=$(( config_fcst_length_seconds/config_OUTINVL ))
+
+    lsr_wwa_start_time=${config_lsr_wwa_start_time:-'1200'}
+
     case ${config_fcst_length_seconds} in
     21600 )
         qpe_mode_string="['qpe_15m', 'qpe_1hr', 'qpe_3hr', 'qpe_6hr']"
@@ -400,9 +403,9 @@ post | plot | diag | verif | snd )
 /^date_ext :/s/: .*/: '${affix}'/
 /^process_times :/s/: .*/: [${fcst_times%,} ]/
 /^domain_name :/s/: .*/: '${wof_domain_name}'/
-/^nt :/s/: .*/: $nt/
-/^dt :/s/: .*/: $dt/
-/^fcstinterval :/s/: .*/: $dt/
+/^nt :/s/: .*/: ${nt}/
+/^dt :/s/: .*/: ${dt}/
+/^fcstinterval :/s/: .*/: ${dt}/
 /^vert_levels :/s/: .*/: ${num_levels}/
 /^fcstpath: /s#: .*#: ${run_dir}/FCST/#
 /^sumpath: /s#: .*#: ${run_dir}/summary_files/#
@@ -413,6 +416,7 @@ post | plot | diag | verif | snd )
 /^mrmspath: /s#: .*#: ${RT_OBSDIR}/MRMS/#
 /^asospath: /s#: .*#: ${RT_OBSDIR}/ASOS/#
 /^lsrwwapath: /s#: .*#: ${RT_OBSDIR}/LSR_WWA/2026#
+/^lsr_wwa_start_time: /s# .*# '${lsr_wwa_start_time}'#
 EOF
         if [[ ! -f "${post_config_orig}" ]]; then
             echo " "

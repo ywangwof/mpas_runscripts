@@ -218,7 +218,6 @@ fi
 echo "INFO: Use fcst_root: ${fcst_root}/${eventdate}/${fcstdir} "
 echo "INFO: Use dest_root: ${dest_root}/${eventdate}${affix} "
 
-exit 0
 #-----------------------------------------------------------------------
 # Set Event End Date and Time
 #-----------------------------------------------------------------------
