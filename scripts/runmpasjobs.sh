@@ -258,8 +258,7 @@ if [[ -z ${task} ]]; then
             )
 
     echo ""
-    select_option "Select a task to get started: " "${options[@]}"
-    selected=$?
+    select_option "Select a task to get started: " "${options[@]}"; selected=$?
     echo ""
 
     result="${options[${selected}]}"; task="${result%%:*}"
@@ -359,6 +358,9 @@ post | plot | diag | verif | snd )
 
     dt=$(( config_OUTINVL/60 ))
     nt=$(( config_fcst_length_seconds/config_OUTINVL ))
+
+    lsr_wwa_start_time=${config_lsr_wwa_start_time:-'1200'}
+
     case ${config_fcst_length_seconds} in
     21600 )
         qpe_mode_string="['qpe_15m', 'qpe_1hr', 'qpe_3hr', 'qpe_6hr']"
