@@ -28,10 +28,32 @@ def parse_args():
     parser.add_argument("-p", "--nprocs", type=int, default=8, help="Number of processes for parallel reading")
     parser.add_argument("-n", "--number", action="store_true", help="Plot gross error check counts")
     parser.add_argument("--cr", action="store_true", help="Plot Consistency Ratio (Total Spread² / RMSD²)")
+    parser.add_argument("--no-legend", dest="no_legend", action="store_true",
+                        help="Omit legend from plots and save it as a standalone sawtooth_legend.png")
 
     args = parser.parse_args()
     args.obs = [ob.strip() for ob in args.obs.split(",") if ob.strip()]
     return args
+
+################################################################################
+def save_standalone_legend(handles, labels, outpath):
+    """Save a standalone legend PNG using proxy Line2D artists."""
+    import matplotlib.lines as mlines
+    proxy = [
+        mlines.Line2D([], [],
+                      color=h.get_color(),
+                      linestyle=h.get_linestyle(),
+                      linewidth=h.get_linewidth(),
+                      label=lbl)
+        for h, lbl in zip(handles, labels)
+    ]
+    fig = plt.figure(figsize=(3.4, 0.55 * len(proxy) + 0.3))
+    fig.legend(handles=proxy, labels=labels, loc='center',
+               frameon=True, shadow=True, fontsize=11, handlelength=2.5)
+    fig.patch.set_facecolor('white')
+    fig.savefig(outpath, bbox_inches='tight', dpi=200, facecolor='white')
+    plt.close(fig)
+    print(f"Saved standalone legend: {outpath}")
 
 ################################################################################
 def get_sawtooth_metadata(args):
@@ -241,8 +263,8 @@ def plot_ob_type(obname, cycle_meta, args):
     cr = [raw_cr[i] for i, v in enumerate(valid_mask) if v]
 
     fig, ax = plt.subplots(figsize=(10, 5))
-    ln1 = ax.plot(minutes, rmsd, color='tab:red', label='RMSD (O-F/A)', lw=2)
-    ln2 = ax.plot(minutes, innov, color='tab:blue', label='Bias', lw=2)
+    ln1 = ax.plot(minutes, rmsd, color='tab:red', label='RMSI (O-F/A)', lw=2)
+    ln2 = ax.plot(minutes, innov, color='tab:blue', label='Mean Innovation (O-F/A)', lw=2)
     ln3 = ax.plot(minutes, spread, color='tab:green', linestyle='--', label='Total Spread', lw=2)
 
     lines = ln1 + ln2 +ln3
@@ -294,8 +316,12 @@ def plot_ob_type(obname, cycle_meta, args):
     plt.setp(ax.get_xticklabels(), rotation=45)
     # Consolidated Legend for both axes
     labs = [l.get_label() for l in lines]
-    ax.legend(lines, labs, loc='upper right', frameon=True, shadow=True)
-    #ax.legend(loc='upper right', frameon=True, shadow=True)
+    if args.no_legend:
+        leg_out = os.path.join(os.getcwd(), 'sawtooth_legend.png')
+        if not os.path.exists(leg_out):
+            save_standalone_legend(lines, labs, leg_out)
+    else:
+        ax.legend(lines, labs, loc='upper right', frameon=True, shadow=True)
     ax.grid(True, alpha=0.3)
 
     out_name = f"sawtooth_{args.eventdate}_{obname}.png"
@@ -365,7 +391,8 @@ def plot_gross_error(obname, cycle_meta, args):
     ax.xaxis.set_major_locator(ticker.FixedLocator(all_cycle_minutes))
     ax.xaxis.set_major_formatter(ticker.FuncFormatter(formatter))
     plt.setp(ax.get_xticklabels(), rotation=45)
-    ax.legend(loc='upper right', frameon=True, shadow=True)
+    if not args.no_legend:
+        ax.legend(loc='upper right', frameon=True, shadow=True)
     ax.grid(True, alpha=0.3)
 
     out_name = f"count_{args.eventdate}_{obname}.png"

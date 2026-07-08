@@ -290,7 +290,7 @@ if [[ ! -e done.zigzag ]]; then
         -s "${startdatetime}"
         -e "${enddatetime}"
         -d "${run_dir}"
-        -o "radar_rw, mrms_refl,cwp,cwp_night,adpsfc_ps187,adpsfc_q181,adpsfc_q183,adpsfc_q187,adpsfc_t187,adpsfc_uv287"
+        -o "radar_rw, mrms_refl,mrms_clear,cwp,cwp_night,adpsfc_ps187,adpsfc_q181,adpsfc_q183,adpsfc_q187,adpsfc_t187,adpsfc_uv287"
         -m 36
         -c 15
         --type "all" --cr -n)

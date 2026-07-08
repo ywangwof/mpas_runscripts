@@ -218,7 +218,7 @@ function submit_a_job {
         else
             log_file="${mywrkdir}/${myjobname}.out"
         fi
-        ${myruncmd} "${myjobscript}" > "$log_file" 2>&1
+        ${myruncmd} "${myjobscript}" > "${log_file}" 2>&1
     else
         if [[ ${dorun} == true ]]; then mecho1n "Submitting ${BROWN}${myjobscript}${NC} .... "; fi
         "${commandlist[@]}"
@@ -354,6 +354,7 @@ function check_job_status {
                     # Check if the pattern matches any files
                     if compgen -G "${pattern}" > /dev/null; then
                         # Load all matches into an array, sorted numerically
+                        # shellcheck disable=SC2312
                         readarray -td '' sorted_files < <(printf '%s\0' ${pattern} | sort -zV)
 
                         # Grab the highest sequence/number
@@ -449,6 +450,7 @@ function group_numbers_by_steps {
     IFS=$'\n' orgnumberstr="${orgnumbers[*]}"; unset IFS
     #mapfile -t sortednumbers < <(sort -g <<<"${orgnumberstr}")
     local sortednumbers=()
+    # shellcheck disable=SC2312
     while IFS='' read -r line; do
         sortednumbers+=("${line}")
     done < <(sort -g <<<"${orgnumberstr}")
@@ -564,14 +566,14 @@ function join_arrays {
     # 1. Create an associative array to track what's in array1
     declare -A seen
     for item in "${array1[@]}"; do
-        seen["$item"]=1
+        seen["${item}"]=1
     done
 
     # 2. Iterate through array2 and append only if not seen
     for item in "${array2[@]}"; do
-        if [[ -z "${seen["$item"]}" ]]; then
-            array1+=("$item")
-            seen["$item"]=1 # Mark as seen so we don't add duplicates from array2 itself
+        if [[ -z "${seen["${item}"]}" ]]; then
+            array1+=("${item}")
+            seen["${item}"]=1 # Mark as seen so we don't add duplicates from array2 itself
         fi
     done
 
@@ -606,14 +608,14 @@ function delete_array {
     # 1. Declare a lookup table (associative array) for array2
     declare -A to_remove
     for item in "${array2[@]}"; do
-        to_remove["$item"]=1
+        to_remove["${item}"]=1
     done
 
     # 2. Rebuild array1 by only keeping items NOT in the lookup table
     local new_array1=()
     for item in "${array1[@]}"; do
-        if [[ -z "${to_remove["$item"]}" ]]; then
-            new_array1+=("$item")
+        if [[ -z "${to_remove["${item}"]}" ]]; then
+            new_array1+=("${item}")
         fi
     done
 
@@ -630,6 +632,7 @@ function intersection {
     read -r -a array_two <<< "$2"
 
     IFS=$'\n'; set -f
+    # shellcheck disable=SC2312
     mapfile -t common < <( comm -12 <(
         printf '%s\n' "${array_one[@]}" | sort) <(
             printf '%s\n' "${array_two[@]}" | sort)
@@ -654,6 +657,7 @@ function typeset2array {
 
     #echo "$arraystr"
 
+    # shellcheck disable=SC2312
     while IFS="=" read -r key val; do
         # shellcheck disable=SC2034
         arrayname["${key}"]="${val}"
@@ -687,6 +691,7 @@ function setsubtract {
     read -r -a array_two <<< "$2"
 
     IFS=$'\n'; set -f
+    # shellcheck disable=SC2312
     mapfile -t diffset < <( comm -23 <(
         printf '%s\n' "${array_one[@]}" | sort) <(
             printf '%s\n' "${array_two[@]}" | sort)
@@ -698,6 +703,7 @@ function setsubtract {
 ####################################################################
 # Function to check if parentheses or quotes are balanced
 # Returns 0 (true) if balanced, 1 (false) otherwise
+# shellcheck disable=SC2312
 function is_balanced {
     local str="$1"
     # Count double quotes
@@ -970,7 +976,7 @@ wait_for_conditions () {
 
     if [[ ${dorun} == true ]]; then
         for cond in "${conditions[@]}"; do
-            if [[ "$cond" =~ (.+)"|"(.+) ]]; then
+            if [[ "${cond}" =~ (.+)"|"(.+) ]]; then
                 cond1=${BASH_REMATCH[1]}; rcond1=$(realpath -m --relative-to "${WORKDIR}" "${cond1}")
                 cond2=${BASH_REMATCH[2]}; rcond2=$(realpath -m --relative-to "${WORKDIR}" "${cond1}")
                 mecho1n "Checking ${rcond1} or ${rcond2} ...."
@@ -984,7 +990,7 @@ wait_for_conditions () {
                 local i=0
                 while [[ ! -e ${cond} ]]; do
                     if [[ ${myverbose} == true ]]; then
-                        [[ $i -lt 1 ]] && echo ""
+                        [[ ${i} -lt 1 ]] && echo ""
                         mecho0 "Waiting for file: ${rcond1}"
                         (( i+=1 ))
                     fi
@@ -1050,6 +1056,7 @@ function num_pending_jobs_greater_than {
     #    done
     #fi
 
+    # shellcheck disable=SC2312
     runnum=$(squeue -u ${USER} -h -t pending -r | wc -l)
 
     [[ ${runnum} -gt ${numcond} ]]
@@ -1185,6 +1192,7 @@ function array_keys_contains {
 
 ########################################################################
 
+# shellcheck disable=SC2312
 function sortnumarray {
     local IFS=$'\n'
 
@@ -1193,7 +1201,9 @@ function sortnumarray {
 
     echo "${sorted_numbers[@]}"
 }
+
 #-----------------------------------------------------------------------
+# shellcheck disable=SC2312
 function sortnumarrayuniq {
     local unique_array
     readarray -t unique_array < <(printf "%s\n" "$@" | sort -n | uniq)
@@ -1314,21 +1324,21 @@ function select_option() {
 
     # --- Jump to character logic ---
     for i in "${!options[@]}"; do
-        local item="${options[$i]}"
+        local item="${options[${i}]}"
         # Strip the note to get just the value (e.g., "azure" from "azure:cloud")
         local val="${item%%:*}"
 
         local j=0
-        local first_char="${val:$j:1}"          # Get the first character of the value
+        local first_char="${val:${j}:1}"          # Get the first character of the value
         local key="${first_char,,}"
         while [[ -v keyitems[${key}] ]]; do
             (( j += 1 ))
-            first_char="${val:$j:1}"
+            first_char="${val:${j}:1}"
             key="${first_char,,}"
         done
 
-        mykeys[i]="$j"
-        keyitems["${key}"]="$i"
+        mykeys[i]="${j}"
+        keyitems["${key}"]="${i}"
     done
 
     function draw_menu() {
@@ -1344,7 +1354,7 @@ function select_option() {
             local dval=""
             local note=""
 
-            local j="${mykeys[$i]}"
+            local j="${mykeys[${i}]}"
             # Check if ":" exists to split into Value and Note
             if [[ "${item}" == *":"* ]]; then
                 dval="${item%%:*}" # Everything before first ":"
@@ -1356,10 +1366,10 @@ function select_option() {
 
             if [[ "${i}" -eq "${selected}" ]]; then
                 # Selected: Green arrow and bright text
-                echo -e "  \033[32m❯ ● ${dval:0:$j}${UNDERLINE}${dval:$j:1}${NC}\033[32m${dval:$((j+1))}\033[0m\033[90m${note}\033[0m"
+                echo -e "  \033[32m❯ ● ${dval:0:${j}}${UNDERLINE}${dval:${j}:1}${NC}\033[32m${dval:$((j+1))}\033[0m\033[90m${note}\033[0m"
             else
                 # Unselected: Plain circle and dimmed note
-                echo -e "    ○ ${dval:0:$j}${UNDERLINE}${dval:$j:1}${NC}${dval:$((j+1))}\033[90m${note}\033[0m"
+                echo -e "    ○ ${dval:0:${j}}${UNDERLINE}${dval:${j}:1}${NC}${dval:$((j+1))}\033[90m${note}\033[0m"
             fi
         done
     }
