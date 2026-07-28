@@ -3,6 +3,7 @@
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
 #SBATCH -t 00:30:00
+#SBATCH --qos=QOS
 #SBATCH --output=WRKDIR/jedi_TASKNAME_%j.log
 ACCTSTR
 EXCLSTR
@@ -14,7 +15,7 @@ time1=$(date '+%s')
 printf "Job Started: %(%a %b %d %H:%M:%S %Z %Y)T. Job Id: %s\n\n" "${time1}" "${SLURM_JOBID}"
 
 # shellcheck disable=SC2050,SC1091
-if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules" || "MACHINE" == "Ursa" ]]; then
+if [[ "MACHINE" == "Ursa" || "MACHINE" == "Hercules" ]]; then
     HOMErrfs="JEDIDIR"
     source /etc/profile.d/modules.sh
     module purge

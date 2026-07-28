@@ -1382,6 +1382,7 @@ function write_config {
     claim_cpu_ics="${default_claim_cpu_ics}"
     npeics="${default_npeics}";    ncores_ics="${default_ncores_ics}"
     claim_cpu_ungrib="${default_claim_cpu_ungrib}"
+    qos_ics="${default_qos_ics}"
 
 [lbc]
     LBCIOTYPE="pnetcdf,cdf5"
@@ -1399,6 +1400,8 @@ function write_config {
     partition_lbc="${default_partition_lbc}"
     claim_cpu_lbc="${default_claim_cpu_lbc}"
     claim_cpu_ungrib="${default_claim_cpu_ungrib}"
+
+    qos_lbc="${default_qos_lbc}"
 
 [dacycles]
     ENS_SIZE=36
@@ -1434,11 +1437,12 @@ function write_config {
 
     claim_cpu_update="${default_claim_cpu_update}"
 
-    claim_time_fcst="00:40:00"
+    claim_time_fcst="00:30:00"
     claim_time_mpassit_alltimes="00:20:00"
 
     npepost=${default_npepost}; ncores_post=${default_ncores_post}; nnodes_post=${default_nnodes_post}
     claim_cpu_post="${default_claim_cpu_post}";
+    qos_da="${default_qos_da}"
 
 [fcst]
     fcstmode="${fcstmode}"
@@ -1463,6 +1467,8 @@ function write_config {
     claim_time_fcst="01:20:00"
     claim_time_mpassit_alltimes="00:20:00"
     claim_time_mpassit_onetime="00:10:00"
+
+    qos_fcst="${default_qos_fcst}"
 
 [compression]
     ens_size_da=36

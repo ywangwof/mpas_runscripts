@@ -27,8 +27,8 @@ elif [[ "${myhost}" == "cheyenne"* || ${myhost} == "derecho"* ]]; then
     srcwrfdir=${srcroot}/WRFV4.0
     srcdartdir=${srcroot}/DART
 else
-    srcroot="/lfs5/NAGAPE/hpc-wof1/ywang/MPAS-WoFS"
-    tool_dir="/home/Yunheng.Wang/local"
+    srcroot="/scratch3/NAGAPE/wof/ywang/MPAS-WoFS"
+    tool_dir="/scratch3/NAGAPE/wof/ywang/tools"
     srcmpassitdir=${srcroot}/MPASSIT
     srcuppdir=${srcroot}/UPP_KATE_kjet
     srcmodeldir=${srcroot}/MPAS-Model.gsl

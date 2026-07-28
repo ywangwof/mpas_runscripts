@@ -3,6 +3,7 @@
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
 #SBATCH -t CLAIMTIME
+#SBATCH --qos=QOS
 #SBATCH --output=WRKDIR/mpassitHHMINSTR_%a_%j.log
 ACCTSTR
 EXCLSTR
@@ -13,7 +14,7 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules" || "MACHINE" == "Ursa" ]]; then
+if [[ "MACHINE" == "Ursa" || "MACHINE" == "Hercules" ]]; then
     module purge
     module use ROOTDIR/modules/MPASSIT
     module load build.MACHINE.intel

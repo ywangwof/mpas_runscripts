@@ -4,6 +4,7 @@
 #SBATCH --ntasks=NOPART CPUSPEC
 #SBATCH -t 00:30:00
 #SBATCH --output=WRKDIR/PREFIX_%a_%j.log
+#SBATCH --qos=QOS
 ACCTSTR
 EXCLSTR
 
@@ -13,7 +14,7 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules" || "MACHINE" == "Ursa" ]]; then
+if [[ "MACHINE" == "Ursa" || "MACHINE" == "Hercules"  ]]; then
     source /etc/profile.d/modules.sh
     module purge
     module use MPASDIR/modulefiles

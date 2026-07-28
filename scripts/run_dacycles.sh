@@ -391,6 +391,7 @@ function run_ioda_bufr {
         [GRIDFILE]="${rundir}/${domname}/${domname}.grid.nc"
         [RRFSDIR]="${rrfs_dir}"
         [MODULE]="${rrfs_modulename}"
+        [QOS]="${config_qos_da}"
     )
     if [[ "${mach}" == "pbs" ]]; then
         jobParms[NNODES]="1"
@@ -1046,6 +1047,12 @@ function create_namelist {
 		EOF
         [[ "${taskname}" == "MPAS" ]] &&  \
         echo "    config_mynn_version        = 1" >> "${filename}"
+        # MPAS v8.3.0
+        #cat <<- EOF >> "${filename}"
+		#    config_mynn_cloudpdf       = 0
+		#    config_icloud_bl           = 0
+		#    config_radt_cld_scheme     = 'cld_fraction'
+		#EOF
     else
         cat <<- EOF >> "${filename}"
 		    config_pbl_scheme          = '${pblscheme}'
@@ -1865,6 +1872,7 @@ function run_jedi_observer {
         [TASKNAME]="${taskname}"
         [JEDIDIR]="${JEDI_DIR}"
         [MODULE]="${jedi_modulename}"
+        [QOS]="${config_qos_da}"
     )
     if [[ "${mach}" == "pbs" ]]; then
         jobParms[CONFIGNNODES]="${config_nnodes_filter}"
@@ -1959,6 +1967,7 @@ function run_jedi_solver {
         [CYCLENO]="${icycle}"               #  Special for Solver
         [ENS_SIZE]="${config_ENS_SIZE}"            #  Special for Solver
         [MODULE]="${jedi_modulename}"
+        [QOS]="${config_qos_da}"
     )
 
     if [[ "${mach}" == "pbs" ]]; then
@@ -2051,6 +2060,7 @@ function run_jedi_post {
         [CURRTIMEFIL]="${currtime_fil}"
         [JEDIDIR]="${JEDI_DIR}"
         [MODULE]="${jedi_modulename}"
+        [QOS]="${config_qos_da}"
     )
 
     if [[ "${mach}" == "pbs" ]]; then
@@ -2437,6 +2447,7 @@ function run_update_mpas {
         [JOBNAME]="update_mpas_${eventtime}"
         [CPUSPEC]="${claim_cpu_update}"
         [CPCMD]="${cpcmd}"
+        [QOS]="${config_qos_da}"
         [INITFILENAME]="${initfile}"
         [INITORIGFILE]="${initorigfile}"
         [LBCPATH]="${lbcdir}"
@@ -2631,6 +2642,7 @@ function run_mpas {
         [CLAIMTIME]="${config_claim_time_fcst}"
         [MPASDIR]="${MPAS_DIR}"
         [MODULE]="${mpas_modulename}"
+        [QOS]="${config_qos_da}"
     )
     #mpas_jobscript="run_mpas.${mach}"
     jobarraystr=$(get_jobarray_str ${mach} "${jobarrays[@]}")

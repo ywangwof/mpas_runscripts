@@ -280,10 +280,14 @@ function default_site_settings {
         default_partition_ics="u1-compute"
         default_claim_cpu_ics="--cpus-per-task=2"
 
+        default_qos_ics="batch"
+
         # LBCs
         default_npelbc=96;  default_ncores_lbc=2
         default_partition_lbc="u1-compute"
         default_claim_cpu_lbc="--cpus-per-task=2"
+
+        default_qos_lbc="batch"
 
         # DA cycles
         default_ncores_dafcst=96;  default_ncores_filter=48
@@ -299,15 +303,18 @@ function default_site_settings {
         default_claim_cpu_ioda_refl="--cpus-per-task=2"
         default_claim_cpu_update="--ntasks-per-node=36"
 
+        default_qos_da="batch"
 
         # FCST cycles
         default_ncores_fcst=96;  default_ncores_post=48
         default_partition_fcst="u1-compute";   default_claim_cpu_fcst="--cpus-per-task=2"
         default_partition_post="u1-compute";   default_claim_cpu_post="--ntasks-per-node=${default_ncores_post}"
-        default_claim_cpu_python="--cpus-per-task=48"
+        default_claim_cpu_python="--cpus-per-task=24 --mem=160G"
 
         default_npefcst=96    ; default_nnodes_fcst=$(( default_npefcst/default_ncores_fcst ))
         default_npepost=96    ; default_nnodes_post=$(( default_npepost/default_ncores_post ))
+
+        default_qos_fcst="batch"
         ;;
 
     "Hercules" )
@@ -428,4 +435,5 @@ function default_site_settings {
     export default_partition_fcst   default_claim_cpu_fcst   default_npefcst       default_ncores_fcst    default_nnodes_fcst
     export default_partition_post   default_claim_cpu_post   default_npepost       default_ncores_post    default_nnodes_post
     export default_claim_cpu_python
+    export default_qos_ics default_qos_lbc default_qos_da default_qos_fcst
 }

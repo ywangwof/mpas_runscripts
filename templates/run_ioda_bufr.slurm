@@ -4,6 +4,7 @@
 #SBATCH --ntasks=NOPART CPUSPEC
 #SBATCH -t 00:30:00
 #SBATCH --output=WRKDIR/JOBNAME_%j.log
+#SBATCH --qos=QOS
 ACCTSTR
 EXCLSTR
 
@@ -12,7 +13,7 @@ EXCLSTR
 time1=$(date '+%s')
 echo -e "Job Started: $(date). Job Id:  $SLURM_JOBID\n"
 
-if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules" || "MACHINE" == "Ursa" ]]; then
+if [[ "MACHINE" == "Ursa" || "MACHINE" == "Hercules" ]]; then
     module purge
     HOMErrfs="RRFSDIR"
     module use ${HOMErrfs}/modulefiles

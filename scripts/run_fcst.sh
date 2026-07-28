@@ -591,10 +591,17 @@ function run_mpas {
     config_gvf_update          = false
 EOF
         if [[ ${sfcscheme} == "sf_mynn" ]]; then
-            cat << EOF >> namelist.atmosphere
-    config_pbl_scheme                = 'bl_mynnedmf'
-    config_mynn_version              = 1
-EOF
+            cat <<- EOF >> namelist.atmosphere
+		    config_pbl_scheme                = 'bl_mynnedmf'
+		    config_mynn_version              = 1
+		EOF
+        # MPAS v8.3.0
+        #    cat <<- EOF >> namelist.atmosphere
+		#    config_pbl_scheme          = 'bl_mynnedmf'
+		#    config_mynn_cloudpdf       = 0
+		#    config_icloud_bl           = 0
+		#    config_radt_cld_scheme     = 'cld_fraction'
+		#EOF
         else
             cat << EOF >> namelist.atmosphere
     config_pbl_scheme                = '${pblscheme}'
@@ -771,6 +778,7 @@ EOF
         [CLAIMTIME]="${config_claim_time_fcst}"
         [MPASDIR]="${MPAS_DIR}"
         [MODULE]="${mpas_modulename}"
+        [QOS]="${config_qos_fcst}"
     )
     if [[ "${mach}" == "pbs" ]]; then
         jobParms[NNODES]="${config_nnodes_fcst}"
@@ -964,6 +972,7 @@ function run_mpassit_onetime {
             [FCST_START]="${i}"
             [FCST_END]="${i}"
             [FCST_INTVL]="${config_OUTINVL}"
+            [QOS]="${config_qos_fcst}"
         )
         if [[ "${mach}" == "pbs" ]]; then
             jobParms[NNODES]="${config_nnodes_post}"
@@ -1036,6 +1045,7 @@ function run_mpassit_alltimes {
             [FCST_START]="${minsec}"
             [FCST_END]="${maxsec}"
             [FCST_INTVL]="${config_OUTINVL}"
+            [QOS]="${config_qos_fcst}"
         )
         if [[ "${mach}" == "pbs" ]]; then
             jobParms[NNODES]="${config_nnodes_post}"

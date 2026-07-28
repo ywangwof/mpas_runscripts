@@ -261,12 +261,13 @@ for ((s=start_s;s<=end_s;s+=900)); do
     fi
 
     ioda_file="${run_dir}/${eventdate}/${dadir}/${timestr}/ioda_refl/ioda_mrms_${datestr}_${timestr}.nc4"
+    clear_file="${run_dir}/${eventdate}/${dadir}/${timestr}/ioda_refl/ioda_mrms_clear_${datestr}_${timestr}.nc4"
 
     if [[ ! -e "done.${timestr}" ]]; then
 
         for ovalue in "${obsvalues[@]}"; do
             echo -e "\nPlotting ${ovalue} at ${timestr} ..."
-            ${show} "${rootdir}/python/plot_ioda.py" -g "${grid_file}" -r 300 -m latlon "${ioda_file}" 2>/dev/null
+            ${show} "${rootdir}/python/plot_ioda.py" -g "${grid_file}" -r 300 -m latlon --heights 500,1000,1500,2000,2500,3000,4000,5000,6000,7000,8000,9000,10000,max --clearAirFile "${clear_file}" "${ioda_file}" 2>/dev/null
             # shellcheck disable=SC2181
             if [[ $? -eq 0 ]]; then
                 ${show} touch "done.${timestr}"

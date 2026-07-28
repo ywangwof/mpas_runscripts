@@ -132,7 +132,7 @@ def get_var_contours(varname,var2d,cntlevels):
 
     # Use reflectivity color map and range
     if varname.startswith('refl'):
-        mycolors = ctables.colortables['NWSReflectivity']
+        mycolors = list(ctables.colortables['NWSReflectivity'])
         mycolors.insert(0,(1,1,1))
         color_map = mcolors.ListedColormap(mycolors)
     elif varname.startswith('error'):
@@ -205,8 +205,8 @@ def get_var_contours(varname,var2d,cntlevels):
         if varname.startswith('refl'):    # Use reflectivity color map and range
             cmin = 0.0
             cmax = 80.0
-            cntlevels = list(np.arange(cmin,cmax,5.0))
-            normc = mcolors.Normalize(cmin,cmax)
+            cntlevels = list(np.arange(cmin, cmax + 5.0, 5.0))
+            normc = mcolors.BoundaryNorm(cntlevels, color_map.N)
         elif varname.startswith('rain') or varname.startswith('prec_'):
             #cntlevels = [0.0,0.01,0.10,0.25,0.50,0.75,1.00,1.25,1.50,1.75,2.00,2.50,3,4,5,7,10,15,20]  # inch
             cntlevels = [0, 1, 2.5, 5, 7.5, 10, 15, 20, 30, 40, 50, 70, 100, 150, 200, 250, 300, 400, 500, 600, 750]  # mm
@@ -386,8 +386,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Plot a DART obs_seq file',
                                      epilog="\n        ---- Yunheng Wang (2025-08-20)\n ",
                                      formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('obsfiles',
-                        help='MRMS 3D Gridded reflectitivity file or IODA netCDF4 file.')
+    parser.add_argument('inputs', nargs='+',
+                        help='Input file and optional ObsValue variable name. Existing path is used as the input file; non-file token is used as obsVar.')
 
     parser.add_argument('-v', '--verbose',
                         help='Enable verbose output.\n ',
@@ -396,6 +396,34 @@ def parse_args():
     parser.add_argument('-l', '--vertLevels',
                         help='Specify vertical levels to be plotted.',
                         type=str, default=None)
+
+    parser.add_argument('--heights',
+                        help='Specify comma-separated heights in meters to be plotted, e.g. max,500,1000,2000.',
+                        type=str, default=None)
+
+    parser.add_argument('--heightTolerance',
+                        help='Set the height matching tolerance in meters for IODA point observations.',
+                        type=float, default=1.0)
+
+    parser.add_argument('--clearAirFile',
+                        help='Specify a clear-air reflectivity file to overlay as white 0 dBZ points.',
+                        type=str, default=None)
+
+    parser.add_argument('--noZeroDbz',
+                        help='Do not plot 0 dBZ reflectivity or clear-air overlay points.',
+                        action="store_true", default=False)
+
+    parser.add_argument('--markerSize',
+                        help='Set the marker size for nonzero reflectivity scatter points.',
+                        type=float, default=8.0)
+
+    parser.add_argument('--marker',
+                        help='Set the scatter marker style: dot or pixel.',
+                        choices=['dot', 'pixel'], default='dot')
+
+    parser.add_argument('--minDbz',
+                        help='Do not plot nonzero reflectivity values below this dBZ threshold.',
+                        type=float, default=None)
 
     parser.add_argument('-c', '--cntLevels',
                         help='Define contour levels as [cmin, cmax, cinc].',
@@ -428,7 +456,8 @@ def parse_args():
 
     args = parser.parse_args()
 
-    parsed_args = {'varname': args.varname }
+    parsed_args = {'varname': args.varname,
+                   'obs_var': 'equivalentReflectivityFactor' }
 
     if args.map in ['latlon', 'lambert', 'stereo']:
         parsed_args['basmap'] = args.map
@@ -444,18 +473,50 @@ def parse_args():
     else:
         parsed_args['t_level'] = 'ALL'
 
+    parsed_args['height_levels'] = None
+    parsed_args['height_tolerance'] = args.heightTolerance
+    parsed_args['plot_zero_dbz'] = not args.noZeroDbz
+    parsed_args['marker_size'] = args.markerSize
+    parsed_args['marker'] = ',' if args.marker == 'pixel' else '.'
+    parsed_args['min_dbz'] = args.minDbz
+    if args.heights is not None:
+        parsed_args['height_levels'] = []
+        for item in args.heights.split(','):
+            height_string = item.strip()
+            if height_string.lower() == 'max':
+                parsed_args['height_levels'].append(None)
+            else:
+                try:
+                    parsed_args['height_levels'].append(float(height_string))
+                except ValueError:
+                    print(f"ERROR: --heights must be a comma-separated list of numbers or \"max\". Got \"{args.heights}\"")
+                    sys.exit(0)
+
+        if len(parsed_args['height_levels']) < 1:
+            print(f"ERROR: --heights must include at least one height. Got \"{args.heights}\"")
+            sys.exit(0)
+
     #-------------------------------------------------------------------
     # Set observation file name
     #-------------------------------------------------------------------
     obsfiles  = []
-    obsfile = args.obsfiles
-    if  os.path.lexists(obsfile):
-        obsfiles.append(obsfile)
+    obsvars   = []
+    for input_arg in args.inputs:
+        if os.path.lexists(input_arg):
+            obsfiles.append(input_arg)
+        else:
+            obsvars.append(input_arg)
 
     if len(obsfiles) == 1:
         parsed_args['obsfile'] = obsfiles[0]
     else:
-        print(f"file name can only be one. Got \"{obsfiles}\"")
+        print(f"file name must be specified exactly once. Got \"{obsfiles}\"")
+        sys.exit(0)
+
+    if len(obsvars) == 1:
+        parsed_args['obs_var'] = obsvars[0]
+    elif len(obsvars) > 1:
+        print(f"obsVar can only be specified once. Got \"{obsvars}\"")
         sys.exit(0)
 
     parsed_args['ioda_file'] = False
@@ -520,11 +581,17 @@ def parse_args():
             print(f"ERROR: The grid file {args.gridfile} not exists.")
             sys.exit(1)
 
+    parsed_args['clear_air_file'] = args.clearAirFile
+    if args.clearAirFile is not None:
+        if not os.path.lexists(args.clearAirFile):
+            print(f"ERROR: The clear-air file {args.clearAirFile} not exists.")
+            sys.exit(1)
+
     return args, make_namespace(parsed_args)
 
 ########################################################################
 
-def load_ioda_ref(args):
+def load_ioda_ref(args,require_error=True,obsvar='equivalentReflectivityFactor'):
 
     var_obj = {}
 
@@ -533,9 +600,23 @@ def load_ioda_ref(args):
         with Dataset(args.obsfile, 'r') as fh:
             meta_group = fh.groups['MetaData']
             obs_group  = fh.groups['ObsValue']
-            err_group  = fh.groups['ObsError']
-            varerr  = err_group.variables['equivalentReflectivityFactor'][:]
-            varobs  = obs_group.variables['equivalentReflectivityFactor'][:]
+            if obsvar not in obs_group.variables:
+                print(f"ERROR: ObsValue variable \"{obsvar}\" not found in {args.obsfile}.")
+                print(f"       Available ObsValue variables: {list(obs_group.variables.keys())}")
+                sys.exit(1)
+            varobs  = obs_group.variables[obsvar][:]
+            if require_error:
+                err_group = fh.groups['ObsError']
+                if obsvar not in err_group.variables:
+                    print(f"ERROR: ObsError variable \"{obsvar}\" not found in {args.obsfile}.")
+                    print(f"       Available ObsError variables: {list(err_group.variables.keys())}")
+                    sys.exit(1)
+                varerr = err_group.variables[obsvar][:]
+            elif 'ObsError' in fh.groups and obsvar in fh.groups['ObsError'].variables:
+                err_group = fh.groups['ObsError']
+                varerr = err_group.variables[obsvar][:]
+            else:
+                varerr = np.zeros_like(varobs)
             varlat  = meta_group.variables['latitude'][:]
             varlon  = meta_group.variables['longitude'][:]
             varhgt  = meta_group.variables['height'][:]
@@ -554,6 +635,7 @@ def load_ioda_ref(args):
     var_obj['varobs']   = varobs
     var_obj['varerr']   = varerr
     var_obj['vartime']  = vartime
+    var_obj['obsvar']   = obsvar
 
     return make_namespace(var_obj,level=1)
 
@@ -588,28 +670,57 @@ def load_gridded_ref(args):
 
 ########################################################################
 
-def retrieve_plotvar(varargs,varobj):
+def height_label(height):
+    if float(height).is_integer():
+        return f"{int(height)}m"
+    return f"{height:g}m"
+
+########################################################################
+
+def is_reflectivity_var(obsvar):
+    return obsvar.startswith('equivalentReflectivityFactor')
+
+########################################################################
+
+def retrieve_plotvar(varargs,varobj,target_height=None):
     """ Select observation index based on command line arguments"""
 
     varmeta = {'level_label': "Max"}
+    obsvar = getattr(varobj, 'obsvar', getattr(varargs, 'obs_var', 'equivalentReflectivityFactor'))
+    if varargs.varname == "value":
+        varmeta['varlabel'] = "Reflectivity" if is_reflectivity_var(obsvar) else obsvar
+    else:
+        varmeta['varlabel'] = "ObsError" if is_reflectivity_var(obsvar) else f"{obsvar} ObsError"
 
     varshape = varobj.varobs.shape
     if len(varshape) == 3:
         glons, glats = np.meshgrid(varobj.varlon, varobj.varlat)
         if cmd_args.verbose: print(f"shape of glons: {glons.shape}, shape of glats: {glats.shape}.")
 
-        vardat = np.max(varobj.varobs, axis=0)
+        if target_height is None:
+            vardat = np.max(varobj.varobs, axis=0)
+        else:
+            heights = np.asarray(varobj.varhgt, dtype=float)
+            level_index = int(np.argmin(np.abs(heights - target_height)))
+            vardat = varobj.varobs[level_index,:,:]
+            varmeta['level_label'] = height_label(heights[level_index])
+
         if cmd_args.verbose: print(f"shape of varobs: {varobj.varobs.shape}, shape of vardat: {vardat.shape}.")
+        varmeta['nobs'] = vardat.size
     else:
         horizontal_groups = defaultdict(list)
+        if target_height is None:
+            height_mask = np.ones(varobj.varobs.shape, dtype=bool)
+        else:
+            height_mask = np.abs(np.asarray(varobj.varhgt, dtype=float) - target_height) <= varargs.height_tolerance
+            varmeta['level_label'] = height_label(target_height)
+
         if varargs.varname == "value":
-            for x, y, val in zip(varobj.varlon, varobj.varlat, varobj.varobs):
+            for x, y, val in zip(varobj.varlon[height_mask], varobj.varlat[height_mask], varobj.varobs[height_mask]):
                 horizontal_groups[(x,y)].append(val)
-            varmeta['varlabel']= "Reflectivity"
         elif varargs.varname == "error":
-            for x, y, val in zip(varobj.varlon, varobj.varlat, varobj.varerr):
+            for x, y, val in zip(varobj.varlon[height_mask], varobj.varlat[height_mask], varobj.varerr[height_mask]):
                 horizontal_groups[(x,y)].append(val)
-            varmeta['varlabel']= "ObsError"
 
         ldat   = []
         llons  = []
@@ -625,9 +736,12 @@ def retrieve_plotvar(varargs,varobj):
         glons = np.array(llons)
         glats = np.array(llats)
         vardat = np.array(ldat)
+        varmeta['nobs'] = int(np.count_nonzero(height_mask))
 
-    if hasattr(varobj, 'vartime'):
+    if hasattr(varobj, 'vartime') and varobj.vartime is not None:
         varmeta['time']  = datetime.fromtimestamp(varobj.vartime[0]).strftime('%Y%m%d_%H%M')
+    else:
+        varmeta['time'] = "notime"
 
     return make_namespace(varmeta), glons,glats,vardat
 
@@ -747,7 +861,7 @@ def interpolation2D(obs_obj,mod_obj):
 
 ########################################################################
 
-def make_plot(wargs,wobj):
+def make_plot(wargs,wobj,target_height=None,clear_air_obj=None):
     """ wargs: Decoded working arguments
         wobj:  Working object
     """
@@ -760,7 +874,11 @@ def make_plot(wargs,wobj):
     #
     #-----------------------------------------------------------------------
 
-    plot_meta, glons,glats,vardata = retrieve_plotvar(wargs,wobj)
+    plot_meta, glons,glats,vardata = retrieve_plotvar(wargs,wobj,target_height)
+
+    if vardata.size < 1:
+        print(f"WARNING: No observations found for {plot_meta.level_label}; skipping plot.")
+        return
 
     if wargs.ranges is None:
         if wargs.plt_wofs is not None:
@@ -791,7 +909,7 @@ def make_plot(wargs,wobj):
         #carr._threshold = carr._threshold/10.
         ax = plt.axes(projection=carr)
 
-        y_position = 0.80
+        y_position = 0.76
         ax.set_extent(ranges,crs=carr)
     elif wargs.basmap == "stereo":
         earthRadius = 6371229.0
@@ -806,12 +924,12 @@ def make_plot(wargs,wobj):
         ax = plt.axes(projection=proj)
         ax.set_extent([-scaling * extentX, scaling * extentX, -scaling * extentY, scaling * extentY], crs=proj)
 
-        y_position = 0.75
+        y_position = 0.71
     else:
         proj_hrrr = setup_hrrr_projection(carr).proj
         ax = plt.axes(projection=proj_hrrr)
 
-        y_position = 0.85
+        y_position = 0.80
         ax.set_extent(ranges,crs=carr)
 
     ax.coastlines(resolution='50m')
@@ -835,7 +953,7 @@ def make_plot(wargs,wobj):
     #gl.ylabel_style = {'rotation': 45}
 
     # Create the title as you see fit
-    plt.title(f'{plot_meta.varlabel} for "{plot_meta.level_label}"')
+    plt.title(f'{plot_meta.varlabel} for "{plot_meta.level_label}"', fontsize=18)
     #plt.style.use(style) # Set the style that we choose above
 
     #-------------------------------------------------------------------
@@ -870,14 +988,44 @@ def make_plot(wargs,wobj):
 
     alphaval = 1.0
     varname = "error"
-    if wargs.varname == "value": varname = 'refl'
+    is_refl = is_reflectivity_var(getattr(wobj, 'obsvar', getattr(wargs, 'obs_var', 'equivalentReflectivityFactor')))
+    if wargs.varname == "value":
+        varname = 'refl' if is_refl else wobj.obsvar
 
     color_map, normc = get_var_contours(varname,vardata,wargs.cntlevel)
     #cntlevels = list(np.linspace(cmin,cmax,9))
 
-    cntr = ax.scatter(glons,glats,marker='.', c=vardata, alpha=alphaval, s=8.0, cmap=color_map, norm=normc, transform=carr)
+    clear_air_lons_list = []
+    clear_air_lats_list = []
+    if is_refl and wargs.plot_zero_dbz and clear_air_obj is not None:
+        _, clear_air_lons, clear_air_lats, clear_air_data = retrieve_plotvar(wargs,clear_air_obj,target_height)
+        if clear_air_data.size > 0:
+            clear_air_lons_list.append(np.asarray(clear_air_lons, dtype=float))
+            clear_air_lats_list.append(np.asarray(clear_air_lats, dtype=float))
 
-    obs_string=f'Number of observations: {wobj.nobs}, min = {vardata.min()}, max = {vardata.max()}'
+    if is_refl:
+        vardata_np = np.asarray(vardata, dtype=float)
+        glons_np   = np.asarray(glons,   dtype=float)
+        glats_np   = np.asarray(glats,   dtype=float)
+        mask_clear  = (vardata_np == 0.0)
+        mask_refl   = ~mask_clear
+        if wargs.min_dbz is not None:
+            mask_refl = mask_refl & (vardata_np >= wargs.min_dbz)
+        if wargs.plot_zero_dbz and mask_clear.sum() > 0:
+            clear_air_lons_list.append(glons_np[mask_clear])
+            clear_air_lats_list.append(glats_np[mask_clear])
+        if wargs.plot_zero_dbz and len(clear_air_lons_list) > 0:
+            clear_air_lons = np.concatenate(clear_air_lons_list)
+            clear_air_lats = np.concatenate(clear_air_lats_list)
+            ax.scatter(clear_air_lons, clear_air_lats, marker=wargs.marker, color='0.6',
+                       edgecolors='0.6', linewidths=0.1, alpha=alphaval, s=8.0,
+                       zorder=2, transform=carr)
+        cntr = ax.scatter(glons_np[mask_refl], glats_np[mask_refl], marker=wargs.marker, c=vardata_np[mask_refl],
+                          alpha=alphaval, s=wargs.marker_size, cmap=color_map, norm=normc, zorder=3, transform=carr)
+    else:
+        cntr = ax.scatter(glons,glats,marker=wargs.marker, c=vardata, alpha=alphaval, s=wargs.marker_size, cmap=color_map, norm=normc, transform=carr)
+
+    obs_string=f'Number of observations: {plot_meta.nobs}, min = {vardata.min()}, max = {vardata.max()}'
     plt.text(0.15,y_position, obs_string, color='black', horizontalalignment='left', verticalalignment='center',fontsize=14,transform=plt.gcf().transFigure)
 
     #mod_obj = read_modgrid(cargs.grid)
@@ -906,6 +1054,8 @@ def make_plot(wargs,wobj):
         root,ext=os.path.splitext(wargs.outfile)
         if ext != ".png":
             outpng = f"{wargs.outfile}_{plot_meta.level_label}.png"
+        elif wargs.height_levels is not None and len(wargs.height_levels) > 1:
+            outpng = f"{root}_{plot_meta.level_label}.png"
         else:
             outpng = wargs.outfile
 
@@ -937,16 +1087,28 @@ if __name__ == "__main__":
 
     #obs_obj = load_variables(args)
     if args.ioda_file:
-        obs_obj = load_ioda_ref(args)
+        obs_obj = load_ioda_ref(args,require_error=(args.varname == "error"),obsvar=args.obs_var)
     else:
         obs_obj = load_gridded_ref(args)
+
+    clear_air_obj = None
+    if args.clear_air_file is not None:
+        clear_air_args = argparse.Namespace(obsfile=args.clear_air_file)
+        clear_air_filename = os.path.basename(args.clear_air_file)
+        if clear_air_filename.startswith('ioda_') or clear_air_filename.startswith('jdiag_'):
+            clear_air_obj = load_ioda_ref(clear_air_args,require_error=False,obsvar='equivalentReflectivityFactor_clear')
+        else:
+            clear_air_obj = load_gridded_ref(clear_air_args)
 
     if cmd_args.verbose: print("\n Elapsed time of load_variables is:  %f seconds" % (timeit.time() - time1))
 
     time3 = timeit.time()
 
     print("")
-    make_plot(args, obs_obj)
+    if args.height_levels is None:
+        make_plot(args, obs_obj, clear_air_obj=clear_air_obj)
+    else:
+        for target_height in args.height_levels:
+            make_plot(args, obs_obj, target_height, clear_air_obj)
 
     if cmd_args.verbose: print("\n Elapsed time of make_plot is:  %f seconds" % (timeit.time() - time3))
-

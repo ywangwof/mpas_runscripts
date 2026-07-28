@@ -2,8 +2,9 @@
 #SBATCH --partition=PARTION
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=1 CPUSPEC
-#SBATCH -t 02:00:00
+#SBATCH -t 00:30:00
 #SBATCH --output=WRKDIR/ungrib_%a_%j.log
+#SBATCH --qos=QOS
 ACCTSTR
 EXCLSTR
 
@@ -13,7 +14,7 @@ time1=$(date '+%s')
 echo "Job Started: $(date). Job Id:  $SLURM_JOBID"
 echo " "
 
-if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules" || "MACHINE" == "Ursa" ]]; then
+if [[ "MACHINE" == "Ursa" || "MACHINE" == "Hercules" ]]; then
     module use ROOTDIR/modules
     module load MODULE
 else
@@ -26,7 +27,7 @@ memstr=$(printf "%02d" $mem)
 cd WRKDIR/ungrib_$memstr
 
 touch running.ungrib_$memstr
-rm -rf error.ungrib_$memstr 
+rm -rf error.ungrib_$memstr
 
 RUNCMD -n 1 EXEDIR/ungrib.exe
 

@@ -363,14 +363,15 @@ post | plot | diag | verif | snd )
 
     case ${config_fcst_length_seconds} in
     21600 )
-        qpe_mode_string="['qpe_15m', 'qpe_1hr', 'qpe_3hr', 'qpe_6hr']"
+        qpe_mode_string="'qpe_15m', 'qpe_1hr', 'qpe_3hr', 'qpe_6hr'"
         ;;
     10800 )
-        qpe_mode_string="['qpe_15m', 'qpe_1hr', 'qpe_3hr']"
+        qpe_mode_string="'qpe_15m', 'qpe_1hr', 'qpe_3hr'"
         ;;
     * )
         echo -e "${RED}ERROR${NC}: fcstlength = ${PURPLE}${config_fcst_length_seconds}${NC} is not supported."
-        exit 1
+        qpe_mode_string="'qpe_15m'"
+        #exit 1
         ;;
     esac
 
@@ -417,6 +418,7 @@ post | plot | diag | verif | snd )
 			/^mrmspath: /s#: .*#: ${RT_OBSDIR}/MRMS/#
 			/^asospath: /s#: .*#: ${RT_OBSDIR}/ASOS/#
 			/^lsrwwapath: /s#: .*#: ${RT_OBSDIR}/LSR_WWA/2026#
+			/^qpe_mode :/s/: .*/: [${qpe_mode_string} ]/
 			EOF
         if [[ ! -f "${post_config_orig}" ]]; then
             echo " "
@@ -429,11 +431,11 @@ post | plot | diag | verif | snd )
         rm  -f "${sedfile}"
     fi
 
-    if [[ "${task}" == "verif" ]]; then
-        # modify the verif script
-        verif_script="${post_script_dir}/wofs_plot_verification_MPAS.py"
-        sed -i "/plot_modes_qpe =/s/\[.*\]/${qpe_mode_string}/" "${verif_script}"
-    fi
+    #if [[ "${task}" == "verif" ]]; then
+    #    # modify the verif script
+    #    verif_script="${post_script_dir}/wofs_plot_verification_MPAS.py"
+    #    sed -i "/plot_modes_qpe =/s/\[.*\]/${qpe_mode_string}/" "${verif_script}"
+    #fi
     ;;
 
 atpost )
@@ -464,10 +466,6 @@ atpost )
 		fi
 		EOF
     )
-    ;;
-* )
-    echo -e "${RED}ERROR${NC}: Unknown task: ${YELLOW}${task}${NC}"
-    exit 1
     ;;
 esac
 

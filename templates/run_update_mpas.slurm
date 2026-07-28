@@ -4,6 +4,7 @@
 #SBATCH --ntasks=NOPART CPUSPEC
 #SBATCH -t 00:30:00
 #SBATCH --output=WRKDIR/fcst_all_update_mpas_%j.log
+#SBATCH --qos=QOS
 #SBATCH --exclusive
 #SBATCH --distribution=block:cyclic
 ACCTSTR

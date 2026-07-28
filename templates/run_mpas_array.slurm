@@ -3,6 +3,7 @@
 #SBATCH -J JOBNAME
 #SBATCH --ntasks=NOPART CPUSPEC
 #SBATCH -t CLAIMTIME
+#SBATCH --qos=QOS
 #SBATCH --output=WRKDIR/fcst_%a_mpas_%j.log
 ACCTSTR
 EXCLSTR
@@ -13,7 +14,7 @@ time1=$(date '+%s')
 
 printf "Job Started: %(%a %b %d %H:%M:%S %Z %Y)T. Job Id: %s\n\n" $time1 $SLURM_JOBID
 
-if [[ "MACHINE" == "Jet" || "MACHINE" == "Hercules" || "MACHINE" == "Ursa" ]]; then
+if [[ "MACHINE" == "Ursa" || "MACHINE" == "Hercules" ]]; then
     source /etc/profile.d/modules.sh
     module purge
     module use MPASDIR/modulefiles

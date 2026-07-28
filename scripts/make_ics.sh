@@ -261,6 +261,7 @@ EOF
                 [JOBNAME]="ungrb_${jobname}"
                 [CPUSPEC]="${config_claim_cpu_ungrib}"
                 [PREFIX]="${config_EXTHEAD}"
+                [QOS]="${config_qos_ics}"
             )
             submit_a_job "${wrkdir}" "ungrib" "jobParms" "${config_TEMPDIR}/run_ungrib_array.${mach}" "${jobscript}" "${jobarraystr}"
         fi
@@ -684,6 +685,7 @@ EOF
         [JOBNAME]="invariant_${jobname}"
         [PREFIX]="${domname}"
         [RRFSDIR]="${rrfs_dir}"
+        [QOS]="${config_qos_ics}"
     )
     # shellcheck disable=SC2154
     if [[ "${mach}" == "pbs" ]]; then
@@ -779,6 +781,7 @@ function run_init {
             [PREFIX]="${domname}"
             [MPASDIR]="${MPAS_DIR}"
             [MODULE]="${mpas_modulename}"
+            [QOS]="${config_qos_ics}"
         )
         # shellcheck disable=SC2154
         if [[ "${mach}" == "pbs" ]]; then
